@@ -7,6 +7,8 @@ class PyPyPage(Page):
             html.a("home", href="index.html", class_="menu"), " ",
             html.a("news", href="news.html", class_="menu"), " ",
             html.a("consortium", href="consortium.html", class_="menu"), " ",
+            html.a("EU-Issues", href="https://codespeak.net/issue/pypy-eu/", 
+                   class_="menu"), " ",
             html.a("community/coding",
                    href="http://codespeak.net/pypy/dist/pypy/doc/index.html",
                    class_="menu"), " ",
