@@ -24,8 +24,8 @@ class Project(Project):
                         src="http://codespeak.net/pypy/img/py-web1.png",
                         height=110, width=149)),
         html.img(alt="EU Logo", id="extraimg",
-                 src="eu-logo-small.jpg",
-                 height=105, width=154),
+                 src="ist.png",
+                 height=105, width=213),
         )
     Page = PyPyPage
 
