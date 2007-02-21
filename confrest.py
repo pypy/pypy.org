@@ -14,6 +14,7 @@ class PyPyPage(Page):
             " ", id="menubar")
 
 class Project(Project):
+    mydir = py.magic.autopath().dirpath()
     title = "PyPy EU Project"
     stylesheet = 'http://codespeak.net/pypy/dist/pypy/doc/style.css'
     encoding = 'latin1'
