@@ -13,6 +13,10 @@ class PyPyPage(Page):
                    class_="menu"), " ",
             " ", id="menubar")
 
+    def get_doclink(self, target):
+        return relpath(self.targetpath.strpath,
+                       self.project.get_docpath().join(target).strpath)
+
 class Project(Project):
     mydir = py.magic.autopath().dirpath()
     title = "PyPy EU Project"
@@ -28,5 +32,7 @@ class Project(Project):
                  height=105, width=213),
         )
     Page = PyPyPage
+    def get_docpath(self):
+        return self.mydir
 
 
