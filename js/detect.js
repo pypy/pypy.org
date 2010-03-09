@@ -11,7 +11,8 @@ $(document).ready(function() {
         download_url = 'download/pypy-1.2-mac.tar.bz2';
         downloat_text = 'Download Mac OS X 10.6 bin';
     } else {
-        return;
+        download_url = "download.html";
+        download_text = "Download page";
     }
     $("#main_download").attr('href', download_url);
     $("#main_download").text(download_text);
