@@ -4,7 +4,7 @@ $(document).ready(function() {
     if (navigator.platform.indexOf('Linux') != -1) {
         download_url = 'download/pypy-1.2.tar.bz2';
         download_text = 'Download linux i386 bin';
-    } else if (navigator.platform.indexOf('Windows') != -1) {
+    } else if (navigator.platform.indexOf('Win') != -1) {
         download_url = 'download/pypy-1.2-win32.zip';
         download_text = 'Download Windows i386 bin';
     } else if (navigator.platform.indexOf('Mac') != 1) {
