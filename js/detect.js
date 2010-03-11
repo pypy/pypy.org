@@ -8,7 +8,7 @@ $(document).ready(function() {
         download_url = 'download/pypy-1.2-win32.zip';
         download_text = 'Download Windows i386 bin';
     } else if (navigator.platform.indexOf('Mac') != 1) {
-        download_url = 'download/pypy-1.2-mac.tar.bz2';
+        download_url = 'download/pypy-1.2-osx.tar.bz2';
         downloat_text = 'Download Mac OS X 10.6 bin';
     } else {
         download_url = "download.html";
