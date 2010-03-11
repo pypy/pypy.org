@@ -14,7 +14,6 @@ $(document).ready(function() {
         download_url = "download.html";
         download_text = "Download page";
     }
-    download_url = "release.html";
     $("#main_download").attr('href', download_url);
     $("#main_download").text(download_text);
 });
