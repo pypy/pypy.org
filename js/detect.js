@@ -13,13 +13,8 @@ $(document).ready(function() {
         download_url = 'download/pypy-1.5-win32.zip';
         download_text = 'Download Windows x86 bin';
     } else if (navigator.platform.indexOf('Mac') != 1) {
-        if (navigator.platform.indexOf('64') != -1) {
-            download_url = 'download/pypy-1.5-osx64.tar.bz2';
-            downloat_text = 'Download Mac OS X 10.6 bin (64 bit)';
-        } else {
-            download_url = 'download/pypy-1.5-osx.tar.bz2';
-            downloat_text = 'Download Mac OS X 10.6 bin (32 bit)';
-        }
+        download_url = 'download/pypy-1.5-osx64.tar.bz2';
+        downloat_text = 'Download Mac OS X 10.6 bin (64 bit)';
     } else {
         download_url = "download.html";
         download_text = "Download page";
