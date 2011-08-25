@@ -12,7 +12,7 @@ $(document).ready(function() {
         }
     } else if (navigator.platform.indexOf('Win') != -1) {
         download_url = base + 'pypy-1.6-win32.zip';
-        download_text = 'Download Windows x86 bin';
+        download_text = 'Download Windows x86 bin (BETA)';
     } else if (navigator.platform.indexOf('Mac') != 1) {
         download_url = base + 'pypy-1.6-osx64.tar.bz2';
         download_text = 'Download Mac OS X 10.6 bin (64 bit)';
