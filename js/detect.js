@@ -1,7 +1,7 @@
 
 $(document).ready(function() {
     var download_url, download_text;
-    var base = 'https://bitbucket.org/pypy/pypy/downloads/';
+    var base = 'http://bitbucket.org/pypy/pypy/downloads/';
     if (navigator.platform.indexOf('Linux') != -1) {
         if (navigator.platform.indexOf('64') != -1) {
             download_url = base + 'pypy-1.6-linux64.tar.bz2';
