@@ -11,6 +11,12 @@ function general_donate() {
     });
 }
 
+function numpy_donate() {
+    $.get("donate3.html", function (html) {
+        $("#sidebar").html(html);
+    });
+}
+
 $(document).ready(function() {
-    py3k_donate();
+    numpy_donate();
 });
