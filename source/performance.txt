@@ -1,44 +1,64 @@
-One of the goals of the PyPy project is to provide a fast and compliant python
-interpreter. Part of the way we achieve this is to provide a high-performance
-garbage collector and a high performance JIT. Results of comparing PyPy and
-CPython can be found on the `speed website`_. Those benchmarks are not a random
-collection. They're a combination of real-world Python programs, benchmarks
-originally included and benchmarks we found PyPy to be slow on. Consult
-descriptions of each for details.
+One of the goals of the PyPy project is to provide a fast and compliant
+python interpreter. Part of the way we achieve this is to provide a
+high-performance garbage collector (GC) and a high-performance
+Just-in-Time compiler (JIT).  Results of comparing PyPy and CPython can
+be found on the `speed website`_. Those benchmarks are not a random
+collection: they are a combination of real-world Python programs,
+benchmarks originally included with the (now dead) Unladen Swallow
+project, and benchmarks we found PyPy to be slow on (and improved).
+Consult the descriptions of each for details.
 
-JIT is however not a magic bullet. There are several characteristics that might
-be surprising for people having first encounter with it. JIT is generally good
-at speeding up straightforward python code that spends a lot of time in
-the bytecode dispatch loop, numerics, heave oo etc. When JIT does not help,
-PyPy is generally slower than CPython, those things include:
+The JIT is however not a magic bullet. There are several characteristics
+that might be surprising for people that are not used to JITs in
+general, or to the PyPy JIT in particular.  The JIT is generally good at
+speeding up straightforward Python code that spends a lot of time in the
+bytecode dispatch loop, i.e. running actual Python code --- as opposed
+to running things that are only invoked by your Python code.  Good
+examples include numeric calculations or any kind of heavily
+object-oriented program.  Bad examples include doing computations with
+large longs --- which is done by unoptimizable support code.  When the
+JIT does not help, PyPy is generally slower than CPython.
 
-* **Tests**: Ideal unit tests would execute each piece of tested code which
-  leaves no time for the JIT to warm up.
+In more details, the JIT is known not to work on:
+
+* **Tests**: The ideal unit tests execute each piece of tested code
+  once.  This leaves no time for the JIT to warm up.
 
 * **Really short-running scripts**: A rule of thumb is if something runs below
-  0.2s JIT has no chance, but it depends a lot on the program in question. In
-  general, make sure you warm up your program before running benchmarks if
-  you're measuring something long-running like a server.
+  0.2s the JIT has no chance, but it depends a lot on the program in question.
+  In general, make sure you warm up your program before running benchmarks, if
+  you're measuring something long-running like a server.  The time required
+  to warm up the JIT varies; give it at least a couple of seconds.  (PyPy's
+  JIT takes a specially long time to warm up.)
 
-* **Functions in runtime**: Functions that take significant time in runtime.
-  PyPy's runtime is generally not as optimized as CPython's and expect those
+* **Long-running runtime functions**: These are the functions provided
+  by the runtime of PyPy that do a significant amount of work.
+  PyPy's runtime is generally not as optimized as CPython's and we expect those
   functions to take somewhere between same time as CPython to 2x longer.
-  XXX explain exactly what runtime is
+  This includes for example computing with longs, or sorting large lists.
+  A counterexample is regular expressions: although they take time, they
+  come with their own JIT.
 
-Unrelated things that we know PyPy is slow at (note that we're probably working
-on it):
+Unrelated things that we know PyPy to be slow at (note that we're probably
+working on it):
 
-* **Long integers**
+* **Building very large dicts**: This is so far an issue with our GCs.
+  Building large lists works much better; the randomness of order in
+  dictionaries is what hurts performance right now.
 
-* **Building very large dicts**
+* **CPython C extension modules**: Any C extension module recompiled
+  with PyPy takes a very large hit in performance.  The purpose of being
+  able to compile C extension modules with PyPy is for them to work at
+  all.  If the extension module is for speedup purposes only, then it
+  makes no sense to have it on top of PyPy right now.  Just remove it
+  and use a straightforward Python version.  If the extension module is
+  both performance-critical and an interface to some C library, then it
+  might be worthwhile to consider rewriting it as a pure Python version,
+  using something like ``ctypes``.
 
-* CPython C extension modules
-
-XXX
-
-We generally consider things that are slower on PyPy than CPython PyPy's bugs.
-In case you find a thing that's not documented here, report it to our
-`bug tracker`_ for investigation
+We generally consider things that are slower on PyPy than CPython bugs
+of PyPy.  In case you find some issue that is not documented here,
+please report it to our `bug tracker`_ for investigation.
 
 .. _`bug tracker`: http://bugs.pypy.org
 .. _`speed website`: http://speed.pypy.org
