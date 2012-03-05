@@ -5,6 +5,12 @@ function py3k_donate() {
     });
 }
 
+function stm_donate() {
+    $.get("don4.html#", function (html) {
+        $("#sidebar").html(html);
+    });
+}
+
 function general_donate() {
     $.get("don2.html#", function (html) {
         $("#sidebar").html(html);
@@ -18,5 +24,5 @@ function numpy_donate() {
 }
 
 $(document).ready(function() {
-    numpy_donate();
+    stm_donate();
 });
