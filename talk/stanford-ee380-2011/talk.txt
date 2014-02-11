@@ -1,0 +1,771 @@
+.. include:: <s5defs.txt>
+
+=========================================================
+Python in Python: the PyPy system
+=========================================================
+
+
+.. admonition:: Armin Rigo
+
+    - *Heinrich-Heine Universität, Germany*
+    - *Open End AB, Sweden*
+
+    March 2011
+
+
+
+
+What is Python
+---------------------------------------------------------
+
+
+What is Python
+---------------------
+
+::
+
+  class Foo(object):
+
+      def __init__(self, value):
+          self.value = value
+
+      def double(self):
+          return Foo(self.value * 2)
+
+  print Foo(42).double().value
+  print Foo("hello").double().value
+
+
+In two points
+-------------
+
+* Strongly, trivially, dynamically typed language
+
+* Ints, floats, longs, string, unicode,
+  lists, tuples, dicts, iterators,
+  functions, classes...
+
+
+Python likes its dictionaries
+-----------------------------
+
+::
+
+  d = {}
+  for i in [1, 2, 3, 4]:
+      d[i] = i*i
+  print d
+
+* in this example, we get ``{1:1, 2:4, 3:9, 4:16}``
+
+
+Python is not Java
+------------------
+
+::
+
+  for name in ["add", "sub", "mul"]:
+      def f(x, y):
+          ...
+      globals()[name] = f
+
+
+Python is complicated
+---------------------
+
+How ``a + b`` works (simplified!):
+
+* look up the method __add__ on the type of a
+
+* if there is one, call it
+
+* if it returns NotImplemented, or if there is none,
+  look up the method __radd__ on the type of b
+
+* if there is one, call it
+
+* if there is none, or we get NotImplemented again,
+  raise an exception TypeError
+
+
+Python is a mess
+----------------
+
+How ``obj.attr`` or ``obj.method()`` works:
+
+* ...
+
+* no way to write it down in just one slide
+
+
+What this talk is about
+-----------------------
+
+* The PyPy project: a framework in which to write interpreters for
+  this kind of language
+
+* "Python in Python" -- roughly
+
+* From the user's point of view (i.e. the programmer in Python),
+  PyPy is very similar to CPython.
+
+
+
+
+CPython and PyPy
+--------------------------------------------------------------------
+
+
+CPython and PyPy
+----------------
+
+* Two implementations
+
+* Two interpreters
+
+* CPython is written in C, PyPy is written in Python
+
+* PyPy tries to be equivalent to CPython
+
+
+...and Jython and IronPython
+----------------------------
+
+* Jython: Python for the Java VM
+
+* IronPython: Python for .NET
+
+* Both try to integrate well with their VM
+
+
+What is PyPy
+------------
+
+* A project started in 2003
+
+* An Open Source effort of volunteers
+
+* With some funding support: 2 years from the European Union (2005-2007),
+  and now from Germany and Sweden (2010-2011).
+
+
+What is PyPy
+------------
+
+* Test-driven development
+
+* Now contains about 200 KLoC, and 150 KLoc of tests
+
+
+A bit of history
+----------------
+
+* Squeak and Scheme48 are also interpreters written in themselves
+
+* Or more precisely, like PyPy, a subset of themselves
+
+* But in PyPy, the subset is at a higher level
+
+* General rule: *every aspect that is independent from the high-level
+  description of the interpreter is left out of it*
+
+
+What is the point of PyPy?
+--------------------------
+
+* CPython is older, it's the "official" version
+
+* PyPy is just a replacement, so why?
+
+* Moreover PyPy is not quite complete (e.g. C extension
+  modules are only partially supported)
+
+
+Speed
+-----
+
+* First answer: PyPy is faster, and may use less memory
+
+* ...or at least, it is "often" the case
+
+
+http://speed.pypy.org/
+----------------------
+
+.. image:: speed.png
+
+
+And (optionally) extra features
+-------------------------------
+
+* "Stackless"
+
+* Non-Python interpreters
+
+* and many smaller experiments
+
+* it is a better experimentation platform than CPython
+
+
+Multi-threading
+---------------
+
+* Bad support on CPython (GIL)
+
+* PyPy has no answer to this question (there is also a GIL)
+
+
+
+
+Architecture
+------------------------------------------------------------------------
+
+
+Architecture
+------------
+
+PyPy has two parts:
+
+* A Python interpreter, written in *RPython*
+
+* A compilation toolchain -- the "translator" -- that translates
+  RPython code into C code (mainly)
+
+
+PyPy's Python interpreter
+-------------------------
+
+* A priori similar to CPython, but written in RPython.
+
+* RPython is also valid Python: we test extensively by running
+  it on top of CPython
+
+* See demo (py.py)
+
+
+The translation toolchain
+-------------------------
+
+* Takes a program written in RPython, a custom subset of Python
+
+* Outputs the "same" program written in C
+
+* See demo
+
+
+RPython is still mostly Python
+------------------------------
+
+* Completely valid Python (can be tested directly)
+
+* Can use lists, dicts, tuples, classes and instances, and so on,
+  but it must be type-safe
+
+* Contains no garbage collection detail (Py_INCREF/Py_DECREF in CPython)
+
+* Really a subset of Python: roughly "how a Java programmer writes his
+  first Python program"
+
+* ...well, plus tons of tricks ``:-)``
+
+
+RPython meta-programming
+------------------------
+
+* RPython is actually only a restriction on the code after being imported,
+  so we can build up everything in (normal) full Python::
+
+    for name in ["add", "sub", "mul"]:
+        def f(x, y):
+            ...
+        globals()[name] = f
+
+* here, the code in ``f()`` is RPython, but the loop around it is not.
+
+
+
+
+Architecture: the interpreter
+--------------------------------------------------------------------------
+
+
+Overview of the interpreter
+---------------------------
+
+* A compiler that produces a custom bytecode format
+
+* An interpreter for this bytecode
+
+* A large library of object types (the "object space")
+
+* A collection of extension modules
+
+
+The bytecode interpreter
+------------------------
+
+* A straightforward, recursive interpreter
+
+* Stack-based
+
+* Every call to a Python function makes a frame object
+
+* Then the interpreter is written as methods on this frame object
+
+
+The object space
+----------------
+
+* Implements all the built-in types
+
+* Structure more flexible than CPython's family of C functions
+
+* Very open to experimentation
+
+
+Separation of levels
+--------------------
+
+* Important: *all* objects that appear in the interpreted program are,
+  in the interpreter, instances of W_XxxObject.
+
+* Again, similar to CPython: an object in Python is implemented,
+  in the interpreter, as a C structure PyXxxObject.
+
+
+Example: smalllong
+------------------
+
+* Standard Python types: int (32/64-bit) and long
+  (integer of unlimited size)
+
+* In CPython, the type is directly linked to its (single) implementation in C.
+  In PyPy, it is not.
+
+* So we could easily add an implementation W_SmallLongObject for
+  integers that happen to fit in 64 bits
+
+* And there is also W_LongObject for the general case
+
+
+Example: smallint
+-----------------
+
+* *Tagged integers,* common in interpreters (but not in CPython)
+
+* Idea, in C terms: take the integer objects whose value fits in 31/63
+  bits, and encode them as odd-valued pseudo-pointers, instead of
+  pointers to separately-allocated integer objects
+
+* We did it in PyPy, but it's disabled now because it does not give
+  the expected performance gain
+
+
+Example: multidict
+------------------
+
+* Similarly, we have several implementations of dict
+
+* For the different typical usage patterns of dicts in Python
+
+* E.g. module dicts (containing all global names of a module),
+  class dicts, instance dicts, user dicts (typically containing
+  non-string keys)
+
+
+Example: mapdict
+----------------
+
+* An instance in Python uses a dictionary to store attributes::
+
+     >>> x = MyClass()
+     >>> x.a = 5
+     >>> x.__dict__
+     {'a': 5}
+     >>> x.__dict__ = {'b': 6}
+     >>> x.b
+     6
+
+
+Example: mapdict
+----------------
+
+* An instance is thus two objects: a dict and a wrapper around it
+
+* Requires a lot of memory
+
+* This is different than Java, Smalltalk or C++, where the class
+  enforces the exact set of attributes of its instances
+
+* But it is like Self and JavaScript
+
+
+Maps
+----------------
+
+* We can reuse the technique introduced in Self: "maps"
+
+* The JavaScript engine V8 also uses them, calling them "hidden classes"
+
+* Idea: it is likely that a lot of instances of a given class will
+  have the same set of attributes
+
+* So we split the attributes into a per-instance part (just an array of
+  field values) and a shared part (giving the attribute names, and their
+  indices in the arrays of the individual instances).
+
+
+
+
+Architecture: the translation toolchain
+---------------------------------------------------------------------
+
+
+Overview
+--------
+
+* "Translation toolchain": statically compiles RPython code
+
+* Produces C code (or JVM or .NET code, experimentally)
+
+* Every aspect that is independent from the high-level
+  description of the interpreter is left out of RPython
+
+* Instead, they are added during translation
+
+* PyPy = hybrid "research base" + "production-ready"
+
+
+Translation overview (1)
+------------------------
+
+* Start with the live RPython program
+
+* Build the Control Flow Graphs (CFGs) of the functions
+
+* Perform global type inference
+
+* We get a type-annotated version of the CFGs
+
+* Demo
+
+
+Translation overview (2)
+------------------------
+
+* "Lower" the level of the CFGs: transform their Python-like operations
+  into C-like operations
+
+* Do a number of additional transformations to insert the selected "aspects"
+
+* Generate C code from the low-level CFGs
+
+
+Various aspects
+---------------
+
+* The object model, e.g. how to turn RPython classes and instances
+  to C structs
+
+* Garbage collection
+
+* Execution model: regular or stackless
+
+* Just-in-Time compiler
+
+
+The object model
+----------------
+
+* Called "RTyping" internally
+
+* Can target "lltype" or "ootype"
+
+* "lltype" = low-level types = C-like structs and arrays
+
+* "ootype" = object-oriented types, for JVM or .NET
+
+
+The execution model
+-------------------
+
+* Optionally do a "stackless transformation"
+
+* We get microthread capabilities (soft threads)
+
+* Even if the source code of the interpreter is just recursive
+
+
+
+
+Garbage collection
+---------------------------------------------------------------------
+
+
+Purpose
+-------
+
+* RPython assumes automatic memory management, like Python
+
+* But of course C code does not
+
+* We can use the Boehm GC, but it is far too slow
+
+* Remember that our GC needs to support both allocating Python-visible
+  objects and internal objects of the interpreter (lists, instances...)
+
+
+Overview
+--------
+
+* We wrote our own GCs, and each alloc operation in the CFGs is replaced
+  with a call to the GC
+
+* Handles finding and freeing unused memory
+
+* The GC is written in RPython, too
+
+* Analyzed like the rest of the program during translation
+
+* This approach allows testing at all levels
+
+
+The GCs we have written
+-----------------------
+
+* Currently used: "minimark", a generational GC with one young generation
+  and using mark-and-sweep for the old generation
+
+* Previously: a hybrid collector using generational semi-space collection
+  and mark-and-sweep for the oldest generation (too complicated)
+
+* Pretty standard, non-concurrent, non-thread-safe collectors
+
+
+Old experiments
+---------------
+
+* Reference counting (like CPython)... Does not work well.
+
+* Mark-and-sweep, a fully non-moving collector
+
+* Mark-and-compact, a fully compacting, generationless collector,
+  similar to Squeak.
+
+* Lesson learned: using a generational collector is essential for
+  dynamic languages like Python
+
+
+GC transformer
+--------------
+
+* Inserting a GC in a program being translated is handled by the "GC
+  transformer"
+
+* Easy to customize, no fixed API
+
+
+API example (minimark GC)
+-------------------------
+
+* The GC provides functions like "malloc"
+
+* Plus a number of others: hash, identity_hash, weakref support,
+  finalizer support
+
+* The GC transformer inserts tables describing the structure of
+  RPython objects: sizes, location of further references, etc.
+
+
+Finding the stack roots
+-----------------------
+
+* The hard part: finding all pointers to GC objects from local variables
+  in the C stack
+
+* ANSI C solution: all pointers are copied to and from some custom stack
+
+* Not-ANSI-C-at-all: parse the assembler produced by GCC to build tables
+
+
+
+
+Just-in-Time Compiler
+---------------------------------------------------------------------
+
+
+Goal
+----
+
+* Speed up the interpreter written in RPython
+
+* Independent of the language that is being interpreted
+
+* Let us call it the P-interpreter (P = Python or other)
+
+
+What is a JIT
+-------------
+
+* A JIT selects pieces of the user program (in language P) that would benefit
+  from compilation instead of interpretation
+
+* A "method JIT" selects individual P functions and compiles them,
+  possibly doing some inlining to improve performance (HotSpot, Psyco)
+
+* A "tracing JIT" selects individual code paths from loops and compiles
+  them, inlining aggressively (TraceMonkey, PyPy)
+
+
+Tracing
+-------
+
+* Run the user program, and do some lightweight profiling of loops
+
+* When a loop is run often enough, enter "Tracing Mode"
+
+* Run one more iteration of the loop in this mode
+
+* In addition to actually running the next iteration, it records a "trace"
+
+
+Tracing (2)
+-----------
+
+* The trace is then turned into a machine code loop, and directly executed
+
+* Runs all the further iterations of the loop
+
+
+Tracing (3)
+-----------
+
+* The machine code contains "guards" checking that all conditions met
+  during tracing are still valid
+
+* When a guard fails (latest: at the end of the loop), we fall back to
+  the regular P-interpreter
+
+
+Meta-Tracing in PyPy
+--------------------
+
+* The explanation above assumes a tracing JIT for the full Python
+  language
+
+* Would need to be maintained whenever we change the Python version we
+  support
+
+* Instead, we have a "meta-tracing JIT"
+
+* We trace the P-interpreter's main loop (running N times) interpreting
+  a P loop (running once)
+
+
+Demo
+----
+
+
+Architecture of the PyPy JIT
+----------------------------
+
+* In advance, turn the CFGs of the P-interpreter into some bytecode
+  representation called "jitcode"
+
+* Uses some hints provided by the P-interpreter author (but not many)
+
+* "Links" into the P-interpreter's bytecode dispatch loop
+
+* In this way we add lightweight profiling code
+
+
+Meta-Tracing
+------------
+
+* When thresholds are reached, we start tracing
+
+* Tracing is done by running the "jitcodes" in a custom interpreter,
+  and recording a trace of all operations performed
+
+* Tracing is slow (double interpretation) but only runs for one iteration
+  of the loop
+
+
+Optimization
+------------
+
+* Advanced optimizations of the trace: escaping analysis, integer bounds,
+  store sinking, string handling, FFI calls, unrolling, virtualrefs...
+
+
+Machine Code Backend
+--------------------
+
+* Turns a trace into machine code
+
+* Simple register allocation (linear code)
+
+* x86, x86-64, (ARM)
+
+* Guards compiled as conditional jumps to code that restores the full state
+
+
+Blackhole interpreter
+---------------------
+
+* When a guard fails, we need to go back to the regular P-interpreter
+
+* Cannot easily re-enter the P-interpreter from anywhere, because it
+  is just C code
+
+* Instead we use one more interpreter, the "blackhole interpreter".
+
+
+Bridges
+-------
+
+* When a guard fails often enough, run again the JIT from there
+
+* Meta-trace, optimize, generate machine code, run it
+
+* Such extra traces are called "bridges" instead of "loops"
+
+* In practice, most loops end up needing some number of bridges
+
+* We get "trees" of machine code
+
+
+More topics
+-----------
+
+* Loops, bridges and "preamble loops"
+
+* Virtualizables
+
+* GC integration
+
+* Memory management of machine code
+
+* ...
+
+
+
+
+Conclusion
+---------------------------------------------------------------------
+
+
+Conclusion
+----------
+
+* PyPy is a platform for writing efficient interpreters for
+  dynamic languages
+
+* http://pypy.org/
+
+* http://speed.pypy.org/
+
+* irc: ``#pypy at freenode.net``
+
+* noisebridge sprint this weekend (from 10am):
+  https://www.noisebridge.net/wiki/Getting_Here
