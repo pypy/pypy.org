@@ -1,0 +1,704 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.11: http://docutils.sourceforge.net/" />
+<meta name="version" content="S5 1.1" />
+<title>Using All These Cores: Transactional Memory in PyPy</title>
+<style type="text/css">
+
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 7614 2013-02-21 15:55:51Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+
+See http://docutils.sf.net/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
+
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
+
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
+
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
+
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+object[type="image/svg+xml"], object[type="application/x-shockwave-flash"] {
+  overflow: hidden;
+}
+
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title, .code .error {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div#header {
+  height: 88px ! important }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left, object.align-left {
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right, object.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+img.align-center, .figure.align-center, object.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.align-left {
+  text-align: left }
+
+.align-center {
+  clear: both ;
+  text-align: center }
+
+.align-right {
+  text-align: right }
+
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: inherit }
+
+/* div.align-center * { */
+/*   text-align: left } */
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block, pre.math, pre.code {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+pre.code .ln { color: grey; } /* line numbers */
+pre.code, code { background-color: #eeeeee }
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.pre {
+  white-space: pre }
+
+span.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+/* "booktabs" style (no vertical lines) */
+table.docutils.booktabs {
+  border: 0px;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.docutils.booktabs * {
+  border: 0px;
+}
+table.docutils.booktabs th {
+  border-bottom: thin solid;
+  text-align: left;
+}
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
+
+.slide li {
+  padding-top: 0.2em }
+
+</style>
+<!-- configuration parameters -->
+<meta name="defaultView" content="slideshow" />
+<meta name="controlVis" content="hidden" />
+<!-- style sheet links -->
+<script src="ui/default/slides.js" type="text/javascript"></script>
+<link rel="stylesheet" href="ui/default/slides.css"
+      type="text/css" media="projection" id="slideProj" />
+<link rel="stylesheet" href="ui/default/outline.css"
+      type="text/css" media="screen" id="outlineStyle" />
+<link rel="stylesheet" href="ui/default/print.css"
+      type="text/css" media="print" id="slidePrint" />
+<link rel="stylesheet" href="ui/default/opera.css"
+      type="text/css" media="projection" id="operaFix" />
+
+<style type="text/css">
+#currentSlide {display: none;}
+</style>
+</head>
+<body>
+<div class="layout">
+<div id="controls"></div>
+<div id="currentSlide"></div>
+<div id="header">
+
+</div>
+<div id="footer">
+<h1>Using All These Cores: Transactional Memory in PyPy</h1>
+
+</div>
+</div>
+<div class="presentation">
+<div class="slide" id="slide0">
+<h1 class="title">Using All These Cores: Transactional Memory in PyPy</h1>
+
+<center><p><strong>Armin Rigo - EuroPython 2014</strong></p>
+</center>
+</div>
+<div class="slide" id="part-1-intro-and-current-status">
+<h1>Part 1 - Intro and Current Status</h1>
+</div>
+<div class="slide" id="introduction">
+<h1>Introduction</h1>
+<ul class="simple">
+<li>PyPy-STM: Software Transactional Memory</li>
+<li>On-going research project:<ul>
+<li>by Remi Meier and myself</li>
+<li>helped by crowdfunding, thanks to all donors</li>
+</ul>
+</li>
+<li>Started as a EuroPython 2011 lightning talk</li>
+</ul>
+</div>
+<div class="slide" id="why-is-there-a-gil">
+<h1>Why is there a GIL?</h1>
+<ul class="simple">
+<li>GIL = Global Interpreter Lock</li>
+<li>initially: CPython was single threaded</li>
+<li>for concurrency (but not parallelism):<ul>
+<li>provide concurrently running threads</li>
+</ul>
+</li>
+<li>easiest way to retrofit into interpreter:<ul>
+<li>acquire GIL around the execution of bytecode instructions</li>
+<li>easy for refcounting, too</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="consequences">
+<h1>Consequences (+)</h1>
+<ul class="simple">
+<li>atomic &amp; isolated instructions:<ul>
+<li>things like <tt class="docutils literal">list.append()</tt> are atomic</li>
+<li>tons of websites mention this</li>
+<li>latent races if Python becomes really parallel</li>
+</ul>
+</li>
+<li>sequential consistency:<ul>
+<li>less surprises; &quot;all variables volatile&quot;</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="id1">
+<h1>Consequences (-)</h1>
+<ul class="simple">
+<li>obviously, no parallelism</li>
+<li>GIL not available to application:<ul>
+<li>all difficulties of concurrency still there</li>
+<li>need application-level locking</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="removing-the-gil">
+<h1>Removing the GIL</h1>
+<ul class="simple">
+<li><ol class="first arabic">
+<li>Fine-grained locking</li>
+</ol>
+</li>
+<li><ol class="first arabic" start="2">
+<li>Shared-nothing</li>
+</ol>
+</li>
+<li><ol class="first arabic" start="3">
+<li>Transactional memory</li>
+</ol>
+</li>
+</ul>
+</div>
+<div class="slide" id="fine-grained-locking">
+<h1>Fine-grained locking</h1>
+<ul class="simple">
+<li>replace GIL with locks on objs / data structures</li>
+<li>accessing different objects can run in parallel</li>
+<li>harder to implement:<ul>
+<li>many locks -&gt; deadlock risks</li>
+<li>refcounting issue</li>
+</ul>
+</li>
+<li>overhead of lock/unlock on objs:<ul>
+<li>Jython depends on JVM for good lock removal</li>
+</ul>
+</li>
+<li>still need application-level locking</li>
+</ul>
+</div>
+<div class="slide" id="shared-nothing">
+<h1>Shared-nothing</h1>
+<ul class="simple">
+<li>each independent part of the program gets its own interpreter</li>
+<li>simple implementation</li>
+<li>gives workaround instead of direct replacement</li>
+<li>not compatible to existing threaded applications, a priori</li>
+<li>explicit communication:<ul>
+<li>good: clean model, no locks</li>
+<li>bad: limitations, overhead</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="transactional-memory">
+<h1>Transactional Memory</h1>
+<ul class="simple">
+<li>like GIL, but instead of blocking, each thread runs optimistically</li>
+<li>&quot;easy&quot; to implement:<ul>
+<li>GIL acquire -&gt; transaction start</li>
+<li>GIL release -&gt; transaction commit</li>
+</ul>
+</li>
+<li>overhead: cross-checking conflicting memory reads and writes,
+and if necessary, cancel and restart transactions</li>
+<li>HTM, STM, or some hybrids exist:<ul>
+<li>but mostly still research-only</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="pypy-stm">
+<h1>PyPy-STM</h1>
+<ul class="simple">
+<li>implementation of a specially-tailored STM (&quot;hard&quot; part):<ul>
+<li>a reusable C library</li>
+<li>called STMGC-C7</li>
+</ul>
+</li>
+<li>used in PyPy to replace the GIL (&quot;easy&quot; part)</li>
+<li>could also be used in CPython<ul>
+<li>but refcounting needs replacing</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="how-does-it-work">
+<h1>How does it work?</h1>
+<object data="fig4.svg" type="image/svg+xml">
+fig4.svg</object>
+</div>
+<div class="slide" id="demo">
+<h1>Demo</h1>
+<ul class="simple">
+<li>counting primes</li>
+</ul>
+</div>
+<div class="slide" id="long-transactions">
+<h1>Long Transactions</h1>
+<ul class="simple">
+<li>threads and application-level locks still needed...</li>
+<li>but <em>can be very coarse:</em><ul>
+<li>two transactions can optimistically run in parallel</li>
+<li>even if they both <em>acquire and release the same lock</em></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="id2">
+<h1>Long Transactions</h1>
+<object data="fig4.svg" type="image/svg+xml">
+fig4.svg</object>
+</div>
+<div class="slide" id="id3">
+<h1>Demo</h1>
+<ul class="simple">
+<li>Bottle web server</li>
+</ul>
+</div>
+<div class="slide" id="pypy-stm-programming-model">
+<h1>PyPy-STM Programming Model</h1>
+<ul class="simple">
+<li>threads-and-locks, fully compatible with the GIL</li>
+<li>this is not &quot;everybody should use careful explicit threading
+with all the locking issues&quot;</li>
+<li>instead, PyPy-STM pushes forward:<ul>
+<li>make or use a thread pool library</li>
+<li>coarse locking, inside that library only</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="id4">
+<h1>PyPy-STM Programming Model</h1>
+<ul class="simple">
+<li>e.g.:<ul>
+<li><tt class="docutils literal">multiprocessing</tt>-like thread pool</li>
+<li>Twisted/Tornado/Bottle extension</li>
+<li>Stackless/greenlet/gevent extension</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="pypy-stm-status">
+<h1>PyPy-STM status</h1>
+<ul class="simple">
+<li>current status:<ul>
+<li>basics work</li>
+<li>best case 25-40% overhead (much better than originally planned)</li>
+<li>app locks not done yet (&quot;with atomic&quot; workaround)</li>
+<li>tons of things to improve</li>
+<li>tons of things to improve</li>
+<li>tons of things to improve</li>
+<li>tons of things to improve</li>
+<li>tons of things to improve</li>
+<li>tons of things to improve</li>
+<li>tons of things to improve</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="summary-benefits">
+<h1>Summary: Benefits</h1>
+<ul class="simple">
+<li>Potential to enable parallelism:<ul>
+<li>in any CPU-bound multithreaded program</li>
+<li>or as a replacement of <tt class="docutils literal">multiprocessing</tt></li>
+<li>but also in existing applications not written for that</li>
+<li>as long as they do multiple things that are &quot;often independent&quot;</li>
+</ul>
+</li>
+<li>Keep locks coarse-grained</li>
+</ul>
+</div>
+<div class="slide" id="summary-issues">
+<h1>Summary: Issues</h1>
+<ul class="simple">
+<li>Keep locks coarse-grained:<ul>
+<li>but in case of systematic conflicts, performance is bad again</li>
+<li>need to track and fix them</li>
+<li>need tool to support this (debugger/profiler)</li>
+</ul>
+</li>
+<li>Performance hit: 25-40% slower than a plain PyPy-JIT (may be ok)</li>
+</ul>
+</div>
+<div class="slide" id="summary-pypy-stm">
+<h1>Summary: PyPy-STM</h1>
+<ul class="simple">
+<li>Not production-ready</li>
+<li>But it has the potential to enable &quot;easier parallelism for everybody&quot;</li>
+<li>Still alpha but slowly getting there!<ul>
+<li>see <a class="reference external" href="http://morepypy.blogspot.com/">http://morepypy.blogspot.com/</a></li>
+</ul>
+</li>
+<li>Crowdfunding!<ul>
+<li>see <a class="reference external" href="http://pypy.org/">http://pypy.org/</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="part-2-under-the-hood">
+<h1>Part 2 - Under The Hood</h1>
+<p><strong>STMGC-C7</strong></p>
+</div>
+<div class="slide" id="overview">
+<h1>Overview</h1>
+<ul class="simple">
+<li>Say we want to run N = 2 threads</li>
+<li>We reserve twice the memory</li>
+<li>Thread 1 reads/writes &quot;memory segment&quot; 1</li>
+<li>Thread 2 reads/writes &quot;memory segment&quot; 2</li>
+<li>Upon commit, we (try to) copy the changes to the other segment</li>
+</ul>
+</div>
+<div class="slide" id="trick-1">
+<h1>Trick #1</h1>
+<ul class="simple">
+<li>Objects contain pointers to each other</li>
+<li>These pointers are relative instead of absolute:<ul>
+<li>accessed as if they were &quot;thread-local data&quot;</li>
+<li>the x86 has a zero-cost way to do that (<tt class="docutils literal">%fs</tt>, <tt class="docutils literal">%gs</tt>)</li>
+<li>supported in clang (not gcc so far)</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="trick-2">
+<h1>Trick #2</h1>
+<ul class="simple">
+<li>With Trick #1, most objects are exactly identical in all N segments:<ul>
+<li>so we share the memory</li>
+<li><tt class="docutils literal">mmap() MAP_SHARED</tt></li>
+<li>actual memory usage is multiplied by much less than N</li>
+</ul>
+</li>
+<li>Newly allocated objects are directly in shared pages:<ul>
+<li>we don't actually need to copy <em>all new objects</em> at commit,
+but only the few <em>old objects</em> modified</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="slide" id="barriers">
+<h1>Barriers</h1>
+<ul class="simple">
+<li>Need to record all reads and writes done by a transaction</li>
+<li>Extremely cheap way to do that:<ul>
+<li><em>Read:</em> set a flag in thread-local memory (one byte)</li>
+<li><em>Write</em> into a newly allocated object: nothing to do</li>
+<li><em>Write</em> into an old object: add the object to a list</li>
+</ul>
+</li>
+<li>Commit: check if each object from that list conflicts with
+a read flag set in some other thread</li>
+</ul>
+</div>
+<div class="slide" id="id5">
+<h1>...</h1>
+</div>
+<div class="slide" id="thank-you">
+<h1>Thank You</h1>
+<ul class="simple">
+<li><a class="reference external" href="http://morepypy.blogspot.com/">http://morepypy.blogspot.com/</a></li>
+<li><a class="reference external" href="http://pypy.org/">http://pypy.org/</a></li>
+<li>irc: <tt class="docutils literal">#pypy</tt> on freenode.net</li>
+</ul>
+</div>
+</div>
+</body>
+</html>
