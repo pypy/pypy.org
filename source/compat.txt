@@ -58,53 +58,59 @@ A community maintained `compatibility wiki`_ is hosted on bitbucket:
 
 * `lxml`_
 
-Known differences that are not going to be fixed:
+The main difference that is not going to be fixed is that PyPy does
+not support refcounting semantics. The following code won't fill the
+file immediately, but only after a certain period of time, when the GC
+does a collection:
 
-* PyPy does not support refcounting semantics. The following code
-  won't fill the file immediately, but only after a certain period
-  of time, when the GC does a collection:
-
-  .. syntax:: python
+.. syntax:: python
 
     open("filename", "w").write("stuff")
 
-  The proper fix is
+The proper fix is
 
-  .. syntax:: python
+.. syntax:: python
 
     f = open("filename", "w")
     f.write("stuff")
     f.close()
 
-  or using the ``with`` keyword
+or using the ``with`` keyword
 
-  .. syntax:: python
+.. syntax:: python
 
     with open("filename", "w") as f:
         f.write("stuff")
 
-  See `more details here`_.
+Similarly, remember that you must ``close()`` a non-exhausted
+generator in order to have its pending ``finally`` or ``with``
+clauses executed immediately:
 
-* For the same reason, some functions and attributes of the ``gc`` module
-  behave in a slightly different way: for example, ``gc.enable`` and
-  ``gc.disable`` are supported, but instead of enabling and disabling the GC,
-  they just enable and disable the execution of finalizers.  Also,
-  ``gc.garbage`` always returns an empty list.
+.. syntax:: python
 
-* You can't add a ``__del__`` method to an existing class; it
-  must be present in the class since the beginning, or else it
-  will not be automatically called when instances are freed.
+    def mygen():
+        with foo:
+            yield 42
 
-* You can't store non-string keys in type objects. Example
+    for x in mygen():
+        if x == 42:
+            break    # foo.__exit__ is not run immediately!
 
-  .. syntax:: python
+    # fixed version:
+    gen = mygen()
+    try:
+        for x in gen:
+            if x == 42:
+                break
+    finally:
+        gen.close()
 
-    class A(object):
-        locals()[42] = 3
+More generally, ``__del__()`` methods are not executed as predictively
+as on CPython: they run "some time later" in PyPy (or not at all if
+the program finishes running in the meantime).  See `more details
+here`_.
 
-  won't work.
-
-A more complete list is available at `our dev site`_.
+A more complete list of known differences is available at `our dev site`_.
 
 .. _`CPython C API`: http://docs.python.org/c-api/
 .. _`CFFI`: http://cffi.readthedocs.org/
