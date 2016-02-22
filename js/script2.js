@@ -18,9 +18,11 @@ function numpy_donate() {
     $.get("don3.html", set_sidebar_html);
 }
 
+/*
 if (location.href.indexOf("numpydonate.html") >= 0)
     f = numpy_donate;
-else if (location.href.indexOf("py3donate.html") >= 0)
+*/
+if (location.href.indexOf("py3donate.html") >= 0)
     f = py3k_donate;
 else
     f = stm_donate;
