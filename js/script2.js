@@ -25,5 +25,5 @@ if (location.href.indexOf("numpydonate.html") >= 0)
 if (location.href.indexOf("py3donate.html") >= 0)
     f = py3k_donate;
 else
-    f = stm_donate;
+    f = general_donate;
 $(document).ready(f);
