@@ -1,0 +1,55 @@
+.. title: index
+.. slug: index
+.. date: 2019-12-28 16:14:02 UTC
+.. tags: 
+.. category: 
+.. link: 
+.. description: 
+.. type: text
+
+PyPy is a `fast`_, `compliant`_ alternative implementation of the `Python`_
+language (2.7.13 and 3.6.9). It has several advantages and distinct features:
+
+  * **Speed:** thanks to its Just-in-Time compiler, Python programs
+    often run `faster`_ on PyPy.  `(What is a JIT compiler?)`_
+
+    "If you want your code to run faster, you should probably just use PyPy."
+    -- Guido van Rossum (creator of Python)
+
+  * **Memory usage:** memory-hungry Python programs (several hundreds of
+    MBs or more) might end up taking `less space`_ than they do in CPython.
+
+  * **Compatibility:** PyPy is `highly compatible`_ with existing python code.
+    It supports `cffi`_ and can run popular python libraries like `twisted`_
+    and `django`_.
+
+  * **Stackless:** PyPy comes by default with support for `stackless mode`_,
+    providing micro-threads for massive concurrency.
+
+  * As well as other `features`_.
+
+.. class:: download
+
+`Download and try out PyPy`__
+
+.. __: download.html
+
+Want to know more? A good place to start is our detailed `speed`_ and
+`compatibility`_ reports!
+
+.. _`stackless mode`: features.html#stackless
+.. _`Python`: http://python.org/
+.. _`fast`: http://speed.pypy.org/
+.. _`faster`: http://speed.pypy.org/
+.. _`(What is a JIT compiler?)`: http://en.wikipedia.org/wiki/Just-in-time_compilation
+.. _`run untrusted code`: features.html#sandboxing
+.. _`compliant`: compat.html
+.. _`Python docs`: http://docs.python.org/2.7
+.. _`twisted`: https://twistedmatrix.com/
+.. _`django`: https://www.djangoproject.com/
+.. _`cffi`: https://cffi.readthedocs.org
+.. _`features`: features.html
+.. _`less space`: http://morepypy.blogspot.com/2009/10/gc-improvements.html
+.. _`highly compatible`: compat.html
+.. _`speed`: http://speed.pypy.org/
+.. _`compatibility`: compat.html
