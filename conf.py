@@ -139,7 +139,7 @@ TRANSLATIONS_PATTERN = '{path}.{lang}.{ext}'
 
 NAVIGATION_LINKS = {
     DEFAULT_LANG: (
-        ('/index.html', 'Home'),
+        ('/index.html', '<image src="images/pypy-logo-nav.png" alt=PyPy/>'),
         ('/features.html', 'What is PyPy?'),
         ('/download.html', 'Download'),
         ('/compat.html', 'Compatibility'),
@@ -224,9 +224,9 @@ THEME_CONFIG = {
 #     )
 
 POSTS = (
+    ("posts/*.txt", "posts", "post.tmpl"),
     ("posts/*.rst", "posts", "post.tmpl"),
     ("posts/*.md", "posts", "post.tmpl"),
-    ("posts/*.txt", "posts", "post.tmpl"),
     ("posts/*.html", "posts", "post.tmpl"),
 )
 PAGES = (
@@ -350,7 +350,6 @@ COMPILERS = {
 # Final output is <img src="LOGO_URL" id="logo" alt="BLOG_TITLE">.
 # The URL may be relative to the site root.
 # LOGO_URL = ''
-LOGO_URL = 'images/pypy-logo.png'
 
 # If you want to hide the title of your website (for example, if your logo
 # already contains the text), set this to False.
@@ -663,7 +662,7 @@ GITHUB_COMMIT_SOURCE = True
 # Where the output site should be located
 # If you don't use an absolute path, it will be considered as relative
 # to the location of conf.py
-#OUTPUT_FOLDER = 'output'
+# OUTPUT_FOLDER = 'output'
 OUTPUT_FOLDER = 'public'
 
 # where the "cache" of partial generated content should be located
@@ -896,11 +895,10 @@ IMAGE_FOLDERS = {'image': 'images'}
 # FAVICONS contains (name, file, size) tuples.
 # Used to create favicon link like this:
 # <link rel="name" href="file" sizes="size"/>
-#FAVICONS = (
+# FAVICONS = (
 #     ("icon", "/favicon.ico", "16x16"),
 #     ("icon", "/icon_128x128.png", "128x128"),
-#      ("shortcut icon", "/favicon.ico", "16x16"),
-#)
+# )
 
 # Show teasers (instead of full posts) in indexes? Defaults to False.
 # INDEX_TEASERS = False
@@ -1298,6 +1296,7 @@ MARKDOWN_EXTENSIONS = ['markdown.extensions.fenced_code', 'markdown.extensions.c
 # environment but is not recommended for HTTP/2.0 when caching is used.
 # Defaults to True.
 # USE_BUNDLES = True
+USE_BUNDLES = False
 
 # Plugins you don't want to use. Be careful :-)
 # DISABLED_PLUGINS = ["render_galleries"]

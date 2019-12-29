@@ -6,9 +6,6 @@
 .. link: 
 .. description: 
 
-What is PyPy?
-===========================================================
-
 PyPy is a replacement for CPython.  It is built using the RPython
 language that was co-developed with it.  The main reason to use it
 instead of CPython is speed: it runs generally faster (see next section).
