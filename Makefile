@@ -20,7 +20,7 @@ build: venv_nikola/bin/nikola  ## build the website if needed, the result is in 
 > venv_nikola/bin/nikola build
 
 auto: venv_nikola/bin/nikola ## build and serve the website, autoupdate on changes
-> venv_nikola/bin/nikola auto
+> venv_nikola/bin/nikola auto -a 0.0.0.0
 
 clean:  venv_nikola/bin/nikola  ## clean the website, usually not needed at all
 > venv_nikola/bin/nikola clean
