@@ -6,7 +6,10 @@
 .. link: 
 .. description: 
 
-.. class:: download_menu
+.. contents::
+    :depth: 2
+
+.. note::
 
   There are `nightly binary builds`_ available. Those builds are not always
   as stable as the release, but they contain numerous bugfixes and
@@ -23,19 +26,6 @@ Linux, Mac OS X and Windows (`what's new in PyPy 7.3.0?`_):
 
 .. _what's new in PyPy 7.3.0?: http://doc.pypy.org/en/latest/release-v7.3.0.html
 
-
-.. class:: download_menu
-
- * Download
-
-   * `Default (with a JIT Compiler)`_
-   * `Other versions`_
-
- * `Installing`_ (optional)
- * `Installing more modules`_
- * `Building from source`_
- * `Packaging`_
- * `Checksums`_
 
 .. _`Default (with a JIT Compiler)`:
 
@@ -83,7 +73,7 @@ are better solutions:
 
 * or translate_ your own PyPy.
 
-.. class:: download_menu
+.. note::
 
     SSL Certificates
 

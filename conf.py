@@ -139,16 +139,26 @@ TRANSLATIONS_PATTERN = '{path}.{lang}.{ext}'
 
 NAVIGATION_LINKS = {
     DEFAULT_LANG: (
-        ('/index.html', '<image src="images/pypy-logo-nav.png" alt=PyPy/>'),
-        ('/features.html', 'What is PyPy?'),
+        ('/index.html', '<image src="images/pypy-logo.svg" width=75 alt=PyPy>'),
+        (
+            (
+                ('/features.html', 'What is PyPy?'),
+                ('/compat.html', 'Compatibility'),
+                ('/performance.html', 'Performance'),
+            ),
+            'Features',
+        ),
         ('/download.html', 'Download'),
-        ('/compat.html', 'Compatibility'),
-        ('/performance.html', 'Performance'),
         ('http://doc.pypy.org', 'Dev Documentation'),
         ('http://morepypy.blogspot.com', 'Blog'),
-        ('/people.html', 'People'),
-        ('/contact.html', 'Contact'),
-        ("/rss.xml", "RSS feed"),
+        (
+            (
+                ('/people.html', 'People'),
+                ('/contact.html', 'Contact'),
+            ),
+            'About',
+        ),
+        #("/rss.xml", "RSS feed"),
     ),
 }
 
@@ -944,7 +954,11 @@ LICENSE = ""
 
 # A small copyright notice for the page footer (in HTML).
 # (translatable)
-CONTENT_FOOTER = 'Contents &copy; {date}         <a href="mailto:{email}">{author}</a> - Powered by         <a href="https://getnikola.com" rel="nofollow">Nikola</a>         {license}'
+CONTENT_FOOTER = """
+<img src="images/pypy-logo-nav-grey.png" alt="PyPy Logo" />  Contents &copy;
+{date} <a href="mailto:{email}">{author}</a> Powered by <a
+href="https://getnikola.com" rel="nofollow">Nikola</a> {license}
+"""
 
 # Things that will be passed to CONTENT_FOOTER.format().  This is done
 # for translatability, as dicts are not formattable.  Nikola will

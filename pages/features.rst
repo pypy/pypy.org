@@ -1,12 +1,13 @@
-.. title: What is PyPy?
+.. title: PyPy - Features
 .. slug: features
 .. date: 2019-12-28 16:14:02 UTC
 .. tags: 
 .. category: 
 .. link: 
-.. description: 
+.. author: The PyPy Team
+.. description: What is PyPy and what are its features
 
-PyPy is a replacement for CPython.  It is built using the RPython
+**PyPy** is a replacement for CPython.  It is built using the RPython
 language that was co-developed with it.  The main reason to use it
 instead of CPython is speed: it runs generally faster (see next section).
 
@@ -39,16 +40,17 @@ If you are interested in helping to move forward, see our `howtohelp`_ page.
 .. _`System Z (s390x)`: https://de.wikipedia.org/wiki/System/390
 .. _`howtohelp`: howtohelp.html
 
-
+.. |---| unicode:: U+2014  .. em dash, trimming surrounding whitespace
+   :trim:
 
 The main features of PyPy:
 --------------------------
 
 Speed
------
+=====
 
 Our `main executable`_ comes with a Just-in-Time compiler.  It is
-`really fast`_ in running most benchmarks --- including very large and
+`really fast`_ in running most benchmarks |---| including very large and
 complicated Python applications, not just 10-liners.
 
 There are two cases that you should be aware where PyPy will *not* be
@@ -72,7 +74,7 @@ but still support (ideally) any Python program.
 
 
 Memory usage
---------------------------
+============
 
 Memory-hungry Python programs (several hundreds of MBs or more) might
 end up taking less space than they do in CPython.  It is not always
@@ -81,7 +83,7 @@ the baseline is higher than CPython's.
 
 
 Stackless
---------------------------
+=========
 
 Support for Stackless_ and greenlets are now integrated in the normal
 PyPy.  More detailed information is available here__.
@@ -91,7 +93,7 @@ PyPy.  More detailed information is available here__.
 
 
 Other features
----------------------------------------
+==============
 
 PyPy has many secondary features and semi-independent
 projects.  We will mention here:
@@ -105,7 +107,7 @@ projects.  We will mention here:
 
 
 Sandboxing
---------------------
+==========
 
 PyPy's *sandboxing* is a working prototype for the idea of running untrusted
 user programs. Unlike other sandboxing approaches for Python, PyPy's does not
@@ -113,28 +115,32 @@ try to limit language features considered "unsafe". Instead we replace all
 calls to external libraries (C or platform) with a stub that communicates
 with an external process handling the policy.
 
-+-----------------------------------------------------------------------------+
-| **Please be aware that it is a prototype only.**  *It needs work to become  |
-| more complete, and you are welcome to help.  In particular, almost none     |
-| of the extension modules work (not even* ``time`` *), and* ``pypy_interact``|
-| *is merely a demo.  Also, a more complete system would include a way        |
-| to do the same as* ``pypy_interact`` *from other languages than Python,     |
-| to embed a sandboxed interpreter inside programs written in other           |
-| languages.*                                                                 |
-+-----------------------------------------------------------------------------+
+.. note::
+
+    **Please be aware that it is a prototype only.**  It needs work to become  
+    more complete, and you are welcome to help.  In particular, almost none     
+    of the extension modules work (not even ``time`` ), and ``pypy_interact``
+    is merely a demo.  Also, a more complete system would include a way        
+    to do the same as ``pypy_interact`` from other languages than Python,     
+    to embed a sandboxed interpreter inside programs written in other           
+    languages. 
 
 To run the sandboxed process, you need to get the full sources and
 build ``pypy-sandbox`` from it (see `Building from source`_).  These
 instructions give you a ``pypy-c`` that you should rename to
-``pypy-sandbox`` to avoid future confusion.  Then run::
+``pypy-sandbox`` to avoid future confusion.  Then run:
 
-   cd pypy/sandbox
-   pypy_interact.py path/to/pypy-sandbox
-   # don't confuse it with pypy/goal/pyinteractive.py!
+.. code-block:: bash
+
+    cd pypy/sandbox
+    pypy_interact.py path/to/pypy-sandbox
+    # don't confuse it with pypy/goal/pyinteractive.py!
 
 You get a fully sandboxed interpreter, in its own filesystem hierarchy
 (try ``os.listdir('/')``).  For example, you would run an untrusted
-script as follows::
+script as follows:
+
+.. code-block:: bash
 
    mkdir virtualtmp
    cp untrusted.py virtualtmp/
@@ -149,9 +155,6 @@ To read more about its features, try ``pypy_interact.py --help`` or go to
 
 .. _`Building from source`: download.html#building-from-source
 .. _`our documentation site`: http://pypy.readthedocs.org/en/latest/sandbox.html
-
-
-
 
 .. _`the cli-jit branch`: https://bitbucket.org/pypy/pypy/src/cli-jit
 .. _`contact us`: contact.html

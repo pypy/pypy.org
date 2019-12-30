@@ -14,17 +14,11 @@ of the commonly used Python `standard library modules`_; details below.
 PyPy3 implements the Python language version 3.6.9.  It has been released,
 but Python is a large language and it is quite possible that a few things are missing.
 
-.. class:: download_menu
-
-   `List of installable top 1000 PyPI packages`_
-
 PyPy has support for the `CPython C API`_, however there are constructs
 that are `not compatible`.  We strongly advise use of `CFFI`_
 instead. CFFI come builtin with PyPy. Many libraries will require
 a bit of effort to work, but there are known success stories. Check out
-PyPy blog for updates, as well as the `Compatibility Wiki`__.
-
-.. __: https://bitbucket.org/pypy/compatibility/wiki/Home
+PyPy blog for updates
 
 C extensions need to be recompiled for PyPy in order to work. Depending on
 your build system, it might work out of the box or will be slightly harder.
@@ -33,11 +27,11 @@ Standard library modules supported by PyPy. Note that large parts of python
 library are implemented in pure python, so they don't have to be listed
 there. Please just check if it imports. If it imports, it should work.
 
-* ``__builtin__, __pypy__, _ast, _cffi_backend, _codecs, _collections, _continuation, _csv, _file, _hashlib, _io, _locale, _lsprof, _md5, _minimal_curses, _multibytecodec, _multiprocessing, _numpypy, _pickle_support, _pypyjson, _random, _rawffi, _sha, _socket, _sre, _ssl, _struct, _testing, _warnings, _weakref, array, binascii, bz2, cStringIO, cmath, cppyy, cpyext, crypt, errno, exceptions, fcntl, gc, imp, itertools, marshal, math, mmap, operator, parser, posix, pwd, pyexpat, pypyjit, select, signal, symbol, sys, termios, thread, time, token, unicodedata, zipimport, zlib``
+``__builtin__, __pypy__, _ast, _cffi_backend, _codecs, _collections, _continuation, _csv, _file, _hashlib, _io, _locale, _lsprof, _md5, _minimal_curses, _multibytecodec, _multiprocessing, _numpypy, _pickle_support, _pypyjson, _random, _rawffi, _sha, _socket, _sre, _ssl, _struct, _testing, _warnings, _weakref, array, binascii, bz2, cStringIO, cmath, cppyy, cpyext, crypt, errno, exceptions, fcntl, gc, imp, itertools, marshal, math, mmap, operator, parser, posix, pwd, pyexpat, pypyjit, select, signal, symbol, sys, termios, thread, time, token, unicodedata, zipimport, zlib``
 
-Supported, but written in pure Python:
+Supported, and written in pure Python:
 
-* ``cPickle, ctypes, datetime, dbm, _functools, grp, readline, resource, sqlite3, syslog``
+``cPickle, ctypes, datetime, dbm, _functools, grp, readline, resource, sqlite3, syslog``
 
 All modules that are pure python in CPython of course work.
 
@@ -79,14 +73,6 @@ The proper fix is
 
 .. code-block:: python
 
-    f = open("filename", "w")
-    f.write("stuff")
-    f.close()
-
-or using the ``with`` keyword
-
-.. code-block:: python
-
     with open("filename", "w") as f:
         f.write("stuff")
 
@@ -95,12 +81,11 @@ program opens a large number of files without closing them explicitly.
 In that case, you can easily hit the system limit on the number of file
 descriptors that are allowed to be opened at the same time.
 
-Since release 5.4, PyPy can be run with the command-line option ``-X
-track-resources`` (as in, ``pypy -X track-resources myprogram.py``).
-This produces a ResourceWarning when the GC closes a non-closed file or
-socket.  The traceback for the place where the file or socket was
-allocated is given as well, which aids finding places where ``close()``
-is missing.
+PyPy can be run with the command-line option ``-X track-resources`` (as in,
+``pypy -X track-resources myprogram.py``). This produces a ``ResourceWarning``
+when the GC closes a non-closed file or socket.  The traceback for the place
+where the file or socket was allocated is given as well, which aids finding
+places where ``close()`` is missing.
 
 Similarly, remember that you must ``close()`` a non-exhausted
 generator in order to have its pending ``finally`` or ``with``
