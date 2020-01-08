@@ -34,32 +34,22 @@ A `fast`_, `compliant`_ alternative implementation of `Python`_
 .. _`What is PyPy`: features.html
 .. _`Documentation`: https://doc.pypy.org
 
-.. raw:: html
-
-    </div>
-    <div class="column pb-4" "flex-basis: 400px">
-
-.. class:: small
-
-On average, PyPy is **4.4 times faser** than CPython
-
-.. figure:: images/pypy_speed_graph.png
-    :alt: PyPy vs. Python speed comparison graph"
-    :figclass: text-sm
-
-    PyPy trunk (with JIT) benchmark times normalized to CPython. Smaller is
-    better. Based on he geometric average of all benchmarks
-
-.. raw:: html
-
-    </div>
-    </div>
 
 ::
 
     "If you want your code to run faster,
     you should probably just use PyPy."
     -- Guido van Rossum (creator of Python)
+
+On average, PyPy is **4.4 times faster** than CPython
+
+.. figure:: images/pypy_speed_graph.png
+    :alt: PyPy vs. Python speed comparison graph"
+    :figclass: text-sm
+
+    PyPy trunk (with JIT) benchmark times normalized to CPython. Smaller is
+    better. Based on the geometric average of all benchmarks
+
 
 **Advantages and distinct Features**
 
