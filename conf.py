@@ -137,9 +137,11 @@ TRANSLATIONS_PATTERN = '{path}.{lang}.{ext}'
 #          with a ``/``, otherwise end them with ``/index.html`` — or
 #          else they won’t be highlighted when active.
 
+# PyPy templates out the logo into a div, so it is not here
+
 NAVIGATION_LINKS = {
     DEFAULT_LANG: (
-        ('/index.html', '<image src="images/pypy-logo.svg" width=75 alt=PyPy>'),
+        
         (
             (
                 ('/features.html', 'What is PyPy?'),
@@ -955,9 +957,15 @@ LICENSE = ""
 # A small copyright notice for the page footer (in HTML).
 # (translatable)
 CONTENT_FOOTER = """
-<img src="images/pypy-logo-nav-grey.png" alt="PyPy Logo" />  Contents &copy;
-{date} <a href="mailto:{email}">{author}</a> Powered by <a
-href="https://getnikola.com" rel="nofollow">Nikola</a> {license}
+<div class="myfooter">
+  <div>
+    <img src="images/pypy-logo-nav-grey.png" alt="PyPy Logo" />
+  </div>
+  <div class=logotext>
+    &nbsp;Contents &copy; {date} <a href="mailto:{email}">{author}</a>
+    Powered by <a href="https://getnikola.com" rel="nofollow">Nikola</a> {license}
+  </div>
+</div>
 """
 
 # Things that will be passed to CONTENT_FOOTER.format().  This is done
