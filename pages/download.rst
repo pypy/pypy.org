@@ -107,7 +107,7 @@ Python2.7 compatible PyPy 7.3.0
 * `Mac OS X binary (64bit)`__
 * FreeBSD x86 and x86_64: see FreshPorts_
 * `Windows binary (32bit)`__ (you might need the VC runtime library
-  installer `vcredist.x86.exe`_.)
+  installer `vcredist.x86.exe`_ for PyPy2.7 and a different `runtime`_ for PyPy3.)
 * `Linux aarch64 binary (64bit, built on Ubuntu 18.04)`__ (see ``[1]`` below)
 * `PowerPC PPC64 Linux binary (64bit big-endian, Fedora 20)`__ (see ``[1]`` below)
 * `PowerPC PPC64le Linux binary (64bit little-endian, Fedora 21)`__ (see ``[1]`` below)
@@ -128,6 +128,7 @@ Python2.7 compatible PyPy 7.3.0
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.0-src.tar.bz2
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.0-src.zip
 .. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
+.. _`runtime`: https://www.microsoft.com/en-us/download/details.aspx?id=48145
 .. __: https://bitbucket.org/pypy/pypy/downloads
 .. _mirror: http://buildbot.pypy.org/mirror/
 .. _FreshPorts: http://www.freshports.org/lang/pypy
