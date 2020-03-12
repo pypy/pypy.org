@@ -203,7 +203,7 @@ The other versions of PyPy are:
   programs by going forward and backward in time.  See the `RevDB
   documentation`__.
 
-.. __: https://bitbucket.org/pypy/revdb/
+.. __: https://foss.heptapod.net/pypy/revdb/
 
 * Old-style sandboxing: A special safe version.
   *This is NOT the version announced in-development during 2019!*
@@ -257,12 +257,11 @@ Building from source
 
 1. Get the source code.  The preferred way is to checkout the current
    trunk using Mercurial_.  The trunk usually works and is of course
-   more up-to-date.  The following command should run in about 7 minutes
-   nowadays if you have hg >= 3.7 (it is much slower with older versions):
+   more up-to-date:
 
    .. code-block:: bash
 
-     hg clone https://bitbucket.org/pypy/pypy
+     hg clone https://foss.heptapod.net/pypy/pypy
 
    The trunk contains PyPy 2.  For PyPy 3, switch to the correct branch:
 
