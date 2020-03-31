@@ -1,0 +1,406 @@
+---
+layout: page
+title: Call for donations - Transactional Memory / Automatic Mutual Exclusion in PyPy
+---
+
+=================================================
+Transactional Memory / Automatic Mutual Exclusion
+=================================================
+
+.. class:: download_menu
+
+   **UPDATE (April 2014): this is the old Call for Donations about
+   Transactional Memory**, kept around for historical purposes.  A `new Call
+   for Donations`__ is available.
+
+.. __: tmdonate2.html
+
+
+Introduction
+============
+
+In the presence of today's machines with multiple processors, Python
+progress is lagging behind: on any CPU-constrained program, developers
+have a difficult choice to make.  They can use in-process solutions that
+do not offer multi-CPU usage.  In this respect, the natural choice
+nowadays is to use Twisted or other event-based paradigms, or systems
+that hide events in the control flow, like Stackless; or alternatively,
+they can use the existing ``threading`` module, with its associated GIL
+and the complexities of real multi-threaded programming (locks,
+deadlocks, races, etc.), which make this solution less attractive.  The
+big alternative is for them to rely on one of various multi-process
+solutions that are outside the scope of the core language; all of them
+in some way or another are hacks that require extra knowledge and time
+to use and that have an impact on the structure of the whole program.
+
+This proposal is about researching and implementing Transactional Memory
+in PyPy.  This is a technique that recently came to the front of the
+multi-core scene.  It promises to offer multi-core CPU usage without
+requiring to fall back to the multi-process solutions described above,
+and also without using the ``threading`` module --- just as a small,
+local extension of the programming language that would be used only in
+the core of the event loops.
+
+(Jump directly to `What Python interface will I use?`_ for practical
+details.)
+
+
+In more details
+===============
+
+This is a call for financial help in researching and implementing a
+version of PyPy able to use multiple processors in a single process.
+This will give a GIL-less Python, i.e. a Python that runs without the
+infamous Global Interpreter Lock.
+
+The basic ideas to do it have been discussed on pypy-dev `[1]`__ `[2]`__
+and on a blog post `[3]`__.
+The goal is to adapt Transactional Memory --- currently only available
+as software, but `soon available as hardware`_ --- to the task of running
+sections of Python code in parallel on multiple processors, while giving
+the programmer the illusion of serial execution.  It is called below
+"PyPy-TM".
+
+.. __: http://mail.python.org/pipermail/pypy-dev/2011-August/008153.html
+.. __: http://mail.python.org/pipermail/pypy-dev/2012-January/009034.html
+.. __: http://morepypy.blogspot.com/2012/01/transactional-memory-ii.html
+
+The main developer will be Armin Rigo.
+This is a "researchy" goal in the sense of us not being quite sure of
+the performance of the result.  We currently estimate the one-year
+performance goal at 2x-to-5x slower than regular PyPy in fully serial
+applications.  We feel confident that it can work, though, in the
+following sense: the performance of PyPy-TM running suited applications
+should scale linearly or close-to-linearly with the number of processors.
+This means that you just need a machine with at least 4 or 8 processors,
+which is already common today and will be even more so in one or two
+years.
+
+You will find below a sketch of the `work plan`_.  If more money than
+requested is collected, then the excess will be entered into the general
+PyPy pot, used for example to finance sprint travel costs to students.
+
+**Note** For donations higher than $1,000, we can arrange for an invoice
+and a different payment method to avoid the high Paypal fees.  Please
+contact pypy at sfconservancy.org if you want to know details on how
+to donate via other means.
+
+
+What is the Global Interpreter Lock?
+------------------------------------
+
+The GIL, or Global Interpreter Lock, is a single lock in both CPython
+and (so far) PyPy, that all threads must acquire in order to execute
+Python bytecodes.  This means that so far, in Python, even when using
+threads we do not gain any benefit in term of multicore performance.
+
+
+What is Transactional Memory?
+-----------------------------
+
+`Transactional Memory`_ --- TM --- is a technique imported from databases: every
+time we want to do a change to the processors' main memory, we do it in
+a "transaction".  Multiple transactions can be executed in parallel by
+multiple cores.  When a transaction is complete, we try to commit it.
+This might either succeed, or (if another transaction committed
+incompatible changes) fail.  If it fails, which is hopefully rare, we
+need to restart the transaction from scratch.
+
+.. _`Transactional Memory`: http://en.wikipedia.org/wiki/Transactional_memory
+
+
+Why hasn't the idea been implemented for CPython already?
+---------------------------------------------------------
+
+Because of the additional complexity required, and mostly, because of
+performance issues.  There have been some experiments already with
+CPython on *Hardware* Transactional Memory:
+
+* `Riley and Zilles (2006)`__
+* `Tabba (2010)`__
+
+.. __: http://sabi.net/nriley/pubs/dls6-riley.pdf
+.. __: http://www.cs.auckland.ac.nz/~fuad/parpycan.pdf
+
+The motivation for using PyPy instead of CPython is the extra
+flexibility of the general approach, as well as the ability to utilize
+the JIT in order to remove part of the overhead that comes with
+*Software* Transactional Memory.
+
+
+A GIL-less Python is impossible.
+--------------------------------
+
+This is a classic criticism of research-oriented projects.  We believe
+that the `work plan`_ below can make a serious impact on considering
+possible a GIL-less Python.  We believe we can do it, but at the
+very least, even if this work generates a negative result, the negative
+result will document the challenges faced should someone else want to
+reattempt the idea in the future.
+
+Nevertheless other projects, such as Psyco (also by Armin) and PyPy
+itself, were called impossible before they were attempted, and have
+hitherto been very successful.
+
+
+Why do it with PyPy instead of CPython?
+---------------------------------------
+
+Because PyPy is designed to be open to this kind of research.  This will
+require no work in the Python interpreter part of PyPy, and instead we
+can focus on e.g. the concurrent garbage collection and the JIT issues.
+`Riley and Zilles`__ have also experimented with Hardware Transactional
+Memory using PyPy.  By contrast, for example, CPython is stuck with
+reference counting, which is known to be an issue for Transactional
+Memory (`Tabba`__ proposes to give up and use Boehm_, which is a bad
+idea in our experience, particularly because of scalability issues).
+
+.. __: http://sabi.net/nriley/pubs/dls6-riley.pdf
+.. __: http://www.cs.auckland.ac.nz/~fuad/parpycan.pdf
+.. _Boehm: http://www.hpl.hp.com/personal/Hans_Boehm/gc/
+
+
+What Python interface will I use?
+---------------------------------
+
+Previous attempts on Hardware
+Transactional Memory focused on parallelizing existing programs written
+using the ``thread`` or ``threading`` modules.  However, as argued
+here__, this may not be the most practical way to achieve real
+multithreading; it seems that better alternatives would offer good
+scalability too.  Notably, TM could benefit any event-based system that
+is written to dispatch events serially (Twisted-based, most GUI toolkit,
+Stackless, gevent, and so on).  The events would internally be processed
+in parallel, while maintaining the illusion of serial execution, with
+all the corresponding benefits of safety.  This should be possible with minimal
+changes to the event dispatchers. This approach has been described by the
+`Automatic Mutual Exclusion`_ work at Microsoft Research, but not been
+implemented anywhere (to the best of our knowledge).
+
+.. _`Automatic Mutual Exclusion`: http://research.microsoft.com/en-us/projects/ame/default.aspx
+
+Note that, yes, this gives you both sides of the coin: you keep using
+your non-thread-based program (without worrying about locks and their
+drawbacks like deadlocks, races, and friends), *and* your programs
+benefit from all your cores.
+
+.. __: http://mail.python.org/pipermail/pypy-dev/2012-January/009044.html
+
+In more details, a low-level built-in module will provide the basics to
+start transactions in parallel; but this module will be only used
+internally in a tweaked version of, say, a Twisted reactor.  Using this
+reactor will be enough for your existing Twisted-based programs to
+actually run on multiple cores.  You --- as a developer of the
+Twisted-based program --- have only to care about improving the
+parallelizability of your program (e.g. by splitting time-consuming
+transactions into several parts; the exact rules will be published in
+detail once they are known).  But the point is that your program is
+always correct.
+
+See some `concrete example`__ of the API.
+
+.. __: https://bitbucket.org/pypy/pypy/raw/stm-gc/lib_pypy/transaction.py
+
+
+Speed
+-----
+
+We estimate the one-year performance target to be 2x-to-5x slower than
+the performance of the regular PyPy in fully serial applications.  (Of
+course, the regular PyPy will not disappear; for the foreseeable future,
+PyPy-TM will be an alternative executable.)
+
+The performance of PyPy-TM running suited applications should scale
+linearly or close-to-linearly with the number of processor.  This means
+that in order to see the benefits, you just need a machine with at least
+4 or 8 processors --- which is already common today and will be even
+more so in one or two years.
+
+
+.. _`soon available as hardware`:
+
+Hardware Transactional Memory
+-----------------------------
+
+The performance of PyPy-TM running on Hardware Transactional Memory is
+unknown so far, but should ideally be close to the performance of a
+regular PyPy.
+
+In more details: This proposal is for work based entirely on *Software*
+Transactional Memory.  However, in the future the ideas and most of the
+code should map directly to Hardware Transactional Memory (HTM).  We
+expect HTM to reduce a lot the cost of some of the issues that we face,
+but not completely remove it.  For example, `AMD's old proposal`_ was
+that there would be two ways to emit memory-referencing
+instructions: one that goes via the HTM mechanisms, and one (the regular
+one) which doesn't.  Choosing the best one on a
+case-by-case basis in the JIT makes a difference in
+performance (although of course not as great as with Software
+Transactional Memory).
+
+`Intel's current proposal`_ on Haswell_ processors does not have this
+distinction, which means transactions are likely to quickly overflow the
+internal buffers.  As a result, the first generation HTM-capable
+processors may not be suited for the approach described here.  But
+this depends on details like the capacity of the hardware buffers that
+are still secret at this point.
+
+(Note also that HTM does not solve some of the issues for implementing
+Transactional Memory in CPython, notably the issue with reference
+counting.  We will have to wait for a real CPython experiment before
+we can settle this question.  Also, this would "just" remove the GIL
+but not offer a multi-core version of non-thread-based programs.)
+
+.. _`AMD's old proposal`: http://developer.amd.com/tools/ASF/Pages/default.aspx
+.. _`Intel's current proposal`: http://software.intel.com/en-us/avx/
+.. _Haswell: http://en.wikipedia.org/wiki/Haswell_%28microarchitecture%29
+
+
+Alternatives
+------------
+
+PyPy-TM will be slower than judicious usage of existing alternatives,
+based on multiple processes that communicate with each other in one way
+or another.  The counter-argument is that TM is not only a cleaner
+solution: there are cases in which it is not doable to organize (or
+retrofit) an existing program into the particular format needed for the
+alternatives.  In particular, small quickly-written programs don't need
+the additional baggage of cross-process communication, and large
+programs can sometimes be almost impossible to turn into multi-process
+versions.  By contrast, we believe that TM can fit naturally into most
+programs, because it only requires local changes to some dispatcher; the
+rest of the program should work without changes.
+
+
+More readings
+-------------
+
+* `Original blog post`__
+* pypy-dev mails `[1]`__ `[2]`__
+* `All our blog posts about stm`__
+
+.. __: http://morepypy.blogspot.com/2011/08/we-need-software-transactional-memory.html
+.. __: http://mail.python.org/pipermail/pypy-dev/2011-August/008153.html
+.. __: http://mail.python.org/pipermail/pypy-dev/2012-January/009034.html
+.. __: http://morepypy.blogspot.com/search/label/stm
+
+
+Work plan
+=========
+
+This is an very rough estimate of the amount of work it would take to
+complete the steps for an experienced developer who is already familiar
+with the PyPy codebase.  As this is a research proposal, we cannot
+guarantee the time estimates here, but we do agree to report regularly to
+the community, so our progress can be followed publicly. 
+
+Paid work will be at $60/hour, but at least one developer who will work on
+the project --- Armin Rigo --- has committed to 2 hours
+of volunteer work per paid hour (so
+the total amount of money that we ask is divided by three).  A 5% general
+donation will go to the `Software Freedom Conservancy`_ itself, the
+non-profit organization of which the PyPy project is a member and which
+manages all the issues related to donations, payments, and tax-exempt
+status.
+
+.. _`Software Freedom Conservancy`: http://sfconservancy.org/
+.. _rstm: http://www.cs.rochester.edu/research/synchronization/rstm/
+
+
+* **STM Library**:
+
+  This part covers adapting an existing STM library for PyPy.  It is
+  already mostly done (based on rstm_), but additional tweaks may be
+  required.
+
+* **Basic tweaks of the translation process**:
+
+  This part covers tweaks needed during the translation process in
+  order to generate an STM-aware version of the RPython programs,
+  including PyPy itself.  It is partly done, but not finished.
+  Estimate: 1 month.
+
+* **Garbage collection**:
+
+  We need a different garbage collector that is able to cope at least
+  with concurrent allocations.  From there, improving the situation is
+  its own open-ended subproject: we can add for example various kinds of
+  parallel collection, synchronized or unsynchronized root tracing,
+  etc.  Estimate for the basic part: 2 months.  Estimate for the rest:
+  4 extra months.
+
+* **User interface**:
+
+  This is the problem of designing and implementing some interface or
+  interfaces for the Python programmer.  We put it in its own category
+  because of its "end-user" importance.  Estimate: 2 months.
+
+* **JIT integration**:
+
+  The above would give us a (probably very slow) version of PyPy-TM.
+  This final part is to integrate it with the JIT compiler generator.
+  The main issue we foresee is integration with the new GC, detecting
+  with object flags or JIT optimizations which objects need
+  transactional memory status or not.  We think that with enough such
+  optimizations we can seriously lower the overhead of PyPy-TM, maybe
+  down to 2x slower than a regular PyPy or better.  Estimate: unknown;
+  at least 4 months.
+
+* **Longer term**:
+
+  In the longer term, we might need to refine the TM processing done
+  above, for example to better support I/O (e.g. we can queue the writes
+  done to a log file) or to add some special fine-grained support
+  (e.g. two transactions that each do ``samelist.append()`` do not need
+  to conflict in the simple case).  This part is not included
+  in the estimates.
+
+  Note: by default, any I/O can be done, but turns the transaction
+  "inevitable".  An inevitable transaction must not abort, so it must be
+  the next one to commit.  This introduces delays at the end of the other
+  CPUs' transactions.
+
+Total: 5 months for the initial version; at least 8 additional months
+for the fast version.  We will go with a total estimate of 15 months,
+corresponding to USD$151200.  The amount sought by this fundraising
+campaign,  considering the 2 volunteer hours per paid hour is thus USD$50400.
+
+
+Benefits of This Work to the Python Community and the General Public
+====================================================================
+
+Python has become one of the most popular dynamic programming languages in
+the world.  Web developers, educators, and scientific programmers alike
+all value Python because Python code is often more readable and because
+Python often increases programmer productivity.
+
+Traditionally, languages like Python ran more slowly than static, compiled
+languages; Python developers chose to sacrifice execution speed for ease
+of programming.  The PyPy project created a substantially improved Python
+language implementation, including a fast Just-in-time (JIT) compiler.
+The increased execution speed that PyPy provides has attracted many users,
+who now find their Python code runs up to four times faster under PyPy
+than under the reference implementation written in C.
+
+However, in the presence of today's machines with multiple processors,
+Python progress lags behind.  The issue has been described in the
+introduction: developers that really need to use multiple CPUs are
+constrained to select and use one of the multi-process solutions that
+are all in some way or another hacks requiring extra knowledge and
+efforts to use.  The focus of the work described in this proposal is to
+offer an alternative in the core of the Python language --- an
+alternative that can naturally integrate with the rest of the program.
+This alternative will be implemented in PyPy.
+
+PyPy's developers make all PyPy software available to the public without
+charge, under PyPy's Open Source copyright license, the permissive MIT
+License.  PyPy's license assures that PyPy is equally available to
+everyone freely on terms that allow both non-commercial and commercial
+activity.  This license allows for academics, for-profit software
+developers, volunteers and enthusiasts alike to collaborate together to
+make a better Python implementation for everyone.
+
+PyPy-TM will be available under the same license.  Being licensed freely
+to the general public means that opportunities to use, improve and learn
+about how Transactional Memory works itself will be generally available
+to everyone.
