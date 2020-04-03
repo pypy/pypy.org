@@ -16,15 +16,15 @@
   performance improvements.
 
 We provide binaries for x86, aarch64, ppc64 and s390x running on different operating systems such as
-Linux, Mac OS X and Windows (`what's new in PyPy 7.3.0?`_):
+Linux, Mac OS X and Windows (`what's new in PyPy 7.3.1?`_):
 
-* the Python2.7 compatible release — **PyPy2.7 v7.3.0**
+* the Python2.7 compatible release — **PyPy2.7 v7.3.1**
 
-* the Python3.6 compatible release — **PyPy3.6 v7.3.0**
+* the Python3.6 compatible release — **PyPy3.6 v7.3.1**
 
 * the Python2.7 Software Transactional Memory special release — **PyPy-STM 2.5.1** (Linux x86-64 only)
 
-.. _what's new in PyPy 7.3.0?: http://doc.pypy.org/en/latest/release-v7.3.0.html
+.. _what's new in PyPy 7.3.1?: http://doc.pypy.org/en/latest/release-v7.3.1.html
 
 
 .. _`Default (with a JIT Compiler)`:
@@ -409,7 +409,28 @@ pre-compiling them, normal users will get errors:
 Checksums
 ---------
 
-Here are the checksums for each of the downloads of PyPy 7.3.0, 7.2.0, 7.1.1, 7.1.0
+Here are the checksums for each of the downloads of PyPy 7.3.1 7.3.0, 7.2.0, 7.1.1, 7.1.0
+
+pypy2.7-7.3.1 sha256::
+
+    f2cb78e45fcf4a0f3791b8c898c5defca4d0e842c3774daed5b6ac200df25fb3  pypy2.7-v7.3.1rc1-aarch64.tar.bz2
+    4baae02f21b18783a41da29b9d0aecb8a2e1c12417178fa9c33aa04ca199f406  pypy2.7-v7.3.1rc1-linux32.tar.bz2
+    947d0a07e9eec8b20e7065e529c3578f22ae65535ee4e782ff5dc3864951c348  pypy2.7-v7.3.1rc1-linux64.tar.bz2
+    e397c62a8fb67762cf4877005fbec4f83344e75c51dca6ad2fdf5f26acfbced9  pypy2.7-v7.3.1rc1-osx64.tar.bz2
+    7c3dcb4223a387410ab1f4ccdf73d416cd71e22ac7dd42b30459045ff41287c4  pypy2.7-v7.3.1rc1-src.tar.bz2
+    f7211d9de07ae816d0f4094eea12b2d487250dfc402df92428beaf76e4f78fad  pypy2.7-v7.3.1rc1-src.zip
+    e71de281b9b1e3c47416bc57f042bf8689286c21e2bbc37746473b0553c13260  pypy2.7-v7.3.1rc1-win32.zip
+
+pypy3.6-7.3.1 sha256::
+
+    52bba4f8d6b5e0112a162cd2169426fcbf66774797c392fd3ee9253562fc9fad  pypy3.6-v7.3.1rc1-aarch64.tar.bz2
+    9dd1fb75cd4f386e379de781ac07d22df6eb4b514205efe1d7f45d4eee122006  pypy3.6-v7.3.1rc1-linux32.tar.bz2
+    ffc6c803d128363ca18ee8bdc85a09e96302bbcc2ae7fb38a107ab6a22a5a1eb  pypy3.6-v7.3.1rc1-linux64.tar.bz2
+    7c7a15d9ab0b932c9b0554f0030d1c63b6ebe71642e7d6f7c67b4066054d2e24  pypy3.6-v7.3.1rc1-osx64.tar.bz2
+    0ab42bd0574d2edf90b51b563b457940191f6d424f0b04de14a242d89f5b673a  pypy3.6-v7.3.1rc1-src.tar.bz2
+    13f39c94f35fb778d355a9fecc61c1dcd0a78230ddb76f3ff9a08788527853f4  pypy3.6-v7.3.1rc1-src.zip
+    ce43c1346a30031d8f93cef2b3adf08e269faca316df29ddd0c89479c81ee4de  pypy3.6-v7.3.1rc1-win32.zip
+
 
 pypy2.7-7.3.0 sha256::
 
