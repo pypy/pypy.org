@@ -1,3 +1,6 @@
+# pypy.org static page and blog makefile
+# type `make help` to see all options 
+
 ifeq ($(origin .RECIPEPREFIX), undefined)
     $(error This Make does not support .RECIPEPREFIX. Please use GNU Make 4.0 or later)
 endif
