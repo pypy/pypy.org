@@ -122,8 +122,8 @@ Python2.7 compatible PyPy 7.3.1
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-osx64.tar.bz2
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-win32.zip
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-aarch64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.0-ppc64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.0-ppc64le.tar.bz2
+.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-ppc64.tar.bz2
+.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-ppc64le.tar.bz2
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-s390x.tar.bz2
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-src.tar.bz2
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-src.zip
@@ -157,8 +157,8 @@ Python 3.6 compatible PyPy3.6 v7.3.1
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-osx64.tar.bz2
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-win32.zip
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-aarch64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.0-ppc64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.0-ppc64le.tar.bz2
+.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-ppc64.tar.bz2
+.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-ppc64le.tar.bz2
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-s390x.tar.bz2
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-src.tar.bz2
 .. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-src.zip
@@ -417,6 +417,8 @@ pypy2.7-7.3.1 sha256::
     cd155d06cd0956d9de4a16e8a6bdf0722cb45b5bc4bbf805825d393ebd6690ad  pypy2.7-v7.3.1-linux32.tar.bz2
     be74886547df7bf7094096a11fc0a48496779d0d1b71901797b0c816f92caca3  pypy2.7-v7.3.1-linux64.tar.bz2
     dfd4651243441d2f8f1c348e9ecc09848642d0c31bb323aa8ac320e5b9f232f0  pypy2.7-v7.3.1-osx64.tar.bz2
+    1b65e085118e44ac57d38a9ba79516c68bf1fdcd65c81c66b5b5ffff06b4463b  pypy2.7-v7.3.1-ppc64.tar.bz2
+    d81c7177e25bd8b1c99081e32362a29ee467ccd310b17a11161f4a9b96222b20  pypy2.7-v7.3.1-ppc64le.tar.bz2
     71ad5132a6fd32af0b538c17ebd1e0bfe5f5dfa74b129bce242bd28357bf35fc  pypy2.7-v7.3.1-s390x.tar.bz2
     fa3771514c8a354969be9bd3b26d65a489c30e28f91d350e4ad2f4081a9c9321  pypy2.7-v7.3.1-src.tar.bz2
     71d764c94f467f9dd75b6af086e2b69e0d520bf6227bcb39055c24c799c135be  pypy2.7-v7.3.1-src.zip
@@ -428,6 +430,8 @@ pypy3.6-7.3.1 sha256::
     2e7a818c67f3ac0708e4d8cdf1961f30cf9586b3f3ca2f215d93437c5ea4567b  pypy3.6-v7.3.1-linux32.tar.bz2
     f67cf1664a336a3e939b58b3cabfe47d893356bdc01f2e17bc912aaa6605db12  pypy3.6-v7.3.1-linux64.tar.bz2
     d9c1778cd1ba37e129b495ea0f35ccdd9b68f5cd9d33ef0ce24e955c16d8840b  pypy3.6-v7.3.1-osx64.tar.bz2
+    ee02b3e65f0ca49dc09850b57835c2b65d1234f26f7991027ca6d65fadbaa4d9  pypy3.6-v7.3.1-ppc64.tar.bz2
+    089fd806629ebf79cb0cb4b0c303d8665f360903b79f0df9214b58dbc42e8231  pypy3.6-v7.3.1-ppc64le.tar.bz2
     147592888e25678c1ae1c2929dc7420b3a0990117fdb25f235cb22476b4e4b5a  pypy3.6-v7.3.1-s390x.tar.bz2
     0c2cc3229da36c6984baee128c8ff8bb4516d69df1d73275dc4622bf249afa83  pypy3.6-v7.3.1-src.tar.bz2
     91e7ba30519f2c4c1833280acfb660b48392ef57c5ed0fa4e8af78587a7b8f20  pypy3.6-v7.3.1-src.zip
