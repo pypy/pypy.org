@@ -25,45 +25,32 @@ your build system, it might work out of the box or will be slightly harder.
 
 Standard library modules supported by PyPy. Note that large parts of python
 library are implemented in pure python, so they don't have to be listed
-there. Please just check if it imports. If it imports, it should work.
+there. Please just check if it imports. If it imports, it should work:
 
-``__builtin__, __pypy__, _ast, _cffi_backend, _codecs, _collections, _continuation, _csv, _file, _hashlib, _io, _locale, _lsprof, _md5, _minimal_curses, _multibytecodec, _multiprocessing, _numpypy, _pickle_support, _pypyjson, _random, _rawffi, _sha, _socket, _sre, _ssl, _struct, _testing, _warnings, _weakref, array, binascii, bz2, cStringIO, cmath, cppyy, cpyext, crypt, errno, exceptions, fcntl, gc, imp, itertools, marshal, math, mmap, operator, parser, posix, pwd, pyexpat, pypyjit, select, signal, symbol, sys, termios, thread, time, token, unicodedata, zipimport, zlib``
+    ``__builtin__``, ``__pypy__``, ``_ast``, ``_cffi_backend``, ``_codecs``,
+    ``_collections``, ``_continuation``, ``_csv``, ``_file``, ``_hashlib``,
+    ``_io``, ``_locale``, ``_lsprof``, ``_md5``, ``_minimal_curses``,
+    ``_multibytecodec``, ``_multiprocessing``, ``_numpypy``, ``_pickle_support``,
+    ``_pypyjson``, ``_random``, ``_rawffi``, ``_sha``, ``_socket``, ``_sre``,
+    ``_ssl``, ``_struct``, ``_testing``, ``_warnings``, ``_weakref``, ``array``,
+    ``binascii``, ``bz2``, ``cStringIO``, ``cmath``, ``cppyy``, ``cpyext``,
+    ``crypt``, ``errno``, ``exceptions``, ``fcntl``, ``gc``, ``imp``,
+    ``itertools``, ``marshal``, ``math``, ``mmap``, ``operator``, ``parser``,
+    ``posix``, ``pwd``, ``pyexpat``, ``pypyjit``, ``select``, ``signal``,
+    ``symbol``, ``sys``, ``termios``, ``thread``, ``time``, ``token``,
+    ``unicodedata``, ``zipimport``, ``zlib``
 
 Supported, and written in pure Python:
 
-``cPickle, ctypes, datetime, dbm, _functools, grp, readline, resource, sqlite3, syslog``
+    ``cPickle``, ``ctypes``, ``datetime``, ``dbm``, ``_functools``, ``grp``,
+    ``readline``, ``resource``, ``sqlite3``, ``syslog``
 
 All modules that are pure python in CPython of course work.
-
-Python libraries known to work under PyPy (the list is not exhaustive).
-A `fuller list`_ is available.
-
-* ctypes
-
-* django
-
-* sqlalchemy
-
-* flask
-
-* twisted
-
-* pylons
-
-* divmod's nevow
-
-* pyglet
-
-* Pillow (the PIL fork)
-
-* `lxml`_
-
-* NumPy
 
 The main difference that is not going to be fixed is that PyPy does
 not support refcounting semantics. The following code won't fill the
 file immediately, but only after a certain period of time, when the GC
-does a collection:
+does a collection and flushes the output:
 
 .. code-block:: python
 
@@ -133,7 +120,4 @@ A more complete list of known differences is available at `our dev site`_.
 .. _`standard library modules`: http://docs.python.org/library/
 .. _`our dev site`: http://pypy.readthedocs.org/en/latest/cpython_differences.html
 .. _`more details here`: http://pypy.readthedocs.org/en/latest/cpython_differences.html#differences-related-to-garbage-collection-strategies
-.. _`compatibility wiki`: https://bitbucket.org/pypy/compatibility/wiki/Home
-.. _`lxml`: https://github.com/amauryfa/lxml/tree/cffi/
 .. _`List of installable top 1000 PyPI packages`: http://packages.pypy.org
-.. _`fuller list`: http://packages.pypy.org

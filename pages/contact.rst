@@ -13,13 +13,12 @@
 
 * for security related issues, non-public funding enquiries etc. please contact pypy-z@python.org
 
-* the bitbucket `bug tracker`_ (registration required to open new issues or to comment)
+* the `issue tracker`_ (registration required to open new issues or to comment)
 
 * more on our `dev site`_.
 
-* code on `bitbucket`_.
+* code on https:foss.heptapod.net/pypy/pypy
 
 .. __: http://mail.python.org/mailman/listinfo/pypy-dev
-.. _`bug tracker`: https://bitbucket.org/pypy/pypy/issues?status=new&status=open
+.. _`issue tracker`: https://foss.heptapod.net/pypy/pypy/issues?status=new&status=open
 .. _`dev site`: http://doc.pypy.org
-.. _`bitbucket`: https://bitbucket.org/pypy/pypy/overview

@@ -156,6 +156,7 @@ NAVIGATION_LINKS = {
         (
             (
                 ('/people.html', 'People'),
+                ('/howtohelp.html', 'How To Help?'),
                 ('/contact.html', 'Contact'),
             ),
             'About',
