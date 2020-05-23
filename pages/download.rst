@@ -32,10 +32,9 @@ Linux, Mac OS X and Windows (`what's new in PyPy 7.3.1?`_):
 "JIT Compiler" version
 -------------------------------
 
-These binaries include a Just-in-Time compiler.  They only work on
-x86 CPUs that have the SSE2_ instruction set (most of
-them do, nowadays), or on x86-64 CPUs. They also contain `stackless`_
-extensions, like `greenlets`_.
+These binaries include a Just-in-Time compiler. On x86-32, they only work on
+CPUs that have the SSE2 instruction set (most of them do, nowadays).. They also
+contain `stackless`_ extensions, like `greenlets`_.
 
 Linux binaries and common distributions
 ---------------------------------------

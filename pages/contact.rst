@@ -17,8 +17,8 @@
 
 * more on our `dev site`_.
 
-* code on https:foss.heptapod.net/pypy/pypy
+* code on https://foss.heptapod.net/pypy/pypy
 
-.. __: http://mail.python.org/mailman/listinfo/pypy-dev
+.. __: https://mail.python.org/mailman/listinfo/pypy-dev
 .. _`issue tracker`: https://foss.heptapod.net/pypy/pypy/issues?status=new&status=open
-.. _`dev site`: http://doc.pypy.org
+.. _`dev site`: https://doc.pypy.org
