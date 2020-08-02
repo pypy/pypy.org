@@ -121,7 +121,7 @@ PyPy core developement for several years as well as maintained much of
 its infrastructure.  He also is the author of the popular `py.test`_ and
 `tox`_ testing tools as well as execnet_, a library for easily deploying
 different interacting Python interpreters side by side.  He helped
-manage multiple PyPy funding contracts through his company merlinux and is a
+manage multiple PyPy funding contracts through his company merlinux and was a
 PyPy representative within the Software Freedom Conservancy (SFC).  He
 holds a summa cum laude degree in computer science with a thesis about
 artificial intelligence applied to the game of Go.  As of 2011 he is on

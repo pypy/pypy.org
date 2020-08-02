@@ -22,4 +22,4 @@ Here are some ideas to help PyPy development:
 
 .. _contact: contact.html
 .. _feedback: contact.html
-.. _`donate`: http://morepypy.blogspot.com/2010/11/speeding-up-pypy-by-donations.html
+.. _`donate`: https://opencollective.com/pypy
