@@ -18,9 +18,13 @@
 
 A `fast`_, `compliant`_ alternative implementation of `Python`_
 
-.. class:: button
+.. raw:: html
 
-    `Get Started`_ : Download and install
+    <a id="download" href="download.html">
+        <img src="images/download.svg">
+        Download PyPy
+    </a>
+    
 
 .. class:: button
 
