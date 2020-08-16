@@ -45,7 +45,7 @@ A `fast`_, `compliant`_ alternative implementation of `Python`_
 
 .. class:: small
 
-On average, PyPy is **4.4 times faster** than CPython
+On average, PyPy is **4.2 times faster** than CPython
 
 .. figure:: images/pypy_speed_graph.png
     :alt: PyPy vs. Python speed comparison graph"
