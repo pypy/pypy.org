@@ -17,7 +17,7 @@ v7.3.1`_
   older versions, see `this page`_
 
 .. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
-.. _`PyPy 7.3.1`: https://doc.pypy.org/en/latest/release-v7.3.1.html
+.. _`PyPy v7.3.1`: https://doc.pypy.org/en/latest/release-v7.3.1.html
 .. _`this page`: https://downloads.python.org/pypy/
 
 Python 3.6 compatible PyPy3.6 v7.3.1
