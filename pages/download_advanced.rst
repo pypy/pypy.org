@@ -24,7 +24,7 @@ Linux, Mac OS X and Windows (`what's new in PyPy 7.3.1?`_):
 
 * the Python2.7 Software Transactional Memory special release — **PyPy-STM 2.5.1** (Linux x86-64 only)
 
-.. _what's new in PyPy 7.3.1?: http://doc.pypy.org/en/latest/release-v7.3.1.html
+.. _what's new in PyPy 7.3.1?: https://doc.pypy.org/en/latest/release-v7.3.1.html
 
 
 .. _`Default (with a JIT Compiler)`:
@@ -83,11 +83,11 @@ are better solutions:
     certificates which should be discovered by the ``_ssl`` module.
 
 
-.. _`Ubuntu`: http://packages.ubuntu.com/search?keywords=pypy&searchon=names
+.. _`Ubuntu`: https://packages.ubuntu.com/search?keywords=pypy&searchon=names
 .. _`PPA`: https://launchpad.net/~pypy/+archive/ppa
-.. _`Debian`: http://packages.debian.org/sid/pypy
-.. _`Fedora`: http://fedoraproject.org/wiki/Features/PyPyStack
-.. _`Gentoo`: http://packages.gentoo.org/package/dev-python/pypy
+.. _`Debian`: https://packages.debian.org/sid/pypy
+.. _`Fedora`: https://fedoraproject.org/wiki/Features/PyPyStack
+.. _`Gentoo`: https://packages.gentoo.org/package/dev-python/pypy
 .. _`Homebrew`: https://github.com/Homebrew/homebrew-core/blob/master/Formula/pypy.rb
 .. _`Arch`: https://wiki.archlinux.org/index.php/PyPy
 .. _`portable-pypy`: https://github.com/squeaky-pl/portable-pypy#portable-pypy-distribution-for-linux
@@ -129,8 +129,8 @@ Python2.7 compatible PyPy 7.3.1
 .. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
 .. _`runtime`: https://www.microsoft.com/en-us/download/details.aspx?id=48145
 .. __: https://downloads.python.org/pypy/
-.. _mirror: http://buildbot.pypy.org/mirror/
-.. _FreshPorts: http://www.freshports.org/lang/pypy
+.. _mirror: https://buildbot.pypy.org/mirror/
+.. _FreshPorts: https://www.freshports.org/lang/pypy
 
 
 Python 3.6 compatible PyPy3.6 v7.3.1
@@ -183,7 +183,7 @@ Memory`_ (STM) documentation.
 
 * `PyPy-STM Linux x86-64 binary (64bit, tar.bz2 built on Ubuntu 12.04 - 16.04)`__
 
-.. _`Software Transactional Memory`: http://doc.pypy.org/en/latest/stm.html
+.. _`Software Transactional Memory`: https://doc.pypy.org/en/latest/stm.html
 .. __: https://downloads.python.org/pypy/pypy-stm-2.5.1-linux64.tar.bz2
 
 
@@ -216,9 +216,9 @@ The other versions of PyPy are:
 
 .. __: https://downloads.python.org/pypy/pypy-1.8-sandbox-linux64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy-1.8-sandbox-linux.tar.bz2
-.. _`sandbox docs`: http://doc.pypy.org/en/latest/sandbox.html
+.. _`sandbox docs`: https://doc.pypy.org/en/latest/sandbox.html
 
-.. _`nightly binary builds`: http://buildbot.pypy.org/nightly/trunk/
+.. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
 
 Installing
 ----------
@@ -244,7 +244,7 @@ If you use your distribution's PyPy package we recommend you install packages
 into a virtualenv. If you try to build a module and the build process complains
 about "missing Python.h", you may need to install the pypy-dev package.
 
-.. _installation documentation: http://doc.pypy.org/en/latest/install.html
+.. _installation documentation: https://doc.pypy.org/en/latest/install.html
 
 .. _translate:
 
@@ -281,7 +281,7 @@ Building from source
 
 2. Make sure you **installed the dependencies.**  See the list here__.
 
-   .. __: http://pypy.readthedocs.org/en/latest/build.html#install-build-time-dependencies
+   .. __: https://pypy.readthedocs.org/en/latest/build.html#install-build-time-dependencies
 
 3. Enter the ``goal`` directory:
 
@@ -355,16 +355,16 @@ Notes:
   This also applies to translation (unless you use CPython to run the
   translation and you specify ``--source``).
 
-.. _instructions: http://pypy.readthedocs.org/en/latest/build.html
-.. _`x86 (IA-32)`: http://en.wikipedia.org/wiki/IA-32
-.. _`x86-64`: http://en.wikipedia.org/wiki/X86-64
-.. _SSE2: http://en.wikipedia.org/wiki/SSE2
+.. _instructions: https://pypy.readthedocs.org/en/latest/build.html
+.. _`x86 (IA-32)`: https://en.wikipedia.org/wiki/IA-32
+.. _`x86-64`: https://en.wikipedia.org/wiki/X86-64
+.. _SSE2: https://en.wikipedia.org/wiki/SSE2
 .. _`contact us`: contact.html
 .. _`sandboxing`: features.html#sandboxing
-.. _`stackless`: http://www.stackless.com/
-.. _`greenlets`: http://pypy.readthedocs.org/en/latest/stackless.html#greenlets
-.. _`Windows build instructions`: http://doc.pypy.org/en/latest/windows.html#preparing-windows-for-the-large-build
-.. _`shadow stack`: http://pypy.readthedocs.org/en/latest/config/translation.gcrootfinder.html
+.. _`stackless`: https://www.stackless.com/
+.. _`greenlets`: https://pypy.readthedocs.org/en/latest/stackless.html#greenlets
+.. _`Windows build instructions`: https://doc.pypy.org/en/latest/windows.html#preparing-windows-for-the-large-build
+.. _`shadow stack`: https://pypy.readthedocs.org/en/latest/config/translation.gcrootfinder.html
 .. _Mercurial: https://www.mercurial-scm.org/
 
 Packaging
@@ -404,6 +404,10 @@ pre-compiling them, normal users will get errors:
   directory that you add to the env var ``PYTHONPATH``.
 
 .. _`package.py`: https://bitbucket.org/pypy/pypy/src/default/pypy/tool/release/package.py
+
+
+.. 
+  checksum start
 
 Checksums
 ---------

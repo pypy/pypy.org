@@ -8,13 +8,17 @@
 
 
 We provide binaries for x86, aarch64, ppc64 and s390x running on different
-operating systems such as Linux, Mac OS X and Windows.
-(`what's new in PyPy 7.3.1?`_)
+operating systems such as Linux, Mac OS X and Windows. Here are links for `PyPy
+v7.3.1`_
 
-Note: Our `nightly binary builds`_ have the most recent bugfixes and performance improvements, though they can be less stable than the official releases below.
+.. note::
+  Our `nightly binary builds`_ have the most recent bugfixes and performance
+  improvements, though they can be less stable than the official releases. For
+  older versions, see `this page`_
 
-.. _`nightly binary builds`: http://buildbot.pypy.org/nightly/trunk/
-.. _what's new in PyPy 7.3.1?: http://doc.pypy.org/en/latest/release-v7.3.1.html
+.. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
+.. _`PyPy 7.3.1`: https://doc.pypy.org/en/latest/release-v7.3.1.html
+.. _`this page`: https://downloads.python.org/pypy/
 
 Python 3.6 compatible PyPy3.6 v7.3.1
 ====================================
@@ -89,4 +93,6 @@ useful information.
 .. _`advanced download`: download_advanced.html
 
 
+.. include:: pages/download_advanced.rst
+    :start-after: checksum start
 
