@@ -41,12 +41,8 @@ Mac
 .. class:: download_menu
 
 * `Mac OS X binary (64bit)`__ (High Sierra >= 10.13, not for Sierra and below)
-* `PowerPC PPC64 Linux binary (64bit big-endian, Fedora 20)`__ 
-* `PowerPC PPC64le Linux binary (64bit little-endian, Fedora 21)`__
 
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-osx64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64le.tar.bz2
 
 
 Other platforms
@@ -54,8 +50,12 @@ Other platforms
 
 .. class:: download_menu
 
+* `PowerPC PPC64 Linux binary (64bit big-endian, Fedora 20)`__ 
+* `PowerPC PPC64le Linux binary (64bit little-endian, Fedora 21)`__
 * `s390x Linux binary (built on Redhat Linux 7.2)`__
 
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64le.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-s390x.tar.bz2
 
 Source
