@@ -128,7 +128,7 @@ Python2.7 compatible PyPy 7.3.1
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-src.zip
 .. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
 .. _`runtime`: https://www.microsoft.com/en-us/download/details.aspx?id=48145
-.. __: https://downloads.python.org/pypy
+.. __: https://downloads.python.org/pypy/
 .. _mirror: http://buildbot.pypy.org/mirror/
 .. _FreshPorts: http://www.freshports.org/lang/pypy
 
@@ -161,7 +161,7 @@ Python 3.6 compatible PyPy3.6 v7.3.1
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-s390x.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-src.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-src.zip
-.. __: https://downloads.python.org/pypy
+.. __: https://downloads.python.org/pypy/
 
 
 If your CPU is really, really old, it may be a x86-32 without SSE2.
