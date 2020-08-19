@@ -18,9 +18,9 @@ Linux
 * `Linux x86 binary (32bit, built on CentOS6)`__ 
 * `Linux aarch64 binary (64bit, built on Ubuntu 18.04)`__
 
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-linux64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-linux32.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-aarch64.tar.bz2
 
 
 Windows
@@ -31,7 +31,7 @@ Windows
 * `Windows binary (32bit)`__ (you might need the VC runtime library
   installer `vcredist.x86.exe`_.)
 
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-win32.zip
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-win32.zip
 .. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
 
 
@@ -44,9 +44,9 @@ Mac
 * `PowerPC PPC64 Linux binary (64bit big-endian, Fedora 20)`__ 
 * `PowerPC PPC64le Linux binary (64bit little-endian, Fedora 21)`__
 
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-osx64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-ppc64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-ppc64le.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-osx64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64le.tar.bz2
 
 
 Other platforms
@@ -56,7 +56,7 @@ Other platforms
 
 * `s390x Linux binary (built on Redhat Linux 7.2)`__
 
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-s390x.tar.bz2
 
 Source
 ------
@@ -65,8 +65,8 @@ Source
 
 * `Source (tar.bz2)`__; `Source (zip)`__. 
 
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-src.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-src.zip
 
 
 More information

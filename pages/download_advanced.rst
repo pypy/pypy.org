@@ -116,19 +116,19 @@ Python2.7 compatible PyPy 7.3.1
   mirror_, but please use only if you have troubles accessing the links above
 
 
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-linux32.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-linux64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-osx64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-win32.zip
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-aarch64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-ppc64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-ppc64le.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-s390x.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-src.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-src.zip
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-osx64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-win32.zip
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64le.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-src.zip
 .. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
 .. _`runtime`: https://www.microsoft.com/en-us/download/details.aspx?id=48145
-.. __: https://bitbucket.org/pypy/pypy/downloads
+.. __: https://downloads.python.org/pypy
 .. _mirror: http://buildbot.pypy.org/mirror/
 .. _FreshPorts: http://www.freshports.org/lang/pypy
 
@@ -151,17 +151,17 @@ Python 3.6 compatible PyPy3.6 v7.3.1
 * `All our downloads,`__ including previous versions.  We also have a
   mirror_, but please use only if you have troubles accessing the links above
 
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-linux64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-linux32.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-osx64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-win32.zip
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-aarch64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-ppc64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-ppc64le.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-s390x.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-src.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-src.zip
-.. __: https://bitbucket.org/pypy/pypy/downloads
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-osx64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-win32.zip
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64le.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-src.zip
+.. __: https://downloads.python.org/pypy
 
 
 If your CPU is really, really old, it may be a x86-32 without SSE2.
@@ -184,7 +184,7 @@ Memory`_ (STM) documentation.
 * `PyPy-STM Linux x86-64 binary (64bit, tar.bz2 built on Ubuntu 12.04 - 16.04)`__
 
 .. _`Software Transactional Memory`: http://doc.pypy.org/en/latest/stm.html
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy-stm-2.5.1-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy-stm-2.5.1-linux64.tar.bz2
 
 
 .. _`Other versions (without a JIT)`:
@@ -214,8 +214,8 @@ The other versions of PyPy are:
   production.  For reference, there are some very old, unmaintained
   binaries for Linux (32bit__, 64bit__).
 
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy-1.8-sandbox-linux64.tar.bz2
-.. __: https://bitbucket.org/pypy/pypy/downloads/pypy-1.8-sandbox-linux.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy-1.8-sandbox-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy-1.8-sandbox-linux.tar.bz2
 .. _`sandbox docs`: http://doc.pypy.org/en/latest/sandbox.html
 
 .. _`nightly binary builds`: http://buildbot.pypy.org/nightly/trunk/
@@ -275,8 +275,8 @@ Building from source
    * `pypy2.7-v7.3.1-src.tar.bz2`__ (sources, PyPy 2 only)
    * `pypy3.6-v7.3.1-src.tar.bz2`__ (sources, PyPy 3 only)
 
-   .. __: https://bitbucket.org/pypy/pypy/downloads/pypy2.7-v7.3.1-src.tar.bz2
-   .. __: https://bitbucket.org/pypy/pypy/downloads/pypy3.6-v7.3.1-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-src.tar.bz2
 
 
 2. Make sure you **installed the dependencies.**  See the list here__.
