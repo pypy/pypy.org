@@ -7,70 +7,117 @@
 .. description: 
 
 
-We provide binaries for x86, aarch64, ppc64 and s390x running on different
-operating systems such as Linux, Mac OS X and Windows. Here are links for `PyPy
-v7.3.1`_
+We provide pre-compiled binaries for many platforms and OSes.
 
 .. note::
   Our `nightly binary builds`_ have the most recent bugfixes and performance
-  improvements, though they can be less stable than the official releases. For
-  older versions, see `this page`_
+  improvements, though they can be less stable than the official releases. See
+  these links for `other versions`_ or `more information`_
 
 .. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
-.. _`PyPy v7.3.1`: https://doc.pypy.org/en/latest/release-v7.3.1.html
-.. _`this page`: https://downloads.python.org/pypy/
+.. _`other versions`: https://downloads.python.org/pypy/
 
-Python 3.6 compatible PyPy3.6 v7.3.1
-====================================
+.. 
+  Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.6>``
 
-Linux
------
+.. list-table:: `PyPy v7.3.1`_
+   :widths: 20 20 20 40
+   :header-rows: 1
 
-.. class:: download_menu
+   * - OS
+     - PyPy3.6
+     - PyPy2.7
+     - Notes
 
-* `Linux x86-64 binary (64bit, built on CentOS6)`__ 
-* `Linux x86 binary (32bit, built on CentOS6)`__ 
-* `Linux aarch64 binary (64bit, built on Ubuntu 18.04)`__
+   * - **Linux x86 64 bit**
+     - Download__
+     - Download__
+     - compatible with CentOS6 and later
+
+   * - **Windows 32 bit**
+     - Download__
+     - Download__
+     - compatible with any windows, 32- or 64-bit
+
+       you might need the VC runtime library installer `vcredist.x86.exe`_
+
+   * - **MacOS**
+
+     - Download__
+     - Download__
+     - High Sierra >= 10.13, not for Sierra and below
+
+   * - **Linux ARM64**
+
+     - Download__
+     - Download__
+     - compatible with CentOS6 and later
+
+
+.. list-table:: Other Platfoms
+   :widths: 20 20 20 40
+   :header-rows: 1
+
+   * - OS
+     - PyPy3.6
+     - PyPy2.7
+     - Notes
+
+   * - **Linux x86 32 bit**
+
+     - Download__
+     - Download__
+     - compatible with CentOS6 and later
+
+   * - **PowerPC PPC64**
+
+     - Download__
+     - Download__
+     - 64bit big-endian, Fedora 20
+
+   * - **PowerPC PPC64le**
+
+     - Download__
+     - Download__
+     - 64bit little-endian, Fedora 21
+
+   * - **S390x**
+
+     - Download__
+     - Download__
+     - built on Redhat Linux 7.2
+
+   
+
+
 
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-aarch64.tar.bz2
-
-
-Windows
--------
-
-.. class:: download_menu
-
-* `Windows binary (32bit)`__ (you might need the VC runtime library
-  installer `vcredist.x86.exe`_.)
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-linux64.tar.bz2
 
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-win32.zip
-.. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
-
-
-Mac
----
-
-.. class:: download_menu
-
-* `Mac OS X binary (64bit)`__ (High Sierra >= 10.13, not for Sierra and below)
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-win32.zip
 
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-osx64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-osx64.tar.bz2
 
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-aarch64.tar.bz2
 
-Other platforms
----------------
-
-.. class:: download_menu
-
-* `PowerPC PPC64 Linux binary (64bit big-endian, Fedora 20)`__ 
-* `PowerPC PPC64le Linux binary (64bit little-endian, Fedora 21)`__
-* `s390x Linux binary (built on Redhat Linux 7.2)`__
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-linux32.tar.bz2
 
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64.tar.bz2
+
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64le.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64le.tar.bz2
+
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-s390x.tar.bz2
+
+.. _`PyPy v7.3.1`: https://doc.pypy.org/en/latest/release-v7.3.1.html
+.. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
+
 
 Source
 ------
@@ -86,11 +133,10 @@ Source
 More information
 ----------------
 
-Visit our `advanced download`_ page for more information about running PyPy,
-including Python 2.7 support, STM, building instructions, checksums and other
-useful information.
+Visit the `more information`_ page for information about running PyPy,
+STM, instructions on building from source and more.
 
-.. _`advanced download`: download_advanced.html
+.. _`more information`: download_advanced.html
 
 
 .. include:: pages/download_advanced.rst
