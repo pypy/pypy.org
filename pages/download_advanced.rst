@@ -9,14 +9,7 @@
 .. contents::
     :depth: 2
 
-.. note::
-
-  There are `nightly binary builds`_ available. Those builds are not always
-  as stable as the release, but they contain numerous bugfixes and
-  performance improvements.
-
-We provide binaries for x86, aarch64, ppc64 and s390x running on different operating systems such as
-Linux, Mac OS X and Windows (`what's new in PyPy 7.3.1?`_):
+We provide pre-compiled binaries for many platforms and OSes:
 
 * the Python2.7 compatible release — **PyPy2.7 v7.3.1**
 
@@ -24,22 +17,144 @@ Linux, Mac OS X and Windows (`what's new in PyPy 7.3.1?`_):
 
 * the Python2.7 Software Transactional Memory special release — **PyPy-STM 2.5.1** (Linux x86-64 only)
 
+.. note::
+
+  Our `nightly binary builds`_ have the most recent bugfixes and performance
+  improvements, though they can be less stable than the official releases. See
+  this link for `older versions`_.
+
+.. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
+.. _`older versions`: https://downloads.python.org/pypy/
+
+..
+  table start
+
+.. 
+  Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.6>``
+
+.. list-table:: `PyPy v7.3.1`_ 
+   :widths: 20 20 20 40
+   :header-rows: 1
+
+   * - OS
+     - PyPy3.6 
+     - PyPy2.7
+     - Notes
+
+   * - **Linux x86 64 bit**
+     - Download__
+     - Download__
+     - compatible with CentOS6 and later
+
+   * - **Windows 32 bit**
+     - Download__
+     - Download__
+     - compatible with any windows, 32- or 64-bit
+
+       you might need the VC runtime library installer `vcredist.x86.exe`_
+
+   * - **MacOS**
+
+     - Download__
+     - Download__
+     - High Sierra >= 10.13, not for Sierra and below
+
+   * - **Linux ARM64**
+
+     - Download__
+     - Download__
+     - compatible with CentOS6 and later
+
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-linux64.tar.bz2
+
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-win32.zip
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-win32.zip
+
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-osx64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-osx64.tar.bz2
+
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-aarch64.tar.bz2
+
+..
+  table finish
+
+
+.. list-table:: Other Platfoms
+   :widths: 20 20 20 40
+   :header-rows: 1
+
+   * - OS
+     - PyPy3.6
+     - PyPy2.7
+     - Notes
+
+   * - **Linux x86 32 bit**
+
+     - Download__
+     - Download__
+     - compatible with CentOS6 and later
+
+   * - **PowerPC PPC64**
+
+     - Download__
+     - Download__
+     - 64bit big-endian, Fedora 20 [1]_
+
+   * - **PowerPC PPC64le**
+
+     - Download__
+     - Download__
+     - 64bit little-endian, Fedora 21 [1]_
+
+   * - **S390x**
+
+     - Download__
+     - Download__
+     - built on Redhat Linux 7.2 [1]_
+
+   
+
+
+
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-linux32.tar.bz2
+
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64.tar.bz2
+
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64le.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64le.tar.bz2
+
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-s390x.tar.bz2
+
+.. _`PyPy v7.3.1`: https://doc.pypy.org/en/latest/release-v7.3.1.html
+.. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
+
+
 .. _what's new in PyPy 7.3.1?: https://doc.pypy.org/en/latest/release-v7.3.1.html
 
+.. [1]
+  Linux binaries are provided for the
+  distributions listed here.  **If your distribution is not exactly this
+  one, it won't work,** you will probably see:
+  ``pypy: error while loading shared libraries: ...``.
 
 .. _`Default (with a JIT Compiler)`:
 
 "JIT Compiler" version
 -------------------------------
 
-These binaries include a Just-in-Time compiler. On x86-32, they only work on
+The binaries above include a Just-in-Time compiler. On x86-32, they only work on
 CPUs that have the SSE2 instruction set (most of them do, nowadays).. They also
 contain `stackless`_ extensions, like `greenlets`_.
 
 Linux binaries and common distributions
 ---------------------------------------
 
-Since version 7.3, the linux x86 binaries in the links below ship with versions
+Since version 7.3, the linux x86 binaries ship with versions
 of OpenSSL, SQLite3, libffi, expat, and TCL/TK binary libraries linked in. This
 make the binaries "portable" so that they should run on any current glibc-based
 linux platform. The ideas were adopted from the `portable-pypy`_ package.
@@ -59,12 +174,9 @@ are better solutions:
 * download PyPy from your release vendor (usually an outdated
   version): `Ubuntu`_ (`PPA`_), `Debian`_, `Homebrew`_, MacPorts,
   `Fedora`_, `Gentoo`_ and `Arch`_ are known to package PyPy, with various
-  degrees of being up-to-date.
+  degrees of being up-to-date. FreshPorts_ packages for FreeBSD.
 
-* use ``sudo snap install --classic <package>``, where ``<package>`` is
-  ``pypy`` or `pypy3``. Snap is a non-vendor specific package manager for
-  linux, and repackages the download tarballs below with the latest platform-
-  specific libraries (again, without changing ``libffi``).
+* use conda_, which will also enable installing binary-compiled packages.
 
 * `recompile the CFFI-based`_ TCL/TK, OpenSSL, or sqlite3 modules, using system
   libraries and the scripts in ``pypy/lib_pypy``. This solution will not solve
@@ -93,75 +205,15 @@ are better solutions:
 .. _`portable-pypy`: https://github.com/squeaky-pl/portable-pypy#portable-pypy-distribution-for-linux
 .. _`recompile the CFFI-based`: https://doc.pypy.org/en/latest/build.html#build-cffi-import-libraries-for-the-stdlib
 .. _`certifi`: https://pypi.org/project/certifi/
-
-.. _release:
-
-Python2.7 compatible PyPy 7.3.1
--------------------------------
-
-.. class:: download_menu
-
-* `Linux x86 binary (32bit, built on CenOS6)`__ 
-* `Linux x86-64 binary (64bit, built on CentOS6)`__ 
-* `Mac OS X binary (64bit)`__
-* FreeBSD x86 and x86_64: see FreshPorts_
-* `Windows binary (32bit)`__ (you might need the VC runtime library
-  installer `vcredist.x86.exe`_ for PyPy2.7 and a different `runtime`_ for PyPy3.)
-* `Linux aarch64 binary (64bit, built on Ubuntu 18.04)`__ (see ``[1]`` below)
-* `PowerPC PPC64 Linux binary (64bit big-endian, Fedora 20)`__ (see ``[1]`` below)
-* `PowerPC PPC64le Linux binary (64bit little-endian, Fedora 21)`__ (see ``[1]`` below)
-* `s390x Linux binary (built on Redhat Linux 7.2)`__ (see ``[1]`` below)
-* `Source (tar.bz2)`__; `Source (zip)`__.  See below for more about the sources.
-* `All our downloads,`__ including previous versions.  We also have a
-  mirror_, but please use only if you have troubles accessing the links above
+.. _conda: https://conda-forge.org/blog/posts/2020-03-10-pypy/
 
 
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-osx64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-win32.zip
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64le.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-s390x.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-src.zip
-.. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
-.. _`runtime`: https://www.microsoft.com/en-us/download/details.aspx?id=48145
+Previous version can be downloaded from here__, or directly from the buildbot's
+mirror_.
+
 .. __: https://downloads.python.org/pypy/
 .. _mirror: https://buildbot.pypy.org/mirror/
 .. _FreshPorts: https://www.freshports.org/lang/pypy
-
-
-Python 3.6 compatible PyPy3.6 v7.3.1
-------------------------------------
-
-.. class:: download_menu
-
-* `Linux x86-64 binary (64bit, built on CentOS6)`__ 
-* `Linux x86 binary (32bit, built on CentOS6)`__ 
-* `Mac OS X binary (64bit)`__ (High Sierra >= 10.13, not for Sierra and below)
-* `Windows binary (32bit)`__ (you might need the VC runtime library
-  installer `vcredist.x86.exe`_.)
-* `Linux aarch64 binary (64bit, built on Ubuntu 18.04)`__ (see ``[1]`` below)
-* `PowerPC PPC64 Linux binary (64bit big-endian, Fedora 20)`__ (see ``[1]`` below)
-* `PowerPC PPC64le Linux binary (64bit little-endian, Fedora 21)`__ (see ``[1]`` below)
-* `s390x Linux binary (built on Redhat Linux 7.2)`__ (see ``[1]`` below)
-* `Source (tar.bz2)`__; `Source (zip)`__.  See below for more about the sources.
-* `All our downloads,`__ including previous versions.  We also have a
-  mirror_, but please use only if you have troubles accessing the links above
-
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-osx64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-win32.zip
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64le.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-s390x.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-src.zip
-.. __: https://downloads.python.org/pypy/
 
 
 If your CPU is really, really old, it may be a x86-32 without SSE2.
@@ -169,11 +221,6 @@ There is untested support for manually translating PyPy's JIT without
 SSE2 (``--jit-backend=x86-without-sse2``) but note that your machine
 is probably low-spec enough that running CPython on it is a better
 idea in the first place.
-
-``[1]:`` stating it again: the Linux binaries are provided for the
-distributions listed here.  **If your distribution is not exactly this
-one, it won't work,** you will probably see: ``pypy: error while loading shared
-libraries: ...``.
 
 PyPy-STM 2.5.1
 ------------------------------
@@ -194,9 +241,8 @@ Other versions
 
 The other versions of PyPy are:
 
-* The most up-to-date `nightly binary builds`_ with a JIT, if the official
-  release is too old for what you want to do. There are versions for
-  different libc on this site too.
+* Try the most up-to-date `nightly binary builds`_ , if the official
+  release is too old for what you want to do.
 
 * Reverse debugger: This version enables debugging your Python
   programs by going forward and backward in time.  See the `RevDB
@@ -235,7 +281,8 @@ a symlink to it, otherwise it will not find its libraries.
 Installing more modules
 -------------------------------
 
-There are as yet few distribution-ready packages.
+There are as yet few distribution-ready packages. `conda`_ is one easy
+way to get packages with a minimum of compilation.
 We recommend installing ``pip``, which is the standard package
 manager of Python.  It works like it does on CPython as explained in the
 `installation documentation`_. 
@@ -328,8 +375,13 @@ Notes:
 
   1. use PyPy, not CPython.  If you don't have any PyPy so far, not even
   an older version, then you need to build one first, with some parts
-  removed.  So, first translate with ``...rpython -Ojit
-  targetpypystandalone --withoutmod-micronumpy --withoutmod-cpyext``,
+  removed.  So, first translate with:
+
+  .. code-block:: shell
+
+     cpython2 rpython -Ojit targetpypystandalone \
+     --withoutmod-micronumpy --withoutmod-cpyext
+
   then copy ``pypy-c`` and ``libpypy_c.so`` somewhere else, and finally
   call it with ``...pypy-c ../../rpython/bin/rpython -Ojit``.
 
@@ -339,7 +391,8 @@ Notes:
   .. code-block:: bash
 
     PYPY_DONT_RUN_SUBPROCESS=1 PYPY_GC_MAX_DELTA=200MB \
-    pypy --jit loop_longevity=300 ../../rpython/bin/rpython -Ojit --source
+    pypy --jit loop_longevity=300 ../../rpython/bin/rpython \
+    -Ojit --source
     # then read the next point about --source
 
 * You can run translations with ``--source``, which only builds the C
@@ -370,14 +423,14 @@ Notes:
 Packaging
 ---------
 
-Once PyPy is translated from source the binary package similar to those
-provided in the section `Default (with a JIT Compiler)`_ above could be
-easily created with ``package.py`` script:
+Once PyPy is translated from source, a binary package similar to those
+provided in the section `Default (with a JIT Compiler)`_ above can be
+created with the ``package.py`` script:
 
 .. code-block:: bash
 
     cd ./pypy/pypy/tool/release/
-    python package.py --help #for information
+    python package.py --help  # for information
     python package.py --archive-name pypy-my-own-package-name
 
 It is recommended to use package.py because custom scripts will
