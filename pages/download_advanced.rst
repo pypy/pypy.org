@@ -465,7 +465,38 @@ pre-compiling them, normal users will get errors:
 Checksums
 ---------
 
-Here are the checksums for each of the downloads of PyPy 7.3.1, 7.3.0, 7.2.0, 7.1.1, 7.1.0
+Here are the checksums for latest downloads
+
+pypy3.6-7.3.2rc1 sha256::
+
+    1c69cca7292e3c3ffcb7a09f5cdeb51d45e24dc75510b2c9bb410b8ffc57a579  pypy3.6-v7.3.2rc1-aarch64.tar.bz2
+    d5738cffc11b364b5f0bf4883c2e1fd46431822f3bd126c7d8c83e9b5f0e6543  pypy3.6-v7.3.2rc1-linux32.tar.bz2
+    41cab069841cfc713cc2d0526034f04fcbd741d67d70212926a3ff90754a39f5  pypy3.6-v7.3.2rc1-linux64.tar.bz2
+    afabd1ea5a7da31df547c1d4b7028caef1dfaad0ba7e9dda81da2884dfe3062c  pypy3.6-v7.3.2rc1-osx64.tar.bz2
+    9202fa080d821cca5fe788acfdee3020449e3c36df720ede89ef7389ad6d4a37  pypy3.6-v7.3.2rc1-src.tar.bz2
+    8dc4d906720208d590133d580bc7976f7aca1fedf49c3dec1eba1fccb39e0bdc  pypy3.6-v7.3.2rc1-src.zip
+    29d47b72cf417d12b23161d898dae38f48e48788733623ffb09807e913fbeb44  pypy3.6-v7.3.2rc1-win32.zip
+
+pypy3.7-7.3.2rc1 sha256::
+
+    a7e2376f5e64256aa2e3cf3d403b4c48753c9c2588c57e0fc6bddebefacb3a9d  pypy3.7-v7.3.2rc1-aarch64.tar.bz2
+    e2b2fa3f83f4a3cc138eb88c3bbf4fde395faec6bc04cd72721623865a366d96  pypy3.7-v7.3.2rc1-linux32.tar.bz2
+    8173935a5d1cae7238cb27e35bf881ab0ed0d8bd978d3cf6c80311ed596324ba  pypy3.7-v7.3.2rc1-linux64.tar.bz2
+    e730cf9e5be8566544a478bf2da4bc4ab84428ac4f4a7bb8e001ea4516a3f3be  pypy3.7-v7.3.2rc1-osx64.tar.bz2
+    209c2136654ea116c316c6d5305659e8e33d49b9f9f61eee36c06330bb3214ba  pypy3.7-v7.3.2rc1-src.tar.bz2
+    419020e81793030cb6d011e7c0b75183163a7586a31ae88a6a52689e9c45926e  pypy3.7-v7.3.2rc1-src.zip
+    a6fc9d568c05504759e945e70b94fc55f5e99748eb01da4fb5192231238fa1d7  pypy3.7-v7.3.2rc1-win32.zip
+
+pypy2.7-7.3.2rc1 sha256::
+
+    935801f57dc82cabb4160dafb919eb29110a2ded97dd4c716b54206314151fe  pypy2.7-v7.3.2rc1-aarch64.tar.bz2
+    925543a3161153d9b15df49000e96ce2625bf4371619667b5f37616b699acc21  pypy2.7-v7.3.2rc1-linux32.tar.bz2
+    6216e1bbac3b86bfd38d16f0685c34c8c9c7aaf908ebd00388844ec295b89c17  pypy2.7-v7.3.2rc1-linux64.tar.bz2
+    a6fcdb44f12379eb1a547750322bd4c154b6e0c5ee30f9de2d9e2b86b2f2f319  pypy2.7-v7.3.2rc1-osx64.tar.bz2
+    9f58b5bacab010d945d9c31e8b7a2539034858f4cdf048f016d8d04430688cc6  pypy2.7-v7.3.2rc1-src.tar.bz2
+    0c86b52f6ad09dce1275427c18a216a0cbb5cf0db89eba2389e97ae81416eef7  pypy2.7-v7.3.2rc1-src.zip
+    bbb737f4ce714af0e7797fc951f5231b26ee10f8bca3d969c5b732982f952957  pypy2.7-v7.3.2rc1-win32.zip
+
 
 pypy2.7-7.3.1 sha256::
 
