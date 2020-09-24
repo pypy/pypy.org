@@ -12,6 +12,10 @@
     <div class="row">
     <div class="column pb-4">
 
+.. image:: images/pypy-logo.svg
+    :alt: PyPy logo
+    :width: 350px
+
 A `fast`_, `compliant`_ alternative implementation of `Python`_
 
 .. raw:: html
@@ -24,7 +28,7 @@ A `fast`_, `compliant`_ alternative implementation of `Python`_
 
 .. class:: button
 
-    `What is PyPy`_ ?
+    `What is PyPy`_ : Features
 
 .. class:: button
 
@@ -34,22 +38,10 @@ A `fast`_, `compliant`_ alternative implementation of `Python`_
 .. _`What is PyPy`: features.html
 .. _`Documentation`: https://doc.pypy.org
 
-
 .. raw:: html
 
     </div>
-    <div class="column pb-4"">
-
-.. image:: images/pypy-logo.svg
-    :alt: PyPy logo
-    :width: 300px
-
-
-.. raw:: html
-
-    </div>
-    </div>
-
+    <div class="column pb-4" "flex-basis: 400px">
 
 .. class:: small
 
@@ -58,10 +50,14 @@ On average, PyPy is **4.2 times faster** than CPython
 .. figure:: images/pypy_speed_graph.png
     :alt: PyPy vs. Python speed comparison graph"
     :figclass: text-sm
-    :width: 100%
 
     PyPy trunk (with JIT) benchmark times normalized to CPython. Smaller is
     better. Based on the geometric average of all benchmarks
+
+.. raw:: html
+
+    </div>
+    </div>
 
 ::
 
