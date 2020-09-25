@@ -15,6 +15,8 @@ We provide pre-compiled binaries for many platforms and OSes:
 
 * the Python3.6 compatible release — **PyPy3.6 v7.3.2**
 
+* the Python3.7 compatible release — **PyPy3.7 v7.3.2**
+
 * the Python2.7 Software Transactional Memory special release — **PyPy-STM 2.5.1** (Linux x86-64 only)
 
 .. note::
@@ -33,10 +35,11 @@ We provide pre-compiled binaries for many platforms and OSes:
   Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.6>``
 
 .. list-table:: `PyPy v7.3.2`_ 
-   :widths: 20 20 20 40
+   :widths: 20 15 15 15 35
    :header-rows: 1
 
    * - OS
+     - PyPy3.7 
      - PyPy3.6 
      - PyPy2.7
      - Notes
@@ -44,9 +47,11 @@ We provide pre-compiled binaries for many platforms and OSes:
    * - **Linux x86 64 bit**
      - Download__
      - Download__
+     - Download__
      - compatible with CentOS6 and later
 
    * - **Windows 32 bit**
+     - Download__
      - Download__
      - Download__
      - compatible with any windows, 32- or 64-bit
@@ -57,23 +62,29 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - Download__
      - Download__
+     - Download__
      - High Sierra >= 10.13, not for Sierra and below
 
    * - **Linux ARM64**
 
      - Download__
      - Download__
+     - Download__
      - compatible with CentOS6 and later
 
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-linux64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-linux64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-linux64.tar.bz2
 
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-win32.zip
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-win32.zip
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-win32.zip
 
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-osx64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-osx64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-osx64.tar.bz2
 
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-aarch64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-aarch64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-aarch64.tar.bz2
 
@@ -82,10 +93,11 @@ We provide pre-compiled binaries for many platforms and OSes:
 
 
 .. list-table:: Other Platfoms
-   :widths: 20 20 20 40
+   :widths: 20 15 15 15 35
    :header-rows: 1
 
    * - OS
+     - PyPy3.7
      - PyPy3.6
      - PyPy2.7
      - Notes
@@ -94,10 +106,12 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - Download__
      - Download__
+     - Download__
      - compatible with CentOS6 and later
 
    * - **PowerPC PPC64**
 
+     - Download__
      - Download__
      - Download__
      - 64bit big-endian, Fedora 20 [1]_
@@ -106,10 +120,12 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - Download__
      - Download__
+     - Download__
      - 64bit little-endian, Fedora 21 [1]_
 
    * - **S390x**
 
+     - Download__
      - Download__
      - Download__
      - built on Redhat Linux 7.2 [1]_
@@ -118,15 +134,19 @@ We provide pre-compiled binaries for many platforms and OSes:
 
 
 
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-linux32.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-linux32.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-linux32.tar.bz2
 
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-ppc64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-ppc64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-ppc64.tar.bz2
 
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-ppc64le.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-ppc64le.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-ppc64le.tar.bz2
 
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-s390x.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-s390x.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-s390x.tar.bz2
 
@@ -176,11 +196,12 @@ are better solutions:
   `Fedora`_, `Gentoo`_ and `Arch`_ are known to package PyPy, with various
   degrees of being up-to-date. FreshPorts_ packages for FreeBSD.
 
-* use conda_, which will also enable installing binary-compiled packages.
+* use conda_, (for MacOS) which will also enable installing binary-compiled
+  packages.
 
 * `recompile the CFFI-based`_ TCL/TK, OpenSSL, or sqlite3 modules, using system
-  libraries and the scripts in ``pypy/lib_pypy``. This solution will not solve
-  compatibility issues with libffi, since that is baked into PyPy.
+  libraries and the scripts in ``pypy/lib_pypy/pypy_tools``. This solution will
+  not solve compatibility issues with libffi, since that is baked into PyPy.
 
 * or translate_ your own PyPy.
 
@@ -223,7 +244,7 @@ is probably low-spec enough that running CPython on it is a better
 idea in the first place.
 
 PyPy-STM 2.5.1
-------------------------------
+--------------
 
 This is a special version of PyPy!  See the `Software Transactional
 Memory`_ (STM) documentation.
@@ -237,7 +258,7 @@ Memory`_ (STM) documentation.
 .. _`Other versions (without a JIT)`:
 
 Other versions
--------------------------------
+--------------
 
 The other versions of PyPy are:
 
@@ -279,7 +300,7 @@ a symlink to it, otherwise it will not find its libraries.
 
 
 Installing more modules
--------------------------------
+-----------------------
 
 There are as yet few distribution-ready packages. `conda`_ is one easy
 way to get packages with a minimum of compilation.
@@ -313,6 +334,9 @@ Building from source
 
    .. code-block:: bash
 
+     # switch to the branch that implements Python 3.7
+     hg update py3.7
+
      # switch to the branch that implements Python 3.6
      hg update py3.6
 
@@ -321,9 +345,11 @@ Building from source
 
    * `pypy2.7-v7.3.2-src.tar.bz2`__ (sources, PyPy 2 only)
    * `pypy3.6-v7.3.2-src.tar.bz2`__ (sources, PyPy 3 only)
+   * `pypy3.7-v7.3.2-src.tar.bz2`__ (sources, PyPy 3 only)
 
    .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-src.tar.bz2
    .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-src.tar.bz2
 
 
 2. Make sure you **installed the dependencies.**  See the list here__.

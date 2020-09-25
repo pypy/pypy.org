@@ -30,7 +30,7 @@ Source
 
 .. class:: download_menu
 
-* `Source (tar.bz2)`__; `Source (zip)`__. 
+* `3.6 Source (tar.bz2)`__; `3.6 Source (zip)`__. 
 
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-src.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-src.zip
