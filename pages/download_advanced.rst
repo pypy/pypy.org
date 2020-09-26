@@ -111,16 +111,16 @@ We provide pre-compiled binaries for many platforms and OSes:
 
    * - **PowerPC PPC64**
 
-     - Download__
-     - Download__
-     - Download__
+     - n/a
+     - 7.3.1__
+     - 7.3.1__
      - 64bit big-endian, Fedora 20 [1]_
 
    * - **PowerPC PPC64le**
 
-     - Download__
-     - Download__
-     - Download__
+     - n/a
+     - 7.3.1__
+     - 7.3.1__
      - 64bit little-endian, Fedora 21 [1]_
 
    * - **S390x**
@@ -138,13 +138,11 @@ We provide pre-compiled binaries for many platforms and OSes:
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-linux32.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-linux32.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-ppc64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-ppc64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-ppc64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-ppc64le.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-ppc64le.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.2-ppc64le.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.1-ppc64le.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64le.tar.bz2
 
 .. __: https://downloads.python.org/pypy/pypy3.7-v7.3.2-s390x.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.2-s390x.tar.bz2
