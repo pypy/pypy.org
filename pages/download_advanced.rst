@@ -493,7 +493,7 @@ Here are the checksums for latest downloads
 
 pypy3.6-7.3.2 sha256::
 
-    64d6a0503c83dd328e1a6bf7fcb2b2e977c1d27c6fcc491a7174fd37bc32a12  pypy3.6-v7.3.2-aarch64.tar.bz2
+    164d6a0503c83dd328e1a6bf7fcb2b2e977c1d27c6fcc491a7174fd37bc32a12  pypy3.6-v7.3.2-aarch64.tar.bz2
     6fa871dedf5e60372231362d2ccb0f28f623d42267cabb49be11a3e10bee2726  pypy3.6-v7.3.2-linux32.tar.bz2
     d7a91f179076aaa28115ffc0a81e46c6a787785b2bc995c926fe3b02f0e9ad83  pypy3.6-v7.3.2-linux64.tar.bz2
     fd457bfeaf54aa69417b6aa4817df40e702dc8aaaf7e83ba005d391a1bddfa96  pypy3.6-v7.3.2-osx64.tar.bz2
