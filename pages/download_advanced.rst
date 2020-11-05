@@ -480,7 +480,7 @@ pre-compiling them, normal users will get errors:
   normally found: e.g. in your project's main directory, or in a
   directory that you add to the env var ``PYTHONPATH``.
 
-.. _`package.py`: https://bitbucket.org/pypy/pypy/src/default/pypy/tool/release/package.py
+.. _`package.py`: https://foss.heptapod.net/pypy/pypy/-/blob/release-pypy3.7-v7.3.2/pypy/tool/release/package.py
 
 
 .. 

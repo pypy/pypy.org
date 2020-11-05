@@ -38,7 +38,7 @@ He's also the main maintainer of
 `jitviewer`_, a tool for analyzing performance of your python programs under
 PyPy.
 
-.. _`jitviewer`: https://bitbucket.org/pypy/jitviewer
+.. _`jitviewer`: https://foss.heptapod.net/pypy/jitviewer
 
 Carl Friedrich Bolz
 ===================
@@ -151,4 +151,4 @@ Many more people
 PyPy is and has always been an effort of many volunteers. Consult the `LICENSE`_
 file for details.
 
-.. _`LICENSE`: https://bitbucket.org/pypy/pypy/src/tip/LICENSE
+.. _`LICENSE`: https://foss.heptapod.net/pypy/pypy/-/blob/branch/default/LICENSE

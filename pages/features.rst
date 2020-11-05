@@ -156,7 +156,6 @@ To read more about its features, try ``pypy_interact.py --help`` or go to
 .. _`Building from source`: download.html#building-from-source
 .. _`our documentation site`: http://pypy.readthedocs.org/en/latest/sandbox.html
 
-.. _`the cli-jit branch`: https://bitbucket.org/pypy/pypy/src/cli-jit
 .. _`contact us`: contact.html
 .. _Prolog: https://bitbucket.org/cfbolz/pyrolog/
 .. _Smalltalk: https://bitbucket.org/pypy/lang-smalltalk/

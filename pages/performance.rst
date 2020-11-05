@@ -371,6 +371,6 @@ We generally consider things that are slower on PyPy than CPython to be bugs
 of PyPy.  If you find some issue that is not documented here,
 please report it to our `bug tracker`_ for investigation.
 
-.. _`bug tracker`: https://bitbucket.org/pypy/pypy/issues?status=new&status=open
+.. _`bug tracker`: https://foss.heptapod.net/pypy/pypy/-/issues
 .. _`speed website`: http://speed.pypy.org
 .. _CFFI: http://cffi.readthedocs.org/
