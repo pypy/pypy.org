@@ -163,5 +163,5 @@ To read more about its features, try ``pypy_interact.py --help`` or go to
 .. _Io: https://bitbucket.org/pypy/lang-io/
 .. _Scheme: https://bitbucket.org/pypy/lang-scheme/
 .. _Gameboy: https://bitbucket.org/pypy/lang-gameboy/
-.. _Topaz: http://topazruby.com/
+.. _Topaz: https://github.com/topazproject/topaz
 .. _HippyVM: http://www.hippyvm.com/
