@@ -79,7 +79,8 @@ On average, PyPy is **4.2 times faster** than CPython
 
 * **Compatibility:** PyPy is `highly compatible`_ with existing python code.
   It supports `cffi`_, `cppyy`_, and can run popular python libraries like
-  `twisted`_ and `django`_.
+  `twisted`_, and `django`_. It can also run NumPy, Scikit-learn and more via a
+  c-extension compatibility layer.
 
 * **Stackless:** PyPy comes by default with support for `stackless mode`_,
   providing micro-threads for massive concurrency.
