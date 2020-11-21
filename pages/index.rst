@@ -60,7 +60,7 @@ On average, PyPy is **4.2 times faster** than CPython
     :figclass: text-sm
     :width: 100%
 
-    PyPy trunk (with JIT) benchmark times normalized to CPython. Smaller is
+    PyPy (with JIT) benchmark times normalized to CPython. Smaller is
     better. Based on the geometric average of all benchmarks
 
 ::
