@@ -493,7 +493,7 @@ Here are the checksums for latest downloads
 
 pypy3.7-7.3.3 sha256::
 
-    e4aa041558b58de6063dd6df93b3def221c4ca4c900d6a9db5b1b52135703a8  pypy3.7-v7.3.3-aarch64.tar.bz2
+    ee4aa041558b58de6063dd6df93b3def221c4ca4c900d6a9db5b1b52135703a8  pypy3.7-v7.3.3-aarch64.tar.bz2
     7d81b8e9fcd07c067cfe2f519ab770ec62928ee8787f952cadf2d2786246efc8  pypy3.7-v7.3.3-linux32.tar.bz2
     37e2804c4661c86c857d709d28c7de716b000d31e89766599fdf5a98928b7096  pypy3.7-v7.3.3-linux64.tar.bz2
     d72b27d5bb60813273f14f07378a08822186a66e216c5d1a768ad295b582438d  pypy3.7-v7.3.3-osx64.tar.bz2
