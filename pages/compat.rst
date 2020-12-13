@@ -6,12 +6,12 @@
 .. link: 
 .. description: 
 
-PyPy implements the Python language version 2.7.13. It supports all of the core
+PyPy implements the Python language version 2.7.18. It supports all of the core
 language, passing Python test suite (with minor modifications that were
 already accepted in the main python in newer versions). It supports most
 of the commonly used Python `standard library modules`_; details below.
 
-PyPy3 implements the Python language version 3.6.9.  It has been released,
+PyPy3 implements the Python language version 3.7.9.  It has been released,
 but Python is a large language and it is quite possible that a few things are missing.
 
 PyPy has support for the `CPython C API`_, however there are constructs
