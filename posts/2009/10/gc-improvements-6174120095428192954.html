@@ -1,0 +1,202 @@
+<html><body><p>In the last week, I (Armin) have been taking some time off the
+JIT work to improve our GCs.  More precisely, our GCs now take
+one or two words less for every object.  This further reduce the
+memory usage of PyPy, as we will show at the end.</p>
+
+<h2>Background information: RPython object model</h2>
+
+<p>We first need to understand the RPython object model as
+implemented by our GCs and our C backend.  (Note that the
+object model of the Python interpreter is built on top of
+that, but is more complicated -- e.g. Python-level objects
+are much more flexible than RPython objects.)</p>
+
+<p>Consider these two RPython classes:</p>
+    
+<pre>
+class A:
+    def __init__(self, x):
+        self.x = x
+    def f(self):
+        return self.x * 42
+
+class B(A):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+    def f(self):
+        return self.x + self.y
+</pre>
+
+<p>The instances of A and B look like this in memory (all cells
+are one word):</p>
+
+<p></p><table border="1"><tr>
+<td>GC header</td>
+<td>vtable ptr of A</td>
+<td>hash</td>
+<td>x</td>
+</tr></table>
+
+<p></p><table border="1"><tr>
+<td>GC header</td>
+<td>vtable ptr of B</td>
+<td>hash</td>
+<td>x</td>
+<td>y</td>
+</tr></table>
+
+<p>The first word, the GC header, describes the layout.  It
+encodes on half a word the shape of the object, including where it
+contains further pointers, so that the GC can trace it.  The
+other half contains GC flags (e.g. the mark bit of a
+mark-and-sweep GC).</p>
+
+<p>The second word is used for method dispatch.  It is similar to a
+C++ vtable pointer.  It points to static data that is mostly a
+table of methods (as function pointers), containing e.g. the method f
+of the example.</p>
+
+<p>The hash field is not necessarily there; it is only present in classes
+whose hash is ever taken in the RPython program (which includes being
+keys in a dictionary).  It is an "identity hash": it works like
+object.__hash__() in Python, but it cannot just be the address of
+the object in case of a GC that moves objects around.</p>
+
+<p>Finally, the x and y fields are, obviously, used to store the value
+of the fields.  Note that instances of B can be used in places that
+expect a pointer to an instance of A.</p>
+
+<h2>Unifying the vtable ptr with the GC header</h2>
+
+<p>The first idea of saving a word in every object is the observation
+that both the vtable ptr and the GC header store information about
+the class of the object.  Therefore it is natural to try to only have
+one of them.  The problem is that we still need bits for the GC flags,
+so the field that we have to remove is the vtable pointer.</p>
+
+<p>This means that method dispatch needs to be more clever: it
+cannot directly read the vtable ptr, but needs to compute it
+from the half-word of the GC header.  Fortunately, this can be
+done with no extra instruction on the assembler level.  Here is
+how things will look like in the end, assuming a 32-bit x86
+machine (but note that as usual we just generate portable C).</p>
+
+<p>The trick for achieving efficiency is that we store all
+vtables together in memory, and make sure that they don't take
+more than 256 KB in total (16 bits, plus 2 bits of alignment).
+Here is how the assembler code (produced by the normal C
+compiler, e.g. gcc) for calling a method looks like.  Before
+the change:</p>
+
+<pre>
+MOV EDX, [EAX + 4]               # load the vtable ptr from object EAX
+MOV EDX, [EDX + method_offset]   # load the function pointer from the vtable
+CALL EDX
+</pre>
+
+<p>Instead, we now have:</p>
+
+<pre>
+MOVZX EDX, [EAX]     # load the 16-bit part of the GC header from EAX
+MOV EDX, [vtable_start + 4*EDX + method_offset]
+CALL EDX
+</pre>
+
+<p>Note that the complex addressing scheme done by the second MOV
+is still just one instruction: the vtable_start and
+method_offset are constants, so they are combined.  And as the
+vtables are anyway aligned at a word boundary, we can use
+4*EDX to address them, giving us 256 KB instead of just 64 KB
+of vtables.</p>
+
+<h2>Optimizing the hash field</h2>
+
+<p>In PyPy's Python interpreter, all application-level objects
+are represented as an instance of some subclass of W_Root.
+Since all of these objects could potentially be stored in a
+dictionary by the application Python program, all these
+objects need a hash field.  Of course, in practice, only a
+fraction of all objects in a Python program end up having
+their hash ever taken.  Thus this field of W_Root is wasted
+memory most of the time.</p>
+
+<p>(Up to now, we had a hack in place to save the hash field
+on a few classes like W_IntegerObject, but that meant that
+the Python expression ``object.__hash__(42)'' would raise
+a TypeError in PyPy.)</p>
+
+<p>The solution we implemented now (done by some Java GCs, among
+others) is to add a hash field to an object when the
+(identity) hash of that object is actually taken.  This means
+that we had to enhance our GCs to support this.  When objects
+are allocated, we don't reserve any space for the hash:</p>
+
+object at 0x74B028
+<table border="1"><tr>
+<td>...00...</td>
+<td>x</td>
+<td>y</td>
+</tr></table>
+    
+<p>When the hash of an object is taken, we use its current memory
+address, and set a flag in the GC header saying that this
+particular object needs a hash:</p>
+
+object at 0x74B028
+<table border="1"><tr>
+<td>...01...</td>
+<td>x</td>
+<td>y</td>
+</tr></table>
+
+<p>If the GC needs to move the object to another memory location,
+it will make the new version of the object bigger, i.e. it
+will also allocate space for the hash field:</p>
+
+object at 0x825F60
+<table border="1"><tr>
+<td>...11...</td>
+<td>x</td>
+<td>y</td>
+<td>0x74B028</td>
+</tr></table>
+
+<p>This hash field is immediately initialized with the old memory
+address, which is the hash value that we gave so far for the
+object.  To not disturb the layout of the object, we always
+put the extra hash field at the end.  Of course, once set,
+the hash value does not change even if the object needs to
+move again.</p>
+
+<h2>Results</h2>
+
+<p>Running the following program on PyPy's Python interpreter
+with n=4000000:</p>
+
+<pre>
+def make_linked_list(n):
+    a = None
+    i = 0
+    while i &lt; n:
+        b = X()
+        b.next = a
+        a = b
+        i += 1
+</pre>
+
+<p>the two optimizations together save 32 MB of RAM (i.e. 8 bytes
+per object).  The version of PyPy we measured this with was built
+as follows:</p>
+
+<pre>
+./translate.py --gcremovetypeptr targetpypystandalone --objspace-std-withsharingdict
+</pre>
+
+<p>The total amount of RAM used on a 32-bit Linux is 247 MB,
+completing in 10.3 seconds.  On CPython, it consumes 684 MB
+and takes 89 seconds to complete...  This nicely shows that
+our GCs are much faster at allocating objects, and that our
+objects can be much smaller than CPython's.</p>
+
+<p>Armin Rigo &amp; Carl Friedrich Bolz</p></body></html>

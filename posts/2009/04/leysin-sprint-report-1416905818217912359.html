@@ -1,0 +1,97 @@
+<html><body><p>The Leysin sprint is nearing its end, as usual here is an attempt at a summary
+</p><p>of what we did.</p><a href="http://4.bp.blogspot.com/_zICyAWqZbLA/Se3dHMjUvrI/AAAAAAAAAHk/ZwGu2owTSok/s1600-h/landscape.jpg"><img alt="Beautiful Leysin Landscape" border="0" id="BLOGGER_PHOTO_ID_5327157049947373234" src="http://4.bp.blogspot.com/_zICyAWqZbLA/Se3dHMjUvrI/AAAAAAAAAHk/ZwGu2owTSok/s320/landscape.jpg" style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer; width: 320px; height: 213px;"></a><div class="section" id="release-work">
+<h2>Release Work</h2>
+<p>Large parts of the sprint were dedicated to fixing bugs. Since the easy bugs
+seem to have been fixed long ago, those were mostly very annoying and hard bugs.
+This work was supported by our <a class="reference external" href="http://codespeak.net:8099/">buildbots</a>, which we tried to get free of
+test-failures. This was worked on by nearly all participants of the sprint
+(Samuele, Armin, Anto, Niko, Anders, Christian, Carl Friedrich). One
+particularly annoying bug was the differences in the tracing events that PyPy
+produces (fixed by Anders, Samuele and Christian). Some details about larger
+tasks are in the sections below.</p>
+<p>The work culminated in the <a class="reference external" href="http://morepypy.blogspot.com/2009/04/beta-for-110-released.html">beta</a> released on Sunday.</p>
+<div class="section" id="stackless">
+<h3>Stackless</h3>
+<p>A large number of problems came from our <a class="reference external" href="http://codespeak.net/pypy/dist/pypy/doc/stackless.html">stackless features</a>, which do some
+advanced things and thus seem to contain advanced bugs. Samuele and Carl
+Friedrich spent some time fixing tasklet pickling and unpickling. This was
+achieved by supporting the (un)pickling of builtin code objects. In addition
+they fixed some bugs in the finalization of tasklets. This needs some care
+because the <tt class="docutils literal"><span class="pre">__del__</span></tt> of a tasklet cannot run at arbitrary points in time, but
+only at safe points. This problem was a bit subtle to get right, and popped up
+nearly every morning of the sprint in form of a test failure.</p>
+<p>Armin and Niko added a way to restrict the stack depth of the RPython-level
+stack. This can useful when using stackless, because if this is not there it is
+possible that you fill your whole heap with stack frames in the case of an
+infinite recursion. Then they went on to make stackless not segfault when
+threads are used at the same time, or if a callback from C library code is in
+progress. Instead you get a <tt class="docutils literal"><span class="pre">RuntimeError</span></tt> now, which is not good but better
+than a segfault.</p>
+</div><a href="http://2.bp.blogspot.com/_zICyAWqZbLA/Se3dbHpy8xI/AAAAAAAAAH0/7rgKpUQhFVA/s1600-h/pair2.jpg"><img alt="Anto and Armin working on the JIT" border="0" id="BLOGGER_PHOTO_ID_5327157392229724946" src="http://2.bp.blogspot.com/_zICyAWqZbLA/Se3dbHpy8xI/AAAAAAAAAH0/7rgKpUQhFVA/s320/pair2.jpg" style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer; width: 320px; height: 213px;"></a>
+<a href="http://1.bp.blogspot.com/_zICyAWqZbLA/Se3dazWieiI/AAAAAAAAAHs/JeahZb31xyg/s1600-h/pair1.jpg">
+</a><div class="section" id="killing-features">
+<h3>Killing Features</h3>
+<p>During the sprint we discussed the fate of the LLVM and the JS backends. Both
+have not really been maintained for some time, and even partially untested
+(their tests were skipped). Also their usefulness appears to be limited. The JS
+backend is cool in principle, but has some serious limitations due to the fact
+that JavaScript is really a dynamic language, while RPython is rather static.
+This made it hard to use some features of JS from RPython, e.g. RPython does not
+support closures of any kind.</p>
+<p>The LLVM backend had its own set of problems. For
+a long time it produced the fastest form of PyPy's Python interpreter, by first
+using the LLVM backend, applying the LLVM optimizations to the result, then
+using LLVM's C backend to produce C code, then apply GCC to the result :-).
+However, it is not clear that it is still useful to directly produce LLVM
+bitcode, since LLVM has rather good C frontends nowadays, with <a class="reference external" href="http://llvm.org/cmds/llvmgcc.html">llvm-gcc</a> and
+<a class="reference external" href="http://clang.llvm.org/">clang</a>. It is likely that we will use LLVM in the future in our JIT (but that's
+another story, based on different code).</p>
+<p>Therefore we decided to remove these two backends from SVN, which Samuele and
+Carl Friedrich did. They are not dead, only resting until somebody who is
+interested in maintaining them steps up.</p>
+</div>
+<div class="section" id="windows">
+<h3>Windows</h3>
+<p>One goal of the release is good Windows-support. Anders and Samuele set up a new
+<a class="reference external" href="http://codespeak.net:8099/builders/pypy-c-lib-python-win-32">windows buildbot</a> which revealed a number of failures. Those were attacked by
+Anders, Samuele and Christian as well as by Amaury (who was not at the sprint,
+but thankfully did a lot of Windows work in the last months).</p>
+</div>
+<div class="section" id="os-x">
+<h3>OS X</h3>
+<p>Christian with some help by Samuele tried to get translation working again under
+Mac OS X. This was a large mess, because of different behaviours of some POSIX
+functionality in Leopard. It is still possible to get the old behaviour back,
+but whether that was enabled or not depended on a number of factors such as
+which Python is used. Eventually they managed to successfully navigate that maze
+and produce something that almost works (there is still a problem remaining
+about OpenSSL).</p>
+</div><a href="http://1.bp.blogspot.com/_zICyAWqZbLA/Se3dazWieiI/AAAAAAAAAHs/JeahZb31xyg/s1600-h/pair1.jpg"><img alt="Samuele and Carl Friedrich pretending to work on something" border="0" id="BLOGGER_PHOTO_ID_5327157386780244514" src="http://1.bp.blogspot.com/_zICyAWqZbLA/Se3dazWieiI/AAAAAAAAAHs/JeahZb31xyg/s320/pair1.jpg" style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer; width: 320px; height: 213px;"></a>
+<div class="section" id="documentation">
+<h3>Documentation</h3>
+<p>The Friday of the sprint was declared to be a documentation day, where (nearly)
+no coding was allowed. This resulted in a newly structured and improved <a class="reference external" href="http://codespeak.net/pypy/dist/pypy/doc/getting-started.html">getting
+started</a> document (done by Carl Friedrich, Samuele and some help of Niko) and
+a new document describing <a class="reference external" href="http://codespeak.net/pypy/dist/pypy/doc/cpython_differences.html">differences to CPython</a> (Armin, Carl Friedrich) as
+well as various improvements to existing documents (everybody else). Armin
+undertook the Sisyphean task of <a class="reference external" href="http://codespeak.net/pypy/dist/pypy/doc/extradoc.html">listing all talks, paper and related stuff</a>
+of the PyPy project.</p>
+</div>
+</div>
+<div class="section" id="various-stuff">
+<h2>Various Stuff</h2>
+<div class="section" id="java-backend-work">
+<h3>Java Backend Work</h3>
+<p>Niko and Anto worked on the JVM backend for a while. First they had to fix
+translation of the Python interpreter to Java. Then they tried to improve the
+performance of the Python interpreter when translated to Java. Mostly they did a
+lot of profiling to find performance bottlenecks. They managed to improve
+performance by 40% by overriding <tt class="docutils literal"><span class="pre">fillInStackTrace</span></tt> of the generated exception
+classes. Apart from that they found no simple-to-fix performance problems.</p>
+</div>
+<div class="section" id="jit-work">
+<h3>JIT Work</h3>
+<p>Armin gave a presentation about the current state of the JIT to the sprinters as
+well as Adrian Kuhn, Toon Verwaest and Camillo Bruni of the University of Bern
+who came to visit for one day. There was a bit of work on the JIT going on too;
+Armin and Anto tried to get closer to having a working JIT on top of the CLI.</p></div></div></body></html>

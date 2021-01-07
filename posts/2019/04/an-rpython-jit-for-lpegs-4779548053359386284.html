@@ -1,0 +1,365 @@
+<html><body><p>The following is a guest post by Stefan Troost, he describes the work he did in his bachelor thesis:</p>
+
+<p>In this project we have used the RPython infrastructure to generate an RPython
+JIT for a
+less-typical use-case: string pattern matching. The work in this project is
+based on <a href="bford.info/pub/lang/peg.pdf">Parsing Expression Grammars</a> and
+<a href="www.inf.puc-rio.br/~roberto/docs/peg.pdf">LPeg</a>, an implementation of PEGs
+designed to be used in Lua. In this post I will showcase some of the work that
+went into this project, explain PEGs in general and LPeg in particular, and
+show some benchmarking results.</p>
+<h1><a id="Parsing_Expression_Grammars_12"></a>Parsing Expression Grammars</h1>
+<p>Parsing Expression Grammas (PEGs) are a type of formal grammar similar to
+context-free grammars, with the main difference being that they are unambiguous.
+This is achieved by redefining the ambiguous choice operator of CFGs (usually
+noted as <code>|</code>) as an <em>ordered</em> choice operator. In practice this means that if a
+rule in a PEG presents a choice, a PEG parser should prioritize the leftmost
+choice. Practical uses include parsing and pattern-searching. In comparison to
+regular expressions PEGs stand out as being able to be parsed in linear time,
+being strictly more powerful than REs, as well as being arguably more readable.</p>
+<h1><a id="LPeg_24"></a>LPeg</h1>
+<p>LPeg is an implementation of PEGs written in C to be used in the Lua
+programming language. A crucial detail of this implementation is that it parses
+high level function calls, translating them to bytecode, and interpreting that
+bytecode. Therefore, we are able to improve that implementation by replacing
+LPegs C-interpreter with an RPython JIT. I use a modified version of LPeg to
+parse PEGs and pass the generated Intermediate Representation, the LPeg
+bytecode, to my VM.</p>
+<h1><a id="The_LPeg_Library_35"></a>The LPeg Library</h1>
+<p>The LPeg Interpreter executes bytecodes created by parsing a string of commands
+using the LPeg library. Our JIT supports a subset of the LPeg library, with
+some of the more advanced or obscure features being left out. Note that this
+subset is still powerful enough to do things like parse JSON.</p>
+<table class="table table-striped table-bordered">
+<thead>
+<tr>
+<th>Operator</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>lpeg.P(string)</td>
+<td>Matches string literally</td>
+</tr>
+<tr>
+<td>lpeg.P(n)</td>
+<td>Matches exactly n characters</td>
+</tr>
+<tr>
+<td>lpeg.P(-n)</td>
+<td>Matches at most n characters</td>
+</tr>
+<tr>
+<td>lpeg.S(string)</td>
+<td>Matches any character in string (Set)</td>
+</tr>
+<tr>
+<td>lpeg.R(“xy”)</td>
+<td>Matches any character between x and y (Range)</td>
+</tr>
+<tr>
+<td>pattern^n</td>
+<td>Matches at least n repetitions of pattern</td>
+</tr>
+<tr>
+<td>pattern^-n</td>
+<td>Matches at most n repetitions of pattern</td>
+</tr>
+<tr>
+<td>pattern1 * pattern2</td>
+<td>Matches pattern1 followed by pattern2</td>
+</tr>
+<tr>
+<td>pattern1 + pattern2</td>
+<td>Matches pattern1 or pattern2 (ordered choice)</td>
+</tr>
+<tr>
+<td>pattern1 - pattern2</td>
+<td>Matches pattern1 if pattern2 does not match</td>
+</tr>
+<tr>
+<td>-pattern</td>
+<td>Equivalent to ("" - pattern)</td>
+</tr>
+</tbody>
+</table>
+<p>As a simple example, the pattern <code>lpeg.P"ab"+lpeg.P"cd"</code> would match either the
+string <code>ab</code> or the string <code>cd</code>.</p>
+<p>To extract semantic information from a pattern, captures are needed. These are
+the following operations supported for capture creation.</p>
+<table class="table table-striped table-bordered">
+<thead>
+<tr>
+<th>Operation</th>
+<th>What it produces</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>lpeg.C(pattern)</td>
+<td>the match for patten plus all captures made by pattern</td>
+</tr>
+<tr>
+<td>lpeg.Cp()</td>
+<td>the current position (matches the empty string)</td>
+</tr>
+</tbody>
+</table>
+<p>(tables taken from the <a href="http://www.inf.puc-rio.br/~roberto/lpeg/">LPeg documentation</a>)</p>
+<p>These patterns are translated into bytecode by LPeg, at which point we are able
+to pass them into our own VM.</p>
+<h1><a id="The_VM_73"></a>The VM</h1>
+<p>The state of the VM at any point is defined by the following variables:</p>
+<ul>
+<li><code>PC</code>: program counter indicating the current instruction</li>
+<li><code>fail</code>: an indicator that some match failed and the VM must backtrack</li>
+<li><code>index</code>: counter indicating the current character of the input string</li>
+<li><code>stackentries</code>: stack of return addresses and choice points</li>
+<li><code>captures</code>: stack of capture objects</li>
+</ul>
+<p>The execution of bytecode manipulates the values of these variables in order to
+produce some output. How that works and what that output looks like will be
+explained now.</p>
+<h1><a id="The_Bytecode_88"></a>The Bytecode</h1>
+<p>For simplicity’s sake I will not go over every individual bytecode, but instead
+choose some that exemplify the core concepts of the bytecode set.</p>
+<h2><a id="generic_character_matching_bytecodes_93"></a>generic character matching bytecodes</h2>
+<ul>
+<li>
+<p><code>any</code>: Checks if there’s any characters left in the inputstring. If it succeeds
+it advances the index and PC by 1, if not the bytecode fails.</p>
+</li>
+<li>
+<p><code>char c</code>: Checks if there is another bytecode in the input and if that
+character is equal to <code>c</code>. Otherwise the bytecode fails.</p>
+</li>
+<li>
+<p><code>set c1-c2</code>: Checks if there is another bytecode in the input and if that
+character is between (including) c1 and c2. Otherwise the bytecode fails.</p>
+</li>
+</ul>
+<p>These bytecodes are the easiest to understand with very little impact on the
+VM. What it means for a bytecode to fail will be explained when
+we get to control flow bytecodes.</p>
+<p>To get back to the example, the first half of the pattern <code>lpeg.P"ab"</code> could be
+compiled to the following bytecodes:</p>
+<pre><code>char a
+char b
+</code></pre>
+<h2><a id="control_flow_bytecodes_117"></a>control flow bytecodes</h2>
+<ul>
+<li>
+<p><code>jmp n</code>: Sets <code>PC</code> to <code>n</code>, effectively jumping to the n’th bytecode. Has no defined
+failure case.</p>
+</li>
+<li>
+<p><code>testchar c n</code>: This is a lookahead bytecode. If the current character is equal
+to <code>c</code> it advances the <code>PC</code> but not the index. Otherwise it jumps to <code>n</code>.</p>
+</li>
+<li>
+<p><code>call n</code>: Puts a return address (the current <code>PC + 1</code>) on the <code>stackentries</code> stack
+and sets the <code>PC</code> to <code>n</code>. Has no defined failure case.</p>
+</li>
+<li>
+<p><code>ret</code>: Opposite of <code>call</code>. Removes the top value of the <code>stackentries</code> stack (if
+the string of bytecodes is valid this will always be a return address) and
+sets the <code>PC</code> to the removed value. Has no defined failure case.</p>
+</li>
+<li>
+<p><code>choice n</code>: Puts a choice point on the <code>stackentries</code> stack. Has no defined
+failure case.</p>
+</li>
+<li>
+<p><code>commit n</code>: Removes the top value of the <code>stackentries</code> stack (if the string of
+bytecodes is valid this will always be a choice point) and jumps to <code>n</code>. Has no
+defined failure case.</p>
+</li>
+</ul>
+<p>Using <code>testchar</code> we can implement the full pattern <code>lpeg.P"ab"+lpeg.P"cd"</code> with
+bytecode as follows:</p>
+<pre><code>testchar a -&gt; L1
+any
+char b
+end
+any
+L1: char c
+char d
+end
+</code></pre>
+<p>The <code>any</code> bytecode is needed because <code>testchar</code> does not consume a character
+from the input.</p>
+<h2><a id="Failure_Handling_Backtracking_and_Choice_Points_158"></a>Failure Handling, Backtracking and Choice Points</h2>
+<p>A choice point consist of the VM’s current <code>index</code> and <code>capturestack</code> as well as a
+<code>PC</code>. This is not the VM’s <code>PC</code> at the time of creating the
+choicepoint, but rather the <code>PC</code> where we should continue trying to find
+matches when a failure occurs later.</p>
+<p>Now that we have talked about choice points, we can talk about how the VM
+behaves in the fail state. If the VM is in the fail state, it removed entries
+from the stackentries stack until it finds a choice point. Then it backtracks
+by restoring the VM to the state defined by the choice point. If no choice
+point is found this way, no match was found in the string and the VM halts.</p>
+<p>Using choice points we could implement the example <code>lpeg.P"ab" + lpeg.P"cd"</code> in
+bytecodes in a different way (LPEG uses the simpler way shown above, but for
+more complex patterns it can’t use the lookahead solution using <code>testchar</code>):</p>
+<pre><code>choice L1
+char a
+char b
+commit
+end
+L1: char c
+char d
+end
+</code></pre>
+<h2><a id="Captures_188"></a>Captures</h2>
+<p>Some patterns require the VM to produce more output than just “the pattern
+matched” or “the pattern did not match”. Imagine searching a document for an
+IPv4 address and all your program responded was “I found one”. In order to
+recieve additional information about our inputstring, captures are used.</p>
+<h3><a id="The_capture_object_195"></a>The capture object</h3>
+<p>In my VM, two types of capture objects are supported, one of them being the
+position capture. It consists of a single index referencing the point in the
+inputstring where the object was created.</p>
+<p>The other type of capture object is called simplecapture. It consists of an
+index and a size value, which are used to reference a substring of the
+inputstring. In addition, simplecaptures have a variable status indicating they
+are either open or full. If a simplecapture object is open, that means that its
+size is not yet determined, since the pattern we are capturing is of variable
+length.</p>
+<p>Capture objects are created using the following bytecodes:</p>
+<ul>
+<li>
+<p><code>Fullcapture Position</code>: Pushes a positioncapture object with the current index
+value to the capture stack.</p>
+</li>
+<li>
+<p><code>Fullcapture Simple n</code>: Pushes a simplecapture object with current index value
+and size=n to the capture stack.</p>
+</li>
+<li>
+<p><code>Opencapture Simple</code>: Pushes an open simplecapture object with current index
+value and undetermined size to the capture stack.</p>
+</li>
+<li>
+<p><code>closecapture</code>: Sets the top element of the capturestack to full and sets its
+size value using the difference between the current index and the index of
+the capture object.</p>
+</li>
+</ul>
+<h1><a id="The_RPython_Implementation_224"></a>The RPython Implementation</h1>
+<p>These, and many more bytecodes were implemented in an RPython-interpreter.
+By adding jit hints, we were able to generate an efficient JIT.
+We will now take a closer look at some implementations of bytecodes.</p>
+<pre><code class="language-python">...
+        <span class="hljs-keyword">elif</span> instruction.name == <span class="hljs-string">"any"</span>:
+            <span class="hljs-keyword">if</span> index &gt;= len(inputstring):
+                fail = <span class="hljs-keyword">True</span>
+            <span class="hljs-keyword">else</span>:
+                pc += <span class="hljs-number">1</span>
+                index += <span class="hljs-number">1</span>
+
+...
+</code></pre>
+<p>The code for the <code>any</code>-bytecode is relatively straight-forward. It either
+advances the <code>pc</code> and <code>index</code> or sets the VM into the fail state,
+depending on whether the end of the inputstring has been reached or not.</p>
+<pre><code class="language-python">...
+        <span class="hljs-keyword">if</span> instruction.name == <span class="hljs-string">"char"</span>:
+            <span class="hljs-keyword">if</span> index &gt;= len(inputstring):
+                fail = <span class="hljs-keyword">True</span>
+            <span class="hljs-keyword">elif</span> instruction.character == inputstring[index]:
+                pc += <span class="hljs-number">1</span>
+                index += <span class="hljs-number">1</span>
+            <span class="hljs-keyword">else</span>:
+                fail = <span class="hljs-keyword">True</span>
+...
+</code></pre>
+<p>The <code>char</code>-bytecode also looks as one would expect. If the VM’s string index is
+out of range or the character comparison fails, the VM is put into the
+fail state, otherwise the <code>pc</code> and <code>index</code> are advanced by 1. As you can see, the
+character we’re comparing the current inputstring to is stored in the
+instruction object (note that this code-example has been simplified for
+clarity, since the actual implementation includes a jit-optimization that
+allows the VM to execute multiple successive char-bytecodes at once).</p>
+<pre><code class="language-python">...
+        <span class="hljs-keyword">elif</span> instruction.name == <span class="hljs-string">"jmp"</span>:
+            pc = instruction.goto
+...
+</code></pre>
+<p>The <code>jmp</code>-bytecode comes with a <code>goto</code> value which is a <code>pc</code> that we want
+execution to continue at.</p>
+<pre><code class="language-python">...
+        <span class="hljs-keyword">elif</span> instruction.name == <span class="hljs-string">"choice"</span>:
+            pc += <span class="hljs-number">1</span>
+            choice_points = choice_points.push_choice_point(
+                instruction.goto, index, captures)
+...
+</code></pre>
+<p>As we can see here, the <code>choice</code>-bytecode puts a choice point onto the stack that
+may be backtracked to if the VM is in the fail-state. This choice point
+consists of a pc to jump to which is determined by the bytecode.
+But it also includes the current <code>index</code> and <code>captures</code> values at the time the choice
+point was created. An ongoing topic of jit optimization is which data structure
+is best suited to store choice points and return addresses. Besides naive
+implementations of stacks and single-linked lists, more case-specific
+structures are also being tested for performance.</p>
+<h1><a id="Benchmarking_Result_299"></a>Benchmarking Result</h1>
+<p>In order to find out how much it helps to JIT LPeg patterns we ran a small
+number of benchmarks. We used an otherwise idle Intel Core i5-2430M CPU with
+3072 KiB of cache and 8 GiB of RAM, running with 2.40GHz. The machine was
+running Ubuntu 14.04 LTS, Lua 5.2.3 and we used GNU grep 2.16 as a point of
+comparison for one of the benchmarks. The benchmarks were run 100 times in
+a new process each. We measured the full runtime of the called process,
+including starting the process.</p>
+<p>Now we will take a look at some plots generated by measuring the runtime of
+different iterations of my JIT compared to lua and using bootstrapping to
+generate a sampling distribution of mean values. The plots contain a few different
+variants of pypeg, only the one called "fullops" is important for this blog post, however.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://1.bp.blogspot.com/-Qv3aZapdMOk/XKXMDhTGujI/AAAAAAAAsNo/b7QShypeeV8mvePwTjPgmDSzUVB6EsiaACLcBGAs/s1600/rawplot_100_kb_urlinput.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://1.bp.blogspot.com/-Qv3aZapdMOk/XKXMDhTGujI/AAAAAAAAsNo/b7QShypeeV8mvePwTjPgmDSzUVB6EsiaACLcBGAs/s400/rawplot_100_kb_urlinput.png" width="400"></a></div>
+
+<p>This is the plot for a search pattern that searches a text file for valid URLs.
+As we can see, if the input file is as small as 100 kb, the benefits of JIT
+optimizations do not outweigh the time required to generate the
+machine code. As a result, all of our attempts perform significantly slower
+than LPeg.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-mTry3w1vSFA/XKXMNoaeHOI/AAAAAAAAsNs/YhdGWoGmyjU3yxqFgcePBklGv-qw13wXgCLcBGAs/s1600/rawplot_500_kb_urlinput.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://2.bp.blogspot.com/-mTry3w1vSFA/XKXMNoaeHOI/AAAAAAAAsNs/YhdGWoGmyjU3yxqFgcePBklGv-qw13wXgCLcBGAs/s400/rawplot_500_kb_urlinput.png" width="400"></a></div>
+
+<p>This is the plot for the same search pattern on a larger input file. As we can
+see, for input files as small as 500 kb our VM already outperforms LPeg’s. An
+ongoing goal of continued development is to get this lower boundary as small as
+possible.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-Cr4BE9Cejg8/XKXMUXamP3I/AAAAAAAAsN0/t5PTo0Q4vPMLwL12bdQ93Q4bAMIjJTEVACLcBGAs/s1600/rawplot_5_mb_urlinput.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://2.bp.blogspot.com/-Cr4BE9Cejg8/XKXMUXamP3I/AAAAAAAAsN0/t5PTo0Q4vPMLwL12bdQ93Q4bAMIjJTEVACLcBGAs/s400/rawplot_5_mb_urlinput.png" width="400"></a></div>
+
+<p>The benefits of a JIT compared to an Interpreter become more and more relevant
+for larger input files. Searching a file as large as 5 MB makes this fairly
+obvious and is exactly the behavior we expect.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-uIoguDb7ApE/XKXMngYEnSI/AAAAAAAAsOA/zdv2WAfdRwwruS1yOdX7jFz0nB_PPQqRACLcBGAs/s1600/rawplot_50_kb_jsoninput.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://2.bp.blogspot.com/-uIoguDb7ApE/XKXMngYEnSI/AAAAAAAAsOA/zdv2WAfdRwwruS1yOdX7jFz0nB_PPQqRACLcBGAs/s400/rawplot_50_kb_jsoninput.png" width="400"></a></div>
+
+<p>This time we are looking at a different more complicated pattern, one that parses JSON used on a
+50 kb input file. As expected, LPeg outperforms us, however, something
+unexpected happens as we increase the filesize.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://3.bp.blogspot.com/-r1-Aq39Oe9I/XKXMuQlcB6I/AAAAAAAAsOE/Eqmj7i3JKz0zdTK6Cd1ai11aZCf-EZkVwCLcBGAs/s1600/rawplot_100_kb_jsoninput.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://3.bp.blogspot.com/-r1-Aq39Oe9I/XKXMuQlcB6I/AAAAAAAAsOE/Eqmj7i3JKz0zdTK6Cd1ai11aZCf-EZkVwCLcBGAs/s400/rawplot_100_kb_jsoninput.png" width="400"></a></div>
+
+<p>Since LPeg has a defined maximum depth of 400 for the choicepoints and
+returnaddresses Stack, LPeg by default refuses to parse files as small as
+100kb. This raises the question if LPeg was intended to be used for parsing.
+Until a way to increase LPeg’s maximum stack depth is found, no comparisons to
+LPeg can be performed at this scale. This has been a low priority in the past
+but may be addressed in the future.</p>
+<p>To conclude, we see that at sufficiently high filesizes, our JIT outperforms
+the native LPeg-interpreter. This lower boundary is currently as low as 100kb
+in filesize.</p>
+<h1><a id="Conclusion_353"></a>Conclusion</h1>
+<p>Writing a JIT for PEG’s has proven itself to be a challenge worth pursuing, as
+the expected benefits of a JIT compared to an Interpreter have been achieved.
+Future goals include getting LPeg to be able to use parsing patterns on larger
+files, further increasing the performance of our JIT and comparing it to other
+well-known programs serving a similar purpose, like grep.</p>
+<p>The prototype implementation that I described in this post can be found
+<a href="https://github.com/sktroost/PyPeg/tree/master/pypeg">on Github</a>
+(it's a bit of a hack in some places, though).</p></body></html>

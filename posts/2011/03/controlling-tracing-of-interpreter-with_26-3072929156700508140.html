@@ -1,0 +1,37 @@
+<html><body><p>This is part 4 and the <strong>final</strong> part of the series on how to speed up an interpreter
+written with PyPy by adding JIT hints to the interpreter. Part 1 described how
+to <a class="reference external" href="http://morepypy.blogspot.com/2011/03/controlling-tracing-of-interpreter-with.html">control the extent of tracing</a>. Part 2 described how to <a class="reference external" href="http://morepypy.blogspot.com/2011/03/controlling-tracing-of-interpreter-with_15.html">influence the
+optimizer with promotion and pure functions</a>. Part 3 described a <a class="reference external" href="http://morepypy.blogspot.com/2011/03/controlling-tracing-of-interpreter-with_21.html">simple object
+model and how it can be optimized</a> by doing small rewrites. In this (short) post
+I present some benchmarks.</p>
+<div class="section" id="benchmarks">
+<h2>Benchmarks</h2>
+<p>For the benchmarks I ran a subset of the benchmarks on <a class="reference external" href="http://speed.pypy.org">http://speed.pypy.org</a>
+with CPython and four different executables of PyPy's Python interpreter (all
+with a JIT). The executables contain all combinations of enabling maps (which
+make instance attributes fast) and type versions (which makes method lookup
+fast).</p>
+<ul class="simple">
+<li><strong>pypy-slow</strong>: contains neither maps nor type versions.</li>
+<li><strong>pypy-map</strong>: contains maps but not type versions.</li>
+<li><strong>pypy-version</strong>: contains type versions but not maps.</li>
+<li><strong>pypy-full</strong>: contains both maps <em>and</em> type versions</li>
+</ul>
+<p>The results are as follows:</p>
+<a href="http://2.bp.blogspot.com/-tzvNLyIUk2g/TY4mMvBzHYI/AAAAAAAAAP8/1Kc6uR3Mb14/s1600/bench-objmodel.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5588446187837660546" src="http://2.bp.blogspot.com/-tzvNLyIUk2g/TY4mMvBzHYI/AAAAAAAAAP8/1Kc6uR3Mb14/s600/bench-objmodel.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 600px;"></a>
+<p>The graph shows the speedup over CPython's numbers. The results are quite
+interesting. Maps by themselves do not speed up much over the bare JIT, whereas
+typed versions alone improve on the JIT baseline in many cases. However, maps
+are not useless. In combination with type versions they add a nice improvement
+over just type versions in a number of benchmarks (most notably
+<tt class="docutils literal"><span class="pre">raytrace-simple</span></tt> and <tt class="docutils literal">richards</tt> but also in <tt class="docutils literal"><span class="pre">crypto-pyaes</span></tt>, <tt class="docutils literal">django</tt>
+and <tt class="docutils literal">go</tt>).</p>
+<p>It's clear that type versions can be arbitrarily effective. A method lookup on a
+class can be arbitrarily slow, if the inheritance hierarchy becomes deeper and
+deeper. The full lookup is replaced by one promotion if type versions are
+enabled.</p>
+<p>Maps on the other hand always replace one dict lookup with one promotion. Since
+dict lookups are already very fast, this by itself does not lead to a gigantic
+improvement. Only in combination with type versions do they show their full
+potential.</p>
+</div></body></html>

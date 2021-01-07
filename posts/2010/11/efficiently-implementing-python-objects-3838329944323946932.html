@@ -1,0 +1,199 @@
+<html><body><p>As could be foreseen by my <a class="reference external" href="http://morepypy.blogspot.com/2010/08/call-for-benchmarks.html">Call for Memory Benchmarks</a> post a while ago, I am
+currently working on improving the memory behaviour of PyPy's Python
+interpreter. In this blog post I want to describe the various data a Python
+instance can store. Then I want to describe how a branch that I did and that was
+recently merged implements the various features of instances in a very
+memory-efficient way.</p>
+<div class="section" id="python-s-object-model">
+<h2>Python's Object Model</h2>
+<p>All "normal" new-style Python instances (i.e. instances of subclasses of <tt class="docutils literal">object</tt>
+without added declarations) store two (or possibly three) kinds of information.</p>
+<div class="section" id="storing-the-class">
+<h3>Storing the Class</h3>
+<p>Every instance knows which class it belongs to. This information is accessible
+via the <tt class="docutils literal">.__class__</tt> attribute. It can also be changed to other (compatible
+enough) classes by writing to that attribute.</p>
+</div>
+<div class="section" id="instance-variables">
+<h3>Instance Variables</h3>
+<p>Every instance also has an arbitrary number of attributes stored (also called
+instance variables). The instance variables used can vary per instance, which is
+not the case in most other class-based languages: traditionally (e.g. in
+Smalltalk or Java) the class describes the shape of its instances,
+which means that the
+set of admissible instance variable names is the same for all instances of a
+class.</p>
+<p>In Python on the other hand, it is possible to add arbitrary attributes to an
+instance at any point. The instance behaves like a dictionary mapping attribute
+names (as strings) to the attribute values.</p>
+<p>This is actually how CPython implements instances. Every instance has a
+reference to a dictionary that stores all the attributes of the instance. This
+dictionary can be reached via the <tt class="docutils literal">.__dict__</tt> attribute. To make things more
+fun, the dictionary can also be <em>changed</em> by writing to that attribute.</p>
+</div>
+<div class="section" id="example">
+<h3>Example</h3>
+<p>As an example, consider the following code:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">A</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">pass</span>
+
+instance1 <span style="color: #555555;">=</span> A()
+instance1<span style="color: #555555;">.</span>x <span style="color: #555555;">=</span> <span style="color: #FF6600;">4</span>
+instance1<span style="color: #555555;">.</span>y <span style="color: #555555;">=</span> <span style="color: #FF6600;">6</span>
+instance1<span style="color: #555555;">.</span>z <span style="color: #555555;">=</span> <span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>
+
+instance2 <span style="color: #555555;">=</span> A()
+instance2<span style="color: #555555;">.</span>x <span style="color: #555555;">=</span> <span style="color: #FF6600;">1</span>
+instance2<span style="color: #555555;">.</span>y <span style="color: #555555;">=</span> <span style="color: #FF6600;">2</span>
+instance2<span style="color: #555555;">.</span>z <span style="color: #555555;">=</span> <span style="color: #FF6600;">3</span>
+</pre></div>
+<p>These two instances would look something like this in memory:</p>
+<a href="http://3.bp.blogspot.com/_zICyAWqZbLA/TN6__OBefcI/AAAAAAAAAMg/vmOMwGa5mKw/s1600/instance-grey.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5539075684529241538" src="http://3.bp.blogspot.com/_zICyAWqZbLA/TN6__OBefcI/AAAAAAAAAMg/vmOMwGa5mKw/s400/instance-grey.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 57px;"></a>
+<p>(The picture glosses over a number of details, but it still shows the essential
+issues.)</p>
+<p>This way of storing things is simple, but unfortunately rather inefficient. Most
+instances of the same class have the same shape, i.e. the same set of instance
+attribute names. That means that the key part of all the dictionaries is
+identical (shown grey here). Therefore storing that part repeatedly in all
+instances is a waste. In addition, dictionaries are themselves rather large.
+Since they are typically implemented as hashmaps, which must not be too full to
+be efficient, a dictionary will use something like 6 words on average per key.</p>
+</div>
+<div class="section" id="slots">
+<h3>Slots</h3>
+<p>Since normal instances are rather large, CPython 2.2 introduced slots, to make
+instances consume less memory. Slots are a way to fix the set of attributes an
+instance can have. This is achieved by adding a declaration to a class, like
+this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">B</span>(<span style="color: #336666;">object</span>):
+    __slots__ <span style="color: #555555;">=</span> [<span style="color: #CC3300;">"x"</span>, <span style="color: #CC3300;">"y"</span>, <span style="color: #CC3300;">"z"</span>]
+</pre></div>
+<p>Now the instances of <tt class="docutils literal">B</tt> can only have <tt class="docutils literal">x</tt>, <tt class="docutils literal">y</tt> and <tt class="docutils literal">z</tt> as attributes
+and don't have a dictionary at all. Instead, the instances of <tt class="docutils literal">B</tt> get
+allocated with enough size to hold exactly the number of instance variables that
+the class permits. This clearly saves a lot of memory over the dictionary
+approach, but has a number of disadvantages. It is obviously less flexible, as
+you cannot add additional instance variables to an instance if you happen to
+need to do that. It also introduces a set of <a class="reference external" href="http://docs.python.org/reference/datamodel.html#slots">rules and corner-cases</a> that can
+be surprising sometimes (e.g. instances of a subclass of a class with slots that
+doesn't have a slots declaration will have a dict).</p>
+</div>
+</div>
+<div class="section" id="using-maps-for-memory-efficient-instances">
+<h2>Using Maps for Memory-Efficient Instances</h2>
+<p>As we have seen in the diagram above, the dictionaries of instances of the same
+class tend to look very similar and share all the keys. The central idea to use
+less memory is to "factor out" the common parts of the instance dictionaries
+into a new object, called a "map" (because it is a guide to the landscape of the
+object, or something). After that factoring out, the representation of the
+instances above looks something like this:</p>
+<a href="http://2.bp.blogspot.com/_zICyAWqZbLA/TN6__c74O3I/AAAAAAAAAMo/CxNPGbfD8bc/s1600/instancemap.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5539075688532294514" src="http://2.bp.blogspot.com/_zICyAWqZbLA/TN6__c74O3I/AAAAAAAAAMo/CxNPGbfD8bc/s400/instancemap.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 59px;"></a>
+<p>Every instance now has a reference to its map, which describes what the instance
+looks like. The actual instance variables are stored in an array (called
+<tt class="docutils literal">storage</tt> in the diagram). In the example here, the map describes that the
+instances have three attributes <tt class="docutils literal">x</tt>, <tt class="docutils literal">y</tt> and <tt class="docutils literal">z</tt>. The numbers after the
+attributes are indexes into the storage array.</p>
+<p>If somebody adds a new attribute to one of the instances, the map for that
+instance will be changed to another map that also contains the new attribute,
+and the storage will have to grow a field with the new attribute. The maps are
+immutable, immortal and reused as much as possible. This means, that two
+instances of the same class with the same set of attributes will have the same
+map. This also means that the memory the map itself uses is not too important,
+because it will potentially be amortized over many instances.</p>
+<p>Note that using maps makes instances nearly as small as if the correct slots had
+been declared in the class. The only overhead needed is the indirection to the
+storage array, because you can get new instance variables, but not new slots.</p>
+<p>The concept of a "map" that describes instances is kind of old and comes from
+the virtual machine for the <a class="reference external" href="http://en.wikipedia.org/wiki/Self_%28programming_language%29">Self</a> programming language. The optimization was
+first described in 1989 in a paper by Chambers, Ungar and Lee with the title <a class="reference external" href="http://labs.oracle.com/self/papers/implementation.html">An
+Efficient Implementation of Self, a Dynamically-Typed Object-Oriented Language
+Based on Prototypes</a>. A similar technique is used in Google's V8 JavaScript
+engine, where the maps are called <a class="reference external" href="http://code.google.com/apis/v8/design.html#prop_access">hidden classes</a> and in the <a class="reference external" href="http://blogs.sun.com/jrose/entry/javaone_in_2010">Rhino
+JavaScript engine</a>.</p>
+<p>The rest of the post describes a number of further details that occur if
+instances are implemented using maps.</p>
+<div class="section" id="supporting-dictionaries-with-maps">
+<h3>Supporting Dictionaries with Maps</h3>
+<p>The default instance representation with maps as shown above works without
+actually having a dictionary as part of each instance. If a dictionary is
+actually requested, by accessing the <tt class="docutils literal">.__dict__</tt> attribute, it needs to be
+created and cached. The dictionary is not a normal Python dictionary, but a thin
+wrapper around the object that forwards all operations to it. From the user's
+point of view it behaves like a normal dictionary though (it even has the
+correct type).</p>
+<p>The dictionary needs to be cached, because accessing <tt class="docutils literal">.__dict__</tt> several times
+should always return the same dictionary. The caching happens by using a
+different map that knows about the dictionary and putting the dictionary into
+the storage array:</p>
+<a href="http://3.bp.blogspot.com/_zICyAWqZbLA/TN6__ibswtI/AAAAAAAAAMw/ZBY7pvZAel8/s1600/dictinstancemap.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5539075690007937746" src="http://3.bp.blogspot.com/_zICyAWqZbLA/TN6__ibswtI/AAAAAAAAAMw/ZBY7pvZAel8/s400/dictinstancemap.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 102px;"></a>
+<p>Things become really complex if the fake dict is used in strange ways. As long
+as the keys are strings, everything is fine. If somebody adds other keys to the
+dict, they cannot be represented by the map any more (which supports only
+attributes, i.e. string keys in the <tt class="docutils literal">__dict__</tt>). If that happens, all the
+information of the instance will move into the fake dictionary, like this:</p>
+<a href="http://3.bp.blogspot.com/_zICyAWqZbLA/TN6___mTkZI/AAAAAAAAAM4/2F-B8drBvKk/s1600/dictinstancemapdevolved.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5539075697837052306" src="http://3.bp.blogspot.com/_zICyAWqZbLA/TN6___mTkZI/AAAAAAAAAM4/2F-B8drBvKk/s400/dictinstancemapdevolved.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 249px;"></a>
+<p>In this picture, the key <tt class="docutils literal"><span class="pre">-1</span></tt> was added to the instance's dictionary. Since
+using the dictionary in arbitrary ways should be rare, we are fine with the
+additional time and memory that the approach takes.</p>
+</div>
+<div class="section" id="slots-and-maps">
+<h3>Slots and Maps</h3>
+<p>Maps work perfectly together with slots, because the slots can just be stored
+into the storage array used by the maps as well (in practise there are some
+refinements to that scheme).  This means that putting a <tt class="docutils literal">__slots__</tt> on a
+class has mostly no effect, because the instance only stores the values of the
+attributes (and not the names), which is equivalent to the way slots are stored
+in CPython.</p>
+</div>
+</div>
+<div class="section" id="implementation-details">
+<h2>Implementation Details</h2>
+<p>In the diagrams above, I represented the maps as flat objects. In practise this
+is a bit more complex, because it needs to be efficient to go from one map to
+the next when new attributes are added. Thus the maps are organized in a tree.</p>
+<p>The instances with their maps from above look a bit more like this in practise:</p>
+<a href="http://4.bp.blogspot.com/_zICyAWqZbLA/TN7AABHntqI/AAAAAAAAANA/YHVsUp51d60/s1600/realmap.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5539075698245220002" src="http://4.bp.blogspot.com/_zICyAWqZbLA/TN7AABHntqI/AAAAAAAAANA/YHVsUp51d60/s400/realmap.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 271px;"></a>
+<p>Every map just describes one attribute of the object, with a name and a an
+index. Every map also has a <tt class="docutils literal">back</tt> field, that points to another map
+describing what the rest of the object looks like. This chain ends with a
+terminator, which also stores the class of the object.</p>
+<p>The maps also contain the information necessary for making a new object of
+class <tt class="docutils literal">A</tt>. Immediately after the new object has been created, its map is the
+terminator. If the <tt class="docutils literal">x</tt> attribute is added, its maps is changed to the
+second-lowest map, and so on. The blue arrows show the sequence of maps that
+the new object goes through when the attributes <tt class="docutils literal">x, y, z</tt> are added.</p>
+<p>This representation of maps as chains of objects sounds very inefficient if an
+object has many attributes. The whole chain has to be walked to find the index.
+This is true to some extent. The problem goes away in the presence of the JIT,
+which knows that the chain of maps is an immutable structure, and will thus
+optimize away all the chain-walking. If the JIT is not used, there are a few
+caches that try to speed up the walking of this chain (similar to the method
+cache in CPython and PyPy).</p>
+</div>
+<div class="section" id="results">
+<h2>Results</h2>
+<p>It's hard to compare the improvements of this optimization in a fair way, as
+the trade-offs are just very different. Just to give an impression, a million
+objects of the same class with three fields on a 32bit system takes:</p>
+<p>without slots:</p>
+<ul class="simple">
+<li>182 MiB memory in CPython</li>
+<li>177 MiB memory in PyPy without maps</li>
+<li>40 MiB memory in PyPy with maps</li>
+</ul>
+<p>with slots:</p>
+<ul class="simple">
+<li>45 MiB memory in CPython</li>
+<li>50 MiB memory in PyPy without maps</li>
+<li>40 MiB memory in PyPy with maps</li>
+</ul>
+<p>Note how maps make the objects a bit more efficient like CPython using slots.
+Also, using slots has no additional effect in PyPy.</p>
+</div>
+<div class="section" id="conclusion">
+<h2>Conclusion</h2>
+<p>Maps are a powerful approach to shrinking the memory used by many similar
+instances. I think they can be pushed even further (e.g. by adding information
+about the types of the attributes) and plan to do so in the following months.
+Details will be forthcoming.</p>
+</div></body></html>

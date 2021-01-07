@@ -1,0 +1,376 @@
+<html><body><p>In my two <a class="reference" href="http://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-1.html">previous</a> <a class="reference" href="http://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-2.html">posts</a>, we talked about the PyPy JIT generator, seeing
+that it can produce huge speedups and how its backend-independent frontend
+works.</p>
+<p>In this post, we will look closer at the internals of the CLI JIT backend; in
+particular, we will see how we work around some serious limitations of the
+platform, and why these workarounds didn't have any serious impact on the
+performances of our <a class="reference" href="http://codespeak.net/svn/pypy/branch/oo-jit/pypy/jit/tl/tlc.py">toy virtual machine</a>.</p>
+<div class="section">
+<h2>Graphs, blocks, links</h2>
+
+<a href="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvSnEbJOxI/AAAAAAAAAEo/hu23h0n0mIc/s1600-h/flowgraph.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277042957038992146" src="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvSnEbJOxI/AAAAAAAAAEo/hu23h0n0mIc/s320/flowgraph.png" style="margin: 0pt 0pt 10px 10px; float: right; cursor: pointer; width: 239px; height: 301px;"></a>
+
+
+<p>One of the core aspect of PyPy translator is the concept of <strong>flow graph</strong>: a
+flow graph is a data structure that represents the code we are operating on.
+It is composed by a set of <strong>basic blocks</strong>, each block containing a sequence
+of operations; blocks are connected together by <strong>links</strong>, and each link can
+carry a variable number of arguments whose value is passed to the target
+block.  In case a block contains more than one outgoing links, the one to
+follow is selected by looking at the value of a designated variable (the
+<strong>exitswitch</strong>), thus making possible to implement conditional jumps.  To have
+a more complete description of the flow graphs model, check the <a class="reference" href="http://codespeak.net/pypy/dist/pypy/doc/translation.html#the-flow-model">documentation</a>.</p>
+
+<p>As we saw in the previous post, the generated JIT compiler makes heavy use of
+<strong>flexswitches</strong> to generate efficient code, continuously intermixing
+JIT-compile time and runtime.</p>
+<p>In terms of graphs, we can think of a flexswitch as a special block whose
+links change over time.  In particular, adding a new case to the flexswitch is
+equivalent to create a link whose target is a new block where the just
+generated code starts.  Thus, the graphs <strong>grows</strong> over the time, as showed by
+the following images:</p>
+
+<a href="http://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTL5PHePI/AAAAAAAAAEw/5-hp6dXBLSo/s1600-h/promotion-1.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277043589690915058" src="http://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTL5PHePI/AAAAAAAAAEw/5-hp6dXBLSo/s320/promotion-1.png" style="cursor: pointer; width: 254px; height: 320px;"></a><a href="http://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMOTC1WI/AAAAAAAAAE4/RzLhmkE3IbE/s1600-h/promotion-2.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277043595344532834" src="http://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMOTC1WI/AAAAAAAAAE4/RzLhmkE3IbE/s320/promotion-2.png" style="cursor: pointer; width: 305px; height: 320px;"></a>
+
+<a href="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMf84hxI/AAAAAAAAAFA/bXnegFVvIqI/s1600-h/promotion-3.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277043600083420946" src="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMf84hxI/AAAAAAAAAFA/bXnegFVvIqI/s320/promotion-3.png" style="cursor: pointer; width: 320px; height: 178px;"></a>
+
+
+<p>In the images above, the block containing the flexswitch is colored in
+cyan. In the first picture, there is only one block connected to the
+flexswitch: this block contains the code to restart the JIT compilation.  The
+second picture shows the graph after the first case has been added: you can
+clearly see that a new block has been created and attached to the flexswitch.
+Finally, the third picture shows the graph after a while, with a lot of new
+blocks attached.</p>
+</div>
+<div class="section">
+<h2>Translate graphs to CLI</h2>
+<p>Conceptually, the goal of the CLI JIT backend is to express these graphs in
+terms of CLI bytecode.</p>
+<p>Translating the single block is easy, as it is just a list of sequential
+operation, and it's straightforward to map each operation to the equivalent
+CLI opcode or to a call to a helper method.  Moreover, we need a way to
+express <strong>links</strong> between the various basic blocks: if the links are known in
+advance, render them is as easy as emitting a (potentially conditional) jump to
+the target block.  Thus, we won't discuss this part in detail, as it is quite
+straightforward.</p>
+<p>The hard part is how to implement <strong>flexswitches</strong>: at the time when we are
+emitting the code, some of the blocks of this growable graph don't even exist:
+how can we make a jump to a non existent block of code?  For backends that
+emit assembly code, it is rather easy: when they need to add a new case to the
+flexswitch, they can just <strong>patch</strong> the existing code to insert a jump to a
+newly allocated area of the memory, where the new code is being generated in.</p>
+<p>For CLI this approach is not feasible, as the VM will never allow us to modify
+existing code. Thus, we need to think of a different approach.</p>
+</div>
+<div class="section">
+<h2>Graphs and methods</h2>
+<p>In .NET, the basic unit of compilation is the <strong>method</strong>: the only way to
+execute some bytecode is to wrap it into a method.  Moreover, it is not
+possible to execute a method until it has been completed, and after this point
+it is no longer possible to <strong>add new code</strong>.</p>
+<p>Because of all these constraints we cannot simply map each graph to its own
+method, since we saw that our graphs can <strong>grow</strong> after they have already been
+executed few times.</p>
+<p>Hence, we need to distinguish between the two concepts:</p>
+<blockquote>
+<ul class="simple">
+<li>a <strong>graph</strong> is the logical unit of code as seen by the JIT compiler:
+concretely, the CLI JIT backend renders it as <em>one or more</em> methods;</li>
+<li>a <strong>method</strong> is a collection of basic blocks; each method has the so
+called <em>parent graph</em>, i.e. the graph its blocks logically belongs to.</li>
+</ul>
+</blockquote>
+<p>The first method of a graph is called <strong>main method</strong> (which has
+nothing to do with the <tt class="docutils literal"><span class="pre">Main</span></tt> static methods found in <tt class="docutils literal"><span class="pre">.exe</span></tt> files); other
+methods are called <strong>children methods</strong>.</p>
+<p>When we want to add a new case to the flexswitch, we create a method
+containing all the new code; then we wrap the method inside a <a class="reference" href="http://msdn.microsoft.com/en-us/magazine/cc301810.aspx">delegate</a> (the
+.NET equivalent of a function pointer) and pass it to the flexswitch, so that
+it can later invoke it.</p>
+</div>
+<div class="section">
+<h2>The hard bit: non-local links</h2>
+<p>Using this approach, after a while the blocks of our original graph are
+scattered over a lot of different methods; however, there are no constraints
+about how these blocks can be linked together, so it happens to have links
+between blocks which are not in the same method. In the following, we will
+refer to them as <strong>non-local links</strong>.</p>
+<p>If the non-local block we want to jump to happens to be at the beginning of
+its containing method, it is enough to invoke the method; but, what if we want
+to jump somewhere in the middle?  What we really want is to produce a method
+which has <strong>multiple entry-points</strong>; again, doing it in assembly would be
+trivial, but the virtual machine does not provide any support for it, so we
+need a work around.</p>
+<p>Each method in a graph is assigned an unique 16 bit <em>method id</em>; each block in
+a method is assigned a progressive 16 bit <em>block number</em>.  From this two
+numbers, we can compute the <em>block id</em> as an <tt class="docutils literal"><span class="pre">unsigned</span> <span class="pre">integer</span></tt>, by storing
+the method id in the first 16 bits and the block number in the second 16 bits.
+By construction, the block id is guaranteed to be unique in the graph.</p>
+<p>The following picture shows a graph composed of three methods; the id of<a href="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvT8_6SS1I/AAAAAAAAAFI/8JIdzVaTHPk/s1600-h/flexswitch-cli.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277044433296182098" src="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvT8_6SS1I/AAAAAAAAAFI/8JIdzVaTHPk/s320/flexswitch-cli.png" style="margin: 0pt 0pt 10px 10px; float: right; cursor: pointer; width: 266px; height: 320px;"></a> each
+method is shown in red, while the block ids are shown in red (for the method
+id part) and black (for the block number part).  The graph contains three
+non-local links; in particular, note the link between blocks <tt class="docutils literal"><span class="pre">0x00020001</span></tt>
+and <tt class="docutils literal"><span class="pre">0x00010001</span></tt> which connects two block that resides in different methods.</p>
+
+
+
+<p>Every method contains a special <strong>dispatch block</strong>, (not shown in the picture above) whose goal is to jump to
+the specified block number inside the method itself.  The first argument of a
+child method is always a block id; when the method starts, it immediately
+jumps to the dispatch block, and thus to the desired block.</p><a href="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvT8_6SS1I/AAAAAAAAAFI/8JIdzVaTHPk/s1600-h/flexswitch-cli.png"></a><p>For example, suppose to have a method which contains 3 blocks numbered 0, 1,
+2; here is how its dispatch blocks looks like; for simplicity it is shown as
+C# code, but it is actually generated as IL bytecode:</p>
+<pre class="literal-block">
+// dispatch block
+int methodid = (blockid &amp; 0xFFFF0000) &gt;&gt; 16); // take the first 16 bits
+int blocknum = blockid &amp;&amp; 0x0000FFFF;         // take the second 16 bits
+
+if (methodid != MY_METHOD_ID) {
+// jump_to_unknown block
+...
+}
+
+switch(blocknum) {
+case 0:
+goto block0;
+case 1:
+goto block1;
+case 2:
+goto block2;
+default:
+throw new Exception("Invalid block id");
+}
+</pre>
+<p>Whenever we want to jump to a non-local block, it is enough to store the block
+id in the appropriate variable and jump to the dispatch block.  If the block
+resides in a different method, the <tt class="docutils literal"><span class="pre">jump_to_unknown</span></tt> block is entered; this
+special block is implemented differently by the main method and the child
+methods, as we will see soon.</p>
+<p>Each time a new method is added to the graph, we build a delegate
+for it, and store it in a special array
+called <tt class="docutils literal"><span class="pre">method_map</span></tt>; since we assign the method id sequentially starting
+from 0, we are sure that to fetch the method whose id is <tt class="docutils literal"><span class="pre">n</span></tt> we can simply
+load the <tt class="docutils literal"><span class="pre">n</span></tt>-th element of the array.</p>
+<p>The <tt class="docutils literal"><span class="pre">jump_to_unknown</span></tt> block of the main method uses this array to select the
+right method, and calls it (<tt class="docutils literal"><span class="pre">FlexSwitchCase</span></tt> is the type of delegates for
+all children methods):</p>
+<pre class="literal-block">
+// jump_to_unknown block of the main method
+FlexSwitchCase meth = method_map[methodid];
+blockid = meth(blockid, ...); // execute the method
+goto dispatch_block;
+</pre>
+<p>Each child method returns a block id specifying the next block to jump to;
+after its execution, we assign the return value to the <tt class="docutils literal"><span class="pre">blockid</span></tt> variable,
+and jump again to the dispatch block, which will jump again to the appropriate
+block.</p>
+<p>Keeping this in mind, it is straightforward to implement the
+<tt class="docutils literal"><span class="pre">jump_to_unknown</span></tt> block of children methods: it is enough to return the
+target block id to the caller, and let its dispatch loop do the right thing.
+If the caller is also a child method, it will return it again, until we reach
+the dispatch loop of the main method, which will finally do the jump.  In
+theory, we could implement things differently and jumping directly from a
+child method to another one, but in that case the call stack could grows
+indefinitely in case of a tight loop between two blocks residing in different
+methods.</p>
+<p>To implement the dispatch block we can exploit the <tt class="docutils literal"><span class="pre">switch</span></tt> opcode of the
+CLI; if the .NET JIT is smart enough, it can render it using an indirect jump;
+overall, jumping to a non-local block consists of an indirect function call
+(by invoking the delegate) plus an indirect jump (by executing the <tt class="docutils literal"><span class="pre">switch</span></tt>
+opcode); even if this is more costly than a simple direct jump, we will see in
+the next section that this not the main source of overhead when following a
+non-local link.</p>
+<p>Obviously, the slow dispatching logic is needed only when we want to jump to a
+non-local block; if the target block happens to reside in the same method as
+the current one, we can directly jump to it, completely removing the overhead.</p>
+<p>Moreover, the dispatch blocks are emitted only if needed, i.e. if the parent
+graph contains at least one flexswitch; graphs without flexswitches are
+rendered in the obvious way, by making one method per graph.</p>
+</div>
+<div class="section">
+<h2>The slow bit: passing arguments</h2>
+<p>Jumping to the correct block is not enough to follow a link: as we said
+before, each link carries a <strong>set of arguments</strong> to be passed from the source to
+the target block.  As usual, passing arguments across local links is easy, as
+we can just use local variables to hold their values; on the other hand,
+non-local links make things more complex.</p>
+<p>The only way to jump to a block is to invoke its containing method, so the
+first solution that comes to mind is to specify its input arguments as
+parameter of the method; however, each block has potentially a different
+number (and different types) of input arguments than every other block, so we
+need to think of something else.</p>
+<p>An alternative solution could be to compute the union of the sets of input
+arguments of <strong>all the blocks in the method</strong>, and use this set as a signature
+for the method; this way, there would be enough space to specify the input
+arguments for every block we might want to jump to, each block ignoring the
+exceeding unused parameters.</p>
+<p>Unfortunately, all the children methods must have the <strong>very same signature</strong>,
+as they are all called from the same calling site in the dispatch block of the
+main method.  Since the union of the set of input arguments (and hence the
+computed signature) varies from method to method, this solution cannot work.</p>
+<p>We might think to determine the signature by computing the union of input
+arguments of <strong>all blocks in the graph</strong>; this way, all the children methods
+would have the same signature.  But as we said above, the graph grows new
+blocks at runtime, so we cannot determine in advance which set of input
+arguments we will need.</p>
+<p>To solve the problem we need a way to pass a variable number of arguments
+without knowing in advance neither their number nor their types.  Thus, we use
+an instance of this class:</p>
+<pre class="literal-block">
+public class InputArgs {
+public int[] ints;
+public float[] floats;
+public object[] objs;
+...
+}
+</pre>
+<p>Since the fields are arrays, they can grow as needed to contain any number of
+arguments; arguments whose type is primitive are stored in the <tt class="docutils literal"><span class="pre">ints</span></tt> or
+<tt class="docutils literal"><span class="pre">floats</span></tt> array, depending on their type; arguments whose type is a reference
+type are stored in the <tt class="docutils literal"><span class="pre">objs</span></tt> array: it's up to each block to cast each
+argument back to the needed type.</p>
+<p>This solution impose a huge overhead on both writing and reading arguments:</p>
+<blockquote>
+<ul class="simple">
+<li>when writing, we need to make sure that the arrays are big enough to
+contains all the arguments we need; if not, we need to allocate a bigger
+array.  Moreover, for each argument we store into the array the virtual
+machine performs a bound-check, even if we know the index will never be
+out of bounds (because we checked the size of the array in advance);</li>
+<li>when reading, the same bound-check is performed for each argument read;
+moreover, for each value read from the <tt class="docutils literal"><span class="pre">objs</span></tt> array we need to insert a
+downcast.</li>
+</ul>
+</blockquote>
+<p>To mitigate the performance drop, we avoid to allocate a new <tt class="docutils literal"><span class="pre">InputArgs</span></tt>
+object each time we do a non-local jump; instead, we preallocate one at the
+beginning of the main method, and reuse it all the time.</p>
+<p>Our <a class="reference" href="http://codespeak.net/svn/user/antocuni/cli-bench/arguments.cs">benchmarks</a> show that passing arguments in arrays is about 10 times slower
+than passing them as real parameter of a method.  Unfortunately, we couldn't
+come up with anything better.</p>
+</div>
+<div class="section">
+<h2>Implement flexswitches</h2>
+<p>Now, we can exploit all this machinery to implement flexswitches, as this is
+our ultimate goal.  As described above, the point is to be able to <strong>add new
+cases</strong> at runtime, each case represented as a delegate.  Here is an excerpt
+of the C# class that implements a flexswitch that switches over an integer
+value:</p>
+<pre class="literal-block">
+public class IntLowLevelFlexSwitch:
+{
+public uint default_blockid = 0xFFFFFFFF;
+public int numcases = 0;
+public int[] values = new int[4];
+public FlexSwitchCase[] cases = new FlexSwitchCase[4];
+
+public void add_case(int value, FlexSwitchCase c)
+{
+...
+}
+
+public uint execute(int value, InputArgs args)
+{
+for(int i=0; i&lt;numcases; i++)
+if (values[i] == value) {
+ return cases[i](0, args);
+}
+return default_blockid;
+}
+}
+</pre>
+<p>For each case, we store both the triggering value and the corresponding
+delegate; the <tt class="docutils literal"><span class="pre">add_case</span></tt> method takes care to append <tt class="docutils literal"><span class="pre">value</span></tt> and <tt class="docutils literal"><span class="pre">c</span></tt> to
+the <tt class="docutils literal"><span class="pre">values</span></tt> and <tt class="docutils literal"><span class="pre">cases</span></tt> arrays, respectively (and resize them if
+necessary).  The interesting bit is the <tt class="docutils literal"><span class="pre">execute</span></tt> method: it takes a value
+and a set of input arguments to be passed across the link and jumps to the
+right block by performing a linear search in the <tt class="docutils literal"><span class="pre">values</span></tt> array.</p>
+<p>As shown by previous sections, the first argument of a <tt class="docutils literal"><span class="pre">FlexSwitchCase</span></tt> is
+the block id to jump to; since when we go through a flexswitch we always want
+to jump to the first block of the method, we pass the special value <tt class="docutils literal"><span class="pre">0</span></tt> as a
+block id, which precisely means <tt class="docutils literal"><span class="pre">jump</span> <span class="pre">to</span> <span class="pre">the</span> <span class="pre">first</span> <span class="pre">block</span></tt>.  This little
+optimization let us not to have to explicitly store the block id for the first
+block of all the cases.</p>
+<p>The value returned by <tt class="docutils literal"><span class="pre">execute</span></tt> is the next block id to jump to; if the
+value is not found in the <tt class="docutils literal"><span class="pre">values</span></tt> array, we return the <tt class="docutils literal"><span class="pre">default_blockid</span></tt>,
+whose value has been set before by the JIT compiler; <tt class="docutils literal"><span class="pre">default_blockid</span></tt>
+usually points to a block containing code to restart the JIT compiler again;
+when the JIT compiler restarts, it emits more code for the missing case, then
+calls <tt class="docutils literal"><span class="pre">add_case</span></tt> on the flexswitch; from now on, the new blocks are wired
+into the existing graph, and we finally managed to implement <strong>growable
+graphs</strong>.</p>
+</div>
+<div class="section">
+<h2>Performances</h2>
+<p>As we saw, implementing growable graphs for CLI is a pain, as the virtual machine
+offers very little support, so we need an incredible amount of workarounds.
+Moreover, the code generated is much worse than what an assembly backend could
+produce, and the cost of following a non-local link is very high compared to
+local links.</p>
+<p>However, our first <a class="reference" href="http://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-1.html">blog post</a> showed that we still get very good
+performances; how is it possible?</p>
+<p><a class="reference" href="http://en.wikipedia.org/wiki/Optimization_%28computer_science%29#Bottlenecks">As usual</a> in computer science, most of the time of a running program in
+spent in a tiny fraction of the code; our benchmark is no exception, and the
+vast majority of the time is spent in the inner loop that multiplies numbers;
+the graph is built in such a way that all the blocks that are part of the
+inner loop reside in the same method, so that all links inside are local (and
+fast).</p>
+<p>Flexswitches and non-local links play a key role to select the right
+specialized implementation of the inner loop, but once it is selected they are
+not executed anymore until we have finished the computation.</p>
+<p>It is still unclear how things will look like when we will compile the full
+Python language instead of a toy one; depending on the code, it could be
+possible to have non-local links inside the inner loop, thus making
+performance much worse.</p>
+</div>
+<div class="section">
+<h2>Alternative implementations</h2>
+<p>Before implementing the solution described here, we carefully studied a lot of
+possible alternatives, but all of them either didn't work because of a
+limitation of the virtual machine or they could work but with terrible
+performances.</p>
+<p>In particular, in theory it is possible to implement non-local links using
+tail calls, by putting each block in its own method and doing a tail call
+instead of a jump; this would also solve the problem of how to pass arguments,
+as each method could have its own signature matching the input args of the
+block.  I would like to explain this solution in a more detailed way as I
+think it's really elegant and nice, but since this post is already too long,
+I'll stop here :-).</p>
+<p>In theory, if the .NET JIT were smart enough it could inline and optimize away
+the tail calls (or at least many of those) and give us very efficient code.
+However, one <a class="reference" href="http://codespeak.net/svn/user/antocuni/cli-bench/tailcall.il">benchmark</a> I wrote shows that tail calls are up to 10 times
+slower (!!!) than normal calls, thus making impractical to use them for our
+purposes.</p>
+</div>
+<div class="section">
+<h2>Conclusion</h2>
+<p>Despite the complexity of the implementation, our result are extremely good;
+the speedup we got is impressive, and it proves that PyPy's approach to JIT
+compiler can work well also on top of object oriented virtual machines like
+.NET or the JVM.</p>
+<p>Generating bytecode for those machine at runtime is not a new idea; Jython,
+IronPython, JRuby and other languages have been doing this for years.
+However, Jython and IronPython do only a simple "static" translation, which
+doesn't take advantage of the informations gathered at runtime to generate
+better, faster and specialized code.  Recently, JRuby grew a new strategy to
+JIT-compile only hotspots, taking advantage of some informations gathered
+while interpreting the code; this is still a "one-shot" compilation, where the
+compiled code does not change over time.</p>
+<p>To my knowledge, PyPy brings the first example of a
+language which implements a truly JIT compiler on top of the underlying JIT
+compiler of the virtual machine, emitting bytecode that changes and adapts
+over the time.  If someone knows other languages doing that, I would really
+like to know more.</p>
+<p>Being so innovative, the problem of this approach is that the current virtual
+machines are not designed to support it in a native way, and this forces us to
+put a lot of workarounds that slow down the generated code.  The hope is that
+in the future the virtual machines will grow features that help us to generate
+such kind of code.  The experimental <a class="reference" href="http://openjdk.java.net/projects/mlvm/">Da Vinci VM</a> seems to go in the right
+direction, so it is possible that in the future I will try to write a JIT
+backend for it.</p>
+<p>At the moment, the CLI JIT backend is almost complete, and all the hardest
+problems seems to be solved; the next step is to fix all the remaining bugs
+and implement some minor feature that it's still missing, then try to apply it
+to the full Python language and see what is the outcome.</p>
+</div></body></html>

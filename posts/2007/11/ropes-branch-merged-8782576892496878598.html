@@ -1,0 +1,29 @@
+<html><body><p>This afternoon we merged the <a href="https://codespeak.net/viewvc/pypy/branch/ropes-unicode/?pathrev=48924">ropes branch</a> that I have been working on on the side for a while (also to cut down the number of currently active branches a bit, since we are doing major cleanups right now). It contained a new (<a href="http://codespeak.net/pypy/dist/pypy/doc/config/objspace.std.withropeunicode.html">optional</a>) implementation of the unicode type using the <a href="http://www.cs.ubc.ca/local/reading/proceedings/spe91-95/spe/vol25/issue12/spe986.pdf">rope data structure</a>. Ropes essentially use concatenation trees to represent strings. The leaves of the trees contain either byte arrays or arrays of unicode characters.
+<a href="http://4.bp.blogspot.com/_zICyAWqZbLA/R0YJua_qlLI/AAAAAAAAACU/5fYi1risjAE/s1600-h/ropes.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5135803118187615410" src="http://4.bp.blogspot.com/_zICyAWqZbLA/R0YJua_qlLI/AAAAAAAAACU/5fYi1risjAE/s320/ropes.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand;"></a>
+
+Of course the fact that ropes are used is mostly completely transparent to the user (as usual in the pypy world :) ). Normal and unicode strings are implemented with them, but just from the behavior of these types the user has a hard time noticing. Of course there are significant changes in performance (in both directions).
+
+Using ropes to implement strings has some interesting effects. The most obvious one is that string concatenation, slicing and repetition is really fast (I suspect that it is amortized O(1),   but haven't proved it). This is probably not helping most existing Python programs because people tend to code in such a way that these operations are not done too often. However, with ropes it is possible to do something like this:
+</p><pre>Python 2.4.1 (pypy 1.0.0 build 48942) on linux2
+Type "help", "copyright", "credits" or "license" for more information.
+&gt;&gt;&gt;&gt; import sys
+&gt;&gt;&gt;&gt; a = "a" * sys.maxint
+&gt;&gt;&gt;&gt; hash(a)
+-768146060
+</pre>
+
+So somebody who is targeting a Python implementation that has ropes could write his code in such a way that this is taken into account. Another interesting feature is that ropes try to share as much data as possible with each other, so if you create a large slice of a large string, the slice is not going to take much additional memory.
+
+One of the most interesting use-cases of ropes are together with unicode. The leaf nodes of a rope unicode string can be either a byte array <span style="font-style: italic;">or</span> an array of unicode characters. This means that a unicode string that uses only characters that are latin-1 or ascii will use one byte of memory per character. If a unicode string contains mostly only unicode characters that are latin-1 and a few that are not, it will still use 1 byte for most of the latin-1 characters. This property also allows really fast encoding and decoding of unicode strings as long as they don't contain non-latin-1 characters (only with certain encodings of course):
+<pre>&gt;&gt;&gt;&gt; s = "a" * sys.maxint
+&gt;&gt;&gt;&gt; u = s.decode("ascii")
+&gt;&gt;&gt;&gt; u = s.decode("latin-1")
+&gt;&gt;&gt;&gt; u = s.decode("utf-8")</pre>
+Again, encoding and decoding strings that contain a few non-latin-1 characters is again efficient:
+<pre>&gt;&gt;&gt;&gt; u = "a" * 100000000 + u"\uffff"
+&gt;&gt;&gt;&gt; s = u.encode("utf-8")
+&gt;&gt;&gt;&gt; len(s)
+100000003</pre>
+I am not completely certain how useful this behaviour is for real-life applications, but it's kind of cool :-). It saves memory for european languages that contain few non-ascii characters.
+
+Of course there is at least one down-side to all of this, which is that string indexing is not O(1) any longer, because we have to walk down the tree to find the correct leaf where the character is actually in. I have not measured much, but I expect it to be quite fast in practice, because the trees are never deeper than 32 nodes.</body></html>

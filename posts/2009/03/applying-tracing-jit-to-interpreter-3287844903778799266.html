@@ -1,0 +1,287 @@
+<html><body><p>After I had failed once more to explain to someone on IRC what the idea behind
+the current JIT generator work of PyPy, I decided to just write a blog post to
+explain it. Here it is :-). The post turned out to be a bit long, so please bear
+with me.</p>
+<p>The goal of the post is to give an understanding of how PyPy's JIT generator is
+going to work. To do this, I will look at what happens when you write an
+interpreter in Java and apply a completely normal tracing JIT to it (for this
+reason all the code examples will be in some sort of pseudo-Java). The
+resulting generated machine code is bad, so I will explain a way to fix the
+occurring problem.</p>
+<p>The techniques I describe here are conceptually similar to what we are doing in
+PyPy. The details (as usual) are different. The reasons why I am trying to
+explain things in this way is that I can start from tracing JITs, which are a
+known existing technique.</p>
+<p>To understand the following, it is helpful to already know a bit how a normal
+tracing JIT works. I will give a reminder of how it is working, but there also
+exist a couple of <a class="reference" href="http://andreasgal.com/2008/08/22/tracing-the-web/">more thorough</a> <a class="reference" href="http://weblogs.mozillazine.org/roadmap/archives/2008/08/tracemonkey_javascript_lightsp.html">introductions</a> on the web already.
+I also will leave out a lot of details about the more detailed workings of
+tracing JITs and only explain the things that are relevant to what I am trying
+to get to here.</p>
+<h2><a id="tracing-jits" name="tracing-jits">Tracing JITs</a></h2>
+<p>Tracing JITs are an idea explored by the <a class="reference" href="http://www.hpl.hp.com/techreports/1999/HPL-1999-78.html">Dynamo project</a> in the context of
+dynamic optimization of machine code at runtime. The techniques were then
+<a class="reference" href="http://portal.acm.org/citation.cfm?doid=1134760.1134780">successfully applied</a> to Java VMs and are now being used by Mozilla's
+<a class="reference" href="https://wiki.mozilla.org/JavaScript:TraceMonkey">TraceMonkey</a> JavaScript VM. They are built on some basic assumptions:</p>
+<blockquote>
+<ul class="simple">
+<li>programs spend most of their runtime in loops</li>
+<li>several iterations of the same loop are likely to take similar code paths</li>
+<li>the best way to gain information about the behaviour of a program is to
+observe it</li>
+</ul>
+</blockquote>
+<p>The basic approach of a tracing JIT is to only generate machine code for
+commonly executed loops and to interpret the rest of the program. The code for
+those common loops however should be highly optimized, including aggressive
+inlining.</p>
+<p>The generation of loops works as follows: At first, everything is interpreted.
+The interpreter does a bit of lightweight profiling to figure out which loops
+are run often. When a common loop is identified, the interpreter enters a
+special mode (called tracing mode). When in tracing mode, the interpreter
+records a history (the <em>trace</em>) of all the operations it executes, in addition
+to actually performing the operations. During tracing, the trace is repeatedly
+checked whether the interpreter is at a position in the program that it had seen
+earlier in the trace. If this happens, the trace recorded corresponds to a loop
+in the program that the tracing interpreter is running. At this point, this loop
+is turned into machine code by taking the trace and making machine code versions
+of all the operations in it.</p>
+<p>This process assumes that the path through the loop that was traced is a
+"typical" example of possible paths (which is statistically likely). Of course
+it is possible that later another path through the loop is taken, therefore the
+machine code will contain <em>guards</em>, which check that the path is still the same.
+If during execution of the machine code a guard fails, the machine code is left
+and execution falls back to using interpretation (there are more complex
+mechanisms in place to still produce more code for the cases of guard failures,
+but they are of no importance for this post).</p>
+<p>It is important to understand when the tracer considers a loop in the trace to
+be closed. This happens when the <em>position key</em> is the same as at an earlier
+point. The position key describes the position of the execution of the program,
+e.g. usually contains things like the function currently being executed and the
+program counter position of the tracing interpreter.</p>
+<p>Let's look at a small example. Take the following code:</p>
+<pre class="literal-block">
+int sum_1_to_n(int n) {
+    int result = 0;
+    while (n &gt;= 0) {
+        result += n;
+        n -= 1;
+    }
+    return result;
+}
+</pre>
+<p>The tracing JIT will at one point trace the execution of the while loop in
+<tt class="docutils literal"><span class="pre">sum_1_to_n</span></tt>. The trace might look as follows:</p>
+<pre class="literal-block">
+guard_true(n &gt;= 0);
+result += n;
+n -= 1;
+&lt;loop_back&gt;
+</pre>
+<p>This trace will then be turned into machine code. Note that the machine code
+loop is by itself infinite and can only be left via a guard failure.</p>
+<p>A slightly more complex example:</p>
+<pre class="literal-block">
+int f(int a, int b) {
+    if (b % 46 == 41)
+        return a - b;
+    else
+        return a + b;
+}
+
+int strange_sum(int n) {
+    int result = 0;
+    while (n &gt;= 0) {
+        result = f(result, n);
+        n -= 1;
+    }
+    return result;
+}
+</pre>
+<p>The trace of the loop in <tt class="docutils literal"><span class="pre">strange_sum</span></tt> would maybe look like this:</p>
+<pre class="literal-block">
+guard_true(n &gt;= 0);
+a = result;
+b = n;
+guard_false(b % 46 == 41);
+result = a + b;
+n -= 1;
+&lt;loop_back&gt;
+</pre>
+<p>This would then be turned into machine code. Note how <tt class="docutils literal"><span class="pre">f</span></tt> was inlined into the
+loop and how the common <tt class="docutils literal"><span class="pre">else</span></tt> case was turned into machine code, while the
+other one is implemented via a guard failure.</p>
+<h2><a id="id1" name="id1">Applying a Tracing JIT to an Interpreter</a></h2>
+<p>In the rest of the post we will explore what happens when the program that is
+being executed/compiled by the tracing JIT is itself a (bytecode) interpreter
+for another language.</p>
+<p>A stylized bytecode interpreter for a simple programming language could look as
+follows:</p>
+<pre class="literal-block">
+W_Object interpret(String bytecode, ...) {
+    Stack&lt;W_Object&gt; stack = new Stack&lt;W_Object&gt;();
+    int pc = 0;
+    while (true) { // bytecode dispatch loop
+        char instruction = bytecode.charAt(pc);
+        pc += 1;
+        switch (instruction) {
+            case ADD:
+                W_Object arg2 = stack.pop();
+                W_Object arg1 = stack.pop();
+                stack.push(do_addition(arg1, arg2));
+                break;
+            case SUB:
+                W_Object arg2 = stack.pop();
+                W_Object arg1 = stack.pop();
+                stack.push(do_substraction(arg1, arg2));
+                break;
+            case RETURN:
+                return stack.pop();
+            case JUMP_BACKWARD:
+                pc -= (int)bytecode.charAt(pc);
+                break;
+            case LOAD_INTEGER:
+                int value = (int)bytecode.charAt(pc);
+                pc += 1;
+                stack.push(new W_Integer(value));
+                break;
+            case PRINT:
+                do_print(stack.pop());
+                break;
+            case DUP:
+                stack.push(stack.peek());
+                break;
+            case JUMP_IF_TRUE:
+                ...
+            ...
+        }
+    }
+</pre>
+<p>If we apply a tracing JIT to this function, it will trace and compile the
+execution of one bytecode, because after one bytecode the bytecode dispatch loop
+is closed. E.g. it might trace and produce machine code for the execution of a
+<tt class="docutils literal"><span class="pre">SUB</span></tt>. (<em>Sidenote:</em> this <tt class="docutils literal"><span class="pre">interpret</span></tt> function is an example where one of the
+assumptions of a tracing JIT break down: two iterations of the bytecode dispatch
+loop are rarely going to follow the same code path, because usually two
+consecutive bytecodes encode different instructions).</p>
+<p>The important bit to remember here is that the tracing JIT will produce a
+machine code loop that corresponds to the bytecode dispatch loop in the
+<tt class="docutils literal"><span class="pre">interpret</span></tt> function. Let's see how we can change that.</p>
+<h2><a id="improving-the-generated-code" name="improving-the-generated-code">Improving the Generated Code</a></h2>
+<p>If we want to make use of the fact that the program that is being jitted is
+itself an interpreter, we need to change the tracing JIT a bit. To be more
+precise we add a way for the user of the tracing JIT to add information to the
+position key that the tracing JIT uses to decide when a loop is closed. This is
+done by a call to a magic function <tt class="docutils literal"><span class="pre">add_to_position_key</span></tt>. This allows the
+program writer to influence the tracing JIT's behaviour.</p>
+<p>The semantics of <tt class="docutils literal"><span class="pre">add_to_position_key</span></tt> is as follows: The method itself does
+not do anything. It has an effect only when it is seen during tracing. If it is
+seen during tracing, the tracer adds the argument of the call to the position
+key that the tracer is using to find out whether a loop was closed or not.</p>
+<p>In the example of the <tt class="docutils literal"><span class="pre">interpret</span></tt> function above, we would add a call to this
+function into the <tt class="docutils literal"><span class="pre">while</span></tt> loop as follows:</p>
+<pre class="literal-block">
+W_Object interpret(String bytecode, ...) {
+    Stack stack = new Stack();
+    int pc = 0;
+    while (true) { // bytecode dispatch loop
+        add_to_position_key(pc);
+        add_to_position_key(bytecode);
+        char instruction = bytecode.charAt(pc);
+        pc += 1;
+        switch (instruction) {
+            case ADD:
+    ...
+</pre>
+<p>When the modified tracing JIT traces now the <tt class="docutils literal"><span class="pre">interpret</span></tt> function executing a
+<tt class="docutils literal"><span class="pre">SUB</span></tt>, something interesting happens. When the bytecode loop is closed, the
+modified tracing JIT does not consider the trace to be a loop, because the value of
+<tt class="docutils literal"><span class="pre">pc</span></tt> has been increased by one, so the position key differs. Instead it
+continues to trace, effectively unrolling the bytecode dispatch loop of
+<tt class="docutils literal"><span class="pre">interpret</span></tt>.</p>
+<p>The only way for a loop to be considered closed is if the <tt class="docutils literal"><span class="pre">pc</span></tt> variable has
+the same value a second time.  This can only happen after a <tt class="docutils literal"><span class="pre">JUMP_BACKWARD</span></tt>
+instruction has been executed.  A <tt class="docutils literal"><span class="pre">JUMP_BACKWARD</span></tt> instruction will only be in
+the bytecode when the bytecode represents a loop. This means that the modified
+tracing JIT will trace the <tt class="docutils literal"><span class="pre">interpret</span></tt> function and will only consider that
+the trace represents a loop when the bytecode itself represents a loop! Thus, a
+machine code loop will eventually be created that corresponds to the loop in the
+<tt class="docutils literal"><span class="pre">bytecode</span></tt>.</p>
+<p>Let's look at at example. If we have a bytecode that corresponds to the
+following instructions:</p>
+<pre class="literal-block">
+pc |   instruction
+---+---------------------
+0  |  LOAD_INTEGER 0
+2  |  DUP
+3  |  PRINT
+4  |  LOAD_INTEGER 1
+6  |  ADD
+7  |  JUMP_BACKWARD 6
+</pre>
+<p>This loop will print integers starting from 0 and going on from there. The
+modified tracing JIT will unroll the bytecode dispatch until it sees the
+<tt class="docutils literal"><span class="pre">JUMP_BACKWARD</span></tt> bytecode. After that bytecode the <tt class="docutils literal"><span class="pre">pc</span></tt> will be 2 again. Thus
+the earlier position key is repeated, which means that the loop will be closed.
+The produced machine code will do the equivalent of the following Java code:</p>
+<pre class="literal-block">
+...
+guard_true(pc == 2)
+guard_true(bytecode == "... correct bytecode string ...")
+while (true) {
+    instruction = bytecode.charAt(pc);
+    pc += 1;
+    guard_true(instruction == DUP);
+    stack.push(stack.peek());
+
+    instruction = bytecode.charAt(pc);
+    pc += 1;
+    guard_true(instruction == PRINT);
+    do_print(stack.pop());
+
+    instruction = bytecode.charAt(pc);
+    pc += 1;
+    guard_true(instruction == LOAD_INTEGER)
+    value = (int)bytecode.charAt(pc);
+    pc += 1
+    stack.push(W_Integer(value))
+
+    instruction = bytecode.charAt(pc);
+    pc += 1;
+    guard_true(instruction == ADD)
+    arg2 = stack.pop()
+    arg1 = stack.pop()
+    stack.push(do_addition(arg1, arg2))
+
+    instruction = bytecode.charAt(pc);
+    pc += 1;
+    guard_true(instruction == JUMP_BACKWARD)
+    pc -= (int)bytecode.charAt(pc);
+}
+</pre>
+<p>This is machine code that essentially does what the bytecode above did. Of
+course the code still remains some remnants of the interpreter (like the program
+counter manipulations, the stack handling, etc), which would have to be removed
+by some clever enough optimization step. If this were done, result would look a
+lot more natural.</p>
+<h2><a id="summary" name="summary">Summary</a></h2>
+<p>If a tracing JIT is enhanced by a way to influence its loop-closing behaviour we
+can significantly improve its performance when the jitted program is itself an
+interpreter. The result is that in such a case the produced machine code
+will correspond to the functions that are being interpreted, not to the code of
+the interpreter itself.</p>
+<p>Now, what does all this have to do with PyPy? What we are working on since a
+while is a sort of tracing JIT for RPython which allows to be customized with a
+function very similar to the <tt class="docutils literal"><span class="pre">add_to_position_key</span></tt> described above. This will
+make it possible to make the tracing JIT generate code that corresponds to the
+code that the interpreter interprets. For example, we would add a call to
+<tt class="docutils literal"><span class="pre">add_to_position_key</span></tt> to SPy, PyPy's Smalltalk VM. Then the tracing JIT will
+produce machine code for Smalltalk-level loops, with all the usual benefits of a
+tracing JIT (like inlining of intermediate methods, constant-folding, ...).
+This JIT differs from normal tracing JITs in that it also supports very powerful
+constant-folding and allocation-removal optimizations. Those optimizations will
+(hopefully) be the content of a later blog post.</p>
+<p>The basics of this process have been working fine since quite a while. What the
+work currently focuses on is to improve the optimizers to remove not only the
+bytecode manipulation code, but also the stack handling, and a large number of
+other inefficiencies.</p></body></html>

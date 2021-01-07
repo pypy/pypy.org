@@ -1,0 +1,74 @@
+<html><body><p><strong>Big fat warning</strong> This is just a proof of concept. It barely works. There are
+missing pieces left and right, which were replaced with hacks so I can get this
+to run and prove it's possible. Don't try this at home, especially your home.
+You have been warned.</p>
+<p>There has been a lot of talking about PyPy not integrating well with the
+current scientific Python ecosystem, and <tt class="docutils literal">numpypy</tt> (a NumPy reimplementation
+on top of pypy) was dubbed "a fancy array library". I'm going to show that
+integration with this ecosystem is possible with our design.</p>
+<p>First, <a class="reference external" href="https://bitbucket.org/fijal/hack2/src/default/embed/embed/matplotwrapper.py">the demo</a>:</p>
+<pre class="literal-block">
+#!/usr/bin/env pypy
+
+# numpy, pypy version
+import numpypy as numpy
+# DRAGONS LIVE THERE (fortunately hidden)
+from embed.emb import import_mod
+
+pylab = import_mod('matplotlib.pylab')
+
+if __name__ == '__main__':
+    a = numpy.arange(100, dtype=int)
+    b = numpy.sin(a)
+    pylab.plot(a, b)
+    pylab.show()
+</pre>
+<p>And you get:</p>
+
+<a href="http://3.bp.blogspot.com/-4WFlo06T9AQ/TuE6jWWCdXI/AAAAAAAABiY/g4gZPlWg0-U/s1600/screen0.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5683888583686124914" src="http://3.bp.blogspot.com/-4WFlo06T9AQ/TuE6jWWCdXI/AAAAAAAABiY/g4gZPlWg0-U/s320/screen0.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 320px; height: 258px;"></a>
+
+<p>Now, how to reproduce it:</p>
+<ul>
+<li><p class="first">You need a PyPy without cpyext, I did not find a linker that would support
+overriding symbols. Right now there are no nightlies like this, so you have
+to compile it yourself, like:</p>
+<pre class="literal-block">
+./translate.py -Ojit targetpypystandalone.py --withoutmod-cpyext
+</pre>
+<p>That would give you a PyPy that's unable to load some libraries like PIL, but
+perfectly working otherwise.</p>
+</li>
+<li><p class="first">Speaking of which, you need a reasonably recent PyPy.</p>
+</li>
+<li><p class="first">The approach is generally portable, however the implementation has been
+tested only on 64bit linux. Few tweaks might be required.</p>
+</li>
+<li><p class="first">You need to install python2.6, the python2.6 development headers, and have
+numpy and matplotlib installed on that python.</p>
+</li>
+<li><p class="first">You need a checkout of my <a class="reference external" href="https://bitbucket.org/fijal/hack2">hacks directory</a> and put embedded on your
+<tt class="docutils literal">PYTHONPATH</tt>, your pypy checkout also has to be on the <tt class="docutils literal">PYTHONPATH</tt>.</p>
+</li>
+</ul>
+<div class="section" id="er-wait-what-happened">
+<h3>Er wait, what happened?</h3>
+<p>What didn't happen is we did not reimplement matplotlib on top of PyPy. What
+did happen is we embed CPython inside of PyPy using ctypes. We instantiate it.
+and follow the <a class="reference external" href="http://docs.python.org/extending/embedding.html">embedding</a> tutorial for CPython. Since numpy arrays are not
+movable, we're able to pass around an integer that's represents the memory
+address of the array data and reconstruct it in the embedded interpreter. Hence
+with a relatively little effort we managed to reuse the same array data on both
+sides to plot at array. Easy, no?</p>
+<p>This approach can be extended to support anything that's not too tied with
+python objects. SciPy and matplotlib both fall into the same category
+but probably the same strategy can be applied to anything, like GTK or QT.
+It's just a matter of extending a hack into a working library.</p>
+<p>To summarize, while we're busy making numpypy better and faster, it seems
+that all external libraries on the C side can be done using an embedded Python
+interpreter with relatively little effort. To get to that point, I spent
+a day and a half to learn how to embed CPython, with very little prior
+experience in the CPython APIs. Of course you should still keep as much as
+possible in PyPy to make it nice and fast :)</p>
+<p>Cheers,
+fijal</p>
+</div></body></html>

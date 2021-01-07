@@ -1,0 +1,36 @@
+<html><body><p>Continuing the <a class="reference" href="http://morepypy.blogspot.com/2008/02/python-finalizers-semantics-part-1.html">last blog post</a> about GC semantics in Python.</p>
+<p>Another consequence of reference counting is that resurrection is easy to
+detect. A dead object can resurrect itself if its finalizer stores it into a
+globally reachable position, like this:</p>
+<pre class="literal-block">
+class C(object):
+    def __init__(self, num):
+        self.num = num
+    def __del__(self):
+        global c
+        if c is None:
+            c = self
+c = C(1)
+while c is not None:
+    c = None
+    print "again"
+</pre>
+<p>This is an infinite loop in CPython: Every time <tt class="docutils literal"><span class="pre">c</span></tt> is set to None in the
+loop, the <tt class="docutils literal"><span class="pre">__del__</span></tt> method resets it to the <tt class="docutils literal"><span class="pre">C</span></tt> instance again (note that
+this is terribly bad programming style, of course. In case anybody was wondering
+:-)). CPython can detect resurrection by checking whether the reference count
+after the call to <tt class="docutils literal"><span class="pre">__del__</span></tt> has gotten bigger.</p>
+<p>There exist even worse examples of perpetual resurrection in particular in
+combination with the cycle GC. If you want to see a particularly horrible one,
+see <a class="reference" href="http://mail.python.org/pipermail/python-dev/2005-August/055251.html">this discussion started by Armin Rigo</a>. In the ensuing thread Tim Peters
+proposes to follow Java's example and call the finalizer of every object at most
+once.</p>
+<p>In PyPy the resurrection problem is slightly more complex, since we have GCs
+that run collection from time to time and don't really get to know at which
+precise time an object dies. If the GC discovers during a collection that an
+object is dead, it will call the finalizer after the collection is finished. If
+the object is then dead at the <em>next</em> collection, the GC does not know whether
+the object was resurrected by the finalizer and then died in the meantime or
+whether it was not resurrected. Therefore it seemed sanest to follow Tim's
+solution and to never call the finalizer of an object a second time, which has
+many other benefits as well.</p></body></html>

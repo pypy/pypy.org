@@ -1,0 +1,76 @@
+<html><body><p>Hi all,</p>
+
+<p>A quick update on Software Transactional Memory.  We are
+working on two fronts.</p>
+
+<p>On the one hand, the integration of the "c4" C library with PyPy is done
+and works well, but is still subject to improvements.  The "PyPy-STM"
+executable (without the JIT)
+seems to be stable, as far as it has been tested.  It runs a simple
+benchmark like Richards with a 3.2x slow-down over a regular JIT-less
+PyPy.</p>
+
+<p>The main factor of this slow-down: the numerous "barriers" in
+the code --- checks that are needed a bit everywhere to verify that a
+pointer to an object points to a recent enough version, and if not, to
+go to the most recent version.  These barriers are inserted automatically
+during the translation; there is no need for us to manually put 42 million
+barriers in the source code of PyPy.  But this automatic insertion uses a
+primitive algorithm right now, which usually ends up putting more barriers than the
+theoretical optimum.  I (Armin) am trying to improve that --- and progressing:
+last week the slow-down was around 4.5x.  This is done in the branch
+<a href="https://bitbucket.org/pypy/pypy/src/stmgc-static-barrier">stmgc-static-barrier</a>.</p>
+
+<p>On the other hand, Remi is progressing on the JIT integration in
+the branch <a href="https://bitbucket.org/pypy/pypy/src/stmgc-c4">stmgc-c4</a>. 
+This has been working in simple cases since a couple of weeks by now, but the
+resulting "PyPy-JIT-STM" often crashes.  This is because while the
+basics are not really hard, we keep hitting new issues that must be
+resolved.</p>
+
+<p>The basics are that whenever the JIT is about to generate
+assembler corresponding to a load or a store in a GC object, it must
+first generate a bit of extra assembler that corresponds to the barrier
+that we need.  This works fine by now (but could benefit from the same
+kind of optimizations described above, to reduce the number of barriers).
+The additional issues are all more subtle.  I will describe the current
+one as an example: it is how to write constant pointers inside the assembler.</p>
+
+<p>Remember that the STM library classifies objects as either
+"public" or "protected/private".  A "protected/private" object
+is one which has not been seen by another thread so far.
+This is essential as an optimization, because we know that no
+other thread will access our protected or private objects in parallel,
+and thus we are free to modify their content in place.  By contrast,
+public objects are frozen, and to do any change, we first need to
+build a different (protected) copy of the object.  See this
+<a href="http://morepypy.blogspot.ch/2013/06/stm-on-drawing-board.html">blog
+post</a> for more details.</p>
+
+<p>So far so good, but the JIT will sometimes (actually often) hard-code
+constant pointers into the assembler it produces.  For example, this is the
+case when the Python code being JITted creates an instance of a known class;
+the corresponding assembler produced by the JIT will reserve the memory for
+the instance and then write the constant type pointer in it.  This type
+pointer is a GC object (in the simple model, it's the Python class object;
+in PyPy it's actually the "map" object, which is
+<a href="http://morepypy.blogspot.ch/2011/03/controlling-tracing-of-interpreter-with_21.html">a different story</a>).</p>
+
+<p>The problem right now is that this constant pointer may point to a
+protected object.  This is a problem because the same piece of assembler
+can later be executed by a different thread.  If it does, then this
+different thread will create instances whose type pointer is bogus: looking
+like a protected object, but actually protected by a different thread.
+Any attempt to use this type pointer to change anything on the class
+itself will likely crash: the threads will all think they can safely change it
+in-place.  To fix this, we need to make sure we only write pointers to
+public objects in the assembler.  This is a bit involved because we need
+to ensure that there <i>is</i> a public version of the object to start with.</p>
+
+<p>When this is done, we will likely hit the next problem, and the next one;
+but at some point it should converge (hopefully!) and we'll give you our first
+PyPy-JIT-STM ready to try.  Stay tuned :-)</p>
+
+<p>A bientôt,</p>
+
+<p>Armin.</p></body></html>

@@ -1,0 +1,230 @@
+<html><body><p>Two weeks ago, I was at the Workshop <a class="reference external" href="http://www-ps.informatik.uni-kiel.de/fg214/Honnef2010/">Programmiersprachen und Rechenkonzepte</a>,
+a yearly meeting of German programming language researchers. At the workshop,
+<a class="reference external" href="http://www-ps.informatik.uni-kiel.de/~fhu/">Frank Huch</a> and <a class="reference external" href="http://www-ps.informatik.uni-kiel.de/~sebf/">Sebastian Fischer</a> gave a really <a class="reference external" href="http://www-ps.informatik.uni-kiel.de/fg214/Honnef2010/Abstracts/Fischer.pdf">excellent talk</a> about an
+elegant regular expression matcher written in Haskell. One design goal of the
+matcher was to run in time linear to the length of the input string (i.e.
+without backtracking) and linear in the size of the regular expression. The
+memory use should also only be linear in the regular expression.</p>
+<p>During the workshop, some of the Haskell people and me then implemented the
+algorithm in (R)Python. Involved were Frank, Sebastian, <a class="reference external" href="http://www.bayceer.uni-bayreuth.de/mod/de/mitarbeiter/mit/mitarbeiter_detail.php?id_obj=59348">Baltasar Trancón y
+Widemann</a>, <a class="reference external" href="http://www.informatik.uni-kiel.de/prog/mitarbeiter/bernd-brassel/">Bernd Braßel</a> and <a class="reference external" href="http://www.informatik.uni-kiel.de/prog/mitarbeiter/fabian-reck/">Fabian Reck</a>.</p>
+<p>In this blog post I want to describe this implementation and show the code of
+it, because it is quite simple. In a later post I will show what optimizations
+PyPy can perform on this matcher and also do some benchmarks.</p>
+<p><strong>A Note on terminology:</strong> In the rest of the post "regular expression" is meant
+in the <a class="reference external" href="http://en.wikipedia.org/wiki/Regular_expressions#Formal_language_theory">Computer Science sense</a>, not in the <a class="reference external" href="http://en.wikipedia.org/wiki/Regular_expressions#POSIX_.28Portable_Operating_System_Interface_.5Bfor_Unix.5D.29">POSIX sense</a>. Most importantly, that
+means that back-references are not allowed.</p>
+<p><strong>Another note:</strong> This algorithm could not be used to implement PyPy's <tt class="docutils literal">re</tt>
+module! So it won't help to speed up this currently rather slow implementation.</p>
+<div class="section" id="implementing-regular-expression-matchers">
+<h2>Implementing Regular Expression Matchers</h2>
+<p>There are two typical approaches to implement regular expression. A naive one is
+to use a back-tracking implementation, which can lead to exponential matching
+times given a sufficiently evil regular expression.</p>
+<p>The other, more complex one, is to transform the regular expression into a
+<a class="reference external" href="http://en.wikipedia.org/wiki/Nondeterministic_finite_state_machine">non-deterministic finite automaton</a> (NFA) and then transform the NFA into a
+<a class="reference external" href="http://en.wikipedia.org/wiki/Deterministic_finite_automaton">deterministic finite automaton</a> (DFA). A DFA can be used to efficiently match
+a string, the problem of this approach is that turning an NFA into a DFA can
+lead to exponentially large automatons.</p>
+<p>Given this problem of potential memory explosion, a more sophisticated approach
+to matching is to not construct the DFA fully, but instead use the NFA for
+matching. This requires some care, because it is necessary to keep track of
+which set of states the automaton is in (it is not just one state, because the
+automaton is non-deterministic).</p>
+<p>The algorithm described here is essentially equivalent to this approach, however
+it does not need an intermediate NFA and represents a state of a corresponding
+DFA as marked regular expression (represented as a tree of nodes). For many
+details about an alternative approach to implement regular expressions
+efficiently, see <a class="reference external" href="http://swtch.com/~rsc/regexp/">Russ Cox excellent article collection</a>.</p>
+</div>
+<div class="section" id="the-algorithm">
+<h2>The Algorithm</h2>
+<p>In the algorithm the regular expression is represented as a tree of nodes. The
+leaves of the nodes can match exactly one character (or the epsilon node, which
+matches the empty string). The inner nodes of the tree combine other nodes in
+various ways, like alternative, sequence or repetition. Every node in the tree
+can potentially have a mark. The meaning of the mark is that a node is marked,
+if that sub-expression matches the string seen so far.</p>
+<p>The basic approach of the algorithm is that for every character of the input
+string the regular expression tree is walked and a number of the nodes in the
+regular expression are marked. At the end of the string, if the top-level node
+is marked, the string matches, otherwise it does not. At the beginning of the
+string, one mark gets shifted into the regular expression from the top, and then
+the marks that are in the regex already are shifted around for every additional
+character.</p>
+<p>Let's start looking at some code, and an example to make this clearer. The base
+class of all regular expression nodes is this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Regex</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, empty):
+        <span style="color: #0099FF; font-style: italic;"># empty denotes whether the regular expression</span>
+        <span style="color: #0099FF; font-style: italic;"># can match the empty string</span>
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>empty <span style="color: #555555;">=</span> empty
+        <span style="color: #0099FF; font-style: italic;"># mark that is shifted through the regex</span>
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> <span style="color: #336666;">False</span>
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">reset</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #CC3300; font-style: italic;">""" reset all marks in the regular expression """</span>
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> <span style="color: #336666;">False</span>
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        <span style="color: #CC3300; font-style: italic;">""" shift the mark from left to right, matching character c."""</span>
+        <span style="color: #0099FF; font-style: italic;"># _shift is implemented in the concrete classes</span>
+        marked <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>_shift(c, mark)
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> marked
+        <span style="color: #006699; font-weight: bold;">return</span> marked
+</pre></div>
+<p>The <tt class="docutils literal">match</tt> function which checks whether a string matches a regex is:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">match</span>(re, s):
+    <span style="color: #006699; font-weight: bold;">if</span> <span style="color: #000000; font-weight: bold;">not</span> s:
+        <span style="color: #006699; font-weight: bold;">return</span> re<span style="color: #555555;">.</span>empty
+    <span style="color: #0099FF; font-style: italic;"># shift a mark in from the left</span>
+    result <span style="color: #555555;">=</span> re<span style="color: #555555;">.</span>shift(s[<span style="color: #FF6600;">0</span>], <span style="color: #336666;">True</span>)
+    <span style="color: #006699; font-weight: bold;">for</span> c <span style="color: #000000; font-weight: bold;">in</span> s[<span style="color: #FF6600;">1</span>:]:
+        <span style="color: #0099FF; font-style: italic;"># shift the internal marks around</span>
+        result <span style="color: #555555;">=</span> re<span style="color: #555555;">.</span>shift(c, <span style="color: #336666;">False</span>)
+    re<span style="color: #555555;">.</span>reset()
+    <span style="color: #006699; font-weight: bold;">return</span> result
+</pre></div>
+<p>The most important subclass of <tt class="docutils literal">Regex</tt> is <tt class="docutils literal">Char</tt>, which matches one
+concrete character:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Char</span>(Regex):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, c):
+        Regex<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, <span style="color: #336666;">False</span>)
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>c <span style="color: #555555;">=</span> c
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        <span style="color: #006699; font-weight: bold;">return</span> mark <span style="color: #000000; font-weight: bold;">and</span> c <span style="color: #555555;">==</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>c
+</pre></div>
+<p>Shifting the mark through <tt class="docutils literal">Char</tt> is easy: a <tt class="docutils literal">Char</tt> instance retains a mark
+that is shifted in when the current character is the same as that in the
+instance.</p>
+<p>Another easy case is that of the empty regular expression <tt class="docutils literal">Epsilon</tt>:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Epsilon</span>(Regex):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>):
+        Regex<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, empty<span style="color: #555555;">=</span><span style="color: #336666;">True</span>)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">False</span>
+</pre></div>
+<p><tt class="docutils literal">Epsilons</tt> never get a mark, but they can match the empty string.</p>
+<div class="section" id="alternative">
+<h3>Alternative</h3>
+<p>Now the more interesting cases remain. First we define an abstract base class
+<tt class="docutils literal">Binary</tt> for the case of composite regular expressions with two children, and
+then the first subclass <tt class="docutils literal">Alternative</tt> which matches if either of two regular
+expressions matches the string (usual regular expressions syntax <tt class="docutils literal">a|b</tt>).</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Binary</span>(Regex):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, left, right, empty):
+        Regex<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, empty)
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left <span style="color: #555555;">=</span> left
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>right <span style="color: #555555;">=</span> right
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">reset</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left<span style="color: #555555;">.</span>reset()
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>right<span style="color: #555555;">.</span>reset()
+        Regex<span style="color: #555555;">.</span>reset(<span style="color: #336666;">self</span>)
+
+<span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Alternative</span>(Binary):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, left, right):
+        empty <span style="color: #555555;">=</span> left<span style="color: #555555;">.</span>empty <span style="color: #000000; font-weight: bold;">or</span> right<span style="color: #555555;">.</span>empty
+        Binary<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, left, right, empty)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        marked_left  <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left<span style="color: #555555;">.</span>shift(c, mark)
+        marked_right <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>right<span style="color: #555555;">.</span>shift(c, mark)
+        <span style="color: #006699; font-weight: bold;">return</span> marked_left <span style="color: #000000; font-weight: bold;">or</span> marked_right
+</pre></div>
+<p>An <tt class="docutils literal">Alternative</tt> can match the empty string, if either of its children can.
+Similarly, shifting a mark into an <tt class="docutils literal">Alternative</tt> shifts it into both its
+children. If either of the children are marked afterwards, the <tt class="docutils literal">Alternative</tt>
+is marked too.</p>
+<p>As an example, consider the regular expression <tt class="docutils literal">a|b|c</tt>, which would be
+represented by the objects <tt class="docutils literal"><span class="pre">Alternative(Alternative(Char('a'),</span> <span class="pre">Char('b')),</span> <span class="pre">Char('c'))</span></tt>.
+Matching the string <tt class="docutils literal">"a"</tt> would lead to the following marks in
+the regular expression objects (green nodes are marked, white ones are
+unmarked):</p>
+
+<img alt="alternativea.gif" src="http://2.bp.blogspot.com/_zICyAWqZbLA/S_Z-iZKY-8I/AAAAAAAAAKY/ShzkzFqaQgo/s1600/alternativea.gif">
+<p>At the start of the process, no node is marked. Then the first char is matched,
+which adds a mark to the <tt class="docutils literal"><span class="pre">Char('a')</span></tt> node, and the mark will propagate up the
+two <tt class="docutils literal">Alternative</tt> nodes.</p>
+</div>
+<div class="section" id="repetition">
+<h3>Repetition</h3>
+<p>The two remaining classes are slightly trickier. <tt class="docutils literal">Repetition</tt> is used to match
+a regular expression any number of times (usual regular expressions syntax
+<tt class="docutils literal">a*</tt>):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Repetition</span>(Regex):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, re):
+        Regex<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, <span style="color: #336666;">True</span>)
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>re <span style="color: #555555;">=</span> re
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>re<span style="color: #555555;">.</span>shift(c, mark <span style="color: #000000; font-weight: bold;">or</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>marked)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">reset</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>re<span style="color: #555555;">.</span>reset()
+        Regex<span style="color: #555555;">.</span>reset(<span style="color: #336666;">self</span>)
+</pre></div>
+<p>A <tt class="docutils literal">Repetition</tt> can always match the empty string. The mark is shifted into the
+child, but if the <tt class="docutils literal">Repetition</tt> is already marked, this will be shifted into
+the child as well, because the <tt class="docutils literal">Repetition</tt> could match a second time.</p>
+<p>As an example, consider the regular expression <tt class="docutils literal">(a|b|c)*</tt> matching the string
+<tt class="docutils literal">abcbac</tt>:</p>
+<img alt="repetition.gif" src="http://4.bp.blogspot.com/_zICyAWqZbLA/S_Z-itgZvbI/AAAAAAAAAKg/vYe5CQxPUOo/s1600/repetition.gif">
+<p>For every character, one of the alternatives matches, thus the repetition matches
+as well.</p>
+</div>
+<div class="section" id="sequence">
+<h3>Sequence</h3>
+<p>The only missing class is that for sequences of expressions, <tt class="docutils literal">Sequence</tt> (usual
+regular expressions syntax <tt class="docutils literal">ab</tt>):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Sequence</span>(Binary):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, left, right):
+        empty <span style="color: #555555;">=</span> left<span style="color: #555555;">.</span>empty <span style="color: #000000; font-weight: bold;">and</span> right<span style="color: #555555;">.</span>empty
+        Binary<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, left, right, empty)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        old_marked_left <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left<span style="color: #555555;">.</span>marked
+        marked_left <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left<span style="color: #555555;">.</span>shift(c, mark)
+        marked_right <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>right<span style="color: #555555;">.</span>shift(
+            c, old_marked_left <span style="color: #000000; font-weight: bold;">or</span> (mark <span style="color: #000000; font-weight: bold;">and</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left<span style="color: #555555;">.</span>empty))
+        <span style="color: #006699; font-weight: bold;">return</span> (marked_left <span style="color: #000000; font-weight: bold;">and</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>right<span style="color: #555555;">.</span>empty) <span style="color: #000000; font-weight: bold;">or</span> marked_right
+</pre></div>
+<p>A <tt class="docutils literal">Sequence</tt> can be empty only if both its children are empty. The mark
+handling is a bit delicate. If a mark is shifted in, it will be shifted to the
+left child regular expression. If that left child is already marked <em>before the
+shift</em>, that mark is shifted to the right child. If the left child can match the
+empty string, the right child gets the mark shifted in as well.</p>
+<p>The whole sequence matches (i.e. is marked), if the left child is marked after
+the shift and if the right child can match the empty string, or if the right
+child is marked.</p>
+<p>Consider the regular expression <tt class="docutils literal">abc</tt> matching the string <tt class="docutils literal">abcd</tt>. For the
+first three characters, the marks wander from left to right, when the <tt class="docutils literal">d</tt> is
+reached, the matching fails.</p>
+<img alt="sequence.gif" src="http://1.bp.blogspot.com/_zICyAWqZbLA/S_Z-iyBRDCI/AAAAAAAAAKo/Kam1Jvk_02s/s1600/sequence.gif">
+</div>
+<div class="section" id="more-complex-example">
+<h3>More Complex Example</h3>
+<p>As a more complex example, consider the expression <tt class="docutils literal"><span class="pre">((abc)*|(abcd))(d|e)</span></tt>
+matching the string <tt class="docutils literal">abcabcabcd</tt>.</p>
+<img alt="complex.gif" src="http://3.bp.blogspot.com/_zICyAWqZbLA/S_Z-iy43N0I/AAAAAAAAAKw/BbRQTkidcJM/s1600/complex.gif">
+<p>Note how the two branches of the first alternative match the first <tt class="docutils literal">abc</tt> in
+parallel, until it becomes clear that only the left alternative <tt class="docutils literal">(abc)*</tt> can
+work.</p>
+</div>
+<div class="section" id="complexity">
+<h3>Complexity</h3>
+<p>The <tt class="docutils literal">match</tt> function above loops over the entire string without going back and
+forth. Each iteration goes over the whole tree every time. Thus the complexity
+of the algorithm is <tt class="docutils literal">O(m*n)</tt> where <tt class="docutils literal">m</tt> is the size of the regular expression
+and <tt class="docutils literal">n</tt> is the length of the string.</p>
+</div>
+</div>
+<div class="section" id="summary-outlook">
+<h2>Summary &amp; Outlook</h2>
+<p>So, what have we achieved now? The code shown here can match regular expressions
+with the desired complexity. It is also not much code. By itself, the Python
+code shown above is not terribly efficient. In the next post I will show how the
+JIT generator can be used to make the simple matcher shown above really fast.</p>
+</div></body></html>

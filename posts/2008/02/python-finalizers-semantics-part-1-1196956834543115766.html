@@ -1,0 +1,47 @@
+<html><body><p>Python's garbage collection semantics is very much historically grown and
+implementation-driven. Samuele Pedroni therefore likes to call it the "'there
+is no such thing as too much chocolate'-approach to GC semantics" :-). In this
+two-part post series I am going to talk about the semantics of finalization
+(<cite>__del__</cite> methods) in CPython and PyPy.</p>
+<p>The current behaviour is mostly all a consequence of the fact that CPython uses
+reference counting for garbage collection. The first consequence is that if
+several objects die at the same time, their finalizers are called in a
+so-called <a class="reference" href="http://en.wikipedia.org/wiki/Topological_sort">topological order</a>, which is a feature that some GCs have that
+CPython offers by chance.  This ensures, that in a <tt class="docutils literal"><span class="pre">__del__</span></tt> method, all the
+attributes of the object didn't get their <tt class="docutils literal"><span class="pre">__del__</span></tt> called yet. A simple
+example:</p>
+<pre class="literal-block">
+class B(object):
+    def __init__(self, logfile):
+        self.logfile = logfile
+    def __del__(self):
+        self.logfile.write("done doing stuff")
+b = B(file("logfile.txt", "w"))
+</pre>
+<p>If the instance of <tt class="docutils literal"><span class="pre">B</span></tt> dies now, both it and the logfile are dead. They will
+get their <tt class="docutils literal"><span class="pre">__del__``s</span> <span class="pre">called</span> <span class="pre">and</span> <span class="pre">it's</span> <span class="pre">important</span> <span class="pre">that</span> <span class="pre">the</span> <span class="pre">file's</span> <span class="pre">``__del__</span></tt>
+gets called second, because otherwise the <tt class="docutils literal"><span class="pre">__del__</span></tt> of <tt class="docutils literal"><span class="pre">B</span></tt> would try to
+write to a closed file.</p>
+<p>The correct ordering happens completely automatically if you use reference
+counting: Setting <tt class="docutils literal"><span class="pre">b</span></tt> to None will decref the old value of <cite>b</cite>. This reduces
+the reference count of this instance to 0, so the finalizer will be called.
+After the <tt class="docutils literal"><span class="pre">__del__</span></tt> has finished, this object will be freed and all the
+objects it points to decrefed as well, which decreases the reference count of
+the file to 0 and call its `` __del__`` as well, which closes the file.</p>
+<p>The behaviour of PyPy's semispace and generational GCs wasn't very nice so far:
+it just called the finalizers in an essentially random order. Last week Armin
+came up with a somewhat <a class="reference" href="http://pypy.readthedocs.org/en/latest/discussion/finalizer-order.html">complicated algorithm</a> that solves this by emulating
+CPython's finalization order, which we subsequently implemented. So PyPy does
+what you expect now! The Boehm GC does a topological ordering by default, so it
+wasn't a problem there.</p>
+<p>A small twist on the above is when
+there is a cycle of objects involving finalizers:
+In this case a topological ordering is not possible, so that CPython refuses to
+guess the finalization order and <a class="reference" href="http://docs.python.org/lib/module-gc.html">puts such cycles</a> into <tt class="docutils literal"><span class="pre">gc.garbage</span></tt>. This
+would be very hard for PyPy to do, since our GC implementation is essentially
+independent from the Python interpreter. The same GCs work for our other
+interpreters after all too. Therefore we decided to break such a cycle at an
+arbitrary place, which doesn't sound too insane.  The insane thing is for
+a Python program to create a cycle of objects with finalizers <em>and</em> depend
+on the order in which the finalizers are called.  Don't do that :-)  (After
+all, CPython wouldn't even call the finalizers in this case.)</p></body></html>

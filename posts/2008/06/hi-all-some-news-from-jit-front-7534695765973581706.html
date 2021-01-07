@@ -1,0 +1,80 @@
+<html><body><p>Hi all,</p>
+
+<p>Some news from the JIT front.  Progress on the JIT has been low-profile
+in the past few months.  No big results to announce yet, but we have
+played with some new ideas, and they are now documented as a draft
+research paper: <a href="http://codespeak.net/svn/user/cfbolz/jitpl/paper/prologjit1.pdf">Towards Just-In-Time Compilation and Specialisation of Prolog.</a></p>
+
+<p>Prolog?  Yes.  To understand this slightly unusual choice of programming
+language, here is first some background about our JIT.</p>
+
+<p>PyPy contains not a JIT but a <i>JIT generator,</i> which means that we
+only write an interpreter for a language (say, the complete Python
+language), and we get a JIT "for free".  More precisely, it's not for
+free: we had to write the JIT generator, of course, as well as some
+amount of subtle generic support code.  The JIT generator preprocesses
+the (complete Python) interpreter that we wrote and links the result
+with the generic support code; the result is a (complete Python) JIT.</p>
+
+<p>The way that this works so far gives us a generated JIT that is very
+similar to <a href="http://psyco.sourceforge.net">Psyco</a> in the way
+it works.
+But Psyco has issues (and so the current PyPy JITs have the same issues):
+it can sometimes produce too much machine code,
+e.g. by failing to notice that two versions of the machine code are
+close enough that they should really be one; and it can also sometimes
+fail in the opposite way, by making a single sub-efficient version of
+the machine code instead of several efficient specialized versions.</p>
+
+<p>A few months ago we have chosen to experiment with improving this
+instead of finishing and polishing what we had so far.  The choice was
+mostly because we were (and still are) busy finishing and polishing
+everything else in PyPy, so it was more fun to keep at least the JIT on
+the experimental side.  Besides, PyPy is now getting to a rather good
+and complete state, and it is quite usable without the JIT already.</p>
+
+<p>Anyway, enough excuses.  Why is this about Prolog?</p>
+
+<p>In PyPy, both the (complete Python) interpreter and the JIT support code
+are in RPython.  Now RPython is not
+an extremely complicated language, but still, it is far from the top on a
+minimalism scale.  In general, this is a good in practice (or at least I
+think so): it gives
+a reasonable balance because it is convenient to write interpreters
+in RPython, while not being so bloated that it makes our translation
+toolchain horribly complicated (e.g. writing garbage collectors for
+RPython - or even JIT generators - is reasonable).  Still, it is not the
+best choice for early research-level experimentation.</p>
+
+<p>So what we did instead recently is hand-write, in Prolog, a JIT that
+looks similar to what we would like to achieve for RPython with our JIT
+generator.  This gave much quicker turnaround times than we were used to
+when we played around directly with RPython.  We wrote tiny example
+interpreters in Prolog (of course not a complete Python interpreter).
+Self-inspection is trivial in Prolog, and generating Prolog code at
+runtime is very easy too.  Moreover, many other issues are also easier
+in Prolog: for example, all data structures are immutable "terms".
+Other languages than Prolog would have worked, too, but it happens to be
+one that we (Carl Friderich, Michael Leuschel and myself) are familiar
+with -- not to mention that it's basically a nice small dynamic
+language.</p>
+
+<p>Of course, all this is closely related to what we want to do in PyPy.
+The fundamental issues are the same.  Indeed, in PyPy, the major goals
+of the JIT are to remove, first, the overhead of allocating objects all
+the time (e.g. integers), and second, the overhead of dynamic dispatch
+(e.g. finding out that it's integers we are adding).  The equivalent
+goals in Prolog are, first, to avoid creating short-lived terms, and
+second, to remove the overhead of dispatch (typically, the dispatching
+to multiple clauses).  If you are familiar with Prolog you can find more
+details about this <a href="http://codespeak.net/svn/user/cfbolz/jitpl/paper/prologjit1.pdf">in the paper.</a> So far we already played with many possible solutions
+in the Prolog JIT, and the paper describes the most mature one; we have
+more experimentation in mind.  The main point here is that these are
+mostly language-independent techniques (anything that works both in
+Prolog and in RPython has to be language-independent, right? :-)</p>
+
+<p>In summary, besides the nice goal of speeding up Prolog, we are trying
+to focus our Prolog JIT on the issues and goals that have equivalents in
+the PyPy JIT generator.  So in the end we are pretty convinced that it
+will give us something that we can backport to PyPy -- good ideas about
+what works and what doesn't, as well as some concrete algorithms.</p></body></html>

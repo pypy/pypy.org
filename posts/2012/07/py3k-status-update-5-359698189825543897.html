@@ -1,0 +1,26 @@
+<html><body><p>This is the fifth status update about our work on the <a class="reference external" href="https://bitbucket.org/pypy/pypy/src/py3k">py3k branch</a>, which we<br>
+can work on thanks to all of the people who <a class="reference external" href="http://morepypy.blogspot.com/2012/01/py3k-and-numpy-first-stage-thanks-to.html">donated</a> to the <a class="reference external" href="http://pypy.org/py3donate.html">py3k proposal</a>.</p><p>Apart from the usual "fix shallow py3k-related bugs" part, most of my work in<br>
+this iteration has been to fix the bootstrap logic of the interpreter, in<br>
+particular to setup the initial <tt class="docutils literal">sys.path</tt>.</p><p>Until few weeks ago, the logic to determine <tt class="docutils literal">sys.path</tt> was written entirely<br>
+at app-level in <tt class="docutils literal">pypy/translator/goal/app_main.py</tt>, which is automatically<br>
+included inside the executable during translation.  The algorithm is more or<br>
+less like this:</p><blockquote><ol class="arabic simple"><li>find the absolute path of the executable by looking at <tt class="docutils literal">sys.argv[0]</tt><br>
+and cycling through all the directories in <tt class="docutils literal">PATH</tt></li>
+<li>starting from there, go up in the directory hierarchy until we find a<br>
+directory which contains <tt class="docutils literal"><span class="pre">lib-python</span></tt> and <tt class="docutils literal">lib_pypy</tt></li>
+</ol></blockquote><p>This works fine for Python 2 where the paths and filenames are represented as<br>
+8-bit strings, but it is a problem for Python 3 where we want to use unicode<br>
+instead.  In particular, whenever we try to encode a 8-bit string into an<br>
+unicode, PyPy asks the <tt class="docutils literal">_codecs</tt> built-in module to find the suitable<br>
+codec. Then, <tt class="docutils literal">_codecs</tt> tries to import the <tt class="docutils literal">encodings</tt> package, to list<br>
+all the available encodings. <tt class="docutils literal">encodings</tt> is a package of the standard<br>
+library written in pure Python, so it is located inside<br>
+<tt class="docutils literal"><span class="pre">lib-python/3.2</span></tt>. But at this point in time we yet have to add<br>
+<tt class="docutils literal"><span class="pre">lib-python/3.2</span></tt> to <tt class="docutils literal">sys.path</tt>, so the import fails.  Bootstrap problem!</p><p>The hard part was to find the problem: since it is an error which happens so<br>
+early, the interpreter is not even able to display a traceback, because it<br>
+cannot yet import <tt class="docutils literal">traceback.py</tt>. The only way to debug it was through some<br>
+carefully placed <tt class="docutils literal">print</tt> statement and the help of <tt class="docutils literal">gdb</tt>. Once found the<br>
+problem, the solution was as easy as moving part of the logic to RPython,<br>
+where we don't have bootstrap problems.</p><p>Once the problem was fixed, I was able to finally run all the CPython test<br>
+against the compiled PyPy.  As expected there are lots of failures, and fixing<br>
+them will be the topic of my next months.</p></body></html>

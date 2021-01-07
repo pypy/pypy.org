@@ -1,0 +1,266 @@
+<html><body><p>This is <strong>part 2</strong> of a series, see <a class="reference external" href="http://morepypy.blogspot.com/2010/05/efficient-and-elegant-regular.html">Part 1</a> for an introduction. In this post
+I want to describe how the JIT generator of the PyPy project can be used to turn
+the elegant but not particularly fast regular expression matcher from the first
+part into a rather fast implementation. In addition, I will show some speed
+measurements against various regular expression implementations.</p>
+<p>Again, note the <strong>disclaimer</strong>: This technology could not easily be used
+to implement Python's <tt class="docutils literal">re</tt>-module.</p>
+<div class="section" id="example-expression-and-first-numbers">
+<h2>Example Expression and First Numbers</h2>
+<p>The regular expression I will use as an example in the rest of this paper is
+the expression <tt class="docutils literal"><span class="pre">(a|b)*a(a|b){20}a(a|b)*</span></tt>. It matches all strings that have two
+<tt class="docutils literal">a</tt> with exactly 20 characters between them. This regular expression has
+the property that the corresponding DFA needs <tt class="docutils literal"><span class="pre">2**(n+1)</span></tt> different states. As
+an input string, we use a random string (of varying lengths) that does <em>not</em>
+match the regular expression. I will give all results as number of chars matched
+per second. While this is not a particularly typical regular expression, it
+should still be possible to get some ballpark numbers for the speeds of various
+implementations – as we will see, the differences between implementations are
+huge anyway.</p>
+<p>All the benchmarks were performed on my laptop, which has an Intel Core2 Duo
+P8400 processor with 2.26 GHz and 3072 KB of cache on a machine with 3GB RAM
+running Ubuntu Linux 10.04.</p>
+<p>To get a feeling for the orders of magnitude involved, the <a class="reference external" href="http://docs.python.org/library/re.html">CPython re module</a>
+(which is implemented in C and quite optimized) can match 2'500'000 chars/s.
+Google's new <a class="reference external" href="http://code.google.com/p/re2/">re2 implementation</a> still matches 550'000 chars/s. Google's
+implementation is slower, but their algorithm gives complexity and space
+guarantees similar to our implementation in the last blog post.</p>
+<p>On the other end of the performance scale is the pure-Python code from the last
+blog post running on CPython. It can match only 12'200 chars/s and is thus 200
+times slower than the <tt class="docutils literal">re</tt> module.</p>
+</div>
+<div class="section" id="translating-the-matcher">
+<h2>Translating the Matcher</h2>
+<p>The code described in the last blog post is not only normal Python code, but
+also perfectly valid RPython code. Nothing particularly dynamic is going on in
+the code, thus it can be translated with PyPy's translation toolchain to C code.
+The resulting binary is considerably faster and can match 720'000 chars/s, 60
+times faster than the untranslated version.</p>
+<p>Another approach is to write equivalent versions of the algorithms in lower
+level languages. This has been done for C++ by Sebastian Fischer and for Java by
+Baltasar Trancón y Widemann. The algorithm is object-oriented enough to be
+mapped very closely to the respective languages. The C++ version is
+a little bit faster than the RPython version translated to C, at 750'000 chars/s. That's
+not very surprising, given their similarity. The Java version is more than twice
+as fast, with 1'920'000 chars/s. Apparently the Java JIT compiler is a lot
+better at optimizing the method calls in the algorithm or does some other
+optimizations. One reason for this could be that the Java JIT can assume that
+the classes it sees are all there are (and it will invalidate the generated
+machine code if more classes are loaded), whereas the C++ compiler needs to
+generate code that works even in the presence of more regular expression
+classes.</p>
+</div>
+<div class="section" id="generating-a-jit">
+<h2>Generating a JIT</h2>
+<p>To get even more performance out of the RPython code, it is possible to generate
+a JIT for it with the help of the PyPy translation toolchain. To do this, the
+matching code needs to be extended somewhat by some hints that tell PyPy's JIT
+generator how this is to be done. The JIT generator can automatically produce a
+JIT compiler from an RPython interpreter of the source language. In our case,
+we view the regular expression matcher as an interpreter for regular
+expressions. Then the <tt class="docutils literal">match</tt> function corresponds to the
+dispatch loop of a traditional interpreter.</p>
+<p>Our regular expression matcher is a very peculiar interpreter. The matcher
+works by running exactly one loop (the one in <tt class="docutils literal">match</tt>) as many times as the
+input string is long, irrespective of the "program", i.e. the particular
+regular expressions. In addition, within the loop there are no conditions (e.g.
+if statements) at all, it is just linear code. This makes it almost perfectly
+suited
+to the JIT generator, which produces a tracing JIT. A tracing JIT compiles the
+hot loops of a program (i.e. regular expression) and has to do extra work if
+there are conditions in the loop. In our case, there is exactly one loop per
+regular expression, without any condition.</p>
+<div class="section" id="jit-hints">
+<h3>JIT Hints</h3>
+<p>The hints that are needed for the <tt class="docutils literal">match</tt> function of the last blog post can
+be seen here (the function is slightly rewritten, e.g. the JIT does only
+properly support a <tt class="docutils literal">while</tt> loop as the main dispatch loop):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;">jitdriver <span style="color: #555555;">=</span> jit<span style="color: #555555;">.</span>JitDriver(reds<span style="color: #555555;">=</span>[<span style="color: #CC3300;">"i"</span>, <span style="color: #CC3300;">"result"</span>, <span style="color: #CC3300;">"s"</span>], greens<span style="color: #555555;">=</span>[<span style="color: #CC3300;">"re"</span>])
+
+<span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">match</span>(re, s):
+    <span style="color: #006699; font-weight: bold;">if</span> <span style="color: #000000; font-weight: bold;">not</span> s:
+        <span style="color: #006699; font-weight: bold;">return</span> re<span style="color: #555555;">.</span>empty
+    <span style="color: #0099FF; font-style: italic;"># shift a mark in from the left</span>
+    result <span style="color: #555555;">=</span> re<span style="color: #555555;">.</span>shift(s[<span style="color: #FF6600;">0</span>], <span style="color: #FF6600;">1</span>)
+    i <span style="color: #555555;">=</span> <span style="color: #FF6600;">1</span>
+    <span style="color: #006699; font-weight: bold;">while</span> i <span style="color: #555555;">&lt;</span> <span style="color: #336666;">len</span>(s):
+        jitdriver<span style="color: #555555;">.</span>can_enter_jit(i<span style="color: #555555;">=</span>i, result<span style="color: #555555;">=</span>result, s<span style="color: #555555;">=</span>s, re<span style="color: #555555;">=</span>re)
+        jitdriver<span style="color: #555555;">.</span>jit_merge_point(i<span style="color: #555555;">=</span>i, result<span style="color: #555555;">=</span>result, s<span style="color: #555555;">=</span>s, re<span style="color: #555555;">=</span>re)
+        <span style="color: #0099FF; font-style: italic;"># shift the internal marks around</span>
+        result <span style="color: #555555;">=</span> re<span style="color: #555555;">.</span>shift(s[i], <span style="color: #FF6600;">0</span>)
+        i <span style="color: #555555;">+=</span> <span style="color: #FF6600;">1</span>
+    re<span style="color: #555555;">.</span>reset()
+    <span style="color: #006699; font-weight: bold;">return</span> result
+</pre></div>
+<p>The <tt class="docutils literal">jitdriver</tt> is an instance describing the data of the interpreter we are
+dealing with. The arguments to the constructor need to list all local variables
+of the dispatch loop. The local variables are classified into two classes, red
+ones and green ones. The green ones hold the objects that make up the program
+that the interpreter currently runs and which position in the program is
+currently being executed. In a typical bytecode interpreter, the bytecode object
+and the program counter would be green. In our case, the regular expression is
+the program, so it is green. The rest of the variables are red.</p>
+<p>The green variables are treated specially by the JIT generator. At runtime, for
+a given value of the green variables, one piece of machine code will be
+generated. This piece of machine code can therefore assume that the value of
+the green variable is constant.</p>
+<p>There are two additional hints, which are method calls on the
+<tt class="docutils literal">jitdriver</tt> instance. The <tt class="docutils literal">jit_merge_point</tt> method marks the beginning of
+the main interpreter loop. The <tt class="docutils literal">can_enter_jit</tt> function marks the point where
+a loop in the user program can be closed, which in our case is trivial, it's
+just at the end of the interpreter loop (for technical reasons it is put at the beginning, because nothing must happen between the <tt class="docutils literal">can_enter_jit</tt> and <tt class="docutils literal">jit_merge_point</tt> invocations).</p>
+<p>Those are the hints that the JIT generator needs to function at all. We added
+some additional hints, that give the JIT generator more information to work
+with. Those hints are immutability information, which means that certain
+instance fields can not be changed after the object has been constructed. Apart
+from the <tt class="docutils literal">marked</tt> field, none of the fields of any of the <tt class="docutils literal">Regex</tt> subclasses
+can change. For example for the <tt class="docutils literal">Char</tt> class this is expressed in the
+following way:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Char</span>(Regex):
+    _immutable_fields_ <span style="color: #555555;">=</span> [<span style="color: #CC3300;">"c"</span>]
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, c):
+        <span style="color: #555555;">...</span>
+</pre></div>
+<p>These hints allow the generated JIT to constant-fold reads out of the immutable
+fields in some situations.</p>
+</div>
+<div class="section" id="adaptions-to-the-original-code">
+<h3>Adaptions to the Original Code</h3>
+<p>In the introduction above I wrote that the code within the loop in <tt class="docutils literal">match</tt>
+uses no conditions. It is indeed true that none of the <tt class="docutils literal">_shift</tt> methods
+have an <tt class="docutils literal">if</tt> statement or similar. However, there are some hidden conditions
+due to the fact that the <tt class="docutils literal">and</tt> and <tt class="docutils literal">or</tt> boolean operators are used, which
+are short-circuiting. Therefore the JIT-version of the code needs to be adapted
+to use the non-short-circuiting operators <tt class="docutils literal">&amp;</tt> and <tt class="docutils literal">|</tt>.</p>
+</div>
+<div class="section" id="jit-example">
+<h3>JIT Example</h3>
+<p>To get an impression of how the generated machine code looks like, consider the
+regular expression <tt class="docutils literal">(a|b)*</tt>. As regular expression objects this would be
+<tt class="docutils literal"><span class="pre">Repetition(Alternative(Char('a'),</span> <span class="pre">Char('b')))</span></tt>. The machine code in its intermediate,
+machine-independent form looks as follows (I have slightly cleaned it up and
+added comments for clarity):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #0099FF; font-style: italic;"># arguments of the loop</span>
+<span style="color: #0099FF; font-style: italic;"># i0 is i in the match function</span>
+<span style="color: #0099FF; font-style: italic;"># result0 is result in the match function</span>
+<span style="color: #0099FF; font-style: italic;"># s0 is s in the match function</span>
+[i0, result0, s0] <span style="color: #0099FF; font-style: italic;"># those are the arguments to the machine code</span>
+char <span style="color: #555555;">=</span> s0[i0] <span style="color: #0099FF; font-style: italic;"># read the character</span>
+<span style="color: #0099FF; font-style: italic;"># read the current mark:</span>
+i5 <span style="color: #555555;">=</span> ConstPtr(ptr_repetition)<span style="color: #555555;">.</span>marked
+i7 <span style="color: #555555;">=</span> char <span style="color: #555555;">==</span> <span style="color: #CC3300;">'a'</span> <span style="color: #0099FF; font-style: italic;"># is the character equal to 'a'</span>
+i8 <span style="color: #555555;">=</span> i5 <span style="color: #555555;">&amp;</span> i7
+i10 <span style="color: #555555;">=</span> char <span style="color: #555555;">==</span> <span style="color: #CC3300;">'b'</span> <span style="color: #0099FF; font-style: italic;"># is the character equal to 'b'</span>
+i11 <span style="color: #555555;">=</span> i5 <span style="color: #555555;">&amp;</span> i10
+<span style="color: #0099FF; font-style: italic;"># write new mark</span>
+ConstPtr(ptr_chara)<span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> i8
+i13 <span style="color: #555555;">=</span> i8 <span style="color: #555555;">|</span> i11
+<span style="color: #0099FF; font-style: italic;"># write new mark</span>
+ConstPtr(ptr_charb)<span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> i11
+<span style="color: #0099FF; font-style: italic;"># write new mark</span>
+ConstPtr(ptr_alternative)<span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> i13
+<span style="color: #0099FF; font-style: italic;"># increment the index</span>
+i17 <span style="color: #555555;">=</span> i0 <span style="color: #555555;">+</span> <span style="color: #FF6600;">1</span>
+i18 <span style="color: #555555;">=</span> <span style="color: #336666;">len</span>(s0)
+<span style="color: #0099FF; font-style: italic;"># write new mark</span>
+ConstPtr(ptr_repetition)<span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> i13
+<span style="color: #0099FF; font-style: italic;"># check that index is smaller than the length of the string</span>
+i19 <span style="color: #555555;">=</span> i17 <span style="color: #555555;">&lt;</span> i18
+<span style="color: #006699; font-weight: bold;">if</span> <span style="color: #000000; font-weight: bold;">not</span> i19:
+    go back to normally running match
+jump(i17, i13, s0) <span style="color: #0099FF; font-style: italic;"># start from the top again</span>
+</pre></div>
+<p>The various <tt class="docutils literal">ConstPtr(ptr_*)</tt> denote constant addresses of parts of the regular
+expression tree:</p>
+<ul class="simple">
+<li><tt class="docutils literal">ptr_repetition</tt> is the <tt class="docutils literal">Repetition</tt></li>
+<li><tt class="docutils literal">ptr_chara</tt> is <tt class="docutils literal"><span class="pre">Char('a')</span></tt></li>
+<li><tt class="docutils literal">ptr_charb</tt> is <tt class="docutils literal"><span class="pre">Char('b')</span></tt></li>
+<li><tt class="docutils literal">ptr_alternative</tt> is the <tt class="docutils literal">Alternative</tt></li>
+</ul>
+<p>Essentially the machine code reads the next char out of the string, the current
+mark out of the <tt class="docutils literal">Repetition</tt> and then performs some boolean operations on
+those, writing back the new marks. Note in particular how the generated
+machine code does not need to do any method calls to <tt class="docutils literal">shift</tt> and <tt class="docutils literal">_shift</tt> and
+that most field reads out of the regular expression classes have been optimized
+away, because the fields are immutable. Therefore the machine code does not
+need to deconstruct the tree of regular expression objects at all, it just
+knows where in memory the various parts of it are, and encodes that directly
+into the code.</p>
+</div>
+<div class="section" id="performance-results-with-jit">
+<h3>Performance Results With JIT</h3>
+<p>With the regular expression matcher translated to C and with a generated JIT,
+the regular expression performance increases significantly. Our running example
+can match 16'500'000 chars/s, which is more than six times faster than the
+<tt class="docutils literal">re</tt> module. This is not an entirely fair comparison, because the <tt class="docutils literal">re</tt>
+module can give more information than just "matches" or "doesn't match", but
+it's still interesting to see. A more relevant comparison is that between the
+program with and without a JIT: Generating a JIT speeds the matcher up by more
+than 20 times.</p>
+</div>
+</div>
+<div class="section" id="conclusion">
+<h2>Conclusion</h2>
+<p>So, what have we actually won? We translated the relatively simple and very slow
+regular expression matching algorithm from the last post to C and were thus able
+to speed it up significantly. The real win is gained by also generating a JIT
+for the matcher, which can be regarded as a simple interpreter. The resulting
+matcher is rather fast.</p>
+<p>The lesson from these posts is <strong>not</strong> that you can or should write a practical
+and general regular expression module in this way – indeed, enhancing the
+algorithm to support more features of the <tt class="docutils literal">re</tt> module would be a lot of work
+and it is also unclear what the speed results for more realistic regular
+expressions would be. However, it makes for a great case study of the JIT
+generator. It was relatively straightforward to generate a JIT for the regex
+matcher, and the speed results were great (Admittedly I know rather a lot about
+PyPy's JIT though). This approach is generalizable to many programs that are
+sufficiently "interpreter-like" (whatever that exactly means).</p>
+<p>All the results that appeared at various points in this blog post can be seen
+here:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="48%">
+<col width="16%">
+<col width="35%">
+</colgroup>
+<tbody valign="top">
+<tr><td><strong>Implementation</strong></td>
+<td><strong>chars/s</strong></td>
+<td><strong>speedup over pure Python</strong></td>
+</tr>
+<tr><td>Pure Python code</td>
+<td>12'200</td>
+<td>1</td>
+</tr>
+<tr><td>Python <tt class="docutils literal">re</tt> module</td>
+<td>2'500'000</td>
+<td>205</td>
+</tr>
+<tr><td>Google's <tt class="docutils literal">re2</tt> implementation</td>
+<td>550'000</td>
+<td>45</td>
+</tr>
+<tr><td>RPython implementation translated to C</td>
+<td>720'000</td>
+<td>59</td>
+</tr>
+<tr><td>C++ implementation</td>
+<td>750'000</td>
+<td>61</td>
+</tr>
+<tr><td>Java implementation</td>
+<td>1'920'000</td>
+<td>157</td>
+</tr>
+<tr><td>RPython implementation with JIT</td>
+<td>16'500'000</td>
+<td>1352</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="sources">
+<h3>Sources</h3>
+<p>All the source code can be found in my Subversion <a class="reference external" href="https://codespeak.net/svn/user/cfbolz/hack/regex">user directory</a> on Codespeak.</p>
+</div></div>
+<p><strong>Edit:</strong></p><p> Armin is right (see first comment). I fixed the problem.</p></body></html>

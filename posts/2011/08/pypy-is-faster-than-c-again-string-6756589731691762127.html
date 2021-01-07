@@ -1,0 +1,106 @@
+<html><body><p>String formatting is probably something you do just about every day in Python,
+and never think about.  It's so easy, just <tt class="docutils literal">"%d %d" % (i, i)</tt> and you're
+done.  No thinking about how to size your result buffer, whether your output
+has an appropriate NULL byte at the end, or any other details.  A C
+equivalent might be:</p>
+<pre class="literal-block">
+char x[44];
+sprintf(x, "%d %d", i, i);
+</pre>
+<p>Note that we had to stop for a second and consider how big numbers might get
+and overestimate the size (44 = length of the biggest number on 64bit (20) +
+1 for the sign * 2 + 1 (for the space) + 1 (NUL byte)), it took the authors of
+this post, fijal and alex, 3 tries to get the math right on this :-)</p>
+<p>This is fine, except you can't even return <tt class="docutils literal">x</tt> from this function, a more
+fair comparison might be:</p>
+<pre class="literal-block">
+char *x = malloc(44 * sizeof(char));
+sprintf(x, "%d %d", i, i);
+</pre>
+<p><tt class="docutils literal">x</tt> is slightly overallocated in some situations, but that's fine.</p>
+<p>But we're not here to just discuss the implementation of string
+formatting, we're here to discuss how blazing fast PyPy is at it, with
+the new <tt class="docutils literal"><span class="pre">unroll-if-alt</span></tt> branch.  Given the Python code:</p>
+<pre class="literal-block">
+def main():
+    for i in xrange(10000000):
+        "%d %d" % (i, i)
+
+main()
+</pre>
+<p>and the C code:</p>
+<pre class="literal-block">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+
+int main() {
+    int i = 0;
+    char x[44];
+    for (i = 0; i &lt; 10000000; i++) {
+        sprintf(x, "%d %d", i, i);
+    }
+}
+</pre>
+<p>Run under PyPy, at the head of the <tt class="docutils literal"><span class="pre">unroll-if-alt</span></tt> branch, and
+compiled with GCC 4.5.2 at -O4 (other optimization levels were tested,
+this produced the best performance). It took <strong>0.85</strong> seconds to
+execute under PyPy, and <strong>1.63</strong> seconds with the compiled binary. We
+think this demonstrates the incredible potential of dynamic
+compilation, GCC is unable to inline or unroll the <tt class="docutils literal">sprintf</tt> call,
+because it sits inside of libc.</p>
+<p>Benchmarking the C code:</p>
+<pre class="literal-block">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+
+int main() {
+    int i = 0;
+    for (i = 0; i &lt; 10000000; i++) {
+        char *x = malloc(44 * sizeof(char));
+        sprintf(x, "%d %d", i, i);
+        free(x);
+    }
+}
+</pre>
+<p>Which as discussed above, is more comperable to the Python, gives a
+result of <strong>1.96</strong> seconds.</p>
+<p>Summary of performance:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="20%">
+<col width="19%">
+<col width="19%">
+<col width="12%">
+<col width="30%">
+</colgroup>
+<tbody valign="top">
+<tr><td>Platform</td>
+<td>GCC (stack)</td>
+<td>GCC (malloc)</td>
+<td>CPython</td>
+<td>PyPy (unroll-if-alt)</td>
+</tr>
+<tr><td>Time</td>
+<td>1.63s</td>
+<td>1.96s</td>
+<td>10.2s</td>
+<td>0.85s</td>
+</tr>
+<tr><td>relative to C</td>
+<td>1x</td>
+<td>0.83x</td>
+<td>0.16x</td>
+<td><strong>1.9x</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Overall PyPy is almost <strong>2x</strong> faster. This is clearly win for dynamic
+compilation over static - the <cite>sprintf</cite> function lives in libc and so
+cannot be specializing over the constant string, which has to be parsed
+every time it's executed. In the case of PyPy, we specialize
+the assembler if we detect the left hand string of the modulo operator
+to be constant.</p>
+<p>Cheers,<br>
+alex &amp; fijal</p></body></html>

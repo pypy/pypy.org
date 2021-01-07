@@ -1,0 +1,111 @@
+<html><body><div dir="ltr" style="text-align: left;">
+<p>Hello everyone!</p>
+<p>This is the second part of the series of improvements in warmup time and
+memory consumption in the PyPy JIT. This post covers recent work on sharing guard
+resume data that was recently merged to trunk. It will be a part
+of the next official PyPy release. To understand what it does, let's
+start with a loop for a simple example:</p>
+<pre class="literal-block">
+class A(object):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def call_method(self, z):
+        return self.x + self.y + z
+
+def f():
+    s = 0
+    for i in range(100000):
+        a = A(i, 1 + i)
+        s += a.call_method(i)
+</pre>
+<p>At the entrance of the loop, we have the following set of operations:</p>
+<pre class="literal-block">
+<div style="color: red;">guard(i5 == 4)</div>
+<div style="color: red;">guard(p3 is null)</div>
+p27 = p2.co_cellvars
+p28 = p2.co_freevars
+<div style="color: red;">guard_class(p17, 4316866008, descr=&lt;Guard0x104295e08&gt;)</div>
+p30 = p17.w_seq
+<div style="color: red;">guard_nonnull(p30, descr=&lt;Guard0x104295db0&gt;)</div>
+i31 = p17.index
+p32 = p30.strategy
+<div style="color: red;">guard_class(p32, 4317041344, descr=&lt;Guard0x104295d58&gt;)</div>
+p34 = p30.lstorage
+i35 = p34..item0
+</pre>
+<p>The above operations gets executed at the entrance, so each time we call <tt class="docutils literal">f()</tt>. They ensure
+all the optimizations done below stay valid. Now, as long as nothing
+out of the ordinary happens, they only ensure that the world around us never changed. However, if e.g. someone puts new
+methods on class <tt class="docutils literal">A</tt>, any of the above guards might fail. Despite the fact that it's a very unlikely
+case, PyPy needs to track how to recover from such a situation. Each of those points needs to keep the full
+state of the optimizations performed, so we can safely deoptimize them and reenter the interpreter.
+This is vastly wasteful since most of those guards never fail, hence some <a href="http://www.stups.uni-duesseldorf.de/mediawiki/images/c/c4/Pub-schneider_efficient_2012.pdf">sharing between guards</a>
+has been performed.</p>
+<p>We went a step further - when two guards are next to each other or the
+operations in between them don't have side effects, we can safely redo the operations or to simply
+put, resume in the previous guard. That means every now and again we execute a few
+operations extra, but not storing extra info saves quite a bit of time and memory. This is similar to the approach that LuaJIT takes, which is called <a href="http://lua-users.org/lists/lua-l/2009-11/msg00089.html">sparse snapshots</a>.</p>
+
+<p>
+I've done some measurements on annotating &amp; rtyping translation of pypy, which
+is a pretty memory hungry program that compiles a fair bit. I measured, respectively:</p>
+<ul class="simple">
+<li>total time the translation step took (annotating or rtyping)</li>
+<li>time it took for tracing (that excludes backend time for the total JIT time) at
+the end of rtyping.</li>
+<li>memory the GC feels responsible for after the step. The real amount of memory
+consumed will always be larger and the coefficient of savings is in 1.5-2x mark</li>
+</ul>
+<p>Here is the table:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="10%">
+<col width="19%">
+<col width="16%">
+<col width="21%">
+<col width="18%">
+<col width="16%">
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">branch</th>
+<th class="head">time annotation</th>
+<th class="head">time rtyping</th>
+<th class="head">memory annotation</th>
+<th class="head">memory rtyping</th>
+<th class="head">tracing time</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>default</td>
+<td>317s</td>
+<td>454s</td>
+<td>707M</td>
+<td>1349M</td>
+<td>60s</td>
+</tr>
+<tr><td>sharing</td>
+<td>302s</td>
+<td>430s</td>
+<td>595M</td>
+<td>1070M</td>
+<td>51s</td>
+</tr>
+<tr><td>win</td>
+<td>4.8%</td>
+<td>5.5%</td>
+<td>19%</td>
+<td>26%</td>
+<td>17%</td>
+</tr>
+</tbody>
+</table>
+<p>Obviously pypy translation is an extreme example - the vast majority of the code out there
+does not have that many lines of code to be jitted. However, it's at the very least
+a good win for us :-)</p>
+<p>We will continue to improve the warmup performance and keep you posted!</p>
+<p>Cheers,<br>
+fijal</p>
+</div>
+<br></body></html>

@@ -1,0 +1,265 @@
+<html><body><p>This is the second part of a tutorial written by <a class="reference external" href="http://codespeak.net/pipermail/pypy-dev/2011q2/007128.html">Andrew Brown</a>. The first
+part described how to <a class="reference external" href="http://morepypy.blogspot.com/2011/04/tutorial-writing-interpreter-with-pypy.html">write an interpreter with PyPy</a>.</p>
+<div class="section" id="adding-jit">
+<h2>Adding JIT</h2>
+<p>Translating RPython to C is pretty cool, but one of the best features of PyPy
+is its ability to <em>generate just-in-time compilers for your interpreter</em>.
+That's right, from just a couple hints on how your interpreter is structured,
+PyPy will generate and include a JIT compiler that will, at runtime, translate
+the interpreted code of our BF language to machine code!</p>
+<p>So what do we need to tell PyPy to make this happen? First it needs to know
+where the start of your bytecode evaluation loop is. This lets it keep track of
+instructions being executed in the target language (BF).</p>
+<p>We also need to let it know what defines a particular execution frame. Since
+our language doesn't really have stack frames, this boils down to what's
+constant for the execution of a particular instruction, and what's not. These
+are called "green" and "red" variables, respectively.</p>
+<p>Refer back to <a class="reference external" href="https://bitbucket.org/brownan/pypy-tutorial/src/tip/example2.py">example2.py</a> for the following.</p>
+<p>In our main loop, there are four variables used: pc, program, bracket_map, and
+tape. Of those, pc, program, and bracket_map are all green variables. They
+<em>define</em> the execution of a particular instruction. If the JIT routines see the
+same combination of green variables as before, it knows it's skipped back and
+must be executing a loop.  The variable "tape" is our red variable, it's what's
+being manipulated by the execution.</p>
+<p>So let's tell PyPy this info. Start by importing the JitDriver class and making
+an instance:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">from</span> <span style="color: #00CCFF; font-weight: bold;">pypy.rlib.jit</span> <span style="color: #006699; font-weight: bold;">import</span> JitDriver
+jitdriver <span style="color: #555555;">=</span> JitDriver(greens<span style="color: #555555;">=</span>[<span style="color: #CC3300;">'pc'</span>, <span style="color: #CC3300;">'program'</span>, <span style="color: #CC3300;">'bracket_map'</span>],
+        reds<span style="color: #555555;">=</span>[<span style="color: #CC3300;">'tape'</span>])
+</pre></div>
+<p>And we add this line to the very top of the while loop in the mainloop
+function:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;">jitdriver<span style="color: #555555;">.</span>jit_merge_point(pc<span style="color: #555555;">=</span>pc, tape<span style="color: #555555;">=</span>tape, program<span style="color: #555555;">=</span>program,
+        bracket_map<span style="color: #555555;">=</span>bracket_map)
+</pre></div>
+<p>We also need to define a JitPolicy. We're not doing anything fancy, so this is
+all we need somewhere in the file:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">jitpolicy</span>(driver):
+    <span style="color: #006699; font-weight: bold;">from</span> <span style="color: #00CCFF; font-weight: bold;">pypy.jit.codewriter.policy</span> <span style="color: #006699; font-weight: bold;">import</span> JitPolicy
+    <span style="color: #006699; font-weight: bold;">return</span> JitPolicy()
+</pre></div>
+<p>See this example at <a class="reference external" href="https://bitbucket.org/brownan/pypy-tutorial/src/tip/example3.py">example3.py</a></p>
+<p>Now try translating again, but with the flag <tt class="docutils literal"><span class="pre">--opt=jit</span></tt>:</p>
+<pre class="literal-block">
+$ python ./pypy/pypy/translator/goal/translate.py --opt=jit example3.py
+</pre>
+<p>It will take significantly longer to translate with JIT enabled, almost 8
+minutes on my machine, and the resulting binary will be much larger. When it's
+done, try having it run the mandelbrot program again. A world of difference,
+from 12 seconds compared to 45 seconds before!</p>
+<p>Interestingly enough, you can see when the JIT compiler switches from
+interpreted to machine code with the mandelbrot example. The first few lines of
+output come out pretty fast, and then the program gets a boost of speed and
+gets even faster.</p>
+</div>
+<div class="section" id="a-bit-about-tracing-jit-compilers">
+<h2>A bit about Tracing JIT Compilers</h2>
+<p>It's worth it at this point to read up on how tracing JIT compilers work.
+Here's a brief explanation: The interpreter is usually running your interpreter
+code as written. When it detects a loop of code in the target language (BF) is
+executed often, that loop is considered "hot" and marked to be traced. The next
+time that loop is entered, the interpreter gets put in tracing mode where every
+executed instruction is logged.</p>
+<p>When the loop is finished, tracing stops. The trace of the loop is sent to an
+optimizer, and then to an assembler which outputs machine code. That machine
+code is then used for subsequent loop iterations.</p>
+<p>This machine code is often optimized for the most common case, and depends on
+several assumptions about the code. Therefore, the machine code will contain
+guards, to validate those assumptions. If a guard check fails, the runtime
+falls back to regular interpreted mode.</p>
+<p>A good place to start for more information is
+<a class="reference external" href="http://en.wikipedia.org/wiki/Just-in-time_compilation">http://en.wikipedia.org/wiki/Just-in-time_compilation</a></p>
+</div>
+<div class="section" id="debugging-and-trace-logs">
+<h2>Debugging and Trace Logs</h2>
+<p>Can we do any better? How can we see what the JIT is doing? Let's do two
+things.</p>
+<p>First, let's add a get_printable_location function, which is used during debug
+trace logging:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">get_location</span>(pc, program, bracket_map):
+    <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #CC3300;">"</span><span style="color: #AA0000;">%s</span><span style="color: #CC3300;">_</span><span style="color: #AA0000;">%s</span><span style="color: #CC3300;">_</span><span style="color: #AA0000;">%s</span><span style="color: #CC3300;">"</span> <span style="color: #555555;">%</span> (
+            program[:pc], program[pc], program[pc<span style="color: #555555;">+</span><span style="color: #FF6600;">1</span>:]
+            )
+jitdriver <span style="color: #555555;">=</span> JitDriver(greens<span style="color: #555555;">=</span>[<span style="color: #CC3300;">'pc'</span>, <span style="color: #CC3300;">'program'</span>, <span style="color: #CC3300;">'bracket_map'</span>], reds<span style="color: #555555;">=</span>[<span style="color: #CC3300;">'tape'</span>],
+        get_printable_location<span style="color: #555555;">=</span>get_location)
+</pre></div>
+<p>This function is passed in the green variables, and should return a string.
+Here, we're printing out the BF code, surrounding the currently executing
+instruction with underscores so we can see where it is.</p>
+<p>Download this as <a class="reference external" href="https://bitbucket.org/brownan/pypy-tutorial/src/tip/example4.py">example4.py</a> and translate it the same as example3.py.</p>
+<p>Now let's run a test program (test.b, which just prints the letter "A" 15 or so
+times in a loop) with trace logging:</p>
+<pre class="literal-block">
+$ PYPYLOG=jit-log-opt:logfile ./example4-c test.b
+</pre>
+<p>Now take a look at the file "logfile". This file is quite hard to read, so
+here's my best shot at explaining it.</p>
+<p>The file contains a log of every trace that was performed, and is essentially a
+glimpse at what instructions it's compiling to machine code for you. It's
+useful to see if there are unnecessary instructions or room for optimization.</p>
+<p>Each trace starts with a line that looks like this:</p>
+<pre class="literal-block">
+[3c091099e7a4a7] {jit-log-opt-loop
+</pre>
+<p>and ends with a line like this:</p>
+<pre class="literal-block">
+[3c091099eae17d jit-log-opt-loop}
+</pre>
+<p>The next line tells you which loop number it is, and how many ops are in it.
+In my case, the first trace looks like this:</p>
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29</pre></div></td><td class="code"><div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;">  [<span style="color: #FF6600;">3</span>c167c92b9118f] {jit<span style="color: #555555;">-</span>log<span style="color: #555555;">-</span>opt<span style="color: #555555;">-</span>loop
+  <span style="color: #0099FF; font-style: italic;"># Loop 0 : loop with 26 ops</span>
+  [p0, p1, i2, i3]
+  debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[_&gt;_+&lt;-]&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+  debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[&gt;_+_&lt;-]&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+  i4 <span style="color: #555555;">=</span> getarrayitem_gc(p1, i2, descr<span style="color: #555555;">=&lt;</span>SignedArrayDescr<span style="color: #555555;">&gt;</span>)
+  i6 <span style="color: #555555;">=</span> int_add(i4, <span style="color: #FF6600;">1</span>)
+  setarrayitem_gc(p1, i2, i6, descr<span style="color: #555555;">=&lt;</span>SignedArrayDescr<span style="color: #555555;">&gt;</span>)
+  debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[&gt;+_&lt;_-]&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+  debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[&gt;+&lt;_-_]&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+  i7 <span style="color: #555555;">=</span> getarrayitem_gc(p1, i3, descr<span style="color: #555555;">=&lt;</span>SignedArrayDescr<span style="color: #555555;">&gt;</span>)
+  i9 <span style="color: #555555;">=</span> int_sub(i7, <span style="color: #FF6600;">1</span>)
+  setarrayitem_gc(p1, i3, i9, descr<span style="color: #555555;">=&lt;</span>SignedArrayDescr<span style="color: #555555;">&gt;</span>)
+  debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[&gt;+&lt;-_]_&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+  i10 <span style="color: #555555;">=</span> int_is_true(i9)
+  guard_true(i10, descr<span style="color: #555555;">=&lt;</span>Guard2<span style="color: #555555;">&gt;</span>) [p0]
+  i14 <span style="color: #555555;">=</span> call(ConstClass(ll_dict_lookup__dicttablePtr_Signed_Signed), ConstPtr(ptr12), <span style="color: #FF6600;">90</span>, <span style="color: #FF6600;">90</span>, descr<span style="color: #555555;">=&lt;</span>SignedCallDescr<span style="color: #555555;">&gt;</span>)
+  guard_no_exception(, descr<span style="color: #555555;">=&lt;</span>Guard3<span style="color: #555555;">&gt;</span>) [i14, p0]
+  i16 <span style="color: #555555;">=</span> int_and(i14, <span style="color: #555555;">-</span><span style="color: #FF6600;">9223372036854775808</span>)
+  i17 <span style="color: #555555;">=</span> int_is_true(i16)
+  guard_false(i17, descr<span style="color: #555555;">=&lt;</span>Guard4<span style="color: #555555;">&gt;</span>) [i14, p0]
+  i19 <span style="color: #555555;">=</span> call(ConstClass(ll_get_value__dicttablePtr_Signed), ConstPtr(ptr12), i14, descr<span style="color: #555555;">=&lt;</span>SignedCallDescr<span style="color: #555555;">&gt;</span>)
+  guard_no_exception(, descr<span style="color: #555555;">=&lt;</span>Guard5<span style="color: #555555;">&gt;</span>) [i19, p0]
+  i21 <span style="color: #555555;">=</span> int_add(i19, <span style="color: #FF6600;">1</span>)
+  i23 <span style="color: #555555;">=</span> int_lt(i21, <span style="color: #FF6600;">114</span>)
+  guard_true(i23, descr<span style="color: #555555;">=&lt;</span>Guard6<span style="color: #555555;">&gt;</span>) [i21, p0]
+  guard_value(i21, <span style="color: #FF6600;">86</span>, descr<span style="color: #555555;">=&lt;</span>Guard7<span style="color: #555555;">&gt;</span>) [i21, p0]
+  debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[_&gt;_+&lt;-]&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+  jump(p0, p1, i2, i3, descr<span style="color: #555555;">=&lt;</span>Loop0<span style="color: #555555;">&gt;</span>)
+  [<span style="color: #FF6600;">3</span>c167c92bc6a15] jit<span style="color: #555555;">-</span>log<span style="color: #555555;">-</span>opt<span style="color: #555555;">-</span>loop}
+</pre></div>
+</td></tr></table><p>I've trimmed the debug_merge_point lines a bit, they were really long.</p>
+<p>So let's see what this does. This trace takes 4 parameters: 2 object pointers
+(p0 and p1) and 2 integers (i2 and i3). Looking at the debug lines, it seems to
+be tracing one iteration of this loop: "[&gt;+&lt;-]"</p>
+<p>It starts executing the first operation on line 4, a "&gt;", but immediately
+starts executing the next operation. The "&gt;" had no instructions, and looks
+like it was optimized out completely.  This loop must always act on the same
+part of the tape, the tape pointer is constant for this trace. An explicit
+advance operation is unnecessary.</p>
+<p>Lines 5 to 8 are the instructions for the "+" operation. First it gets the
+array item from the array in pointer p1 at index i2 (line 6), adds 1 to it and
+stores it in i6 (line 7), and stores it back in the array (line 8).</p>
+<p>Line 9 starts the "&lt;" instruction, but it is another no-op. It seems that i2
+and i3 passed into this routine are the two tape pointers used in this loop
+already calculated. Also deduced is that p1 is the tape array. It's not clear
+what p0 is.</p>
+<p>Lines 10 through 13 perform the "-" operation: get the array value (line 11),
+subtract (line 12) and set the array value (line 13).</p>
+<p>Next, on line 14, we come to the "]" operation. Lines 15 and 16 check whether
+i9 is true (non-zero). Looking up, i9 is the array value that we just
+decremented and stored, now being checked as the loop condition, as expected
+(remember the definition of "]").  Line 16 is a guard, if the condition is not
+met, execution jumps somewhere else, in this case to the routine called
+&lt;Guard2&gt; and is passed one parameter: p0.</p>
+<p>Assuming we pass the guard, lines 17 through 23 are doing the dictionary lookup
+to bracket_map to find where the program counter should jump to.  I'm not too
+familiar with what the instructions are actually doing, but it looks like there
+are two external calls and 3 guards. This seems quite expensive, especially
+since we know bracket_map will never change (PyPy doesn't know that).  We'll
+see below how to optimize this.</p>
+<p>Line 24 increments the newly acquired instruction pointer. Lines 25 and 26 make
+sure it's less than the program's length.</p>
+<p>Additionally, line 27 guards that i21, the incremented instruction pointer, is
+exactly 86. This is because it's about to jump to the beginning (line 29) and
+the instruction pointer being 86 is a precondition to this block.</p>
+<p>Finally, the loop closes up at line 28 so the JIT can jump to loop body &lt;Loop0&gt;
+to handle that case (line 29), which is the beginning of the loop again. It
+passes in parameters (p0, p1, i2, i3).</p>
+</div>
+<div class="section" id="optimizing">
+<h2>Optimizing</h2>
+<p>As mentioned, every loop iteration does a dictionary lookup to find the
+corresponding matching bracket for the final jump. This is terribly
+inefficient, the jump target is not going to change from one loop to the next.
+This information is constant and should be compiled in as such.</p>
+<p>The problem is that the lookups are coming from a dictionary, and PyPy is
+treating it as opaque. It doesn't know the dictionary isn't being modified or
+isn't going to return something different on each query.</p>
+<p>What we need to do is provide another hint to the translation to say that the
+dictionary query is a pure function, that is, its output depends <em>only</em> on its
+inputs and the same inputs should always return the same output.</p>
+<p>To do this, we use a provided function decorator pypy.rlib.jit.purefunction,
+and wrap the dictionary call in a decorated function:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #9999FF;">@purefunction</span>
+<span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">get_matching_bracket</span>(bracket_map, pc):
+    <span style="color: #006699; font-weight: bold;">return</span> bracket_map[pc]
+</pre></div>
+<p>This version can be found at <a class="reference external" href="https://bitbucket.org/brownan/pypy-tutorial/src/tip/example5.py">example5.py</a></p>
+<p>Translate again with the JIT option and observe the speedup. Mandelbrot now
+only takes 6 seconds!  (from 12 seconds before this optimization)</p>
+<p>Let's take a look at the trace from the same function:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;">[<span style="color: #FF6600;">3</span>c29fad7b792b0] {jit<span style="color: #555555;">-</span>log<span style="color: #555555;">-</span>opt<span style="color: #555555;">-</span>loop
+<span style="color: #0099FF; font-style: italic;"># Loop 0 : loop with 15 ops</span>
+[p0, p1, i2, i3]
+debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[_&gt;_+&lt;-]&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[&gt;_+_&lt;-]&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+i4 <span style="color: #555555;">=</span> getarrayitem_gc(p1, i2, descr<span style="color: #555555;">=&lt;</span>SignedArrayDescr<span style="color: #555555;">&gt;</span>)
+i6 <span style="color: #555555;">=</span> int_add(i4, <span style="color: #FF6600;">1</span>)
+setarrayitem_gc(p1, i2, i6, descr<span style="color: #555555;">=&lt;</span>SignedArrayDescr<span style="color: #555555;">&gt;</span>)
+debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[&gt;+_&lt;_-]&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[&gt;+&lt;_-_]&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+i7 <span style="color: #555555;">=</span> getarrayitem_gc(p1, i3, descr<span style="color: #555555;">=&lt;</span>SignedArrayDescr<span style="color: #555555;">&gt;</span>)
+i9 <span style="color: #555555;">=</span> int_sub(i7, <span style="color: #FF6600;">1</span>)
+setarrayitem_gc(p1, i3, i9, descr<span style="color: #555555;">=&lt;</span>SignedArrayDescr<span style="color: #555555;">&gt;</span>)
+debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[&gt;+&lt;-_]_&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+i10 <span style="color: #555555;">=</span> int_is_true(i9)
+guard_true(i10, descr<span style="color: #555555;">=&lt;</span>Guard2<span style="color: #555555;">&gt;</span>) [p0]
+debug_merge_point(<span style="color: #CC3300;">'+&lt;[&gt;[_&gt;_+&lt;-]&gt;.[&lt;+&gt;-]&lt;&lt;-]++++++++++.'</span>, <span style="color: #FF6600;">0</span>)
+jump(p0, p1, i2, i3, descr<span style="color: #555555;">=&lt;</span>Loop0<span style="color: #555555;">&gt;</span>)
+[<span style="color: #FF6600;">3</span>c29fad7ba32ec] jit<span style="color: #555555;">-</span>log<span style="color: #555555;">-</span>opt<span style="color: #555555;">-</span>loop}
+</pre></div>
+<p>Much better! Each loop iteration is an add, a subtract, two array loads, two
+array stores, and a guard on the exit condition. That's it! This code doesn't
+require <em>any</em> program counter manipulation.</p>
+<p>I'm no expert on optimizations, this tip was suggested by Armin Rigo on the
+pypy-dev list. Carl Friedrich has a series of posts on how to optimize your
+interpreter that are also very useful: <a class="reference external" href="http://bit.ly/bundles/cfbolz/1">http://bit.ly/bundles/cfbolz/1</a></p>
+</div>
+<div class="section" id="final-words">
+<h2>Final Words</h2>
+<p>I hope this has shown some of you what PyPy is all about other than a faster
+implementation of Python.</p>
+<p>For those that would like to know more about how the process works, there are
+several academic papers explaining the process in detail that I recommend. In
+particular: Tracing the Meta-Level: PyPy's Tracing JIT Compiler.</p>
+<p>See <a class="reference external" href="http://readthedocs.org/docs/pypy/en/latest/extradoc.html">http://readthedocs.org/docs/pypy/en/latest/extradoc.html</a></p>
+</div></body></html>

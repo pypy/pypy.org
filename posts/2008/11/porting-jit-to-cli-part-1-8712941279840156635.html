@@ -1,0 +1,166 @@
+<html><body><p>As the readers of this blog <a class="reference" href="http://morepypy.blogspot.com/2008/05/progresses-on-cli-jit-backend-front.html">already know</a>, I have been working on the CLI
+JIT backend for some months: last Friday, it reached an important milestone,
+as it is now able to produce huge speedups for a little dynamic language.  To
+know how huge the speedup is, read on :-).</p>
+<p>The goal of PyPy JIT generator is to take an interpreter and, with the help of
+few annotations, automatically generate a JIT compiler for it.  In this post,
+we will talk about the <tt class="docutils literal"><span class="pre">tlc</span></tt> virtual machine: while <tt class="docutils literal"><span class="pre">tlc</span></tt> it is just a toy
+language, it contains some features that make it an interesting target for our
+JIT generator.</p>
+<div class="section">
+<h2>The <tt class="docutils literal"><span class="pre">tlc</span></tt> virtual machine</h2>
+<p><tt class="docutils literal"><span class="pre">tlc</span></tt> is executed by a stack based, dynamically typed virtual machine (for
+those who knows a bit about the Python VM: does it sound familiar? :-)).</p>
+<p>There are three types of objects: <em>integers</em>, <em>nil</em>, and <em>cons cells</em> (i.e.
+lisp-like pairs of objects).</p>
+<p>As the VM is very simple, it provides only few opcodes:</p>
+<blockquote>
+<ul class="simple">
+<li>opcodes to manipulate the stack, like <tt class="docutils literal"><span class="pre">PUSH</span></tt>, <tt class="docutils literal"><span class="pre">POP</span></tt>, etc.</li>
+<li>integer operations, like <tt class="docutils literal"><span class="pre">ADD</span></tt>, <tt class="docutils literal"><span class="pre">MUL</span></tt>, all the comparisons, etc.:
+these operations can only be applied to integers;</li>
+<li>list operations, like <tt class="docutils literal"><span class="pre">CONS</span></tt>, <tt class="docutils literal"><span class="pre">CAR</span></tt>, <tt class="docutils literal"><span class="pre">CDR</span></tt>: these operations can
+only be applied to lists;</li>
+<li>other operations, including jumps and conditional jumps.</li>
+</ul>
+</blockquote>
+<p>The VM is interesting for our purposes because it has a lot of similarities
+with Python (though on a smaller scale, of course):</p>
+<blockquote>
+<ol class="arabic simple">
+<li>it has to do type-checks at runtime before doing most of the operations;</li>
+<li>every time you do an arithmetic operation, it has to unbox the operand,
+do the computation, and the box the result again.</li>
+</ol>
+</blockquote>
+<p>This means that even if you have a program which only uses integers, you are
+paying a lot of overhead.</p>
+<p>To know more about this toy VM, look at its <a class="reference" href="http://codespeak.net/svn/pypy/branch/oo-jit/pypy/jit/tl/tlc.py">source code</a>: the interesting
+bits are the classes used to represent objects, and the <tt class="docutils literal"><span class="pre">interp_eval</span></tt>
+function, which contains the main loop of the virtual machine.  As you can
+see, the implementation is quite straightforward; all the <tt class="docutils literal"><span class="pre">hint</span></tt> calls you
+see are the special annotations needed by the JIT generator to produce better
+code.</p>
+</div>
+<div class="section">
+<h2>Let's JIT it!</h2>
+<p>So, the whole point is to generate a JIT compiler from it, isn't it?</p>
+<p>First, checkout a fresh copy of the <tt class="docutils literal"><span class="pre">oo-jit</span></tt> branch:</p>
+<pre class="literal-block">
+$ svn co http://codespeak.net/svn/pypy/branch/oo-jit
+</pre>
+<p>Then, go to the <tt class="docutils literal"><span class="pre">oo-jit/pypy/jit/tl</span> <span class="pre">directory</span></tt>, and compile the <tt class="docutils literal"><span class="pre">tlc</span></tt> VM
+with the CLI backend and JIT enabled:</p>
+<pre class="literal-block">
+$ cd oo-jit/pypy/jit/tl/
+$ ../../translator/goal/translate.py -b cli --jit --batch targettlc
+...
+lot of texts
+...
+</pre>
+<p>If everything went OK, you now have a <tt class="docutils literal"><span class="pre">targettlc-cli</span></tt> executable, which
+accepts two arguments: the name of the file containing the <tt class="docutils literal"><span class="pre">tlc</span></tt> program we
+want to run, and an integer to be passed to it.</p>
+<p>Luckily, in the same directory we have a <tt class="docutils literal"><span class="pre">factorial.tlc</span></tt> file that contains
+the bytecode for a function that -- guess? -- computes the factorial of a
+given integer; let's try it:</p>
+<pre class="literal-block">
+$ ./targettlc-cli factorial.tlc 5
+Non jitted:    120 (0.009371 seconds)
+Warmup jitted: 120 (0.208954 seconds)
+Warmed jitted: 120 (0.000323999999999991 seconds)
+</pre>
+<p>Cool, it seems that the result was computed correcly :-). As you can see from
+the output, we ran the program three times:</p>
+<blockquote>
+<ol class="arabic simple">
+<li>by plain interpretation, without any jitting;</li>
+<li>with the jit enabled: this run includes the time spent by doing the
+compilation itself, plus the time spent by running the produced code;</li>
+<li>again with the jit enabled, but this time the compilation has already
+been done, so we are actually measuring how good is the code we produced.</li>
+</ol>
+</blockquote>
+<p>So, it's time to run a benchmark: let's try to compute the factorial of a very
+big number; the result will be 0, because obviously after a while we overflow,
+but after all we are interested in the time spent, not in the result:</p>
+<pre class="literal-block">
+$ ./targettlc-cli factorial.tlc 5000000
+Non jitted:    0 (19.93247 seconds)
+Warmup jitted: 0 (0.293229999999998 seconds)
+Warmed jitted: 0 (0.0494239999999984 seconds)
+
+$ python -c 'print 19.93247/0.0494239999999984'
+403.295362577
+</pre>
+<p>And no, I didn't make any mistake in copying&amp;pasting: the jitted version is
+really 400 times faster that the non jitted one!</p>
+<p><strong>Warning</strong>: my laptop seems to be not very well suited for benchmarks, as the
+results vary a lot from run to run; I've run the benchmarks a lot of times,
+and I got speedup factors up to 500 times, so your results may be different.</p>
+</div>
+<div class="section">
+<h2>More benchmarks</h2>
+<p>It's also interesting to compare the result with a manual written <a class="reference" href="http://codespeak.net/svn/user/antocuni/cli-bench/factorial.cs">C#
+version</a> of the factorial, to see how good is code we produced; to get
+reasonable results, we need to compute a larger factorial, to let to code to
+run a bit more:</p>
+<pre class="literal-block">
+$ ./targettlc-cli --onlyjit factorial.tlc 100000000
+Warmup jitted: 0 (0.980856 seconds)
+Warmed jitted: 0 (0.769716 seconds)
+
+$ mono factorial.exe 100000000
+C#:            0 (0.153777 seconds)
+
+$ python -c 'print 0.769716/0.153777'
+5.00540392907
+</pre>
+<p>We know that the generated code is far from being optimal, but probably the
+factor of five is at least partially due to the fact that Mono's own JIT is optimized for
+C#-like code, and our code has a completely different shape.</p>
+<p>All the benchmarks above were run under Linux, with Mono 1.9.1.  Here are the
+results for the same benchmarks, but run with Microsoft CLR (on a different
+machine, so the absolute values are not comparable):</p>
+<pre class="literal-block">
+$ ./targettlc-cli factorial.tlc 5000000
+Non jitted:    0 (15,640625 seconds)
+Warmup jitted: 0 (0,4375 seconds)
+Warmed jitted: 0 (0,03125 seconds)
+
+$ python -c 'print 15.640625/0.03125'
+500.5
+
+$ ./targettlc-cli --onlyjit factorial.tlc 100000000
+Warmup jitted: 0 (0,90625 seconds)
+Warmed jitted: 0 (0,515625 seconds)
+
+$ ./factorial.exe 100000000
+C#:            0 (0,34375 seconds)
+
+$ python -c 'print 0.515625/0.34375'
+1.5
+</pre>
+<p>The results are even better than before; this is probably thanks to CLR's JIT,
+that does a better job than Mono when faced to something which is different
+than the usual C#-like code.</p>
+</div>
+<div class="section">
+<h2>Conclusions (for now)</h2>
+<p>This is a very important result, because it proves that PyPy's approach to JIT
+compilers can be applied effectively also to OO virtual machines; the result
+is even better than what I expected, because when generating code for .NET we
+have much less freedom than when generating assembly code, and I had to play
+some tricks to work around some .NET limitations.</p>
+<p>Moreover, it worked at the first try :-). I tried to compile the <tt class="docutils literal"><span class="pre">tlc</span></tt>
+virtual machine as soon as all the related JIT tests were passing, and
+surprisingly everything worked just fine, even if it was the very first time I
+was trying to apply some features of the JIT to something bigger than a test:
+I think this is yet another prove that Test Driven Development just works!</p>
+<p>Even if this is a major milestone, the CLI JIT backend is not yet completed:
+as a consequence it can't still be used for the full PyPy, but all the
+hardest problems should have been solved now.</p>
+<p>Since a lot of readers asked for more technical details, especially about the
+JIT, I will try to soon write a second blog post explaining how the CLI backend works
+internally, with a brief look to the generated code to see how it looks like.</p>
+</div></body></html>

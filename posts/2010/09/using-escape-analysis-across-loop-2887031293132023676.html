@@ -1,0 +1,120 @@
+<html><body><p>This blog post is a successor to the one about <a class="reference external" href="http://morepypy.blogspot.com/2010/09/escape-analysis-in-pypys-jit.html">escape analysis in PyPy's
+JIT</a>. The examples from there will be continued here. This post is a bit
+science-fictiony. The algorithm that PyPy currently uses is significantly more
+complex and much harder than the one that is described here. The resulting
+behaviour is very similar, however, so we will use the simpler version (and we
+might switch to that at some point in the actual implementation).</p>
+<p>In the last blog post we described how escape analysis can be used to remove
+many of the allocations of short-lived objects and many of the type dispatches
+that are present in a non-optimized trace. In this post we will improve the
+optimization to also handle more cases.</p>
+<p>To understand some more what the optimization described in the last blog post
+can achieve, look at the following figure:</p><p>
+
+<img alt="new lifetimes" src="http://3.bp.blogspot.com/_zICyAWqZbLA/TJohiRZtjZI/AAAAAAAAALs/Tns2pB_gVPY/s1600/obj-lifetime.png">
+
+</p><p>The figure shows a trace before optimization, together with the lifetime of
+various kinds of objects created in the trace. It is executed from top to
+bottom. At the bottom, a jump is used to execute the same loop another time.
+For clarity, the figure shows two iterations of the loop.
+The loop is executed until one of the guards in the trace fails, and the
+execution is aborted.</p>
+<p>Some of the operations within this trace are <tt class="docutils literal">new</tt> operations, which each create a
+new instance of some class. These instances are used for a while, e.g. by
+calling methods on them, reading and writing their fields. Some of these
+instances escape, which means that they are stored in some globally accessible
+place or are passed into a function.</p>
+<p>Together with the <tt class="docutils literal">new</tt> operations, the figure shows the lifetimes of the
+created objects. Objects in category 1 live for a while, and are then just not
+used any more. The creation of these objects is removed by the
+optimization described in the last blog post.</p>
+<p>Objects in category 2 live for a while and then escape. The optimization of the
+last post deals with them too: the <tt class="docutils literal">new</tt> that creates them and
+the field accesses are deferred, until the point where the object escapes.</p>
+<p>The objects in category 3 and 4 are in principle like the objects in category 1
+and 2. They are created, live for a while, but are then passed as an argument
+to the <tt class="docutils literal">jump</tt> operation. In the next iteration they can either die (category
+3) or escape (category 4).</p>
+<p>The optimization of the last post considered the passing of an object along a
+jump to be equivalent to escaping. It was thus treating objects in category 3
+and 4 like those in category 2.</p>
+<p>The improved optimization described in this post will make it possible to deal
+better with objects in category 3 and 4. This will have two consequences: on
+the one hand, more allocations are removed from the trace (which is clearly
+good). As a side-effect of this, the traces will also be type-specialized.</p>
+<div class="section" id="optimizing-across-the-jump">
+<h2>Optimizing Across the Jump</h2>
+<p>Let's look at the final trace obtained in the last post for the example loop.
+The final trace was much better than the original one, because many allocations
+were removed from it. However, it also still contained allocations:</p>
+<div class="figure">
+<img alt="step 1" src="http://3.bp.blogspot.com/_zICyAWqZbLA/TJoiO1zH8II/AAAAAAAAAL0/N2CSp4EnMAw/s1600/step1.png">
+</div>
+<p>The two new <tt class="docutils literal">BoxedIntegers</tt> stored in <tt class="docutils literal">p15</tt> and <tt class="docutils literal">p10</tt> are passed into
+the next iteration of the loop. The next iteration will check that they are
+indeed <tt class="docutils literal">BoxedIntegers</tt>, read their <tt class="docutils literal">intval</tt> fields and then not use them
+any more. Thus those instances are in category 3.</p>
+<p>In its current state the loop
+allocates two <tt class="docutils literal">BoxedIntegers</tt> at the end of every iteration, that then die
+very quickly in the next iteration. In addition, the type checks at the start
+of the loop are superfluous, at least after the first iteration.</p>
+<p>The reason why we cannot optimize the remaining allocations away is because
+their lifetime crosses the jump. To improve the situation, a little trick is
+needed. The trace above represents a loop, i.e. the jump at the end jumps to
+the beginning. Where in the loop the jump occurs is arbitrary, since the loop
+can only be left via failing guards anyway. Therefore it does not change the
+semantics of the loop to put the jump at another point into the trace and we
+can move the <tt class="docutils literal">jump</tt> operation just above the allocation of the objects that
+appear in the current <tt class="docutils literal">jump</tt>. This needs some care, because the arguments to
+<tt class="docutils literal">jump</tt> are all currently live variables, thus they need to be adapted.</p>
+<p>If we do that for our example trace above, the trace looks like this:</p>
+<div class="figure">
+<img alt="step 2" src="http://1.bp.blogspot.com/_zICyAWqZbLA/TJoiPTYjwgI/AAAAAAAAAL8/X7RrjkpzKwc/s1600/step2.png">
+</div>
+<p>Now the lifetime of the remaining allocations no longer crosses the jump, and
+we can run our escape analysis a second time, to get the following trace:</p>
+<div class="figure">
+<img alt="step3" src="http://1.bp.blogspot.com/_zICyAWqZbLA/TJoiP8o9rNI/AAAAAAAAAME/XHA-nsDB1kI/s1600/step3.png">
+</div>
+<p>This result is now really good. The code performs the same operations than
+the original code, but using direct CPU arithmetic and no boxing, as opposed to
+the original version which used dynamic dispatching and boxing.</p>
+<p>Looking at the final trace it is also completely clear that specialization has
+happened. The trace corresponds to the situation in which the trace was
+originally recorded, which happened to be a loop where <tt class="docutils literal">BoxedIntegers</tt> were
+used. The now resulting loop does not refer to the <tt class="docutils literal">BoxedInteger</tt> class at
+all any more, but it still has the same behaviour. If the original loop had
+used <tt class="docutils literal">BoxedFloats</tt>, the final loop would use <tt class="docutils literal">float_*</tt> operations
+everywhere instead (or even be very different, if the object model had
+user-defined classes).</p>
+</div>
+<div class="section" id="entering-the-loop">
+<h2>Entering the Loop</h2>
+<p>The approach of placing the <tt class="docutils literal">jump</tt> at some other point in the loop leads to
+one additional complication that we glossed over so far. The beginning of the
+original loop corresponds to a point in the original program, namely the
+<tt class="docutils literal">while</tt> loop in the function <tt class="docutils literal">f</tt> from the last post.</p>
+<p>Now recall that in a VM that uses a tracing JIT, all programs start by being
+interpreted. This means that when <tt class="docutils literal">f</tt> is executed by the interpreter, it is
+easy to go from the interpreter to the first version of the compiled loop.
+After the <tt class="docutils literal">jump</tt> is moved and the escape analysis optimization is applied a
+second time, this is no longer easily possible.  In particular, the new loop
+expects two integers as input arguments, while the old one expected two
+instances.</p>
+<p>To make it possible to enter the loop directly from the intepreter, there
+needs to be some additional code that enters the loop by taking as input
+arguments what is available to the interpreter, i.e. two instances. This
+additional code corresponds to one iteration of the loop, which is thus
+<a class="reference external" href="http://en.wikipedia.org/wiki/Loop_splitting#Loop_peeling">peeled off</a>:</p>
+<div class="figure">
+<img alt="step 4" src="http://4.bp.blogspot.com/_zICyAWqZbLA/TJoiPwXQ-gI/AAAAAAAAAMM/AzQUy5Hy23Q/s1600/step4.png">
+</div>
+</div>
+<div class="section" id="summary">
+<h2>Summary</h2>
+<p>The optimization described in this post can be used to optimize away
+allocations in category 3 and improve allocations in category 4, by deferring
+them until they are no longer avoidable. A side-effect of these optimizations
+is also that the optimized loops are specialized for the types of the variables
+that are used inside them.</p>
+</div></body></html>

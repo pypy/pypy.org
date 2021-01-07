@@ -1,0 +1,57 @@
+<html><body><div dir="ltr" style="text-align: left;">
+We are happy to announce that JIT support in both the PowerPC backend and the<br>
+s390x backend have been enhanced. Both can now vectorize loops via SIMD<br>
+instructions. Special thanks to IBM for funding this work.<br>
+<br>
+If you are not familiar with this topic you can read more details <a href="http://pypyvecopt.blogspot.co.at/">here</a>.<br>
+<div>
+<br>
+There are many more enhancements under the hood. Most notably, all pure operations are now delayed until the latest possible point. In some cases indices have been calculated more than once or they needed an additional register, because the old value is still used. Additionally it is now possible to load quadword-aligned memory in both PPC and s390x (x86 currently cannot do that).<br>
+<h3>
+<span style="font-size: large;">NumPy &amp; CPyExt</span></h3>
+The community and core developers have been moving CPyExt towards a complete, but emulated, layer for CPython C extensions. This is great, because the one restriction preventing the wider deployment of PyPy in several scenarios will hopefully be removed. However, we advocate not to use CPyExt, but rather to not write C code at all (let PyPy speed up your Python code) or use <a href="http://cffi.readthedocs.io/en/latest/">cffi</a>.<br>
+<br>
+The work done here to support vectorization helps<i> micronumpy </i>(NumPyPy) to speed up operations for PPC and s390x. So why is PyPy supporting both NumPyPy and NumPy, do we actually need both? Yes, there are places where gcc can beat the JIT, and places where the tight integration between NumPyPy and PyPy is more performant. We do have plans to integrate both, hijacking the C-extension method calls to use NumPyPy where we know NumPyPy can be faster.<br>
+<br>
+Just to give you an idea why this is a benefit:<br>
+<br>
+NumPy arrays can carry custom dtypes and apply user defined python functions on the arrays. How could one optimize this kind of scenario? In a traditional setup, you cannot. But as soon as NumPyPy is turned on, you can suddenly JIT compile this code and vectorize it.<br>
+<br>
+Another example is element access that occurs frequently, or any other calls that cross between Python and the C level frequently.<br>
+<h3>
+<span style="font-size: large;">Benchmarks</span></h3>
+Let's have a look at some benchmarks reusing <a href="https://bitbucket.org/mikefc/numpy-benchmark/src" target="_blank">mikefc's numpy benchmark suite</a> (find the forked version <a href="https://bitbucket.org/plan_rich/numpy-benchmark" target="_blank">here</a>). <span style="white-space: pre-wrap;">I only ran a subset of microbenchmarks, showing that the core functionality is</span><br>
+<span style="white-space: pre-wrap;">functioning properly. </span>Additionally it has been rewritten to use <a href="https://perf.readthedocs.io/en/latest/"><i>perf</i></a> instead of the <i>timeit</i> stdlib module.<br>
+<br>
+<h2>
+<span style="font-size: small;">Setup</span></h2>
+x86 runs on a Intel i7-2600 clocked at 3.40GHz using 4 cores. PowerPC runs on the Power 8 clocked at 3.425GHz providing 160 cores. Last but not least the mainframe machine clocked up to 4 GHz, but fully virtualized (as it is common for such machines). Note that PowerPC is a non private remote machine. It is used by many users and it is crowded with processes. It is hard to extract a stable benchmark there.<br>
+<br>
+x86 ran on Fedora 24 (kernel version of 4.8.4), PPC ran on Fedora 21 (kernel version 3.17.4) and s390x ran on Redhat Linux 7.2 (kernel version 3.10.0). Respectivley, numpy on cpython had openblas available on x86, no blas implementation were present on s390x and PPC provided blas and lapack.<br>
+<br>
+As you can see all machines run very different configurations. It does not make sense to compare across platforms, but rather implementations on the same platform.<br>
+<br>
+<br>
+<a href="http://4.bp.blogspot.com/-SLgW88U0Bek/WBhPjeuohdI/AAAAAAAAAkY/c5VgHxLjVaoWHIqf6zj65eBQeAefv5HPgCK4B/s1600/vecopt-x86-sse4.png"><img border="0" height="388" src="https://4.bp.blogspot.com/-SLgW88U0Bek/WBhPjeuohdI/AAAAAAAAAkY/c5VgHxLjVaoWHIqf6zj65eBQeAefv5HPgCK4B/s640/vecopt-x86-sse4.png" width="640"></a><br>
+<br>
+<a href="http://1.bp.blogspot.com/-z8V9bUPw_BY/WBhPoQvdZ2I/AAAAAAAAAkg/n5IoXwIRnIwaNvOcb8S4S7-Iw455_dFGgCK4B/s1600/vecopt-ppc64le.png"></a><a href="http://4.bp.blogspot.com/-b8xDL8pO4q4/WBhPqZW0wRI/AAAAAAAAAko/ZRyZpD4GP9IF6fbT4ngUfWmEJcQ536uZQCK4B/s1600/vecopt-s390x.png"><img border="0" height="390" src="https://4.bp.blogspot.com/-b8xDL8pO4q4/WBhPqZW0wRI/AAAAAAAAAko/ZRyZpD4GP9IF6fbT4ngUfWmEJcQ536uZQCK4B/s640/vecopt-s390x.png" width="640"></a><img border="0" height="396" src="https://1.bp.blogspot.com/-z8V9bUPw_BY/WBhPoQvdZ2I/AAAAAAAAAkg/n5IoXwIRnIwaNvOcb8S4S7-Iw455_dFGgCK4B/s640/vecopt-ppc64le.png" width="640"><br>
+<br>
+<br>
+Blue shows CPython 2.7.10+ available on that platform using the latest NumPy (1.11). Micro NumPy is used for PyPy. PyPy+ indicates that the vectorization optimization is turned on.<br>
+All bar charts show the median value of all runs (5 samples, 100 loops, 10 inner loops, for the operations on vectors (not matrices) the loops are set to 1000). PyPy additionally gets 3 extra executions to warmup the JIT.<br>
+<br>
+The comparison is really comparing speed of machine code. It compares the PyPy's JIT output vs GCC's output. It has little to do with the speed of the interpreter.<br>
+<br>
+Both new SIMD backends speedup the numeric kernels. Some times it is near to the speed of CPython, some times it is faster. The maximum parallelism very much depends on the extension emitted by the compiler. All three SIMD backends have the same vector register size (which is 128 bit). This means that all three behave similar but ppc and s390x gain more because they can load 128bit of memory from quadword aligned memory.<br>
+<br>
+<h2>
+Future directions</h2>
+Python is achieving rapid adoption in data science. This is currently a trend emerging in Europe, and Python is already heavily used for data science in the USA many other places around the world.<br>
+<br>
+<br>
+PyPy can make a valuable contribution for data scientists, helping them to rapidly write scientific programs in Python and run them at near native speed. If you happen to be in that situation, we are eager to hear you feedback or resolve your issues and also work together to improve the performance of your,<br>
+code. Just get in touch!<br>
+<br>
+<br>
+Richard Plangger (plan_rich) and the PyPy team</div>
+</div></body></html>

@@ -1,0 +1,141 @@
+<html><body><p>In my <a class="reference" href="http://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-1.html">previous post</a>, we saw that PyPy JIT generator can produce huge
+speedups when applied to the <a class="reference" href="http://www.blogger.com/.._%60sourcecode%60:http://codespeak.net/svn/pypy/branch/oo-jit/pypy/jit/tl/tlc.py">tlc</a> toy language.</p>
+<p>In this post we will dive a bit into the internals of PyPy JIT, to see how it
+manages to do so. Note that this is a <strong>very</strong> high level overview of how the
+JIT works, and applies to all backends.  Then, in the third post of this
+series, we will look closer at the CLI JIT backend, seeing how it works around
+some .NET limitations and how the generated code looks like.</p>
+
+<h2>PyPy JIT for dummies</h2>
+<p>As you surely know, the key idea of PyPy is that we are too lazy to write a
+JIT of our own: so, instead of passing nights writing a JIT, we pass years
+coding a <strong>JIT generator</strong> that writes the JIT for us :-).</p>
+<p>I'm not going to explain how the JIT generator does its job, (perhaps this
+will be the subject of another blog post), but how the <strong>generated JIT</strong>
+works.</p>
+<p>There are values that, if known at compile-time (i.e., when the <em>JIT compiler</em>
+runs), let the JIT to produce very efficient code.  In a dynamic language,
+types are the primary example: for instance, suppose you are a compiler and
+you have to compile to following Python function:</p>
+<pre class="literal-block">
+def mysum(a):
+  return a + 1
+</pre>
+<p>At compile time, you don't have any knowledge about the type of the parameter:
+it could be integer, float, an user defined object, etc.  In this situation,
+the only safe choice is to emit code which does the usual, slow, full lookup
+to know how to perform the operations.</p>
+<p>On the other hand, suppose that you knew in advance that the parameter is an
+integer: this time, you could emit code that exploits this <strong>extra
+knowledge</strong>, by performing directly a fast integer addition.</p>
+<p>The idea behind PyPy JIT is that if you don't have enough knowledge to
+generate efficient code, you <strong>stop compiling</strong> and wait until you know
+exactly what you need.  Concretely, you emit code that runs until the point
+where you stopped the compilation, then it triggers a special procedure that
+<strong>restarts the compiler</strong>.  This time the JIT compiler knows everything
+you need, because you can inspect the state of the running program.</p>
+<p>Let's see an example: the first time the JIT compiles <tt class="docutils literal"><span class="pre">mysum</span></tt>, it produces
+something like this pseudo-code:</p>
+<pre class="literal-block">
+PyObject mysum_compiled(PyObject a)
+{
+  Type a_type = a.GetType();
+  switch(a_type) {
+      default: continue_compilation(a_type, &lt;position&gt;);
+  }
+}
+</pre>
+<p>If you call <tt class="docutils literal"><span class="pre">mysum(41)</span></tt>, the execution goes in the <em>default</em> branch of the
+switch, thus calling <tt class="docutils literal"><span class="pre">continue_compilation</span></tt>: its job is to restart the JIT
+compiler, which now can emit fast code because it knows the exact type of
+<tt class="docutils literal"><span class="pre">a</span></tt>; then, it <strong>modifies</strong> the original <tt class="docutils literal"><span class="pre">mysum_compiled</span></tt> function, in
+order to make it executing the newly generated code the next time it
+encounters an integer at that point:</p>
+<pre class="literal-block">
+PyObject mysum_compiled(PyObject a)
+{
+  Type a_type = a.GetType();
+  switch(a_type) {
+      PyInteger: return new PyInteger(a.value+1); // fast path!
+      default: continue_compilation(a_type, &lt;position&gt;);
+  }
+}
+</pre>
+<p>From now on, every time we call <tt class="docutils literal"><span class="pre">mysum</span></tt> with an integer argument, the JIT
+compiler is not called anymore and the fast path is directly executed; if we
+happen to call <tt class="docutils literal"><span class="pre">mysum</span></tt> with a float arguments, the switch goes again in the
+<em>default</em> branch, and the JIT compiler is started once more to produce fast
+code also for this case.  What happens in practice is that compile-time and
+runtime are continuously intermixed, until the switches are stable enough and
+the compiler is not needed anymore.</p>
+<p>In PyPy jargon, this kind of "growable switch" is called <strong>flexswitch</strong>, and
+it's one of the most important concept of our JIT generator.</p>
+
+<h2>Promotion</h2>
+<p>How can the JIT generator know which values are useful to know to generate
+efficient code and which aren't?  Unfortunately it can't, or at least our JIT
+generator is not smart enough at the moment.</p>
+<p>To get the best from it, the developers of the VM need to instruct it by
+<em>annotating</em> the variables on which we want the JIT to stop until it knows the
+actual values; this is done by using particular <strong>hints</strong>, called <em>promote</em>
+and <em>promote_class</em>; variables annotated with such hints are said to be
+<strong>promoted</strong>. If something is promoted, a flexswitch is used to gain
+information about it, as seen in the last section.</p>
+<p>For an example, let's look at an excerpt from main dispatch loop of the <a class="reference" href="http://www.blogger.com/.._%60sourcecode%60:http://codespeak.net/svn/pypy/branch/oo-jit/pypy/jit/tl/tlc.py">tlc</a>
+virtual machine:</p>
+<pre class="literal-block">
+elif opcode == ADD:
+  a, b = stack.pop(), stack.pop()
+  hint(a, promote_class=True)
+  hint(b, promote_class=True)
+  stack.append(b.add(a))
+</pre>
+<p>This the implementation of the <tt class="docutils literal"><span class="pre">ADD</span></tt> opcode: first, it pops two values from
+the stack; then, it computes the result; finally, it push the result to the
+stack again.  In between, both the classes of <tt class="docutils literal"><span class="pre">a</span></tt> and <tt class="docutils literal"><span class="pre">b</span></tt> have been
+promoted: this means that when the JIT emits the code for <tt class="docutils literal"><span class="pre">b.add(a)</span></tt>, it
+knows exactly what is happening: if it sees that both are instances of the
+<tt class="docutils literal"><span class="pre">IntObj</span></tt> class, it inlines the method call and emits a fast integer addition
+instead.</p>
+
+<h2>Virtuals</h2>
+<p>The other important concept of the JIT is the presence of <em>virtual
+structures</em>, <em>virtual lists</em>, and <em>virtual dictionaries</em>.  Again, I'm not
+going to explain in depth how they work, but only why they are so important for
+generating highly efficient code.</p>
+<p>The essence of virtuals is that you don't allocate objects until you really
+need to do it, e.g. because they are being passed as an argument to some
+external function.  Instead, we store all the informations we need as local
+variables; e.g., in the case of a virtual structure, we create as many local
+variables as the number of its fields: if the structure <em>escapes</em> the local
+scope, we <em>force</em> it to a real object, by allocating memory on the heap and
+initializing it after the current value of the local variables.</p>
+<p>This technique allows the JIT to avoid the allocation of many temporary
+objects that hold intermediate results; consider for example the following
+Python loop:</p>
+<pre class="literal-block">
+result = 0
+for i in range(N):
+  result += i
+return result
+</pre>
+<p>Without the JIT, at each iteration, a new <tt class="docutils literal"><span class="pre">int</span></tt> object is created and bound
+to the <tt class="docutils literal"><span class="pre">result</span></tt> variable, while the previous one is discarded and not needed
+anymore.  By combining virtuals and promotion, the JIT can emit code that does
+the whole computation locally, and allocates a real object only at the end,
+when it <em>escapes</em> from the local scope because it is returned from the
+function.</p>
+
+<h2>Putting it all together</h2>
+<p>This is, essentially, how PyPy's generated JITs work.  To summarize, our JITs
+emit multiple versions of each chunk of code: each version is <strong>specialized</strong>
+and optimized for one particular case.</p>
+<p>The cost of selecting the right specialization to use (through flexswitches)
+is almost always negligible compared to how much time you save by running the
+fast version instead of the more-general-but-slow one.  Moreover, each
+specialized version knows the exact shape of the objects it's dealing with, so
+they can be virtualized to make the generated code even more efficient.</p>
+<p>At the end, the actual code generation is done by one of the <strong>JIT backends</strong>:
+the backends exploit all the knowledge gathered by the previous steps to
+produce highly efficient code, but this will be the subject of the next blog
+post.</p></body></html>

@@ -1,0 +1,72 @@
+<html><body><p>The Düsseldorf sprint is currently in full progress and this post will try to
+summarize what progress has been made in the last days. We are (again) sprinting
+at the <a class="reference" href="http://www.stups.uni-duesseldorf.de">STUPS group</a> of the Düsseldorf University. You can find <a class="reference" href="http://codespeak.net/pypy/extradoc/sprintinfo/october-2008/announcement.html">the sprint
+announcement</a> and the <a class="reference" href="http://codespeak.net/pypy/extradoc/sprintinfo/october-2008/planning.txt">daily planning file</a>.</p>
+<p>Holger and Samuele put quite some effort over several days into setting up and
+improving PyPy's testing infrastructure. PyPy has a variety of tests. On the one
+hand, there are of course our own tests. But then we also have the CPython tests
+that should be run on top of <tt class="docutils literal"><span class="pre">pypy-c</span></tt>. Up to now we used a custom-made pile of
+hacks, held together by lots of duct-tape. It consisted of a variety of
+different machines running different things with different reporting solutions.
+Some of the old test-results can still be <a class="reference" href="http://wyvern.cs.uni-duesseldorf.de/pypytest/summary-old.html">found on wyvern</a>. Now we are moving
+to a buildbot based solution together with a custom reporter to have a view
+similar to the old one. Some details are not quite finished yet, but most of the
+things are already <a class="reference" href="http://codespeak.net:8099/">working rather well</a> (currently all the results displayed
+are from the 2.5-merge branch).</p>
+<p>Another large (and ongoing) topic of work is the <a class="reference" href="https://codespeak.net/viewvc/pypy/branch/2.5-merge/">2.5 branch</a>. It contains the
+work done by our Summer-of-Code student, <a class="reference" href="http://blog.brunogola.com.br/">Bruno Gola</a>, of adding CPython 2.5
+features to PyPy's Python interpreter. While Bruno implemented most language
+features and imported the 2.5 stdlib into PyPy, a lot of details were still
+missing. In the last days nearly everybody worked on fixing small issues and
+failing stdlib tests. While doing that we tried to categorize some CPython tests
+as <em>implementation dependant</em> so that we can skip them when running on PyPy.</p>
+
+<h2>Memory Improvements</h2>
+<p>One goal of the sprint is to measure and to reduce the memory behaviour of our
+Python interpreter. The idea is to make <tt class="docutils literal"><span class="pre">pypy-c</span></tt> a realistic option for use on
+embedded devices. By memory behaviour we mean both the
+dynamic memory usage (how much bytes does a dict or an instance take) as well as
+the size of the executable and details of the GC strategy.</p>
+<p>Alexander, Carl Friedrich and Antonio did some work on analyzing the static data
+that a <tt class="docutils literal"><span class="pre">pypy-c</span></tt> executable contains. Our executables have the tendency to be
+rather large, both due to a lot of code and due to a large amount of static
+data. The analysis didn't give any really surprising results, the problem is
+mostly that we have a lot of static data originating from a bit everywhere in
+our program. Two big offenders are the <tt class="docutils literal"><span class="pre">unicodedata</span></tt>-module with about 750 KB
+of static data and the multimethod-tables with about 150 KB of data.</p>
+<p>Armin, Iko, Anto and Maciek worked on a new approach to malloc-removal. This is
+(for PyPy) a crucial optimization of the translation toolchain that performs
+escape analysis to find out which objects don't outlive the frame they were
+allocated in. Since RPython is garbage-collected we usually have a lot of
+allocations, so it is important to statically get rid of many of them. To
+successfully do that, some inlining is needed to give the analysis more context.
+This leads to the fact that we have rather aggressive inlining-settings to allow
+as much malloc-removal as possible. The new approach tries to inline functions
+only if this actually leads to the successful removal of a malloc operation. The
+code is not finished quite yet, so it remains to be seen how successful it will
+be.</p>
+<p>Before the sprint Maciek had started to work on a <a class="reference" href="http://en.wikipedia.org/wiki/Mark-compact_algorithm">mark-compact GC</a> for PyPy. The
+idea is that it is better for memory-constrained-environments because it does
+not double the memory-requirements during collections. During the sprint Armin
+and Maciek worked on cleaning up the code a bit and then merging the branch.
+An interesting property of the mark-compact GC is that after a collection all
+the memory that is not currently used by the program is returned to the
+operating system. Right now the GC is not as fast as our more mature ones, but
+it probably will be the basis for future tweaking.</p>
+<p>A small thing that was done by Alexander and Carl Friedrich to make objects smaller is
+to enable <a class="reference" href="http://codespeak.net/pypy/dist/pypy/doc/interpreter-optimizations.html#sharing-dicts">shared instance dictionaries</a> also for instances of old-style
+classes. Before it worked only for instances of new-style classes. Shared
+instance dictionaries are a way to reduce the memory-usage of instances. In the
+optimal case, it gives the same memory-savings that <tt class="docutils literal"><span class="pre">__slots__</span></tt> are giving,
+but without any behavioural changes. Conceptually it is very similar e.g. to
+the notion of "map" in the <a class="reference" href="http://en.wikipedia.org/wiki/Self_programming_language">Self project</a>, or the <a class="reference" href="http://code.google.com/apis/v8/design.html#prop_access">hidden classes</a> that Google Chrome's V8
+is using (click on the link, there are nice graphics). The
+difference is that for them it is mostly a way to get faster attribute access,
+and PyPy is so far only using it form memory savings (but that might change in
+the future).</p>
+<p>In parallel to all the other work, John Witulski worked tirelessly on advancing
+the AMD64-JIT-backend. John has the implementation of this backend as the topic
+of his Bachelor's thesis. He is progressing quite well (especially also
+considering that this is his first sizeable Python project ever), just sometimes
+being impaired by such annoyances as errors in the official Intel documentation.
+By now the backend is supporting many integer operations and control flow.</p></body></html>

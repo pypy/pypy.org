@@ -1,0 +1,98 @@
+<html><body><p>While the Düsseldorf is dwindling off, we put our minds to the task of retelling
+our accomplishments. The sprint was mostly about improving the JIT and we         
+managed to stick to that task (as much as we managed to stick to anything). The   
+sprint was mostly filled with doing many small things.</p>                        
+<div class="section" id="inlining">                                               
+<h2>Inlining</h2>                                                                 
+<p>Carl Friedrich and Samuele started the sprint trying to tame the JIT's inlining.
+Until now, the JIT would try to inline everything in a loop (except other loops)  
+which is what most tracing JITs actually do. This works great if the resulting    
+trace is of reasonable length, but if not it would result in excessive memory     
+consumption and code cache problems in the CPU. So far we just had a limit on     
+the trace size, and we would abort tracing when the limit was reached. This       
+would happen again and again for the same loop, which is not useful at all. The   
+new approach introduced is to be more clever when tracing is aborted by marking   
+the function with the largest contribution to the trace size as non-inlinable. The
+next time this loop is traced, it usually then gives a reasonably sized trace.</p>
+<p>This gives a problem because now some functions that don't contain loops are not
+inlined, which means they never get assembler code for them generated. To remedy  
+this problem we also make it possible to trace functions from their start (as     
+opposed to just tracing loops). We do that only for functions that can not be     
+inlinined (either because they contain loops or they were marked as               
+non-inlinable as described above).</p>                                            
+<p>The result of this is that the <a class="reference external" href="http://svn.python.org/view/sandbox/trunk/decimal/telco/">Python version</a> <a class="reference external" href="http://speleotrove.com/decimal/telco.html">telco decimal benchmark</a> runs                                 
+to completion without having to arbitrarily increase the trace length limit.                    
+It's also about 40% faster than running it on CPython. This is one of the first                 
+non-tiny programs that we speed up.</p>                                                         
+</div>                                                                                          
+<div class="section" id="reducing-gc-pressure">                                                 
+<h2>Reducing GC Pressure</h2>                                                                   
+<p>Armin and Anto used some GC instrumentation to find places in pypy-c-jit                     
+that allocate a lot of memory. This is an endlessly surprising exercise, as                     
+usually we don't care too much about allocations of short-lived objects when                    
+writing RPython, as our GCs usually deal well with those. They found a few                      
+places where they could remove allocations, most importantly by making one of                   
+the classes that make up traces smaller.</p>                                                    
+</div>                                                                                          
+<div class="section" id="optimizing-chains-of-guards">                                          
+<h2>Optimizing Chains of Guards</h2>                                                            
+<p>Carl Friedrich and Samuele started a simple optimization on the trace level that             
+removes superfluous guards. A common pattern in a trace is to have stronger                     
+and stronger guards about the same object. As an example, often there is first a                
+guard that an object is not None, later followed by a guard that it is exactly                  
+of a given class and then even later that it is a precise instance of that                      
+class. This is inefficient, as we can just check the most precise thing in the                  
+place of the first guard, saving us guards (which take memory, as they need resume data).       
+Maciek, Armin and Anto later improved on that by introducing a new guard that                   
+checks for non-nullity and a specific class in one guard, which allows us to                    
+collapse more chains.</p>                                                                       
+</div>                                                                                          
+<div class="section" id="improving-jit-and-exceptions">                                         
+<h2>Improving JIT and Exceptions</h2>                                                           
+<p>Armin and Maciek went on a multi-day quest to make the JIT and Python-level                  
+exceptions like each other more. So far, raising and catching exceptions would                  
+make the JIT generate code that has a certain amusement value, but is not really                
+fast in any way. To improve the situation, they had to dig into the exception                   
+support in the Python interpreter, where they found various inefficiencies. They                
+also had to rewrite the <tt class="docutils literal"><span class="pre">exceptions</span></tt> module to be in RPython (as opposed to                                                             
+just pure Python + an old hack). Another problems is that tracebacks give you                   
+access to interpreter frames. This forces the JIT to deoptimize things, as                      
+the JIT keeps some of the frame's content in CPU registers or on the CPU stack,                 
+which reflective access to frames prevents.                                                     
+Currently we try to improve the simple cases where the traceback is never                       
+actually accessed. This work is not completely finished, but some cases are                     
+already significantly faster.</p>                                                               
+</div>                                                                                          
+<div class="section" id="moving-pypy-to-use-py-test-1-1">                                       
+<h2>Moving PyPy to use py.test 1.1</h2>                                                         
+<p>Holger worked on porting PyPy to use the <a class="reference external" href="http://codespeak.net/py/dist/announce/release-1.1.0.html">newly released</a> py.test 1.1. PyPy                   
+still uses some very old support code in its testing infrastructure, which makes                
+this task a bit annoying. He also gave the other PyPy developers a demo of some                 
+of the newer py.test features and we discussed which of them we want to start                   
+using to improve our tests to make them shorter and clearer. One of the things                  
+we want to do eventually is to have less skipped tests than now.</p>                            
+</div>                                                                                          
+<div class="section" id="using-a-simple-effect-analysis-for-the-jit">                           
+<h2>Using a Simple Effect Analysis for the JIT</h2>                                             
+<p>One of the optimization the JIT does is caching fields that are read out of                  
+structures on the heap. This cache needs to be invalidated at some points, for
+example when such a field is written to (as we don't track aliasing much).
+Another case is a call in the assembler, as the target function could
+arbitrarily change the heap. This of course is imprecise, since most functions
+don't actually change the whole heap, and we have an analysis that finds out
+which sorts of types of structs and arrays a function can mutate. During the
+sprint Carl Friedrich and Samuele integrated this analysis with the JIT, to help
+it invalidate caches less aggressively. Later Anto and Carl Friedrich also
+ported this support to the CLI version of the JIT.</p>
+</div>
+<div class="section" id="miscellaneous">
+<h2>Miscellaneous</h2>
+<p>Samuele (with some assistance of Carl Friedrich) set up a buildbot slave on a
+Mac Mini at the University. This should let us stabilize on the Max OS X. So far
+we still have a number of <a class="reference external" href="http://codespeak.net:8099/summary?category=mac">failing tests</a>, but now we are in a situation to
+sanely approach fixing them.</p>
+<p>Anto improved the CLI backend to support the infrastructure for producing the
+<a class="reference external" href="http://morepypy.blogspot.com/2009/11/hi-all-this-week-i-worked-on-improving.html">profiling graphs Armin introduced</a>.</p>
+<p>The guinea-pigs that were put into Carl Friedrich's care have been fed (which
+was the most important sprint task anyway).</p>
+<p> Samuele &amp; Carl Friedrich</p></div></body></html>

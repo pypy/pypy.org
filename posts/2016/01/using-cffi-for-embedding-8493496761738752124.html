@@ -1,0 +1,139 @@
+<html><body><h3>Introduction</h3>
+
+<p><a href="http://cffi.readthedocs.org/">CFFI</a> has been a great success so far to call C libraries in your
+Python programs, in a way that is both simple and that works across
+CPython 2.x and 3.x and PyPy.</p>
+
+<p>This post assumes that you know what CFFI is and how to use it in
+API mode (<tt class="docutils literal">ffi.cdef()</tt>, <tt class="docutils literal">ffi.set_source()</tt>, <tt class="docutils literal">ffi.compile()</tt>).
+A quick overview can be found <a href="http://cffi.readthedocs.org/en/latest/overview.html#real-example-api-level-out-of-line">in this paragraph.</a></p>
+
+<p>The major news of CFFI 1.4, released last december, was that you can
+now declare C functions with <tt class="docutils literal">extern "Python"</tt> in the <tt class="docutils literal">cdef()</tt>.
+These magic keywords make the function callable from C (where it is
+defined automatically), but calling it will call some Python code
+(which you attach with the <tt class="docutils literal">@ffi.def_extern()</tt> decorator).  This is
+useful because it gives a more straightforward, faster and
+libffi-independent way to write callbacks.  For more details, see <a href="http://cffi.readthedocs.org/en/latest/using.html#extern-python-new-style-callbacks">the
+documentation.</a></p>
+
+<p>You are, in effect, declaring a static family of C functions which
+call Python code.  The idea is to take pointers to them, and pass them
+around to other C functions, as callbacks.  However, the idea of a set
+of C functions which call Python code opens another path: <em>embedding</em>
+Python code inside non-Python programs.</p>
+
+<h3>Embedding</h3>
+
+<p>Embedding is traditionally done using the CPython C API: from C code,
+you call <tt class="docutils literal">Py_Initialize()</tt> and then some other functions like
+<tt class="docutils literal">PyRun_SimpleString()</tt>.  In the simple cases it is, indeed, simple
+enough; but it can become a complicated story if you throw in
+supporting application-dependent object types; and a messy story if
+you add correctly running on multiple threads, for example.</p>
+<p>Moreover, this approach is specific to CPython (2.x or 3.x).  It does
+not work at all on PyPy, which has its own very different, minimal
+<a href="http://pypy.readthedocs.org/en/latest/embedding.html">embedding API.</a></p>
+
+<p>The new-and-coming thing about CFFI 1.5, meant as replacement of the
+above solutions, is direct embedding support---with no fixed API at
+all.  The idea is to write some Python script with a <tt class="docutils literal">cdef()</tt> which
+declares a number of <tt class="docutils literal">extern "Python"</tt> functions.  When running the
+script, it creates the C source code and compiles it to a
+dynamically-linked library (<tt class="docutils literal">.so</tt> on Linux).  This is the same as in
+the regular API-mode usage.  What is new is that these <tt class="docutils literal">extern
+"Python"</tt> can now also be <em>exported</em> from the <tt class="docutils literal">.so</tt>, in the C
+sense.  You also give a bit of initialization-time Python code
+directly in the script, which will be compiled into the <tt class="docutils literal">.so</tt> too.</p>
+<p>This library can now be used directly from any C program (and it is
+still importable in Python).  It exposes the C API of your choice,
+which you specified with the <tt class="docutils literal">extern "Python"</tt> declarations.  You
+can use it to make whatever custom API makes sense in your particular
+case.  You can even directly make a "plug-in" for any program that
+supports them, just by exporting the API expected for such plugins.</p>
+
+<h3>Trying it out on CPython</h3>
+
+<p>This is still being finalized, but please try it out.  You can
+see <a href="https://bitbucket.org/cffi/cffi/src/static-callback-embedding/demo/embedding.py">embedding.py</a> directly online for a quick glance.  Or
+see below the instructions on Linux with CPython 2.7 (CPython 3.x and
+non-Linux platforms are still a work in progress right now, but this
+should be quickly fixed):</p>
+<ul>
+<li><p class="first">get the branch <tt class="docutils literal"><span class="pre">static-callback-embedding</span></tt> of CFFI:</p>
+<pre class="literal-block">
+hg clone https://bitbucket.org/cffi/cffi
+hg up static-callback-embedding
+</pre>
+</li>
+<li><p class="first">make the <tt class="docutils literal">_cffi_backend.so</tt>:</p>
+<pre class="literal-block">
+python setup_base.py build_ext -f -i
+</pre>
+</li>
+<li><p class="first">run <tt class="docutils literal">embedding.py</tt> in the <tt class="docutils literal">demo</tt> directory:</p>
+<pre class="literal-block">
+cd demo
+PYTHONPATH=.. python embedding.py
+</pre>
+</li>
+<li><p class="first">this produces <tt class="docutils literal">_embedding_cffi.c</tt>.  Run <tt class="docutils literal">gcc</tt> to build it.  On Linux:</p>
+<pre class="literal-block">
+gcc -shared -fPIC _embedding_cffi.c -o _embedding_cffi.so  \
+    -lpython2.7 -I/usr/include/python2.7
+</pre>
+</li>
+<li><p class="first">try out the demo C program in <tt class="docutils literal">embedding_test.c</tt>:</p>
+<pre class="literal-block">
+gcc embedding_test.c _embedding_cffi.so
+PYTHONPATH=.. LD_LIBRARY_PATH=. ./a.out
+</pre>
+</li>
+</ul>
+<p>Note that if you get <tt class="docutils literal">ImportError: cffi extension module
+'_embedding_cffi' has unknown version 0x2701</tt>, it means that the
+<tt class="docutils literal">_cffi_backend</tt> module loaded is a pre-installed one instead of the
+more recent one in "<tt class="docutils literal">..</tt>".  Be sure to use <tt class="docutils literal"><span class="pre">PYTHONPATH=..</span></tt> for now.  (Some installations manage to be confused enough to load the system-wide cffi even if another version is in the PYTHONPATH.  I think a virtualenv can be used to work around this issue.)</p>
+
+<h3>Try it out on PyPy</h3>
+
+<p>Very similar steps can be followed on PyPy, but it requires the
+<tt class="docutils literal"><span class="pre">cffi-static-callback-embedding</span></tt> branch of PyPy, which you must
+first translate from sources.  The difference is then that you need to
+adapt the first <tt class="docutils literal">gcc</tt> command line: replace <tt class="docutils literal"><span class="pre">-lpython2.7</span></tt> with
+<tt class="docutils literal"><span class="pre">-lpypy-c</span></tt> and to fix the <tt class="docutils literal"><span class="pre">-I</span></tt> path (and possibly add a <tt class="docutils literal"><span class="pre">-L</span></tt>
+path).</p>
+
+<h3>More details</h3>
+
+<p>How it works, more precisely, is by automatically initializing CPython/PyPy
+the first time any of the <tt class="docutils literal">extern "Python"</tt>
+functions is called from the C program.  This is done using locks in case of multi-threading,
+so several threads can concurrently do this "first call".  This should work even if two
+different threads call the first time a function from two <em>different</em>
+embedded CFFI extensions that happen to be linked with the same program.  Explicit initialization is
+never needed.</p>
+
+<p>The custom initialization-time Python code you put in
+<tt class="docutils literal">ffi.embedding_init_code()</tt> is executed at that time.  If this code
+starts to be big, you can move it to independent modules or packages.
+Then the initialization-time Python code only needs to import them.  In
+that case, you have to carefully set up <tt class="docutils literal">sys.path</tt> if the modules are
+not installed in the usual Python way.</p>
+<p>If the Python code is big and full of dependencies, a better alternative
+would be to use virtualenv.  How to do that is not fully fleshed out so
+far.  You can certainly run the whole program with the environment
+variables set up by the virtualenv's <tt class="docutils literal">activate</tt> script first.  There
+are probably other solutions that involve using gcc's
+<tt class="docutils literal"><span class="pre">-Wl,-rpath=\$ORIGIN/</span></tt> or <tt class="docutils literal"><span class="pre">-Wl,-rpath=/fixed/path/</span></tt> options to load
+a specific libpython or libypypy-c library.  If you try it out and it
+doesn't work the way you would like, please complain <tt class="docutils literal"><span class="pre">:-)</span></tt></p>
+<p>Another point: right now this does not support CPython's notion of
+multiple subinterpreters.  The logic creates a single global Python
+interpreter, and runs everything in that context.  Maybe a future
+version would have an explicit API to do that — or maybe it should be
+the job of a 3rd-party extension module to provide a Python interface
+over the notion of subinterpreters...</p>
+<p>More generally, any feedback is appreciated.</p>
+<p>Have fun,</p>
+<p>Armin</p></body></html>

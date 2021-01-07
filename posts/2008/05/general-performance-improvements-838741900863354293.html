@@ -1,0 +1,52 @@
+<html><body><p>Hi all,</p>
+
+<p>During the past two weeks we invested some more efforts on the
+baseline performance of pypy-c.  Some of the tweaks we did
+were just new ideas, and others were based on actual
+profiling.  The net outcome is that we now expect PyPy to be
+in the worst case twice as slow than CPython on real
+applications.  Here are some small-to-medium-size benchmark
+results.  The number is the execution time, normalized to 1.0
+for CPython 2.4:</p>
+
+<p></p><ul><li><strong>1.90</strong> on templess (a simple templating language)</li>
+<li><strong>1.49</strong> on gadfly (pure Python SQL database)</li>
+<li><strong>1.49</strong> on translate.py (pypy's own translation toolchain)</li>
+<li><strong>1.44</strong> on mako (another templating system)</li>
+<li><strong>1.21</strong> on pystone</li>
+<li><strong>0.78</strong> on richards</li>
+</ul>
+
+<p>(This is all without the JIT, as usual.  The JIT is not ready yet.)</p>
+
+<p>You can build yourself a pypy-c with this kind of speed with
+the magic command line (gcrootfinder is only for a 32-bit
+Linux machine):</p>
+
+<p></p><pre>    pypy/translator/goal/translate.py --gc=hybrid --gcrootfinder=asmgcc targetpypystandalone --allworkingmodules --faassen</pre>
+
+<p>The main improvements come from:
+    
+</p><ul><li>A general shortcut for any operation between built-in objects:
+for example, a subtraction of two integers or floats now dispatches
+directly to the integer or float subtraction code, without looking up
+the '__sub__' in the class.</li>
+<li>A shortcut for getting attributes out of instances of user classes
+when the '__getattribute__' special method is not overridden.</li>
+<li>The so-called Hybrid Garbage Collector is now a
+three-generations collector.
+<a href="http://codespeak.net/pypy/dist/pypy/doc/garbage_collection.html">
+More about our GCs...</a></li>
+<li>Some profiling showed bad performance in our implementation of
+the built-in id() -- a trivial function to write in CPython, but a lot
+more fun when you have a moving GC and your object's real address can
+change.</li>
+<li>The bytecode compiler's parser had a very slow linear search
+algorithm that we replaced with a dictionary lookup.</li>
+</ul>
+
+<p>These benchmarks are doing CPU-intensive operations. You can expect
+a similar blog post soon about the I/O performance, as the
+<code>io-improvements</code> branch gets closer to being merged
+<code>:-)</code>  The branch could also improve the speed of
+string operations, as used e.g. by the templating systems.</p></body></html>

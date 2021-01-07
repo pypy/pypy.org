@@ -1,0 +1,69 @@
+<html><body><p>Good day everyone.</p>
+<p>Recent round of optimizations, especially <a class="reference external" href="http://morepypy.blogspot.com/2011/01/loop-invariant-code-motion.html">loop invariant code motion</a>
+has been very good for small to medium examples. There is work ongoing to
+make them scale to larger ones, however there are few examples worth showing
+how well they perform. This one following example, besides getting benefits
+from loop invariants, also shows a difference between static and dynamic
+compilation. In fact, after applying all the optimizations C does, only a
+JIT can use the extra bit of runtime information to run even faster.</p>
+<p>The example is as follows. First Python. I create two files, x.py:</p>
+<pre class="literal-block">
+def add(a, b):
+  return a + b
+</pre>
+<p>And y.py:</p>
+<pre class="literal-block">
+from x import add
+
+def main():
+    i = 0
+    a = 0.0
+    while i &lt; 1000000000:
+        a += 1.0
+        add(a, a)
+        i += 1
+
+main()
+</pre>
+<p>For C, x.c:</p>
+<pre class="literal-block">
+double add(double a, double b)
+{
+  return a + b;
+}
+</pre>
+<p>and y.c:</p>
+<pre class="literal-block">
+double add(double a, double b);
+
+int main()
+{
+  int i = 0;
+  double a = 0;
+  while (i &lt; 1000000000) {
+    a += 1.0;
+    add(a, a);
+    i++;
+  }
+}
+</pre>
+<p>Results?</p>
+<ul class="simple">
+<li><b>1.97s - PyPy</b></li>
+<li><b>3.07s - C</b></li>
+</ul>
+Compilation options:
+<ul class="simple">
+<li>PyPy trunk (386ed41eae0c), running pypy-c y.py</li>
+<li>C - gcc -O3 (GCC 4.4.5 shipped with Ubuntu Maverick)</li>
+</ul>
+<p>Hence, PyPy 50% faster than C on this carefully crafted example. The reason
+is obvious - static compiler can't inline across file boundaries. In C,
+you can somehow circumvent that, however, it wouldn't anyway work
+with shared libraries. In Python however, even when the whole import system
+is completely dynamic, the JIT can dynamically find out what can be inlined.
+That example would work equally well for Java and other decent JITs, it's
+however good to see we work in the same space :-)</p>
+<p>Cheers,<br>
+fijal</p>
+<p>EDIT: Updated GCC version</p></body></html>

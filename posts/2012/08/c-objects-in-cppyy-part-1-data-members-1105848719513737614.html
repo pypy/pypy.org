@@ -1,0 +1,496 @@
+<html><body><p>The cppyy module makes it possible to call into C++ from PyPy through the
+<a href="http://root.cern.ch/drupal/content/reflex">Reflex package</a>.
+Documentation and setup instructions are
+<a href="http://doc.pypy.org/en/latest/cppyy.html">available here</a>.
+Recent work has focused on STL, low-level buffers, and code quality, but also
+a lot on pythonizations for the
+<a href="http://root.cern.ch/drupal/content/cint">CINT backend</a>, which is
+mostly for High Energy Physics (HEP) use only.
+A
+<a href="http://morepypy.blogspot.com/2012/06/architecture-of-cppyy.html">previous posting</a> walked
+through the high-level structure and organization of the module, where it was
+argued why it is necessary to write cppyy in RPython and generate bindings at
+run-time for the best performance.
+This posting details how access to C++ data structures is provided and is part
+of a series of 3 postings on C++ object representation in Python: the second
+posting will be about method dispatching, the third will tie up several odds
+and ends by showing how the choices presented here and in part 2 work together
+to make features such as auto-casting possible.
+
+
+</p><h3>Wrapping Choices</h3>
+
+<p>Say we have a plain old data type (POD), which is the simplest possible
+data structure in C++.
+Like for example:
+
+</p><pre>    struct A {
+        int    m_i;
+        double m_d;
+    };</pre>
+
+<p>What should such a POD look like when represented in Python?
+Let's start by looking at a Python data structure that is functionally
+similar, in that it also carries two public data members of the desired
+types.
+Something like this:
+
+</p><pre>    class A(object):
+        def __init__(self):
+            self.m_i = 0
+            self.m_d = 0.</pre>
+
+<p>Alright, now how to go about connecting this Python class with the former
+C++ POD?
+Or rather, how to connect instances of either.
+The exact memory layout of a Python
+<tt class="docutils literal"><span class="pre">A</span></tt>
+instance is up to Python, and likewise the layout of a C++
+<tt class="docutils literal"><span class="pre">A</span></tt> instance is up
+to C++.
+Both layouts are implementation details of the underlying language, language
+implementation, language version, and the platform used.
+It should be no surprise then, that for example an
+<tt class="docutils literal"><span class="pre">int</span></tt> in C++ looks
+nothing like a
+<tt class="docutils literal"><span class="pre">PyIntObject</span></tt>, even
+though it is perfectly possible, in both cases, to point out in memory where
+the integer value is.
+The two representations can thus not make use of the same block of memory
+internally.
+However, the requirement is that the access to C++ from Python looks and feels
+natural in its use, not that the mapping is exact.
+Another requirement is that we want access to the actual object from both
+Python and C++.
+In practice, it is easier to provide natural access to C++ from Python than
+the other way around, because the choices of memory layout in C++ are far more
+restrictive: the memory layout defines the access, as the actual class
+definition is gone at run-time.
+The best choice then, is that the Python object will act as a proxy to the C++
+object, with the actual data always being in C++.
+
+</p><p>From here it follows that if the
+<tt class="docutils literal"><span class="pre">m_i</span></tt> data member
+lives in C++, then Python needs some kind of helper to access it.
+Conveniently, since version 2.2, Python has a
+<tt class="docutils literal"><span class="pre">property</span></tt> construct
+that can take a getter and setter function that are called when the property
+is used in Python code, and present it to the programmer as if it were a data
+member.
+So we arrive at this (note how the
+<tt class="docutils literal"><span class="pre">property</span></tt> instance
+is a variable at the class level):
+
+</p><pre>    class A(object):
+        def __init__(self):
+            self._cppthis = construct_new_A()
+        m_i = property(get_m_i, set_m_i)
+        m_d = property(get_m_d, set_m_d)</pre>
+
+<p>The
+<tt class="docutils literal"><span class="pre">construct_new_A</span></tt>
+helper is not very interesting (the reflection layer can provide for it
+directly), and methods are a subject for part 2 of this posting, so focus on
+<tt class="docutils literal"><span class="pre">get_m_i</span></tt>
+and <tt class="docutils literal"><span class="pre">set_m_i</span></tt>.
+In order for the getter to work, the method needs to have access to the C++
+instance for which the Python object is a proxy.
+On access, Python will call the getter function with the proxy instance for
+which it is called.
+The proxy has a
+<tt class="docutils literal"><span class="pre">_cppthis</span></tt> data
+member from which the C++ instance can be accessed (think of it as a pointer)
+and all is good, at least for
+<tt class="docutils literal"><span class="pre">m_i</span></tt>.
+The second data member
+<tt class="docutils literal"><span class="pre">m_d</span></tt>, however,
+requires some more work: it is located at some offset into
+<tt class="docutils literal"><span class="pre">_cppthis</span></tt>.
+This offset can be obtained from the reflection information, which lets the
+C++ compiler calculate it, so details such as
+<a href="http://en.wikipedia.org/wiki/Byte_padding#Data_structure_padding">byte padding</a>
+are fully accounted for.
+Since the setter also needs the offset, and since both share some more details
+such as the containing class and type information of the data member, it is
+natural to create a custom property class.
+The getter and setter methods then become bound methods of an instance of that
+custom property,
+<tt class="docutils literal"><span class="pre">CPPDataMember</span></tt>, and
+there is one such instance per data member.
+Think of something along these lines:
+
+</p><pre>    def make_datamember(cppclass, name):
+        cppdm = cppyy.CPPDataMember(cppclass, name)
+        return property(cppdm.get, cppdm.set)</pre>
+
+where the
+<tt class="docutils literal"><span class="pre">make_datamember</span></tt>
+function replaces the call to
+<tt class="docutils literal"><span class="pre">property</span></tt> in the
+class definition above.
+
+<p>Now hold on a minute!
+Before it was argued that Python and C++ can not share the same underlying
+memory structure, because of choices internal to the language.
+But if on the Python side choices are being made by the developer of the
+language bindings, that is no longer a limitation.
+In other words, why not go through e.g. the Python extension API, and do
+this:
+
+</p><pre>    struct A_pyproxy {
+        PyObject_HEAD
+        int    m_i;
+        double m_d;
+    };</pre>
+
+<p>Doing so would save on
+<a href="http://en.wikipedia.org/wiki/Malloc">malloc overhead</a> and remove
+a pointer indirection.
+There are some technical issues specific to PyPy for such a choice: there is
+no such thing as
+<tt class="docutils literal"><span class="pre">PyPyObject_HEAD</span></tt>
+and the layout of objects is not a given as that is decided only at
+translation time.
+But assume that those issues can be solved, and also accept that there is no
+problem in creating structure definitions like this at run-time, since the
+reflection layer can provide both the required size and access to the
+placement
+<tt class="docutils literal"><span class="pre">new operator</span></tt>
+(compare e.g. CPython's
+<a href="http://docs.python.org/library/struct.html">struct module</a>).
+There is then still a more fundamental problem: it must be possible to take
+over ownership in Python from instances created in C++ and vice-versa.
+With a proxy scheme, that is trivial: just pass the pointer and do the
+necessary bookkeeping.
+With an embedded object, however, not every use case can be implemented: e.g.
+if an object is created in Python, passed to C++, and deleted in C++, it
+must have been allocated independently.
+The proxy approach is therefore still the best choice, although embedding
+objects may provide for optimizations in some use cases.
+
+
+</p><h3>Inheritance</h3>
+
+<p>The next step, is to take a more complicated C++ class, one with inheritance
+(I'm leaving out details such as constructors etc., for brevity):
+
+</p><pre>    class A {
+    public:
+        virtual ~A() {}
+        int    m_i;
+        double m_d;
+    };
+
+    class B : public A {
+    public:
+        virtual ~B() {}
+        int    m_j;
+    };</pre>
+
+<p>From the previous discussion, it should already be clear what this will look
+like in Python:
+
+</p><pre>    class A(object):
+        def __init__(self):
+            self._cppthis = construct_new_A()
+        m_i = make_datamember('A', 'm_i')
+        m_d = make_datamember('A', 'm_d')
+
+    class B(A):
+        def __init__(self):
+            self._cppthis = construct_new_B()
+        m_j = make_datamember('B', 'm_j')</pre>
+
+<p>There are some minor adjustments needed, however.
+For one, the offset of the
+<tt class="docutils literal"><span class="pre">m_i</span></tt> data member
+may be no longer zero: it is possible that a virtual function dispatch table
+(<a href="http://en.wikipedia.org/wiki/Virtual_method_table">vtable</a>)
+pointer is added at the beginning of
+<tt class="docutils literal"><span class="pre">A</span></tt> (an alternative
+is to have the vtable pointer at the end of the object).
+But if
+<tt class="docutils literal"><span class="pre">m_i</span></tt> is handled the
+same way as
+<tt class="docutils literal"><span class="pre">m_d</span></tt>, with the
+offset provided by the compiler, then the compiler will add the bits, if any,
+for the vtable pointer and all is still fine.
+A real problem could come in however, with a call of the
+<tt class="docutils literal"><span class="pre">m_i</span></tt> property on
+an instance of
+<tt class="docutils literal"><span class="pre">B</span></tt>: in that case,
+the <tt class="docutils literal"><span class="pre">_cppthis</span></tt>
+points to a <tt class="docutils literal"><span class="pre">B</span></tt>
+instance, whereas the getter/setter pair expect an
+<tt class="docutils literal"><span class="pre">A</span></tt> instance.
+In practice, this is usually not a problem: compilers will align
+<tt class="docutils literal"><span class="pre">A</span></tt> and
+<tt class="docutils literal"><span class="pre">B</span></tt> and calculate
+an offset for
+<tt class="docutils literal"><span class="pre">m_j</span></tt> from the start
+of <tt class="docutils literal"><span class="pre">A</span></tt>.
+Still, that is an implementation detail (even though it is one that can be
+determined at run-time and thus taken advantage of by the JIT), so it can not
+be relied upon.
+The <tt class="docutils literal"><span class="pre">m_i</span></tt> getter
+thus needs to take into account that it can be called with a derived type,
+and so it needs to add an additional offset.
+With that modification, the code looks something like this (as you would have
+guessed, this is getting more and more into pseudo-code territory, although it
+is conceptually close to the actual implementation in cppyy):
+
+</p><pre>    def get_m_i(self):
+        return int(self._cppthis + offset(A, m_i) + offset(self.__class__, A))</pre>
+
+<p>Which is a shame, really, because the offset between
+<tt class="docutils literal"><span class="pre">B</span></tt> and
+<tt class="docutils literal"><span class="pre">A</span></tt> is going
+to be zero most of the time in practice, and the JIT can not completely
+<a href="http://morepypy.blogspot.com/2011/03/controlling-tracing-of-interpreter-with_15.html">elide</a>
+the offset calculation (as we will see later; it is easy enough to elide if
+<tt class="docutils literal"><span class="pre">self.__class__</span></tt> is
+<tt class="docutils literal"><span class="pre">A</span></tt>, though).
+One possible solution is to repeat the properties for each derived class, i.e.
+to have a
+<tt class="docutils literal"><span class="pre">get_B_m_i</span></tt> etc., but
+that looks ugly on the Python side and anyway
+does not work in all cases: e.g. with multiple inheritance where there are
+data members with the same name in both bases, or if
+<tt class="docutils literal"><span class="pre">B</span></tt> itself has a
+public data member called
+<tt class="docutils literal"><span class="pre">m_i</span></tt> that shadows
+the one from <tt class="docutils literal"><span class="pre">A</span></tt>.
+The optimization then, is achieved by making
+<tt class="docutils literal"><span class="pre">B</span></tt> in charge of the
+offset calculations, by making
+<tt class="docutils literal"><span class="pre">offset</span></tt> a method of
+<tt class="docutils literal"><span class="pre">B</span></tt>, like so:
+
+</p><pre>    def get_m_i(self):
+        return int(self._cppthis + offset(A, m_i) + self.offset(A))</pre>
+
+<p>The insight is that by scanning the inheritance hierarchy of a derived
+class like <tt class="docutils literal"><span class="pre">B</span></tt>, you
+can know statically whether it may sometimes need offsets, or whether the
+offsets are always going to be zero.
+Hence, if the offsets are always zero, the method
+<tt class="docutils literal"><span class="pre">offset</span></tt> on
+<tt class="docutils literal"><span class="pre">B</span></tt> will
+simply return the literal
+<tt class="docutils literal"><span class="pre">0</span></tt> as its
+implementation, with the JIT taking care of the rest through inlining and
+constant folding.
+If the offset could be non-zero, then the method will perform an actual
+calculation, and it will let the JIT elide the call only if possible.
+
+
+</p><h3>Multiple Virtual Inheritance</h3>
+
+<p>Next up would be multiple inheritance, but that is not very interesting: we
+already have the offset calculation between the actual and base class, which
+is all that is needed to resolve any multiple inheritance hierarchy.
+So, skip that and move on to multiple <i>virtual</i> inheritance.
+That that is going to be a tad more complicated will be clear if you show the
+following code snippet to any old C++ hand and see how they respond.
+Most likely you will be told: "Don't ever do that."
+But if code can be written, it will be written, and so for the sake of the
+argument, what would this look like in Python:
+
+</p><pre>    class A {
+    public:
+        virtual ~A() {}
+        int m_a;
+    };
+
+    class B : public virtual A {
+    public:
+        virtual ~B() {}
+        int m_b;
+    };
+
+    class C : public virtual A {
+    public:
+        virtual ~C() {}
+        int m_c;
+    };
+
+    class D : public virtual B, public virtual C {
+    public:
+        virtual ~D() {}
+        int m_d;
+    };</pre>
+
+<p>Actually, nothing changes from what we have seen so far: the scheme as laid
+out above is fully sufficient.
+For example, <tt class="docutils literal"><span class="pre">D</span></tt>
+would simply look like:
+
+</p><pre>    class D(B, C):
+        def __init__(self):
+            self._cppthis = construct_new_D()
+        m_d = make_datamember('D', 'm_d')</pre>
+
+<p>Point being, the only complication added by the multiple virtual
+inheritance, is that navigation of the C++ instance happens with pointers
+internal to the instance rather than with offsets.
+However, it is still a fixed offset from any location to any other location
+within the instance as its parts are laid out consecutively in memory (this is
+not a requirement, but it is the most efficient, so it is what is used in
+practice).
+But what you can not do, is determine the offset statically: you need a live
+(i.e. constructed) object for any offset calculations.
+In Python, everything is always done dynamically, so that is of itself not a
+limitation.
+Furthermore,
+<tt class="docutils literal"><span class="pre">self</span></tt> is already
+passed to the offset calculation (remember that this was done to put the
+calculation in the derived class, to optimize the common case of zero
+offset), thus a live C++ instance is there precisely when it is needed.
+The call to the offset calculation is hard to elide, since the instance will
+be passed to a C++ helper and so the most the JIT can do is guard on the
+instance's memory address, which is likely to change between traces.
+Instead, explicit caching is needed on the base and derived types, allowing
+the JIT to elide the lookup in the explicit cache.
+
+
+</p><h3>Static Data Members and Global Variables</h3>
+
+<p>That, so far, covers all access to instance data members.
+Next up are static data members and global variables.
+A complication here is that a Python
+<tt class="docutils literal"><span class="pre">property</span></tt> needs to
+live on the class in order to work its magic.
+Otherwise, if you get the property, it will simply return the getter function,
+and if you set it, it will dissappear.
+The logical conclusion then, is that a
+<tt class="docutils literal"><span class="pre">property</span></tt>
+representing a static or global variable, needs to live on the class of the
+class, or the metaclass.
+If done directly though, that would mean that every static data member is
+available from every class, since all Python classes have the same metaclass,
+which is class
+<tt class="docutils literal"><span class="pre">type</span></tt> (and which is
+its own metaclass).
+To prevent that from happening and because
+<tt class="docutils literal"><span class="pre">type</span></tt> is actually
+immutable, each proxy class needs to have its own custom metaclass.
+Furthermore, since static data can also be accessed on the instance, the
+class, too, gets a
+<tt class="docutils literal"><span class="pre">property</span></tt> object
+for each static data member.
+Expressed in code, for a basic C++ class, this looks as follows:
+
+</p><pre>    class A {
+    public:
+        static int s_i;
+    };</pre>
+
+<p>Paired with some Python code such as this, needed to expose the static
+variable both on the class and the instance level:
+
+</p><pre>    meta_A = type(CppClassMeta, 'meta_A', [CPPMetaBase], {})
+    meta_A.s_i = make_datamember('A', 's_i')
+
+    class A(object):
+        __metaclass__ = meta_A
+        s_i = make_datamember('A', 's_i')</pre>
+
+<p>Inheritance adds no complications for the access of static data per se, but
+there is the issue that the metaclasses must follow the same hierarchy as the
+proxy classes, for the Python method resolution order (MRO) to work.
+In other words, there are two complete, parallel class hierarchies that map
+one-to-one: a hierarchy for the proxy classes and one for their metaclasses.
+
+</p><p>A parallel class hierarchy is used also in other highly dynamic,
+object-oriented environments, such as for example
+<a href="http://en.wikipedia.org/wiki/Metaclass#In_Smalltalk-80">Smalltalk</a>.
+In Smalltalk as well, class-level constructs, such as class methods and data
+members, are defined for the class in the metaclass.
+A metaclass hierarchy has further uses, such as lazy loading of nested
+classes and member templates (this would be coded up in the base class of all
+metaclasses:
+<tt class="docutils literal"><span class="pre">CPPMetaBase</span></tt>), and
+makes it possible to distribute these over different reflection libraries.
+With this in place, you can write Python codes like so:
+
+</p><pre>    &gt;&gt;&gt;&gt; from cppyy.gbl import A
+    &gt;&gt;&gt;&gt; a = A()
+    &gt;&gt;&gt;&gt; a.s_i = 42
+    &gt;&gt;&gt;&gt; print A.s_i == a.s_i
+    True
+    &gt;&gt;&gt;&gt; # etc.</pre>
+
+<p>The implementation of the getter for
+<tt class="docutils literal"><span class="pre">s_i</span></tt> is a lot
+easier than for instance data: the static data lives at a fixed, global,
+address, so no offset calculations are needed.
+The same is done for global data or global data living in namespaces:
+namespaces are represented as Python classes, and global data are implemented
+as properties on them.
+The need for a metaclass is one of the reasons why it is easier for namespaces
+to be classes: module objects are too restrictive.
+And even though namespaces are not modules, you still can, with
+some limitations,
+<tt class="docutils literal"><span class="pre">import</span></tt> from
+them anyway.
+
+</p><p>It is common that global objects themselves are pointers, and therefore it
+is allowed that the stored
+<tt class="docutils literal"><span class="pre">_cppthis</span></tt> is not a
+pointer to a C++ object, but rather a pointer to a pointer to a C++ object.
+A double pointer, as it were.
+This way, if the C++ code updates the global pointer, it will automatically
+reflect on the Python side in the proxy.
+Likewise, if on the Python side the pointer gets set to a different variable,
+it is the pointer that gets updated, and this will be visible on the C++ side.
+In general, however, the same caveat as for normal Python code applies: in
+order to set a global object, it needs to be set within the scope of that
+global object.
+As an example, consider the following code for a C++ namespace
+<tt class="docutils literal"><span class="pre">NS</span></tt> with
+global variable
+<tt class="docutils literal"><span class="pre">g_a</span></tt>, which behaves
+the same as Python code for what concerns the visibility of changes to the
+global variable:
+
+</p><pre>    &gt;&gt;&gt;&gt; from cppyy.gbl import NS, A
+    &gt;&gt;&gt;&gt; from NS import g_a
+    &gt;&gt;&gt;&gt; g_a = A(42)                     # does NOT update C++ side
+    &gt;&gt;&gt;&gt; print NS.g_a.m_i
+    13                                   # the old value happens to be 13
+    &gt;&gt;&gt;&gt; NS.g_a = A(42)                  # does update C++ side
+    &gt;&gt;&gt;&gt; print NS.g_a.m_i
+    42
+    &gt;&gt;&gt;&gt; # etc.</pre>
+
+
+<h3>Conclusion</h3>
+
+<p>That covers all there is to know about data member access of C++ classes in
+Python through a reflection layer!
+A few final notes: RPython does not support metaclasses, and so the
+construction of proxy classes (code like
+<tt class="docutils literal"><span class="pre">make_datamember</span></tt>
+above) happens in Python code instead.
+There is an overhead penalty of about 2x over pure RPython code associated
+with that, due to extra guards that get inserted by the JIT.
+A factor of 2 sounds like a lot, but the overhead is tiny to begin with, and
+2x of tiny is still tiny and it's not easy to measure.
+The class definition of the custom property,
+<tt class="docutils literal"><span class="pre">CPPDataMember</span></tt>, is
+in RPython code, to be transparent to the JIT.
+The actual offset calculations are in the reflection layer.
+Having the proxy class creation in Python, with structural code in RPython,
+complicates matters if proxy classes need to be constructed on-demand.
+For example, if an instance of an as-of-yet unseen type is returned by a
+method.
+Explaining how that is solved is a topic of part 2, method calls, so stay
+tuned.
+
+</p><p>This posting laid out the reasoning behind the object representation of C++
+objects in Python by cppyy for the purpose of data member access.
+It explained how the chosen representation of offsets gives rise to a very
+pythonic representation, which allows Python introspection tools to work as
+expected.
+It also explained some of the optimizations done for the benefit of the JIT.
+Next up are method calls, which will be described in part 2.</p></body></html>

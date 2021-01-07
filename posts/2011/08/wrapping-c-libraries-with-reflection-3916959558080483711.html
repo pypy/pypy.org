@@ -1,0 +1,75 @@
+<html><body><p>Well over a year ago, <a class="reference external" href="http://morepypy.blogspot.com/2010/07/cern-sprint-report-wrapping-c-libraries.html">work was started</a> on the <tt class="docutils literal">cppyy</tt> module which lives in the
+<tt class="docutils literal">reflex-support</tt> branch.
+Since then, work has progressed at a varying pace and has included a recent
+sprint in Düsseldorf, last July.</p>
+<p>Let's first take a step back and recap why we're interested in doing this,
+given that it is perfectly possible to use C++ through generated bindings and
+<tt class="docutils literal">cpyext</tt>.
+<tt class="docutils literal">cppyy</tt> makes use of reflection information generated for the C++ classes of
+interest, and has that reflection information available at run time.
+Therefore, it is able to open up complex C++ types to the JIT in a
+conceptually similar manner as simple types are open to it.
+This means that it is possible to get rid of a lot of the marshalling layers
+when making cross-language calls, resulting in much lower call overhead than
+is possible when going through the CPython API, or other methods of wrapping.</p>
+<p>There are two problems that need to be solved: C++ language constructs need to
+be presented on the Python side in a natural way; and cross-language impedance
+mismatches need to be minimized, with some hints of the user if need be.
+For the former, the list of mapped features has grown to a set that is
+sufficient to do real work.
+There is now support for:</p>
+<blockquote>
+<ul class="simple">
+<li>builtin, pointer, and array types</li>
+<li>namespaces, classes, and inner classes</li>
+<li>global functions, global data</li>
+<li>static/instance data members and methods</li>
+<li>default variables, object return by value</li>
+<li>single and multiple (virtual) inheritance</li>
+<li>templated classes</li>
+<li>basic STL support and pythonizations</li>
+<li>basic (non-global) operator mapping</li>
+</ul>
+</blockquote>
+<p>The second problem is harder and will always be an on-going process.
+But one of the more important issues has been solved at the recent Düsseldorf
+sprint, namely, that of reclaiming C++ objects instantiated from the Python
+side by the garbage collector.</p>
+<p>Performance has also improved, especially that of the nicer "pythonized"
+interface that the user actually sees, although it still misses out on
+about a factor of 2.5 in comparison to the lower-level interface (which has
+gotten uglier, so you really don't want to use that).
+Most of this improvement is due to restructuring so that it plays nicer with
+the JIT and libffi, both of which themselves have seen improvements.</p>
+<p>Work is currently concentrated on the back-ends: a <a class="reference external" href="http://root.cern.ch/drupal/content/cint">CINT</a> back-end is underway
+and a LLVM/CLang pre-compiled headers (PCH) back-end is planned.
+The latter is needed for this code to be released in the wild, rather than
+just used in high energy physics (HEP), as that would be easier to support.
+Also, within HEP, CLang's PCH are foreseen to be the future format of
+reflection information.</p>
+<p>At the end of the Düsseldorf sprint, we tried a little code that did something
+actually "useful," namely the filling of a histogram with some random values.
+We did get it to work, but trying <tt class="docutils literal">cppyy</tt> on a large class library showed
+that a good warning system for such things like missing classes was sorely
+needed.
+That has been added since, and revisiting the histogram example later, here is
+an interesting note: the <tt class="docutils literal"><span class="pre">pypy-c</span></tt> run takes 1.5x the amount of time of that
+of the compiled, optimized, C++ code.
+The run was timed start to finish, including the reflection library loading
+and JIT warm-up that is needed in the case of Python, but not for the compiled
+C++ code.
+However, in HEP, scientists run many short jobs while developing their
+analysis codes, before submitting larger jobs on the GRID to run during lunch
+time or overnight.
+Thus, a more realistic comparison is to include the compilation time needed
+for the C++ code and with that, the Python code needs only 55% of the time
+required by C++.</p>
+<p>The choice of a programming language is often a personal one, and such
+arguments like the idea that C++ is hard to use typically do not carry much
+weight with the in-crowd that studies quantum field dynamics for fun.
+However, getting the prompt with your analysis results back faster is a sure
+winner. We hope that <tt class="docutils literal">cppyy</tt> will soon have progressed far enough to make it
+useful first to particle physicists and then other uses for wrapping C++
+libraries.</p>
+
+Wim Lavrijsen, Carl Friedrich Bolz, Armin Rigo</body></html>

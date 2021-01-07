@@ -1,0 +1,338 @@
+<html><body><p>As part of writing my PhD I am currently thinking about the relationship
+between PyPy's meta-tracing approach with various previous ideas to
+automatically get a (JIT-)compiler from only an interpreter of a language. One
+of the most-researched ideas along these lines is that of <a class="reference external" href="http://en.wikipedia.org/wiki/Partial_evaluation">partial evaluation</a>.
+Partial evaluation has basically the same goals as PyPy when it comes to
+compilers: Write an interpreter, and get a compiler for free. The methods for
+reaching that goal are a bit different. In this series of blog posts, I am
+trying to explore the similarities and differences of partial evaluation and
+PyPy's meta-tracing.</p>
+<h2>A Flowgraph Language</h2>
+<p>To be able to clearly understand what "partial evaluation" is and what
+"meta-tracing" is I will show an "executable model" of both. To that end, I am
+defining a small imperative language and will then show what a partial evaluator
+and a tracer for that language look like. All this code will be
+implemented in Prolog. (Any pattern-matching functional language would do, but I
+happen to know Prolog best. Backtracking is not used, so you can read things
+simply as functional programs.) In this post I will start with
+the definition of the language, and a partial evaluator for it. The code
+written in this blog post can be found fully here: <a class="reference external" href="http://paste.pocoo.org/show/541004/">http://paste.pocoo.org/show/541004/</a></p>
+<p>The language is conceptionally similar to PyPy's flow graphs, but a bit more
+restricted. It does not have function calls, only labelled basic blocks
+that consist of a series of linearly executed operations, followed by a
+conditional or an unconditional jump. Every operation is assigning a value to a
+variable, which is computed by applying some operation to some arguments.</p>
+<p>A simple program to raise <tt class="docutils literal">x</tt> to the <tt class="docutils literal">yth</tt> power in that language looks like
+this:</p>
+<pre class="literal-block">
+power:
+    res = 1
+    if y goto power_rec else goto power_done
+
+power_rec:
+    res = res * x
+    y = y - 1
+    if y goto power_rec else goto power_done
+
+power_done:
+    print_and_stop(res)
+</pre>
+<p>To represent the same program as Prolog data structures, we use the
+following Prolog code:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power</span>, <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+             <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">y</span>, <span style="color: #CC3300;">power_rec</span>, <span style="color: #CC3300;">power_done</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),
+                 <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">y</span>, <span style="color: #CC3300;">sub</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">y</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+                 <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">y</span>, <span style="color: #CC3300;">power_rec</span>, <span style="color: #CC3300;">power_done</span>)))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_done</span>, <span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>))).
+</pre></div>
+<p>Every rule of <tt class="docutils literal">block</tt> declares one block by first giving the label of the
+block, followed by the code. Code is a series of <tt class="docutils literal">op1</tt> or <tt class="docutils literal">op2</tt> statements
+terminated by a <tt class="docutils literal">jump</tt>, an <tt class="docutils literal">if</tt> or a <tt class="docutils literal">print_and_stop</tt>. <tt class="docutils literal">op1</tt> statements
+are operations with one argument of the form <tt class="docutils literal">op1(res_variable,
+operation_name, argument, next_statement)</tt>. Arguments can be either variables
+in the form <tt class="docutils literal">var(name)</tt> or constants in the form <tt class="docutils literal">const(value)</tt>.</p>
+<p>To run programs in this flowgraph language, we first need some helper
+functionality. The first few helper functions are concerned with the handling of
+environments, the data structures the interpreter uses to map variable
+names occuring in the program to the variables' current values. In Python
+dictionaries would be used for this purpose, but in Prolog we have to emulate
+these by lists of key/value pairs (not very efficient, but good enough):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">X</span>, [], <span style="color: #006699; font-weight: bold;">_</span>) :- <span style="color: #CC00FF;">throw</span>(<span style="color: #CC00FF;">key_not_found</span>(<span style="color: #003333;">X</span>)).
+<span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">Key</span>, [<span style="color: #003333;">Key</span><span style="color: #555555;">/</span><span style="color: #003333;">Value</span> | <span style="color: #006699; font-weight: bold;">_</span>], <span style="color: #003333;">Value</span>) :- !.
+<span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">Key</span>, [<span style="color: #006699; font-weight: bold;">_</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Value</span>) :- <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">Key</span>, <span style="color: #003333;">Rest</span>, <span style="color: #003333;">Value</span>).
+
+<span style="color: #CC00FF;">write_env</span>([], <span style="color: #003333;">X</span>, <span style="color: #003333;">V</span>, [<span style="color: #003333;">X</span><span style="color: #555555;">/</span><span style="color: #003333;">V</span>]).
+<span style="color: #CC00FF;">write_env</span>([<span style="color: #003333;">Key</span><span style="color: #CC3300;">/</span><span style="color: #006699; font-weight: bold;">_</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Key</span>, <span style="color: #003333;">Value</span>, [<span style="color: #003333;">Key</span><span style="color: #555555;">/</span><span style="color: #003333;">Value</span> | <span style="color: #003333;">Rest</span>]) :- !.
+<span style="color: #CC00FF;">write_env</span>([<span style="color: #003333;">Pair</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Key</span>, <span style="color: #003333;">Value</span>, [<span style="color: #003333;">Pair</span> | <span style="color: #003333;">NewRest</span>]) :- <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">Key</span>, <span style="color: #003333;">Value</span>, <span style="color: #003333;">NewRest</span>).
+
+<span style="color: #CC00FF;">remove_env</span>([], <span style="color: #006699; font-weight: bold;">_</span>, []).
+<span style="color: #CC00FF;">remove_env</span>([<span style="color: #003333;">Key</span><span style="color: #CC3300;">/</span><span style="color: #006699; font-weight: bold;">_</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Key</span>, <span style="color: #003333;">Rest</span>) :- !.
+<span style="color: #CC00FF;">remove_env</span>([<span style="color: #003333;">Pair</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Key</span>, [<span style="color: #003333;">Pair</span> | <span style="color: #003333;">NewRest</span>]) :- <span style="color: #CC00FF;">remove_env</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">Key</span>, <span style="color: #003333;">NewRest</span>).
+
+<span style="color: #CC00FF;">resolve</span>(<span style="color: #CC00FF;">const</span>(<span style="color: #003333;">X</span>), <span style="color: #006699; font-weight: bold;">_</span>, <span style="color: #003333;">X</span>).
+<span style="color: #CC00FF;">resolve</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #003333;">X</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">Y</span>) :- <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">X</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Y</span>).
+</pre></div>
+<p>The implementation of these functions is not too important. The <tt class="docutils literal">lookup</tt>
+function finds a key in an environment list, the <tt class="docutils literal">write_env</tt> function adds a
+new key/value pair to an environment, <tt class="docutils literal">remove_env</tt> removes a key. The
+<tt class="docutils literal">resolve</tt> function is used to take either a constant or a variable and return
+a value. If it's a constant, the value of that constant is returned, if it's a
+variable it is looked up in the environment. Note how the last argument of
+<tt class="docutils literal">lookup</tt> and <tt class="docutils literal">resolve</tt> is actually a return value, which is the typical
+approach in Prolog.</p>
+<p>So far we have not specified what the primitive operations that can occur in the
+program actually mean. For that we define a <tt class="docutils literal">do_op</tt> function which
+executes primitive operations:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">same</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">X</span>).
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">mul</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">Y</span>, <span style="color: #003333;">Z</span>) :- <span style="color: #003333;">Z</span> <span style="color: #555555;">is</span> <span style="color: #003333;">X</span> <span style="color: #555555;">*</span> <span style="color: #003333;">Y</span>.
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">add</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">Y</span>, <span style="color: #003333;">Z</span>) :- <span style="color: #003333;">Z</span> <span style="color: #555555;">is</span> <span style="color: #003333;">X</span> <span style="color: #555555;">+</span> <span style="color: #003333;">Y</span>.
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">sub</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">Y</span>, <span style="color: #003333;">Z</span>) :- <span style="color: #003333;">Z</span> <span style="color: #555555;">is</span> <span style="color: #003333;">X</span> <span style="color: #555555;">-</span> <span style="color: #003333;">Y</span>.
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">eq</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">Y</span>, <span style="color: #003333;">Z</span>) :- <span style="color: #003333;">X</span> <span style="color: #555555;">==</span> <span style="color: #003333;">Y</span> <span style="color: #CC3300;">-&gt;</span> <span style="color: #003333;">Z</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">1</span>; <span style="color: #003333;">Z</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>.
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">ge</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">Y</span>, <span style="color: #003333;">Z</span>) :- <span style="color: #003333;">X</span> <span style="color: #555555;">&gt;=</span> <span style="color: #003333;">Y</span> <span style="color: #CC3300;">-&gt;</span> <span style="color: #003333;">Z</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">1</span>; <span style="color: #003333;">Z</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>.
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">readlist</span>, <span style="color: #003333;">L</span>, <span style="color: #003333;">I</span>, <span style="color: #003333;">X</span>) :- <span style="color: #CC00FF;">nth0</span>(<span style="color: #003333;">I</span>, <span style="color: #003333;">L</span>, <span style="color: #003333;">X</span>).
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #006699; font-weight: bold;">_</span>, <span style="color: #006699; font-weight: bold;">_</span>, <span style="color: #006699; font-weight: bold;">_</span>) :- <span style="color: #CC00FF;">throw</span>(<span style="color: #CC00FF;">missing_op</span>(<span style="color: #003333;">Op</span>)).
+</pre></div>
+<p>Again the last argument is an output variable.</p>
+<p>Now we can start executing simple operations. For that an <tt class="docutils literal">interp</tt> predicate
+is defined. It takes as its first argument the current environment and as the
+second argument the operation to execute. E.g. to execute primitive operations
+with one or two arguments:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg</span>),
+    <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg</span>, <span style="color: #003333;">Res</span>),
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>).
+
+<span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg1</span>),
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg2</span>),
+    <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg1</span>, <span style="color: #003333;">RArg2</span>, <span style="color: #003333;">Res</span>),
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>).
+</pre></div>
+<p>First the arguments are resolved into values. Afterwards the operation is executed,
+and the result is written back into the environment. Then <tt class="docutils literal">interp</tt> is called on
+the rest of the program. Similarly easy are the unconditional jump and
+<tt class="docutils literal">print_and_stop</tt>:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">L</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">Block</span>),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Block</span>, <span style="color: #003333;">Env</span>).
+
+
+<span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #003333;">Arg</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Val</span>),
+    <span style="color: #CC00FF;">print</span>(<span style="color: #003333;">Val</span>), <span style="color: #CC3300;">nl</span>.
+</pre></div>
+<p>In the unconditional jump we simply get the target block and continue executing
+that. To execute <tt class="docutils literal">print_and_stop</tt> we resolve the argument, print the value and
+then are done.</p>
+<p>The conditional jump is only slightly more difficult:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">if</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">L1</span>, <span style="color: #003333;">L2</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">==</span> <span style="color: #FF6600;">0</span> <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L2</span>, <span style="color: #003333;">Block</span>)
+    ;
+        <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L1</span>, <span style="color: #003333;">Block</span>)
+    ),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Block</span>, <span style="color: #003333;">Env</span>).
+</pre></div>
+<p>First the variable is looked up in the environment. If the variable is zero,
+execution continues at the second block, otherwise it continues at the first
+block.</p>
+<p>Given this interpreter, we can execute the above example program like this, on a
+Prolog console:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #AA0000; background-color: #FFAAAA;">$</span> <span style="color: #CC3300;">swipl</span> <span style="color: #555555;">-</span><span style="color: #CC3300;">s</span> <span style="color: #CC3300;">cfglang</span>.<span style="color: #CC3300;">pl</span>
+<span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power</span>, <span style="color: #003333;">Block</span>), <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Block</span>, [<span style="color: #CC3300;">x</span><span style="color: #555555;">/</span><span style="color: #FF6600;">10</span>, <span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">10</span>]).
+<span style="color: #FF6600;">10000000000</span>
+</pre></div>
+<h2>Partial Evaluation of the Flowgraph Language</h2>
+<p>Let's look at what a partial evaluator for this simple flowgraph language would
+look like. Partial evaluation (PE), also called specialization, is a program
+manipuation technique. PE takes an input program and transforms it into a
+(hopefully) simpler and faster output program. It does this by assuming that
+some variables in the input program are constants. All operations that act only
+on such constants can be folded away. All other operations need to remain in the
+output program (called residual program). Thus the partial evaluator proceeds
+much like an interpreter, just that it cannot actually execute some operations.
+Also, its output is not just a value, but also list of remaining operations that
+could not be optimized away.</p>
+<p>The partial evaluator cannot use normal environments, because unlike the
+interpreter not all variables' values are known to it. It will therefore work on
+partial environments, which store just the know variables. For these partial
+environments, some new helper functions are needed:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">Key</span>, [], <span style="color: #CC00FF;">var</span>(<span style="color: #003333;">Key</span>)).
+<span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">Key</span>, [<span style="color: #003333;">Key</span><span style="color: #555555;">/</span><span style="color: #003333;">Value</span> | <span style="color: #006699; font-weight: bold;">_</span>], <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">Value</span>)) :- !.
+<span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">Key</span>, [<span style="color: #006699; font-weight: bold;">_</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Value</span>) :- <span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">Key</span>, <span style="color: #003333;">Rest</span>, <span style="color: #003333;">Value</span>).
+
+<span style="color: #CC00FF;">presolve</span>(<span style="color: #CC00FF;">const</span>(<span style="color: #003333;">X</span>), <span style="color: #006699; font-weight: bold;">_</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">X</span>)).
+<span style="color: #CC00FF;">presolve</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #003333;">V</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">X</span>) :- <span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">X</span>).
+</pre></div>
+<p>The function <tt class="docutils literal">plookup</tt> takes a variable and a partial environment and returns
+either <tt class="docutils literal">const(Value)</tt> if the variable is found in the partial environment or
+<tt class="docutils literal">var(Key)</tt> if it is not. Equivalently, <tt class="docutils literal">presolve</tt> is like <tt class="docutils literal">resolve</tt>,
+except that it uses <tt class="docutils literal">plookup</tt> instead of <tt class="docutils literal">lookup</tt>.</p>
+<p>With these helpers we can start writing a partial evaluator. The following two
+rules are where the main optimization in the form of constant folding happens.
+The idea is that when the partial evaluator sees an operation that involves
+only constant arguments, it can constant-fold the operation, otherwise it
+can't:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">pe</span>(<span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">RArg</span>),
+    (<span style="color: #003333;">RArg</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">C</span>, <span style="color: #003333;">Res</span>),
+        <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">RestResidual</span> <span style="color: #555555;">=</span> <span style="color: #003333;">NewOp</span>
+    ;
+        <span style="color: #CC00FF;">remove_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg</span>, <span style="color: #003333;">RestResidual</span>)
+    ),
+    <span style="color: #CC00FF;">pe</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">RestResidual</span>).
+
+<span style="color: #CC00FF;">pe</span>(<span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg1</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">RArg1</span>),
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg2</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">RArg2</span>),
+    (<span style="color: #003333;">RArg1</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C1</span>), <span style="color: #003333;">RArg2</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C2</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">C1</span>, <span style="color: #003333;">C2</span>, <span style="color: #003333;">Res</span>),
+        <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">RestResidual</span> <span style="color: #555555;">=</span> <span style="color: #003333;">NewOp</span>
+
+    ;
+        <span style="color: #CC00FF;">remove_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg1</span>, <span style="color: #003333;">RArg2</span>, <span style="color: #003333;">RestResidual</span>)
+    ),
+    <span style="color: #CC00FF;">pe</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">RestResidual</span>).
+</pre></div>
+<p>The <tt class="docutils literal">pe</tt> predicate takes a partial environment, the current operations and
+potentially returns a new operation. To partially evaluate a simple operation, its arguments are
+looked up in the partial environment. If all the arguments are constants, the
+operation can be executed, and no new operation is produced. Otherwise, we need
+to produce a new residual operation which is exactly like the one currently
+looked at. Also, the result variable needs to be removed from the partial
+environment, because it was just overwritten by an unknown value.</p>
+<p>The potentially generated residual operation is stored into the output argument
+<tt class="docutils literal">NewOp</tt>. The output argument of the recursive call is the last argument of
+the newly created residual operation, which will then be filled by the
+recursive call. This is a typical approach in Prolog, but may look strange if
+you are not familiar with it.</p>
+<p>Note how the first case of these two rules is just like interpretation. The
+second case doesn't really do anything, it just produces a residual operation.
+This relationship between normal evaluation and partial evaluation is very
+typical.</p>
+<p>The unconditional jump and <tt class="docutils literal">print_and_stop</tt> are not much more complex:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">pe</span>(<span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">L</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">LR</span>)) :-
+    <span style="color: #CC00FF;">do_pe</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">LR</span>).
+
+<span style="color: #CC00FF;">pe</span>(<span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #003333;">Arg</span>), <span style="color: #003333;">Env</span>, <span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #003333;">RArg</span>)) :-
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg</span>).
+</pre></div>
+<p>To partially evaluate an unconditional jump we again produce a jump. The target
+label of that residual jump is computed by asking the partial evaluator to
+produce residual code for the label <tt class="docutils literal">L</tt> with the given partial environment.
+<tt class="docutils literal">print_and_stop</tt> is simply turned into a <tt class="docutils literal">print_and_stop</tt>. We will see the
+code for <tt class="docutils literal">do_pe</tt> soon.</p>
+<p>Conditional jumps are more interesting:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">pe</span>(<span style="color: #CC00FF;">if</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">L1</span>, <span style="color: #003333;">L2</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C</span>) <span style="color: #CC3300;">-&gt;</span>
+        (<span style="color: #003333;">C</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span> <span style="color: #CC3300;">-&gt;</span>
+            <span style="color: #003333;">L</span> <span style="color: #555555;">=</span> <span style="color: #003333;">L2</span>
+        ;
+            <span style="color: #003333;">L</span> <span style="color: #555555;">=</span> <span style="color: #003333;">L1</span>
+        ),
+        <span style="color: #CC00FF;">do_pe</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">LR</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">LR</span>)
+    ;
+        <span style="color: #CC00FF;">do_pe</span>(<span style="color: #003333;">L1</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">L1R</span>),
+        <span style="color: #CC00FF;">do_pe</span>(<span style="color: #003333;">L2</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">L2R</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">if</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">L1R</span>, <span style="color: #003333;">L2R</span>)
+    ).
+</pre></div>
+<p>First we look up the value of the condition variable. If it is a constant, we
+can produce better code, because we know statically that only one path is
+reachable. Thus we produce code for that path, and then emit an unconditional
+jump there. If the condition variable is not known at partial evaluation time,
+we need to partially evaluate both paths and produce a conditional jump in the
+residual code.</p>
+<p>This rule is the one that causes the partial evaluator to potentially do much
+more work than the interpreter, because after an <tt class="docutils literal">if</tt> sometimes both paths
+need to be explored. In the worst case this process never stops, so a real
+partial evaluator would need to ensure somehow that it terminates. There are
+many algorithms for doing that, but I will ignore this problem here.</p>
+<p>Now we need to understand what the <tt class="docutils literal">do_pe</tt> predicate is doing. Its most
+important task is to make sure that we don't do the same work twice by
+memoizing code that was already partially evaluated in the past. For that it
+keeps a mapping of <tt class="docutils literal">Label, Partial Environment</tt> to <tt class="docutils literal">Label of the residual
+code</tt>:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">do_pe</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">LR</span>) :-
+    (<span style="color: #CC00FF;">code_cache</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">LR</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC3300;">true</span>
+    ;
+        <span style="color: #CC00FF;">gensym</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">LR</span>),
+        <span style="color: #CC00FF;">assert</span>(<span style="color: #CC00FF;">code_cache</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">LR</span>)),
+        <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">Code</span>),
+        <span style="color: #CC00FF;">pe</span>(<span style="color: #003333;">Code</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">Residual</span>),
+        <span style="color: #CC00FF;">assert</span>(<span style="color: #CC00FF;">block</span>(<span style="color: #003333;">LR</span>, <span style="color: #003333;">Residual</span>))
+    ).
+</pre></div>
+<p>If the code cache indicates that label <tt class="docutils literal">L</tt> was already partially evaluated
+with partial environment <tt class="docutils literal">PEnv</tt>, then the previous residual code label
+<tt class="docutils literal">LPrevious</tt>
+is returned. Otherwise, a new label is generated with <tt class="docutils literal">gensym</tt>, the code cache
+is informed of that new label with <tt class="docutils literal">assert</tt>, then the block is partially
+evaluated and the residual code is added to the database.</p>
+<p>For those who know partial evaluation terminology: This partial evaluator is a
+polyvariant online partial evaluator. "Polyvariant" means that for every label,
+several specialized version of the block can be generated. "Online" means that
+no preprocessing is done before the partial evaluator runs.</p>
+
+<h2>Partial Evaluation Example</h2>
+<p>With this code we can look at the classical example of partial evaluation (it's
+probably the "Hello World" of partial evaluation). We
+can ask the partial evaluator to compute a power function, where the exponent
+<tt class="docutils literal">y</tt> is a fixed number, e.g. 5, and the base <tt class="docutils literal">x</tt> is unknown:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">do_pe</span>(<span style="color: #CC3300;">power</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">5</span>], <span style="color: #003333;">LR</span>).
+<span style="color: #003333;">LR</span> <span style="color: #555555;">=</span> <span style="color: #CC3300;">power1</span>.
+</pre></div>
+<p>To find out which code was produced, we can use <tt class="docutils literal">listing</tt>:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">listing</span>(<span style="color: #CC3300;">code_cache</span>)
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">5</span>], <span style="color: #CC3300;">power1</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">5</span>, <span style="color: #CC3300;">res</span><span style="color: #555555;">/</span><span style="color: #FF6600;">1</span>], <span style="color: #CC3300;">power_rec1</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">4</span>], <span style="color: #CC3300;">power_rec2</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">3</span>], <span style="color: #CC3300;">power_rec3</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">2</span>], <span style="color: #CC3300;">power_rec4</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">1</span>], <span style="color: #CC3300;">power_rec5</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_done</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">0</span>], <span style="color: #CC3300;">power_done1</span>).
+
+<span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">listing</span>(<span style="color: #CC3300;">block</span>)
+.... <span style="color: #CC3300;">the</span> <span style="color: #CC3300;">block</span> <span style="color: #CC3300;">definition</span> <span style="color: #CC3300;">of</span> <span style="color: #CC3300;">the</span> <span style="color: #CC3300;">user</span> <span style="color: #CC3300;">program</span> ....
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_done1</span>, <span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec5</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_done1</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec4</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_rec5</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec3</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_rec4</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec2</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_rec3</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec1</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_rec2</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power1</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_rec1</span>)).
+</pre></div>
+<p>The <tt class="docutils literal">code_cache</tt> tells which residual labels correspond to which original
+labels under which partial environments. Thus, <tt class="docutils literal">power1</tt> contains the code of
+<tt class="docutils literal">power</tt> under the assumption that <tt class="docutils literal">y</tt> is 5. Looking at the block listing,
+the label <tt class="docutils literal">power1</tt> corresponds to code that simply multiplies <tt class="docutils literal">res</tt> by <tt class="docutils literal">x</tt>
+five times without using the variable <tt class="docutils literal">x</tt> at all. The loop that was present
+in the original program has been fully unrolled, the loop variable <tt class="docutils literal">y</tt> has
+disappeared. Hopefully this is faster than the original program.</p>
+
+<h2>Conclusion</h2>
+<p>In this blog post we saw an interpreter for a simple flow graph language in
+Prolog, together with a partial evaluator for it. The partial evaluator
+essentially duplicates every rule of the interpreter. If all the arguments of
+the current operation are known, it acts like the interpreter, otherwise it
+simply copies the operation into the residual code.</p>
+<p>Partial evaluation can be used for a variety of applications, but the most
+commonly cited one is that of applying it to an interpreter. To do that, the
+program that the interpreter runs is assumed to be constant by the partial
+evaluator. Thus a specialized version of the interpreter is produced that does
+not use the input program at all. That residual code can be seen as a compiled
+version of the input program.</p>
+<p>In the <a href="http://morepypy.blogspot.com/2012/01/simple-tracer-for-flow-graph-language.html">next blog post in this series</a> we will look at writing a simple tracer for
+the same flowgraph language.</p></body></html>

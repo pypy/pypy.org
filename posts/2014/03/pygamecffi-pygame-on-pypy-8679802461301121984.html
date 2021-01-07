@@ -1,0 +1,108 @@
+<html><body><div dir="ltr" style="text-align: left;">
+<p>The Raspberry Pi aims to be a low-cost educational tool that anyone can use to learn about electronics and programming. Python and <a class="reference external" href="http://pygame.org/news.html">pygame</a> are included in the Pi's programming toolkit. And since last year, thanks in part to sponsorship from the <a class="reference external" href="http://www.raspberrypi.org/">Raspberry Pi Foundation</a>, PyPy also works on the Pi (read more <a class="reference external" href="http://morepypy.blogspot.com/2013/05/pypy-20-alpha-for-arm.html">here</a>).</p>
+<p>With PyPy working on the Pi, game logic written in Python stands to gain an awesome performance boost. However, the original pygame is a Python C extension. This means it performs poorly on PyPy and negates any speedup in the Python parts of the game code.</p>
+<p>One solution to making pygame games run faster on PyPy, and eventually on the Raspberry Pi, comes in the form of <a class="reference external" href="http://github.com/CTPUG/pygame_cffi">pygame_cffi</a>. pygame_cffi uses <a class="reference external" href="https://cffi.readthedocs.org/">CFFI</a> to wrap the underlying SDL library instead of a C extension. A few months ago, the Raspberry Pi Foundation sponsored a <a class="reference external" href="http://morepypy.blogspot.com/2013/12/pygame-cffi.html">Cape Town Python User Group hackathon</a> to build a proof-of-concept pygame using CFFI. This hackathon was a success and it produced an early working version of pygame_cffi.</p>
+<p>So for the last 5 weeks Raspberry Pi has been funding work on pygame_cffi. The goal was a complete implementation of the core modules. We also wanted benchmarks to illuminate performance differences between pygame_cffi on PyPy and pygame on CPython. We are happy to report that those goals were met. So without further ado, here's a rundown of what works.</p>
+<div class="section" id="current-functionality">
+<h3>Current functionality</h3>
+<ul class="simple">
+<li><a class="reference external" href="http://www.pygame.org/docs/ref/surface.html">Surfaces</a> support all the usual flags for SDL and OpenGL rendering (more about OpenGL <a class="reference internal" href="#pyopenglperformance">below</a>).</li>
+<li>The graphics-related modules <a class="reference external" href="http://www.pygame.org/docs/ref/color.html">color</a>, <a class="reference external" href="http://www.pygame.org/docs/ref/display.html">display</a>, <a class="reference external" href="http://www.pygame.org/docs/ref/font.html">font</a> and <a class="reference external" href="http://www.pygame.org/docs/ref/image.html">image</a>, and parts of <a class="reference external" href="http://www.pygame.org/docs/ref/draw.html">draw</a> and <a class="reference external" href="http://www.pygame.org/docs/ref/transform.html">transform</a> are mostly complete.</li>
+<li><a class="reference external" href="http://www.pygame.org/docs/ref/event.html">Events</a>! No <a class="reference external" href="http://www.pygame.org/docs/ref/fastevent.html">fastevent</a> module yet, though.</li>
+<li>Mouse and keyboard functionality, as provided by the <a class="reference external" href="http://www.pygame.org/docs/ref/mouse.html">mouse</a> and <a class="reference external" href="http://www.pygame.org/docs/ref/key.html">key</a> modules, is complete.</li>
+<li>Sound functionality, as provided by the <a class="reference external" href="http://www.pygame.org/docs/ref/mixer.html">mixer</a> and <a class="reference external" href="http://www.pygame.org/docs/ref/music.html">music</a> modules, is complete.</li>
+<li>Miscellaneous modules, <a class="reference external" href="http://www.pygame.org/docs/ref/cursors.html">cursors</a>, <a class="reference external" href="http://www.pygame.org/docs/ref/rect.html">rect</a>, <a class="reference external" href="http://www.pygame.org/docs/ref/sprite.html">sprite</a> and <a class="reference external" href="http://www.pygame.org/docs/ref/time.html">time</a> are also complete.</li>
+</ul>
+
+Invention screenshot:
+
+<div class="separator" style="clear: both; text-align: center;"><a href="http://3.bp.blogspot.com/-1ZVah86dW3s/UzL9ZhiDiKI/AAAAAAAABvI/kMO9Pnmq9FY/s1600/invention_screenshot.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="http://3.bp.blogspot.com/-1ZVah86dW3s/UzL9ZhiDiKI/AAAAAAAABvI/kMO9Pnmq9FY/s320/invention_screenshot.png"></a></div>
+
+Mutable mamba screenshot:
+
+<div class="separator" style="clear: both; text-align: center;"><a href="http://2.bp.blogspot.com/-JZzDhMwp43s/UzL9g4lktwI/AAAAAAAABvQ/WuCvtbCA3Lc/s1600/mutable_mamba_screenshot.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="http://2.bp.blogspot.com/-JZzDhMwp43s/UzL9g4lktwI/AAAAAAAABvQ/WuCvtbCA3Lc/s320/mutable_mamba_screenshot.png"></a></div>
+
+<p>With the above-mentioned functionality in place we could get 10+ of the pygame examples to work, and a number of <a class="reference external" href="http://pyweek.org/">PyWeek</a> games. At the time of writing, if a game doesn't work it is most likely due to an unimplemented <a class="reference external" href="http://www.pygame.org/docs/ref/transform.html">transform</a> or <a class="reference external" href="http://www.pygame.org/docs/ref/draw.html">draw</a> function. That will be remedied soon.</p>
+</div>
+<div class="section" id="performance">
+<h3>Performance</h3>
+<p>In terms of performance, pygame_cffi on PyPy is showing a lot of promise. It beats pygame on CPython by a significant margin in our events processing and collision detection benchmarks, while blit and fill benchmarks perform similarly. The pygame examples we checked also perform better.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="http://3.bp.blogspot.com/-tSV6v3J5rwc/UzL-4CbkqCI/AAAAAAAABwQ/NFDuq4biNqY/s1600/collision_increase.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="http://3.bp.blogspot.com/-tSV6v3J5rwc/UzL-4CbkqCI/AAAAAAAABwQ/NFDuq4biNqY/s400/collision_increase.png"></a></div>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="http://1.bp.blogspot.com/-HJCdpeVHbj0/UzL-0e5eGMI/AAAAAAAABwI/3eKRVRpP45s/s1600/examples_bench.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="http://1.bp.blogspot.com/-HJCdpeVHbj0/UzL-0e5eGMI/AAAAAAAABwI/3eKRVRpP45s/s400/examples_bench.png"></a></div>
+
+<p>However, there is still work to be done to identify and eliminate bottlenecks. On the Raspberry Pi performance is markedly worse compared to pygame (barring collision detection). The PyWeek games we tested also performed slightly worse. Fortunately there is room for improvement in various places.</p>
+
+Invention &amp; Mutable Mamba (x86)
+
+<div class="separator" style="clear: both; text-align: center;"><a href="http://4.bp.blogspot.com/-jYdr73oj154/UzL-u4aAwWI/AAAAAAAABwA/cv_vNSFtb0Q/s1600/pyweek_games_bench.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="http://4.bp.blogspot.com/-jYdr73oj154/UzL-u4aAwWI/AAAAAAAABwA/cv_vNSFtb0Q/s400/pyweek_games_bench.png"></a></div>
+
+Standard pygame examples (Raspberry Pi)
+
+<div class="separator" style="clear: both; text-align: center;"><a href="http://2.bp.blogspot.com/-gd9KEHANb_I/UzL-oKCx5BI/AAAAAAAABv4/frssbcGhI9A/s1600/examples_bench_rasp.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="http://2.bp.blogspot.com/-gd9KEHANb_I/UzL-oKCx5BI/AAAAAAAABv4/frssbcGhI9A/s400/examples_bench_rasp.png"></a></div>
+
+<p>Here's a summary of some of the benchmarks. Relative speed refers to the frame rate obtained in pygame_cffi on PyPy relative to pygame on CPython.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="76%">
+<col width="24%">
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">Benchmark</th>
+<th class="head">Relative speed (pypy speedup)</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Events (x86)</td>
+<td>1.41</td>
+</tr>
+<tr><td>Events (Pi)</td>
+<td>0.58</td>
+</tr>
+<tr><td>N<sup>2</sup> collision detection on 100 sprites (x86)</td>
+<td>4.14</td>
+</tr>
+<tr><td>N<sup>2</sup> collision detection on 100 sprites (Pi)</td>
+<td>1.01</td>
+</tr>
+<tr><td>Blit 100 surfaces (x86)</td>
+<td>1.06</td>
+</tr>
+<tr><td>Blit 100 surfaces (Pi)</td>
+<td>0.60</td>
+</tr>
+<tr><td>Invention (x86)</td>
+<td>0.95</td>
+</tr>
+<tr><td>Mutable Mamba (x86)</td>
+<td>0.72</td>
+</tr>
+<tr><td>stars example (x86)</td>
+<td>1.95</td>
+</tr>
+<tr><td>stars example (Pi)</td>
+<td>0.84</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="opengl">
+<h2>OpenGL</h2>
+<p id="pyopenglperformance">Some not-so-great news is that <a class="reference external" href="http://pyopengl.sourceforge.net/">PyOpenGL</a> performs poorly on PyPy since PyOpenGL uses ctypes. This translates into a nasty reduction in frame rate for games that use OpenGL surfaces. It might be worthwhile creating a CFFI-powered version of PyOpenGL as well.</p>
+</div>
+</div>
+<div class="section" id="where-to-now">
+<h3>Where to now?</h3>
+<p>Work on pygame_cffi is ongoing. Here are some things that are in the pipeline:</p>
+<ul class="simple">
+<li>Get pygame_cffi on PyPy to a place where it is consistently faster than pygame on CPython.</li>
+<li>Implement the remaining modules and functions, starting with <a class="reference external" href="http://www.pygame.org/docs/ref/draw.html">draw</a> and <a class="reference external" href="http://www.pygame.org/docs/ref/transform.html">transform</a>.</li>
+<li>Improve test coverage.</li>
+<li>Reduce the time it takes for CFFI to parse the cdef. This makes the initial pygame import slow.</li>
+</ul>
+<p>If you want to contribute you can find pygame_cffi <a class="reference external" href="http://github.com/CTPUG/pygame_cffi">on Github</a>.
+Feel free to find us on #pypy on freenode or post issues on github.</p>
+<p>Cheers,<br>
+Rizmari Versfeld</p>
+</div>
+<br></div></body></html>

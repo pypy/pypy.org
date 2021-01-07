@@ -1,0 +1,153 @@
+<html><body><p>The question I was asked most often during my recent <a class="reference external" href="http://morepypy.blogspot.com/2011/03/us-trip-report-popl-microsoft-ibm.html">US trip</a> was how exactly
+the hints work that interpreter authors can use to improve the execution speed
+of the programs running on their interpreters. Since those hints are not really
+documented all that well, I decided to write blog posts about them. This is the
+first one.</p>
+<div class="section" id="background">
+<h2>Background</h2>
+<p>First, let's recap some basics: PyPy's approach to implementing dynamic
+languages is to write an interpreter for
+the language in RPython. This interpreter can be translated to C and then
+further to machine code. The interpreter consists of code in the form of a
+large number of generated C functions and some data. Similarly, the user
+program consists of functions in the language the interpreter executes.</p>
+<p>As was explained in a <a class="reference external" href="http://morepypy.blogspot.com/2009/03/applying-tracing-jit-to-interpreter.html">blog post</a> and a <a class="reference external" href="http://codespeak.net/svn/pypy/extradoc/talk/icooolps2009/bolz-tracing-jit.pdf">paper</a> two years ago, PyPy's JIT is a
+meta-tracer. Since we want to re-use our tracer for a variety of languages, we
+don't trace the execution of the user program, but instead trace the execution
+of the <em>interpreter</em> that is running the program. This means that the traces
+don't contain the bytecodes of the language in question, but RPython-level
+operations that the interpreter did to execute the program.</p>
+<p>On the other hand, the loops that are traced by the tracer are the loops in the
+user program. This means that the tracer stops tracing after one iteration of
+the loop in the user function that is being considered. At this point, it can
+have traced many iterations of the interpreter main loop.</p>
+<p>Here's a diagram of this process:</p>
+
+<a href="http://3.bp.blogspot.com/-YUYgnZkPta8/TXu694dW9bI/AAAAAAAAAPY/VOCWosHnXCM/s1600/trace-levels.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5583261735346173362" src="http://3.bp.blogspot.com/-YUYgnZkPta8/TXu694dW9bI/AAAAAAAAAPY/VOCWosHnXCM/s600/trace-levels.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand;"></a>
+
+<p>On the left you see the levels of execution. The CPU executes the binary of
+PyPy's Python interpreter, which consists of RPython functions that have been
+compiled first to C, then to machine code. Some of these functions contain
+loops, others don't. The interpreter runs a Python program written by a
+programmer (the user). If the tracer is used, it traces operations on the level
+of the interpreter. However, the extent of the trace is determined by the loops
+in the user program.</p>
+</div>
+<div class="section" id="how-far-should-tracing-go">
+<h2>How Far Should Tracing Go</h2>
+<p>When the tracer encounters a function call at the interpreter level, e.g. the
+interpreter main loop calling a helper function, it can do one of two things:</p>
+<ol class="arabic simple">
+<li>it can trace into the helper function, effectively inlining it into the trace.</li>
+<li>it can not trace into the function and instead record a call to that function
+as an operation in the trace. Such a call operation in the trace is sometimes
+called <em>residual call</em>.</li>
+</ol>
+<p>As a default, the tracer will try to trace into the helper because that will
+give more information to the optimizer, allowing it to do a better job. This is
+particularly important for the allocation removal optimization, because if a
+freshly allocated object is passed as an argument to a residual call, its
+allocation cannot be optimized away.</p>
+<p>There is a problem however if the helper function itself contains a loop. The
+tracer records the linear sequence of operations that are being executed. Thus
+when it encounters a loop on the interpreter level it records all the
+operations of every iteration of the loop itself, with the net effect of
+unrolling it. The only places where the tracer stops and tries to close the
+trace is in the main loop of the interpreter. When the tracer encounters the
+main loop, it also checks whether the original user loop has been closed, and
+thus whether it can stop tracing.</p>
+<p>For most helper functions in the interpreter that contain loops, fully
+unrolling does not make sense. If a loop is unrolled, the trace is specific to
+the number of iteration that was seen during tracing. If the trace is later
+executed with a different number of iterations, the trace will be left via a
+guard failure, which is inefficient. Therefore the default behaviour of the
+tracer is to never trace into a function on the interpreter level that contains
+a loop, but to trace into all non-looping helper functions.</p>
+<p>This default behaviour is essentially a heuristic, but one that usually makes
+sense. We want to produce just enough traces to make the resulting code
+efficient, but not more. Therefore we trace as much as possible (everything by
+default) except the functions which loops where tracing would produce code that
+is less general than it could be.</p>
+<p>As an example for a helper with a loop, take string concatenation. It loops over
+the characters of both arguments and copies them over into the result string. It
+does not make sense to unroll the loops in this function. If we do that,
+the resulting trace can only be used for strings of the length that was seen
+during tracing. In practise, the string lengths are usually different each run,
+meaning that the trace with unrolling is not run to completion in most cases.</p>
+</div>
+<div class="section" id="influencing-the-default-behaviour">
+<h2>Influencing the Default Behaviour</h2>
+<p>Sometimes the default behaviour is not actually what is wanted. This is
+something the interpreter author has to decide, usually by looking at the traces
+that are produced and deciding that they should be improved. There are two ways
+in which the default is wrong:</p>
+<ul class="simple">
+<li><strong>false negatives:</strong> if a helper function that <strong>does</strong> contain a loop should
+be traced into, unrolling the loop.</li>
+<li><strong>false positives:</strong> if a helper function that <strong>does not</strong> contain a loop is
+inlined into the trace, but the interpreter author decides that this is not
+helpful.</li>
+</ul>
+<p>If the interpreter author finds false negatives or false positives, she can fix
+that by applying a hint to the tracer. These hints take the form of function
+decorators (which both live in the <tt class="docutils literal">pypy.rlib.jit</tt> module). In the next two
+subsections I will describe these two function decorators and their use.</p>
+<div class="section" id="unrolling-functions-with-loops">
+<h3>Unrolling Functions With Loops</h3>
+<p>The first decorator, used to fix false negatives, is the <tt class="docutils literal">unroll_safe</tt>
+decorator. It is used to tell the tracer to always trace into a function that
+has a loop, effectively unrolling the loop. This decorator should be used only
+if the loop in the helper function is expected to always run for the same number
+of iterations. This sounds like a strong restriction, in practise this is less
+severe: The number of iterations needs to only be the same <em>in the context where
+the helper functions is traced from</em>.</p>
+<p>It is easiest to understand this condition via an example. Let's look at the
+<tt class="docutils literal">BUILD_TUPLE</tt> bytecode in Python. It takes one argument, the length <tt class="docutils literal">n</tt> of
+the tuple being built. The bytecode pops <tt class="docutils literal">n</tt> arguments from the stack, turns
+them into a tuple and pushes that tuple on the stack. Thus the function that
+implements <tt class="docutils literal">BUILD_TUPLE</tt> in PyPy's Python interpreter calls a helper
+<tt class="docutils literal">popvalues</tt> which pops <tt class="docutils literal">n</tt> values from the stack and returns them in a list.
+This helper is implemented with a loop and would thus not be traced into by
+default.  The loop in the helper can run for very different numbers of
+iterations, because it is used in a variety of places. However, for every
+concrete <tt class="docutils literal">BUILD_TUPLE</tt> bytecode, the argument will be constant. Therefore it
+is safe (and even necessary) to annotate <tt class="docutils literal">popvalues</tt> with the <tt class="docutils literal">unroll_safe</tt>
+decorator.</p>
+<p>A different example is the implementation of the <tt class="docutils literal">isinstance</tt> builtin. It is
+used to check whether an object <tt class="docutils literal">a</tt> is an instance of a class <tt class="docutils literal">B</tt> like
+this: <tt class="docutils literal">isinstance(a, B)</tt>. The second argument of the function can also be a
+tuple of classes to check whether an object is an instance of one of a number of
+classes: <tt class="docutils literal">isinstance(a, (A, B, C, D))</tt>. To implement this second case, the
+implementation of <tt class="docutils literal">isinstance</tt> contains a loop iterating over the elements of
+the tuple. The number of loop iterations can vary, but is usually fixed for each
+individual call site which typically just lists a few classes in the source
+code. Therefore it is also safe to annotate the implementation of <tt class="docutils literal">isinstance</tt>
+with the <tt class="docutils literal">unroll_safe</tt> decorator.</p>
+</div>
+<div class="section" id="preventing-the-tracing-of-functions">
+<h3>Preventing the Tracing of Functions</h3>
+<p>The second decorator <tt class="docutils literal">dont_look_inside</tt> is used to fix false positives. It
+tells the JIT to never trace into the decorated function and just always produce
+a residual call instead. This decorator is in many ways less important than the
+unrolling one (except for a special situation that I will describe in a
+follow-up post). It is used if tracing into a function is not expected to yield
+any speed benefits, because the optimizer will not be able to improve it much.
+This is often the case if the called helper function does not contain any
+"dynamic" behaviour. In such a situation it is better to just leave the function
+call in the trace, because that produces less code.</p>
+<p>An example would be the import mechanism in Python. It's very unlikely that any
+performance improvement can be had by turning part of it into assembler.
+Therefore we hide it from the tracer by annotating them with
+<tt class="docutils literal">dont_look_inside</tt>.</p>
+</div>
+</div>
+<div class="section" id="conclusion">
+<h2>Conclusion</h2>
+<p>In this post we discussed two hints that can be used to control precisely which
+parts of the interpreter should be meta-traced. If these hints are used
+carefully, this can go a long way to making the interpreter produce traces that
+contain exactly the interesting part of the execution, and will contain calls to
+the functions that can not be optimized by tracing techniques.</p>
+<p>In the <a href="http://morepypy.blogspot.com/2011/03/controlling-tracing-of-interpreter-with_15.html">next part of this series</a> I will discuss a different set of hints that can
+be used to strongly optimize traces.</p>
+</div></body></html>

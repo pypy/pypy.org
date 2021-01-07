@@ -1,0 +1,82 @@
+<html><body><p>The <a href="http://doc.pypy.org/en/latest/cppyy.html">cppyy module</a>
+provides C++ bindings for PyPy by using the reflection information extracted
+from C++ header files by means of the
+<a href="http://root.cern.ch/drupal/content/reflex">Reflex package</a>.
+In order to support C++11, the goal is to move away from Reflex and instead use
+<a href="http://root.cern.ch/drupal/content/cling">cling</a>, an interactive
+C++ interpreter, as the backend.
+Cling is based on <a href="http://llvm.org/">llvm</a>'s
+<a href="http://clang.llvm.org/">clang</a>.
+
+The use of a real compiler under the hood has the advantage that it is now
+possible to cover every conceivable corner case.
+The disadvantage, however, is that every corner case actually has to be
+covered.
+Life is somewhat easier when calls come in from the python interpreter, as
+those calls have already been vetted for syntax errors and all lookups are
+well scoped.
+Furthermore, the real hard work of getting sane responses from and for C++
+in an interactive environment is done in cling, not in the bindings.
+Nevertheless, it is proving a long road (but for that matter clang does not
+support all of C++11 yet), so here's a quick status update showing that good 
+progress is being made.
+
+</p><p>The following example is on CPython, not PyPy, but moving a third
+(after Reflex and
+<a href="http://root.cern.ch/root/Cint.html">CINT</a>) backend into place
+underneath cppyy is straightforward compared to developing the backend
+in the first place.
+
+Take this snippet of C++11 code
+(<tt class="docutils literal"><span class="pre">cpp11.C</span></tt>):
+
+</p><p></p><pre>    constexpr int data_size() { return 5; }
+
+    auto N = data_size();
+
+    template&lt;class L, class R&gt;
+    struct MyMath {
+       static auto add(L l, R r) -&gt; decltype(l+r) { return l + r; }
+    };
+
+    template class MyMath&lt;int, int&gt;;</pre>
+
+<p>As a practical matter, most usage of new C++11 features will live in
+implementations, not in declarations, and are thus never seen by the bindings.
+The above example is therefore somewhat contrived, but it will serve to show
+that these new declarations actually work.
+The new features used here are
+<tt class="docutils literal"><span class="pre">constexpr</span></tt>,
+<tt class="docutils literal"><span class="pre">auto</span></tt>, and
+<tt class="docutils literal"><span class="pre">decltype</span></tt>.
+Here is how you could use these from CPython, using the
+<a href="http://root.cern.ch/viewvc/trunk/bindings/pyroot/">PyROOT</a>
+package, which has more than a passing resemblance to cppyy, as one is based
+on the other:
+
+</p><p></p><pre>    import ROOT as gbl
+    gbl.gROOT.LoadMacro('cpp11.C')
+
+    print 'N =', gbl.N
+    print '1+1 =', gbl.MyMath(int, int).add(1,1)</pre>
+
+which, when entered into a file
+(<tt class="docutils literal"><span class="pre">cpp11.py</span></tt>) and executed,
+prints the expected results:
+
+<p></p><pre>    $ python cpp11.py
+    N = 5
+    1+1 = 2</pre>
+
+In the example, the C++ code is compiled on-the-fly, rather than first generating
+a dictionary as is needed with Reflex.
+A deployment model that utilizes stored pre-compiled information is foreseen
+to work with larger projects, which may have to pull in headers from many places.
+
+<p>Work is going to continue first on C++03 on cling with CPython (about 85% of
+unit tests currently pass), with a bit of work on C++11 support on the side.
+Once fully in place, it can be brought into a new backend for cppyy, after 
+which the remaining parts of C++11 can be fleshed out for both interpreters.
+
+</p><p>Cheers,<br>
+Wim Lavrijsen</p></body></html>

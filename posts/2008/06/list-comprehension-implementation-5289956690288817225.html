@@ -1,0 +1,65 @@
+<html><body><p>List comprehensions are a nice feature in Python. They are, however, just
+syntactic sugar for <tt class="docutils literal"><span class="pre">for</span></tt> loops. E.g. the following list comprehension:</p>
+<pre class="literal-block">
+def f(l):
+    return [i ** 2 for i in l if i % 3 == 0]
+</pre>
+<p>is sugar for the following <tt class="docutils literal"><span class="pre">for</span></tt> loop:</p>
+<pre class="literal-block">
+def f(l):
+    result = []
+    for i in l:
+        if i % 3 == 0:
+            result.append(i ** 2)
+    return result
+</pre>
+<p>The interesting bit about this is that list comprehensions are actually
+implemented in almost exactly this way. If one disassembles the two functions
+above one gets sort of similar bytecode for both (apart from some details, like
+the fact that the append in the list comprehension is done with a special
+<tt class="docutils literal"><span class="pre">LIST_APPEND</span></tt> bytecode).</p>
+<p>Now, when doing this sort of expansion there are some classical problems: what
+name should the intermediate list get that is being built? (I said classical
+because this is indeed one of the problems of many macro systems). What CPython
+does is give the list the name <tt class="docutils literal"><span class="pre">_[1]</span></tt> (and <tt class="docutils literal"><span class="pre">_[2]</span></tt>... with nested list
+comprehensions). You can observe this behaviour with the following code:</p>
+<pre class="literal-block">
+$ python
+Python 2.5.2 (r252:60911, Apr 21 2008, 11:12:42)
+[GCC 4.2.3 (Ubuntu 4.2.3-2ubuntu7)] on linux2
+Type "help", "copyright", "credits" or "license" for more information.
+&gt;&gt;&gt; [dir() for i in [0]][0]
+['_[1]', '__builtins__', '__doc__', '__name__', 'i']
+&gt;&gt;&gt; [[dir() for i in [0]][0] for j in [0]][0]
+['_[1]', '_[2]', '__builtins__', '__doc__', '__name__', 'i', 'j']
+</pre>
+<p>That is a sort of nice decision, since you can not reach that name by any
+"normal" means. Of course you can confuse yourself in funny ways if you want:</p>
+<pre class="literal-block">
+&gt;&gt;&gt; [locals()['_[1]'].extend([i, i + 1]) for i in range(10)]
+[0, 1, None, 1, 2, None, 2, 3, None, 3, 4, None, 4, 5, None, 5, 6, None, 6, 7, None, 7, 8, None, 8, 9, None, 9, 10, None]
+</pre>
+<p>Now to the real reason why I am writing this blog post. PyPy's Python
+interpreter implements list comprehensions in more or less exactly the same way,
+with on tiny difference: the name of the variable:</p>
+<pre class="literal-block">
+$ pypy-c-53594-generation-allworking
+Python 2.4.1 (pypy 1.0.0 build 53594) on linux2
+Type "help", "copyright", "credits" or "license" for more information.
+``the globe is our pony, the cosmos our real horse''
+&gt;&gt;&gt;&gt; [dir() for i in [0]][0]
+['$list0', '__builtins__', '__doc__', '__name__', 'i']
+</pre>
+<!-- ::
+][)())`` hack -->
+<p>Now, that shouldn't really matter for anybody, should it? Turns out it does. The
+following way too clever code is <a class="reference" href="http://www.google.com/codesearch?hl=en&amp;lr=&amp;q=__name%5C+for%5C+__name%5C+in%5C+locals&amp;sbtn=Search">apparently used a lot</a>:</p>
+<pre class="literal-block">
+__all__ = [__name for __name in locals().keys() if not __name.startswith('_') '
+               or __name == '_']
+</pre>
+<p>In PyPy this will give you a <tt class="docutils literal"><span class="pre">"$list0"</span></tt> in <tt class="docutils literal"><span class="pre">__all__</span></tt>, which will prevent the
+import of that module :-(. I guess I need to change the name to match CPython's.</p>
+<p><strong>Lesson learned</strong>: no detail is obscure enough to not have some code depending
+on it. Mostly problems on this level of obscurity are the things we are fixing
+in PyPy at the moment.</p></body></html>

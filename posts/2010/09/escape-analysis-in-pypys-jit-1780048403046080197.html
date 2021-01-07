@@ -1,0 +1,264 @@
+<html><body><p>The goal of a just-in-time compiler for a dynamic language is obviously to
+improve the speed of the language over an implementation of the language that
+uses interpretation. The first goal of a JIT is thus to remove the
+interpretation overhead, i.e. the overhead of bytecode (or AST) dispatch and the
+overhead of the interpreter's data structures, such as operand stack etc. The
+second important problem that any JIT for a dynamic language needs to solve is
+how to deal with the overhead of boxing of primitive types and of type
+dispatching. Those are problems that are usually not present in statically typed
+languages.</p>
+<p>Boxing of primitive types means that dynamic languages need to be able to handle
+all objects, even integers, floats, etc. in the same way as user-defined
+instances. Thus those primitive types are usually <em>boxed</em>, i.e. a small
+heap-structure is allocated for them, that contains the actual value.</p>
+<p>Type dispatching is the process of finding the concrete implementation that is
+applicable to the objects at hand when doing a generic operation at hand. An
+example would be the addition of two objects: The addition needs to check what
+the concrete objects are that should be added are, and choose the implementation
+that is fitting for them.</p>
+<p>Last year, we wrote a <a class="reference external" href="http://morepypy.blogspot.com/2009/03/applying-tracing-jit-to-interpreter.html">blog post</a>  and <a class="reference external" href="http://portal.acm.org/citation.cfm?id=1565827">a paper about how PyPy's meta-JIT
+approach works</a>. These explain how the meta-tracing JIT can remove the overhead
+of bytecode dispatch. In this post (and probably a followup) we want to explain
+how the traces that are produced by our meta-tracing JIT are then optimized to
+also remove some of the overhead more closely associated to dynamic languages,
+such as boxing overhead and type dispatching. The most important technique to
+achieve this is a form of <a class="reference external" href="http://en.wikipedia.org/wiki/Escape_analysis">escape analysis</a> that we call <em>virtual objects</em>.
+This is best explained via an example.</p>
+<div class="section" id="running-example">
+<h2>Running Example</h2>
+<p>For the purpose of this blog post, we are going to use a very simple object
+model, that just supports an integer and a float type. The objects support only
+two operations, <tt class="docutils literal">add</tt>, which adds two objects (promoting ints to floats in a
+mixed addition) and <tt class="docutils literal">is_positive</tt>, which returns whether the number is greater
+than zero. The implementation of <tt class="docutils literal">add</tt> uses classical Smalltalk-like
+double-dispatching. These classes could be part of the implementation of a very
+simple interpreter written in RPython.</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Base</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">add</span>(<span style="color: #336666;">self</span>, other):
+        <span style="color: #CC3300; font-style: italic;">""" add self to other """</span>
+        <span style="color: #006699; font-weight: bold;">raise</span> <span style="color: #CC0000; font-weight: bold;">NotImplementedError</span>(<span style="color: #CC3300;">"abstract base"</span>)
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">add__int</span>(<span style="color: #336666;">self</span>, intother):
+        <span style="color: #CC3300; font-style: italic;">""" add intother to self, where intother is a Python integer """</span>
+        <span style="color: #006699; font-weight: bold;">raise</span> <span style="color: #CC0000; font-weight: bold;">NotImplementedError</span>(<span style="color: #CC3300;">"abstract base"</span>)
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">add__float</span>(<span style="color: #336666;">self</span>, floatother):
+        <span style="color: #CC3300; font-style: italic;">""" add floatother to self, where floatother is a Python float """</span>
+        <span style="color: #006699; font-weight: bold;">raise</span> <span style="color: #CC0000; font-weight: bold;">NotImplementedError</span>(<span style="color: #CC3300;">"abstract base"</span>)
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">is_positive</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #CC3300; font-style: italic;">""" returns whether self is positive """</span>
+        <span style="color: #006699; font-weight: bold;">raise</span> <span style="color: #CC0000; font-weight: bold;">NotImplementedError</span>(<span style="color: #CC3300;">"abstract base"</span>)
+
+<span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">BoxedInteger</span>(Base):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, intval):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>intval <span style="color: #555555;">=</span> intval
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">add</span>(<span style="color: #336666;">self</span>, other):
+        <span style="color: #006699; font-weight: bold;">return</span> other<span style="color: #555555;">.</span>add__int(<span style="color: #336666;">self</span><span style="color: #555555;">.</span>intval)
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">add__int</span>(<span style="color: #336666;">self</span>, intother):
+        <span style="color: #006699; font-weight: bold;">return</span> BoxedInteger(intother <span style="color: #555555;">+</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>intval)
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">add__float</span>(<span style="color: #336666;">self</span>, floatother):
+        <span style="color: #006699; font-weight: bold;">return</span> BoxedFloat(floatother <span style="color: #555555;">+</span> <span style="color: #336666;">float</span>(<span style="color: #336666;">self</span><span style="color: #555555;">.</span>intval))
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">is_positive</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>intval <span style="color: #555555;">&gt;</span> <span style="color: #FF6600;">0</span>
+
+<span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">BoxedFloat</span>(Base):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, floatval):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>floatval <span style="color: #555555;">=</span> floatval
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">add</span>(<span style="color: #336666;">self</span>, other):
+        <span style="color: #006699; font-weight: bold;">return</span> other<span style="color: #555555;">.</span>add__float(<span style="color: #336666;">self</span><span style="color: #555555;">.</span>floatval)
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">add__int</span>(<span style="color: #336666;">self</span>, intother):
+        <span style="color: #006699; font-weight: bold;">return</span> BoxedFloat(<span style="color: #336666;">float</span>(intother) <span style="color: #555555;">+</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>floatval)
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">add__float</span>(<span style="color: #336666;">self</span>, floatother):
+        <span style="color: #006699; font-weight: bold;">return</span> BoxedFloat(floatother <span style="color: #555555;">+</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>floatval)
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">is_positive</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>floatval <span style="color: #555555;">&gt;</span> <span style="color: #FF6600;">0.0</span>
+</pre></div>
+<p>Using these classes to implement arithmetic shows the basic problem that a
+dynamic language implementation has. All the numbers are instances of either
+<tt class="docutils literal">BoxedInteger</tt> or <tt class="docutils literal">BoxedFloat</tt>, thus they consume space on the heap. Performing many
+arithmetic operations produces lots of garbage quickly, thus putting pressure on
+the garbage collector. Using double dispatching to implement the numeric tower
+needs two method calls per arithmetic operation, which is costly due to the
+method dispatch.</p>
+<p>To understand the problems more directly, let us consider a simple function that
+uses the object model:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">f</span>(y):
+    res <span style="color: #555555;">=</span> BoxedInteger(<span style="color: #FF6600;">0</span>)
+    <span style="color: #006699; font-weight: bold;">while</span> y<span style="color: #555555;">.</span>is_positive():
+        res <span style="color: #555555;">=</span> res<span style="color: #555555;">.</span>add(y)<span style="color: #555555;">.</span>add(BoxedInteger(<span style="color: #555555;">-</span><span style="color: #FF6600;">100</span>))
+        y <span style="color: #555555;">=</span> y<span style="color: #555555;">.</span>add(BoxedInteger(<span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>))
+    <span style="color: #006699; font-weight: bold;">return</span> res
+</pre></div>
+<p>The loop iterates <tt class="docutils literal">y</tt> times, and computes something in the process. To
+understand the reason why executing this function is slow, here is the trace
+that is produced by the tracing JIT when executing the function with <tt class="docutils literal">y</tt>
+being a <tt class="docutils literal">BoxedInteger</tt>:</p>
+<pre class="literal-block">
+# arguments to the trace: p0, p1
+# inside f: res.add(y)
+guard_class(p1, BoxedInteger)
+    # inside BoxedInteger.add
+    i2 = getfield_gc(p1, intval)
+    guard_class(p0, BoxedInteger)
+        # inside BoxedInteger.add__int
+        i3 = getfield_gc(p0, intval)
+        i4 = int_add(i2, i3)
+        p5 = new(BoxedInteger)
+            # inside BoxedInteger.__init__
+            setfield_gc(p5, i4, intval)
+# inside f: BoxedInteger(-100)
+p6 = new(BoxedInteger)
+    # inside BoxedInteger.__init__
+    setfield_gc(p6, -100, intval)
+
+# inside f: .add(BoxedInteger(-100))
+guard_class(p5, BoxedInteger)
+    # inside BoxedInteger.add
+    i7 = getfield_gc(p5, intval)
+    guard_class(p6, BoxedInteger)
+        # inside BoxedInteger.add__int
+        i8 = getfield_gc(p6, intval)
+        i9 = int_add(i7, i8)
+        p10 = new(BoxedInteger)
+            # inside BoxedInteger.__init__
+            setfield_gc(p10, i9, intval)
+
+# inside f: BoxedInteger(-1)
+p11 = new(BoxedInteger)
+    # inside BoxedInteger.__init__
+    setfield_gc(p11, -1, intval)
+
+# inside f: y.add(BoxedInteger(-1))
+guard_class(p0, BoxedInteger)
+    # inside BoxedInteger.add
+    i12 = getfield_gc(p0, intval)
+    guard_class(p11, BoxedInteger)
+        # inside BoxedInteger.add__int
+        i13 = getfield_gc(p11, intval)
+        i14 = int_add(i12, i13)
+        p15 = new(BoxedInteger)
+            # inside BoxedInteger.__init__
+            setfield_gc(p15, i14, intval)
+
+# inside f: y.is_positive()
+guard_class(p15, BoxedInteger)
+    # inside BoxedInteger.is_positive
+    i16 = getfield_gc(p15, intval)
+    i17 = int_gt(i16, 0)
+# inside f
+guard_true(i17)
+jump(p15, p10)
+</pre>
+<p>(indentation corresponds to the stack level of the traced functions).</p>
+<p>The trace is inefficient for a couple of reasons. One problem is that it checks
+repeatedly and redundantly for the class of the objects around, using a
+<tt class="docutils literal">guard_class</tt> instruction. In addition, some new <tt class="docutils literal">BoxedInteger</tt> instances are
+constructed using the <tt class="docutils literal">new</tt> operation, only to be used once and then forgotten
+a bit later. In the next section, we will see how this can be improved upon,
+using escape analysis.</p>
+</div>
+<div class="section" id="virtual-objects">
+<h2>Virtual Objects</h2>
+<p>The main insight to improve the code shown in the last section is that some of
+the objects created in the trace using a <tt class="docutils literal">new</tt> operation don't survive very
+long and are collected by the garbage collector soon after their allocation.
+Moreover, they are used only inside the loop, thus we can easily prove that
+nobody else in the program stores a reference to them. The
+idea for improving the code is thus to analyze which objects never escape the
+loop and may thus not be allocated at all.</p>
+<p>This process is called <em>escape analysis</em>. The escape analysis of
+our tracing JIT works by using <em>virtual objects</em>: The trace is walked from
+beginning to end and whenever a <tt class="docutils literal">new</tt> operation is seen, the operation is
+removed and a virtual object is constructed. The virtual object summarizes the
+shape of the object that is allocated at this position in the original trace,
+and is used by the escape analysis to improve the trace. The shape describes
+where the values that would be stored in the fields of the allocated objects
+come from. Whenever the optimizer sees a <tt class="docutils literal">setfield</tt> that writes into a virtual
+object, that shape summary is thus updated and the operation can be removed.
+When the optimizer encounters a <tt class="docutils literal">getfield</tt> from a virtual, the result is read
+from the virtual object, and the operation is also removed.</p>
+<p>In the example from last section, the following operations would produce two
+virtual objects, and be completely removed from the optimized trace:</p>
+<pre class="literal-block">
+p5 = new(BoxedInteger)
+setfield_gc(p5, i4, intval)
+p6 = new(BoxedInteger)
+setfield_gc(p6, -100, intval)
+</pre>
+<p>The virtual object stored in <tt class="docutils literal">p5</tt> would know that it is an <tt class="docutils literal">BoxedInteger</tt>, and that
+the <tt class="docutils literal">intval</tt> field contains <tt class="docutils literal">i4</tt>, the one stored in <tt class="docutils literal">p6</tt> would know that
+its <tt class="docutils literal">intval</tt> field contains the constant -100.</p>
+<p>The following operations, that use <tt class="docutils literal">p5</tt> and <tt class="docutils literal">p6</tt> could then be
+optimized using that knowledge:</p>
+<pre class="literal-block">
+guard_class(p5, BoxedInteger)
+i7 = getfield_gc(p5, intval)
+# inside BoxedInteger.add
+guard_class(p6, BoxedInteger)
+# inside BoxedInteger.add__int
+i8 = getfield_gc(p6, intval)
+i9 = int_add(i7, i8)
+</pre>
+<p>The <tt class="docutils literal">guard_class</tt> operations can be removed, because the classes of <tt class="docutils literal">p5</tt> and
+<tt class="docutils literal">p6</tt> are known to be <tt class="docutils literal">BoxedInteger</tt>. The <tt class="docutils literal">getfield_gc</tt> operations can be removed
+and <tt class="docutils literal">i7</tt> and <tt class="docutils literal">i8</tt> are just replaced by <tt class="docutils literal">i4</tt> and -100. Thus the only
+remaining operation in the optimized trace would be:</p>
+<pre class="literal-block">
+i9 = int_add(i4, -100)
+</pre>
+<p>The rest of the trace is optimized similarly.</p>
+<p>So far we have only described what happens when virtual objects are used in
+operations that read and write their fields. When the virtual object is used in
+any other operation, it cannot stay virtual. For example, when a virtual object
+is stored in a globally accessible place, the object needs to actually be
+allocated, as it will live longer than one iteration of the loop.</p>
+<p>This is what happens at the end of the trace above, when the <tt class="docutils literal">jump</tt> operation
+is hit. The arguments of the jump are at this point virtual objects. Before the
+jump is emitted, they are <em>forced</em>. This means that the optimizers produces code
+that allocates a new object of the right type and sets its fields to the field
+values that the virtual object has. This means that instead of the jump, the
+following operations are emitted:</p>
+<pre class="literal-block">
+p15 = new(BoxedInteger)
+setfield_gc(p15, i14, intval)
+p10 = new(BoxedInteger)
+setfield_gc(p10, i9, intval)
+jump(p15, p10)
+</pre>
+<p>Note how the operations for creating these two instances has been moved down the
+trace. It looks like for these operations we actually didn't win much, because
+the objects are still allocated at the end. However, the optimization was still
+worthwhile even in this case, because some operations that have been performed
+on the forced virtual objects have been removed (some <tt class="docutils literal">getfield_gc</tt> operations
+and <tt class="docutils literal">guard_class</tt> operations).</p>
+<p>The final optimized trace of the example looks like this:</p>
+<pre class="literal-block">
+# arguments to the trace: p0, p1
+guard_class(p1, BoxedInteger)
+i2 = getfield_gc(p1, intval)
+guard_class(p0, BoxedInteger)
+i3 = getfield_gc(p0, intval)
+i4 = int_add(i2, i3)
+i9 = int_add(i4, -100)
+
+guard_class(p0, BoxedInteger)
+i12 = getfield_gc(p0, intval)
+i14 = int_add(i12, -1)
+
+i17 = int_gt(i14, 0)
+guard_true(i17)
+p15 = new(BoxedInteger)
+setfield_gc(p15, i14, intval)
+p10 = new(BoxedInteger)
+setfield_gc(p10, i9, intval)
+jump(p15, p10)
+</pre>
+<p>The optimized trace contains only two allocations, instead of the original five,
+and only three <tt class="docutils literal">guard_class</tt> operations, from the original seven.</p>
+</div>
+<div class="section" id="summary">
+<h2>Summary</h2>
+<p>In this blog post we described how simple escape analysis within the scope of
+one loop works. This optimizations reduces the allocation of many intermediate
+data structures that become garbage quickly in an interpreter. It also removes a
+lot of the type dispatching overhead. In a later post, we will explain how this
+optimization can be improved further.</p>
+</div></body></html>

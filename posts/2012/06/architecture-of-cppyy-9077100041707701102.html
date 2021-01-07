@@ -1,0 +1,162 @@
+<html><body><p>The cppyy module makes it possible to call into C++ from PyPy through the
+<a class="reference external" href="http://root.cern.ch/drupal/content/reflex">Reflex package</a>.
+Work started about <a class="reference external" href="http://morepypy.blogspot.com/2010/07/cern-sprint-report-wrapping-c-libraries.html">two years ago</a>, with a <a class="reference external" href="http://morepypy.blogspot.com/2011/08/wrapping-c-libraries-with-reflection.html">follow-up sprint</a> a year later.
+The module has now reached an acceptable level of maturity and initial
+documentation with setup instructions, as well as a list of the currently
+supported language features, are now <a class="reference external" href="http://doc.pypy.org/en/latest/cppyy.html">available here</a>.
+There is a sizable (non-PyPy) set of unit and application tests that is still
+being worked through, not all of them of general applicability, so development
+continues its current somewhat random walk towards full language coverage.
+However, if you find that cppyy by and large works for you except for certain
+specific features, feel free to ask for them to be given higher priority.</p>
+<p>Cppyy handles bindings differently than what is typically found in other
+tools with a similar objective, so this update walks through some of these
+differences, and explains why choices were made as they are.</p>
+<p>The most visible difference, is from the viewpoint of the Python programmer
+interacting with the module.
+The two canonical ways of making Python part of a larger environment, are to
+either embed or extend it.
+The latter is done with so-called <a class="reference external" href="http://docs.python.org/release/2.7.3/extending/extending.html">extension modules</a>, which are explicitly
+constructed to be very similar in their presentation to the Python programmer
+as normal Python modules.
+In cppyy, however, the external C++ world is presented from a single entrance
+point, the global C++ namespace (in the form of the variable <tt class="docutils literal">cppyy.gbl</tt>).
+Thus, instead of importing a package that contains your C++ classes, usage
+looks like this (assuming class <tt class="docutils literal">MyClass</tt> in the global namespace):</p>
+<pre class="literal-block">
+&gt;&gt;&gt;&gt; import cppyy
+&gt;&gt;&gt;&gt; m = cppyy.gbl.MyClass()
+&gt;&gt;&gt;&gt; # etc.
+</pre>
+<p>This is more natural than it appears at first: C++ classes and functions are,
+once compiled, represented by unique linker symbols, so it makes sense to give
+them their own unique place on the Python side as well.
+This organization allows pythonizations of C++ classes to propagate from one
+code to another, ensures that all normal Python introspection (such as
+<tt class="docutils literal">issubclass</tt> and <tt class="docutils literal">isinstance</tt>) works as expected in all cases, and that it
+is possible to represent C++ constructs such as typedefs simply by Python
+references.
+Achieving this unified presentation would clearly require a lot of internal
+administration to track all C++ entities if they each lived in their own,
+pre-built extension modules.
+So instead, cppyy generates the C++ bindings at run-time, which brings us to
+the next difference.</p>
+<p>Then again, that is not really a difference: when writing or generating a
+Python extension module, the result is some C code that consists of calls into
+Python, which then gets compiled.
+However, it is not the bindings themselves that are compiled; it is the code
+that creates the bindings that gets compiled.
+In other words, any generated or hand-written extension module does exactly
+what cppyy does, except that they are much more specific in that the bound
+code is hard-wired with e.g. fixed strings and external function calls.
+The upshot is that in Python, where all objects are first-class and run-time
+constructs, there is no difference whatsoever between bindings generated at
+run-time, and bindings generated at ... well, run-time really.
+There is a difference in organization, though, which goes back to the first
+point of structuring the C++ class proxies in Python: given that a class will
+settle in a unique place once bound, instead of inside a module that has no
+meaning in the C++ world, it follows that it can also be uniquely located in
+the first place.
+In other words, cppyy can, and does, make use of a <a class="reference external" href="http://doc.pypy.org/en/latest/cppyy.html#automatic-class-loader">class loader</a> to
+auto-load classes on-demand.</p>
+<p>If at this point, this all reminds you of a bit ctypes, just with some extra
+bells and whistles, you would be quite right.
+In fact, internally cppyy makes heavy use of the RPython modules that form the
+guts of ctypes.
+The difficult part of ctypes, however, is the requirement to annotate
+functions and structures.
+That is not very pleasant in C, but in C++ there is a whole other level of
+complexity in that the C++ standard specifies many low-level details, that are
+required for dispatching calls and understanding object layout, as
+"implementation defined."
+Of course, in the case of Open Source compilers, getting at those details is
+doable, but having to reverse engineer closed-source compilers gets old rather
+quickly in more ways than one.
+More generally, these implementation defined details prevent a clean interface,
+i.e. without a further dependency on the compiler, into C++ like the one that
+the <a class="reference external" href="http://morepypy.blogspot.com/2012/06/release-01-of-cffi.html">CFFI module</a> provides for C.
+Still, once internal pointers have been followed, offsets have been calculated,
+<tt class="docutils literal">this</tt> objects have been provided, etc., etc., the final dispatch into binary
+C++ is no different than that into C, and cppyy will therefore be able to make
+use of CFFI internally, like it does with ctypes today.
+This is especially relevant in the <a class="reference external" href="http://root.cern.ch/drupal/content/cling">CLang/LLVM</a> world, where stub functions
+are done away with.
+To get the required low-level details then, cppyy relies on a back-end, rather
+than getting it from the programmer, and this is where Reflex (together with
+the relevant C++ compiler) comes in, largely automating this tedious process.</p>
+<p>There is nothing special about Reflex per se, other than that it is relatively
+lightweight, available, and has proven to be able to handle huge code bases.
+It was a known quantity when work on cppyy started, and given the number
+of moving parts in learning PyPy, that was a welcome relief.
+Reflex is based on <a class="reference external" href="http://www.gccxml.org">gccxml</a>, and can therefore handle pretty much any C or
+C++ code that you care to throw at it.
+It is also technically speaking obsolete as it will not support C++11, since
+gccxml won't, but its expected replacement, based on CLang/LLVM, is not
+quite there yet (we are looking at Q3 of this year).
+In cppyy, access to Reflex, or any back-end for that matter, is through a
+thin C API (see the schematic below): cppyy asks high level questions to the
+back-end, and receives low-level results, some of which are in the form of
+opaque handles.
+This ensures that cppyy is not tied to any specific back-end.
+In fact, currently it already supports another, <a class="reference external" href="http://root.cern.ch/root/Cint.html">CINT</a>, but that back-end is
+of little interest outside of High Energy Physics (HEP).
+The Python side is always the same, however, so any Python code based on cppyy
+does not have to change if the back-end changes.
+To use the system,  a back-end specific tool (<tt class="docutils literal">genreflex</tt> for Reflex) is
+first run on a set of header files with a <a class="reference external" href="http://doc.pypy.org/en/latest/cppyy.html#advanced-example">selection file</a> for choosing the
+required classes.
+This produces a C++ file that must be compiled into a shared library, and a
+corresponding map file for the class loader.
+These shared libraries, with their map files alongside, can be put anywhere
+as long as they can be located through the standard paths for the dynamic
+loader.
+With that in place, the setup is ready, and the C++ classes are available to
+be used from cppyy.</p>
+<a href="http://1.bp.blogspot.com/-GTr_ubhX0As/T-hoMQZdtSI/AAAAAAAACIM/tMAZnQEL5GY/s1600/cppyy_architecture.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="253" src="http://1.bp.blogspot.com/-GTr_ubhX0As/T-hoMQZdtSI/AAAAAAAACIM/tMAZnQEL5GY/s400/cppyy_architecture.png" width="400"></a>
+<p>So far, nothing that has been described is specific to PyPy.
+In fact, most of the technologies described have been used for a long time
+on CPython already, so why the need for a new, PyPy-specific, module?
+To get to that, it is important to first understand how a call is mediated
+between Python and C++.
+In Python, there is the concept of a PyObject, which has a reference count, a
+pointer to a type object, and some payload.
+There are APIs to extract the low-level information from the payload for use
+in the C++ call, and to repackage any results from the call.
+This marshalling is where the bulk of the time is spent when dispatching.
+To be absolutely precise, most C++ extension module generators produce slow
+dispatches because they don't handle overloads efficiently, but even in there,
+they still spend most of their time in the marshalling code, albeit in calls
+that fail before trying the next overload.
+In PyPy, speed is gained by having the JIT unbox objects into the payload only,
+allowing it to become part of compiled traces.
+If the same marshalling APIs were used, the JIT is forced to rebox the payload,
+hand it over through the API, only to have it unboxed again by the binding.
+Doing so is dreadfully inefficient.
+The objective of cppyy, then, is to keep all code transparent to the JIT until
+the absolute last possible moment, i.e. the call into C++ itself, therefore
+allowing it to (more or less) directly pass the payload it already has, with
+an absolute minimal amount of extra work.
+In the extreme case when the binding is not to a call, but to a data member of
+an object (or to a global variable), the memory address is delivered to the
+JIT and this results in direct access with no overhead.
+Note the interplay: cppyy in PyPy does not work like a binding in the CPython
+sense that is a back-and-forth between the interpreter and the extension.
+Instead, it does its work by being transparent to the JIT, allowing the JIT to
+dissolve the binding.
+And with that, we have made a full circle: if to work well with the JIT, and
+in so doing achieve the best performance, you can not have marshalling or do
+any other API-based driving, then the concept of compiled extension modules is
+out, and the better solution is in run-time generated bindings.</p>
+<p>That leaves one final point.
+What if you do want to present an extension module-like interface to
+programmers that use your code?
+But of course, this is Python: everything consists of first-class objects,
+whose behavior can be changed on the fly.
+In CPython, you might hesitate to make such changes, as every overlay or
+indirection results in quite a bit of overhead.
+With PyPy, however, these layers are all optimized out of existences, making
+that a non-issue.</p>
+<p>This posting laid out the reasoning behind the organization of cppyy.
+A follow-up is planned, to explain how C++ objects are handled and
+represented internally.</p>
+<p>Wim Lavrijsen</p></body></html>

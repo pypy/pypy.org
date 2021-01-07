@@ -1,0 +1,207 @@
+<html><body><p>Hello everyone.</p>
+<p>I'm proud to release the result of a Facebook-sponsored study on the feasibility of
+using the RPython toolchain to produce a PHP interpreter. The rules were
+simple: two months; one person; get as close to PHP as possible, implementing
+enough warts and corner cases to be reasonably sure that it answers hard
+problems in the PHP language. The outcome is called <tt class="docutils literal">Hippy VM</tt> and implements
+most of the PHP 1.0 language (functions, arrays, ints, floats and strings).
+This should be considered an alpha release.</p>
+<p>The resulting interpreter is obviously incomplete – it does not support all
+modern PHP constructs (classes are completely unimplemented), builtin functions,
+grammar productions, web server integration, builtin libraries
+etc., etc.. It's <strong>just</strong> complete enough for me to reasonably be able to
+say that – given some engineering effort – it's possible to provide a rock-solid
+and fast PHP VM using PyPy technologies.</p>
+<p>The result is available in a <a class="reference external" href="https://bitbucket.org/fijal/hippyvm">Bitbucket repo</a> and is released under the MIT
+license.</p>
+<div class="section" id="performance">
+<h3>Performance</h3>
+<p>The table below shows a few benchmarks comparing Hippy VM to <a class="reference external" href="http://www.zend.com">Zend</a> (a standard
+PHP interpreter available in Linux distributions) and <a class="reference external" href="https://github.com/facebook/hiphop-php">HipHop VM</a> (a PHP-to-C++
+optimizing compiler developed by Facebook).  The versions used were Zend 5.3.2
+(Zend Engine v2.3.0) and HipHop VM heads/vm-0-ga4fbb08028493df0f5e44f2bf7c042e859e245ab
+(note that you need to check out the <tt class="docutils literal">vm</tt> branch to get the newest version).</p>
+<p>The run was performed on 64-bit Linux running on a Xeon W3580 with 8M of
+L2 cache, which was otherwise unoccupied.</p>
+<p>Unfortunately, I was not able to run it on the JITted version of HHVM, the new effort by Facebook,
+but people involved with the project told me it's usually slower or comparable with the compiled HipHop.
+Their JITted VM is still alpha software, so I'll update it as soon as I have the info.</p>
+<blockquote>
+<table border="1" class="docutils">
+<colgroup>
+<col width="20%">
+<col width="11%">
+<col width="15%">
+<col width="15%">
+<col width="19%">
+<col width="21%">
+</colgroup>
+<tbody valign="top">
+<tr><td>benchmark</td>
+<td>Zend</td>
+<td>HipHop VM</td>
+<td>Hippy VM</td>
+<td>Hippy / Zend</td>
+<td>Hippy / HipHop</td>
+</tr>
+<tr><td>arr</td>
+<td>2.771</td>
+<td>0.508+-0%</td>
+<td>0.274+-0%</td>
+<td>10.1x</td>
+<td>1.8x</td>
+</tr>
+<tr><td>fannkuch</td>
+<td>21.239</td>
+<td>7.248+-0%</td>
+<td>1.377+-0%</td>
+<td>15.4x</td>
+<td>5.3x</td>
+</tr>
+<tr><td>heapsort</td>
+<td>1.739</td>
+<td>0.507+-0%</td>
+<td>0.192+-0%</td>
+<td>9.1x</td>
+<td>2.6x</td>
+</tr>
+<tr><td>binary_trees</td>
+<td>3.223</td>
+<td>0.641+-0%</td>
+<td>0.460+-0%</td>
+<td>7.0x</td>
+<td>1.4x</td>
+</tr>
+<tr><td>cache_get_scb</td>
+<td>3.350</td>
+<td>0.614+-0%</td>
+<td>0.267+-2%</td>
+<td>12.6x</td>
+<td>2.3x</td>
+</tr>
+<tr><td>fib</td>
+<td>2.357</td>
+<td>0.497+-0%</td>
+<td>0.021+-0%</td>
+<td>111.6x</td>
+<td>23.5x</td>
+</tr>
+<tr><td>fasta</td>
+<td>1.499</td>
+<td>0.233+-4%</td>
+<td>0.177+-0%</td>
+<td>8.5x</td>
+<td>1.3x</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<p>The PyPy compiler toolchain provides a way to implement a dynamic
+language interpreter in a high-level language called RPython. This is
+a language which is lower-level than Python, but still higher-level than
+C or C++: for example, RPython is a garbage-collected language. The killer
+feature is that the toolchain will generate a JIT for your interpreter which
+will be able to leverage most of the work that has been done on speeding up Python
+in the PyPy project.  The resulting JIT is generated for your interpreter, and is not Python-specific.
+This was one of the toolchain's original design decisions – in contrast to e.g. the JVM,
+which was initially only used to interpret Java and later adjusted to serve as a platform for
+dynamic languages.</p>
+<p>Another important difference is that there is no common bytecode to which you compile both your
+language and Python, so you don't inherit problems presented when implementing language X on top of,
+say, <a class="reference external" href="http://www.parrot.org/">Parrot VM</a> or the JVM.  The PyPy toolchain does not impose constraints on the semantics of
+your language, whereas the benefits of the JVM only apply to languages that map well onto Java concepts.</p>
+<p>To read more about creating your own interpreters using the PyPy toolchain,
+read <a class="reference external" href="http://morepypy.blogspot.com/2011/04/tutorial-writing-interpreter-with-pypy.html">more</a> <a class="reference external" href="http://morepypy.blogspot.com/2011/04/tutorial-part-2-adding-jit.html">blog posts</a> or an <a class="reference external" href="http://tratt.net/laurie/tech_articles/articles/fast_enough_vms_in_fast_enough_time">excellent article</a> by Laurence Tratt.</p>
+</div>
+<div class="section" id="php-deviations">
+<h3>PHP deviations</h3>
+<p>The project's biggest deviation from the PHP specification is probably
+that GC is no longer reference counting. That means that the object finalizer, when
+implemented, will not be called directly at the moment of object death, but
+at some later point. There are possible future developments to alleviate that
+problem, by providing "refcounted" objects when leaving the current scope.
+Research has to be done in order to achieve that.</p>
+</div>
+<div class="section" id="assessment">
+<h3>Assessment</h3>
+<p>The RPython toolchain seems to be a cost-effective choice for writing
+dynamic language VMs.  It both provides a fast JIT and gives you
+access to low-level primitives when you need them. A good example is
+in the directory <tt class="docutils literal">hippy/rpython</tt> which contains the implementation
+of an ordered dictionary. An ordered dictionary is not a primitive
+that RPython provides – it's not necessary for the goal of
+implementing Python.  Now, implementing it on top of a normal dictionary
+is possible, but inefficient. RPython provides a way to work
+directly at a lower level, if you desire to do so.</p>
+<p>Things that require improvements in RPython:</p>
+<ul class="simple">
+<li>Lack of mutable strings on the RPython level ended up being a problem.
+I ended up using lists of characters; which are efficient, but inconvenient,
+since they don't support any string methods.</li>
+<li>Frame handling is too conservative and too Python-specific, especially around
+the calls. It's possible to implement less general, but simpler and faster
+frame handling implementation in RPython.</li>
+</ul>
+</div>
+<div class="section" id="status-of-the-implementation">
+<h3>Status of the implementation</h3>
+<p>Don't use it! It's a research prototype intended to assess the feasibility
+of using RPython to create dynamic language VMs. The most notable
+feature that's missing is reasonable error reporting. That said, I'm
+confident it implements enough of the PHP language to prove that the full
+implementation will present the same performance characteristics.</p>
+</div>
+<div class="section" id="benchmarks">
+<h3>Benchmarks</h3>
+<p>The benchmarks are a selection of computer language shootout benchmarks, as well
+as <tt class="docutils literal">cache_get_scb</tt>, which is a part of old Facebook code. All benchmarks other
+than this one (which is not open source, but definitely the most interesting :( ) are
+available in the <tt class="docutils literal">bench</tt> directory. The Python program to run them is called
+<tt class="docutils literal">runner.py</tt> and is in the same directory. It runs them 10 times, cutting off the first
+3 runs (to ignore the JIT warm-up time) and averaging the rest. As you can see
+the standard deviation is fairly minimal for all interpreters and runs; if
+it's omitted it means it's below 0.5%.</p>
+<p>The benchmarks were not selected for their ease of optimization – the optimizations
+in the interpreter were written specifically for this set of benchmarks. No special JIT
+optimizations were added, and barring what's mentioned below a vanilla PyPy 1.9 checkout
+was used for compilation.</p>
+</div>
+<div class="section" id="so-how-fast-will-my-website-run-if-this-is-completed">
+<h3>So, how fast will my website run if this is completed?</h3>
+<p>The truth is that I lack the benchmarks to be able to answer that right now. The core
+of the PHP language is implemented up to the point where I'm confident
+that the performance will not change as we get more of the PHP going.</p>
+</div>
+<div class="section" id="how-do-i-run-it">
+<h3>How do I run it?</h3>
+<p>Get a <a class="reference external" href="https://bitbucket.org/pypy/pypy">PyPy checkout</a>, apply the <a class="reference external" href="https://gist.github.com/2923845">diff</a> if you want to squeeze out the last
+bits of performance and run <tt class="docutils literal"><span class="pre">pypy-checkout/pypy/bin/rpython</span> targethippy.py</tt> to
+get an executable that resembles a PHP interpreter. You can also directly run
+<tt class="docutils literal">python targethippy.py file.php</tt>, but this will be about 2000x slower.</p>
+</div>
+<div class="section" id="rpython-modifications">
+<h3>RPython modifications</h3>
+<p>There was a modification that I did to the PyPy source code; the <a class="reference external" href="https://gist.github.com/2923845">diff</a>
+is available. It's trivial, and should simply be made optional in the
+RPython JIT generator, but it was easier just to do it, given the very constrained time
+frame.</p>
+<ul class="simple">
+<li><tt class="docutils literal">gen_store_back_in_virtualizable</tt> was disabled. This feature is
+necessary for Python frames but not for PHP frames. PHP frames
+do not have to be kept alive after we exit a function.</li>
+</ul>
+</div>
+<div class="section" id="future">
+<h3>Future</h3>
+<p>Hippy is a cool prototype that presents a very interesting path towards a fast
+PHP VM.  However, at the moment I have too many other open source commitments
+to take on the task of completing it in my spare time.  I do think that this project
+has a lot of potential, but I will not commit to any further development at
+this time.  If you send pull requests I'll try to review them.  I'm also open
+to having further development on this project funded, so if you're interested
+in this project and the potential of a fast PHP interpreter, please get in
+touch.</p>
+</div>
+<p>Cheers,<br>
+fijal</p>
+<p><b>EDIT:</b> Fixed the path to the rpython binary</p></body></html>

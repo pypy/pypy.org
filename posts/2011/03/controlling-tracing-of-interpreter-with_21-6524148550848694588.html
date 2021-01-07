@@ -1,0 +1,409 @@
+<html><body><p>This is part 3 of the series on how to speed up an interpreter written with
+PyPy by adding JIT hints to the interpreter. Part 1 described how to <a class="reference external" href="http://morepypy.blogspot.com/2011/03/controlling-tracing-of-interpreter-with.html">control
+the extent of tracing</a>. Part 2 described how to <a class="reference external" href="http://morepypy.blogspot.com/2011/03/controlling-tracing-of-interpreter-with_15.html">influence the optimizer with
+promotion and pure functions</a>. In this post I describe a worked-out example of
+a small object model for a dynamic language and how to make it efficient using
+the hints described in the previous posts.</p>
+<div class="section" id="a-simple-object-model">
+<h2>A Simple Object Model</h2>
+<p>To implement a dynamic language efficiently, the operations on its objects need
+to be fast. Most dynamic languages have object models that are made by using
+dictionaries everywhere. Let's look at an example of how the JIT can be made to
+optimize such operations.</p>
+<p>For the purpose of this blog post we will use a very simple and bare-bones
+object model that just supports very simple classes and instances, without any
+inheritance or any fancy features. The model has classes, which contain methods.
+Instances have a class. Instances have their own attributes. When looking up an
+attribute on an instance, the instances attributes are searched. If the
+attribute is not found there, the class' attributes are searched.</p>
+<p>To implement this object model, we could use the following RPython code as part
+of the interpreter source code:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Class</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, name):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>name <span style="color: #555555;">=</span> name
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>methods <span style="color: #555555;">=</span> {}
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">instantiate</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #006699; font-weight: bold;">return</span> Instance(<span style="color: #336666;">self</span>)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">find_method</span>(<span style="color: #336666;">self</span>, name):
+        result <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>methods<span style="color: #555555;">.</span>get(name)
+        <span style="color: #006699; font-weight: bold;">if</span> result <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>:
+            <span style="color: #006699; font-weight: bold;">return</span> result
+        <span style="color: #006699; font-weight: bold;">raise</span> <span style="color: #CC0000; font-weight: bold;">AttributeError</span>(name)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">change_method</span>(<span style="color: #336666;">self</span>, name, value):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>methods[name] <span style="color: #555555;">=</span> value
+
+
+<span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Instance</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, cls):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>cls <span style="color: #555555;">=</span> cls
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>attributes <span style="color: #555555;">=</span> {}
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">getfield</span>(<span style="color: #336666;">self</span>, name):
+        result <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>attributes<span style="color: #555555;">.</span>get(name)
+        <span style="color: #006699; font-weight: bold;">if</span> result <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>:
+            <span style="color: #006699; font-weight: bold;">return</span> result
+        <span style="color: #006699; font-weight: bold;">raise</span> <span style="color: #CC0000; font-weight: bold;">AttributeError</span>(name)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">write_attribute</span>(<span style="color: #336666;">self</span>, name, value):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>attributes[name] <span style="color: #555555;">=</span> value
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">getattr</span>(<span style="color: #336666;">self</span>, name):
+        <span style="color: #006699; font-weight: bold;">try</span>:
+            <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>getfield(name)
+        <span style="color: #006699; font-weight: bold;">except</span> <span style="color: #CC0000; font-weight: bold;">AttributeError</span>:
+            <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>cls<span style="color: #555555;">.</span>find_method(name)
+</pre></div>
+<p>In this straightforward implementation the methods and attributes are just
+stored in dictionaries on the classes/instances. While this object model is very
+simple it already contains all the hard parts of Python's object model. Both
+instances and classes can have arbitrary fields, and they are changeable at
+any time.  Moreover, instances can change their class after they have been
+created.</p>
+<p>When using this object model in
+an interpreter, a huge amount of time will be spent doing lookups in these
+dictionaries. To make the language efficient using a tracing JIT, we need to
+find a way to get rid of these dictionary lookups somehow.</p>
+<p>Let's assume we trace through code that sums three attributes, such as:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;">inst<span style="color: #555555;">.</span>getattr(<span style="color: #CC3300;">"a"</span>) <span style="color: #555555;">+</span> inst<span style="color: #555555;">.</span>getattr(<span style="color: #CC3300;">"b"</span>) <span style="color: #555555;">+</span> inst<span style="color: #555555;">.</span>getattr(<span style="color: #CC3300;">"c"</span>)
+</pre></div>
+<p>The trace could look like this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #0099FF; font-style: italic;"># inst.getattr("a")</span>
+attributes1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>attributes
+result1 <span style="color: #555555;">=</span> <span style="color: #336666;">dict</span><span style="color: #555555;">.</span>get(attributes1, <span style="color: #CC3300;">"a"</span>)
+guard(result1 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>)
+
+<span style="color: #0099FF; font-style: italic;"># inst.getattr("b")</span>
+attributes2 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>attributes
+v1 <span style="color: #555555;">=</span> <span style="color: #336666;">dict</span><span style="color: #555555;">.</span>get(attributes2, <span style="color: #CC3300;">"b"</span>)
+guard(v1 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #336666;">None</span>)
+cls1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>cls
+methods1 <span style="color: #555555;">=</span> cls<span style="color: #555555;">.</span>methods
+result2 <span style="color: #555555;">=</span> <span style="color: #336666;">dict</span><span style="color: #555555;">.</span>get(methods1, <span style="color: #CC3300;">"b"</span>)
+guard(result2 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>)
+v2 <span style="color: #555555;">=</span> result1 <span style="color: #555555;">+</span> result2
+
+<span style="color: #0099FF; font-style: italic;"># inst.getattr("c")</span>
+attributes3 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>attributes
+v3 <span style="color: #555555;">=</span> <span style="color: #336666;">dict</span><span style="color: #555555;">.</span>get(attributes3, <span style="color: #CC3300;">"c"</span>)
+guard(v3 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #336666;">None</span>)
+cls1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>cls
+methods2 <span style="color: #555555;">=</span> cls<span style="color: #555555;">.</span>methods
+result3 <span style="color: #555555;">=</span> <span style="color: #336666;">dict</span><span style="color: #555555;">.</span>get(methods2, <span style="color: #CC3300;">"c"</span>)
+guard(result3 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>)
+
+v4 <span style="color: #555555;">=</span> v2 <span style="color: #555555;">+</span> result3
+<span style="color: #006699; font-weight: bold;">return</span>(v4)
+</pre></div>
+<p>In this example, the attribute <tt class="docutils literal">a</tt> is found on the instance, but the
+attributes <tt class="docutils literal">b</tt> and <tt class="docutils literal">c</tt> are found on the class. The trace indeed contains
+five calls to <tt class="docutils literal">dict.get</tt>, which is slow.</p>
+</div>
+<div class="section" id="making-instance-attributes-faster-using-maps">
+<h2>Making Instance Attributes Faster Using Maps</h2>
+<p>The first step in making <tt class="docutils literal">getattr</tt> faster in our object model is to optimize
+away the dictionary lookups on the instances. The hints we have looked at in the
+two earlier blog posts don't seem to help with the current object model. There is
+no pure function to be seen, and the instance is not a candidate for promotion,
+because there tend to be many instances.</p>
+<p>This is a common problem when trying to apply hints. Often, the interpreter
+needs a small rewrite to expose the pure functions and nearly-constant objects
+that are implicitly there. In the case of instance fields this rewrite is not
+entirely obvious. The basic idea is as follows. In theory instances can have
+arbitrary fields. In practice however many instances share their layout (i.e.
+their set of keys) with many other instances.</p>
+<p>Therefore it makes sense to factor the layout information out of the instance
+implementation into a shared object. This shared layout object is called a
+<em>map</em>. Maps are an old idea that comes originally from the SELF language. They are
+also used by many JavaScript implementations such as V8. I've <a class="reference external" href="http://morepypy.blogspot.com/2010/11/efficiently-implementing-python-objects.html">written about maps
+before</a>, so I won't explain them fully again.</p>
+<p>The rewritten <tt class="docutils literal">Instance</tt> class using maps looks like this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Map</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>attribute_indexes <span style="color: #555555;">=</span> {}
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>other_maps <span style="color: #555555;">=</span> {}
+
+    <span style="color: #9999FF;">@purefunction</span>
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">getindex</span>(<span style="color: #336666;">self</span>, name):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>attribute_indexes<span style="color: #555555;">.</span>get(name, <span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>)
+
+    <span style="color: #9999FF;">@purefunction</span>
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">new_map_with_additional_attribute</span>(<span style="color: #336666;">self</span>, name):
+        <span style="color: #006699; font-weight: bold;">if</span> name <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #000000; font-weight: bold;">in</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>other_maps:
+            newmap <span style="color: #555555;">=</span> Map()
+            newmap<span style="color: #555555;">.</span>attribute_indexes<span style="color: #555555;">.</span>update(<span style="color: #336666;">self</span><span style="color: #555555;">.</span>attribute_indexes)
+            newmap<span style="color: #555555;">.</span>attribute_indexes[name] <span style="color: #555555;">=</span> <span style="color: #336666;">len</span>(<span style="color: #336666;">self</span><span style="color: #555555;">.</span>attribute_indexes)
+            <span style="color: #336666;">self</span><span style="color: #555555;">.</span>other_maps[name] <span style="color: #555555;">=</span> newmap
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>other_maps[name]
+
+
+EMPTY_MAP <span style="color: #555555;">=</span> Map()
+
+<span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Instance</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, cls):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>cls <span style="color: #555555;">=</span> cls
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>map <span style="color: #555555;">=</span> EMPTY_MAP
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>storage <span style="color: #555555;">=</span> []
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">getfield</span>(<span style="color: #336666;">self</span>, name):
+        <span style="color: #336666;">map</span> <span style="color: #555555;">=</span> hint(<span style="color: #336666;">self</span><span style="color: #555555;">.</span>map, promote<span style="color: #555555;">=</span><span style="color: #336666;">True</span>)
+        index <span style="color: #555555;">=</span> <span style="color: #336666;">map</span><span style="color: #555555;">.</span>getindex(name)
+        <span style="color: #006699; font-weight: bold;">if</span> index <span style="color: #555555;">!=</span> <span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>:
+            <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>storage[index]
+        <span style="color: #006699; font-weight: bold;">raise</span> <span style="color: #CC0000; font-weight: bold;">AttributeError</span>(name)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">write_attribute</span>(<span style="color: #336666;">self</span>, name, value):
+        <span style="color: #336666;">map</span> <span style="color: #555555;">=</span> hint(<span style="color: #336666;">self</span><span style="color: #555555;">.</span>map, promote<span style="color: #555555;">=</span><span style="color: #336666;">True</span>)
+        index <span style="color: #555555;">=</span> <span style="color: #336666;">map</span><span style="color: #555555;">.</span>getindex(name)
+        <span style="color: #006699; font-weight: bold;">if</span> index <span style="color: #555555;">!=</span> <span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>:
+            <span style="color: #336666;">self</span><span style="color: #555555;">.</span>storage[index] <span style="color: #555555;">=</span> value
+            <span style="color: #006699; font-weight: bold;">return</span>
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>map <span style="color: #555555;">=</span> <span style="color: #336666;">map</span><span style="color: #555555;">.</span>new_map_with_additional_attribute(name)
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>storage<span style="color: #555555;">.</span>append(value)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">getattr</span>(<span style="color: #336666;">self</span>, name):
+        <span style="color: #006699; font-weight: bold;">try</span>:
+            <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>getfield(name)
+        <span style="color: #006699; font-weight: bold;">except</span> <span style="color: #CC0000; font-weight: bold;">AttributeError</span>:
+            <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>cls<span style="color: #555555;">.</span>find_method(name)
+</pre></div>
+<p>Instances no longer use dictionaries to store their fields. Instead, they have a
+reference to a map, which maps field names to indexes into a storage list. The
+storage list contains the actual field values. The maps are shared between
+objects with the same layout. Therefore they have to be immutable, which means
+that their <tt class="docutils literal">getindex</tt> method is a pure function. When a new attribute is added
+to an instance, a new map needs to be chosen, which is done with the
+<tt class="docutils literal">new_map_with_additional_attribute</tt> method on the previous map. Now that we have
+introduced maps, it is safe to promote the map everywhere, because we assume
+that the number of different instance layouts is small.</p>
+<p>With this changed instance implementation, the trace we had above changes to the
+following, where <tt class="docutils literal">0xb74af4a8</tt> is the memory address of the Map instance that
+has been promoted:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #0099FF; font-style: italic;"># inst.getattr("a")</span>
+map1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>map
+guard(map1 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb74af4a8</span>)
+index1 <span style="color: #555555;">=</span> Map<span style="color: #555555;">.</span>getindex(map1, <span style="color: #CC3300;">"a"</span>)
+guard(index1 <span style="color: #555555;">!=</span> <span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>)
+storage1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>storage
+result1 <span style="color: #555555;">=</span> storage1[index1]
+
+<span style="color: #0099FF; font-style: italic;"># inst.getattr("b")</span>
+map2 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>map
+guard(map2 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb74af4a8</span>)
+index2 <span style="color: #555555;">=</span> Map<span style="color: #555555;">.</span>getindex(map2, <span style="color: #CC3300;">"b"</span>)
+guard(index2 <span style="color: #555555;">==</span> <span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>)
+cls1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>cls
+methods1 <span style="color: #555555;">=</span> cls<span style="color: #555555;">.</span>methods
+result2 <span style="color: #555555;">=</span> <span style="color: #336666;">dict</span><span style="color: #555555;">.</span>get(methods1, <span style="color: #CC3300;">"b"</span>)
+guard(result2 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>)
+v2 <span style="color: #555555;">=</span> result1 <span style="color: #555555;">+</span> result2
+
+<span style="color: #0099FF; font-style: italic;"># inst.getattr("c")</span>
+map3 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>map
+guard(map3 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb74af4a8</span>)
+index3 <span style="color: #555555;">=</span> Map<span style="color: #555555;">.</span>getindex(map3, <span style="color: #CC3300;">"c"</span>)
+guard(index3 <span style="color: #555555;">==</span> <span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>)
+cls1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>cls
+methods2 <span style="color: #555555;">=</span> cls<span style="color: #555555;">.</span>methods
+result3 <span style="color: #555555;">=</span> <span style="color: #336666;">dict</span><span style="color: #555555;">.</span>get(methods2, <span style="color: #CC3300;">"c"</span>)
+guard(result3 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>)
+
+v4 <span style="color: #555555;">=</span> v2 <span style="color: #555555;">+</span> result3
+<span style="color: #006699; font-weight: bold;">return</span>(v4)
+</pre></div>
+<p>The calls to <tt class="docutils literal">Map.getindex</tt> can be optimized away, because they are calls to
+a pure function and they have constant arguments. That means that <tt class="docutils literal">index1/2/3</tt>
+are constant and the guards on them can be removed. All but the first guard on
+the map will be optimized away too, because the map cannot have changed in
+between. The optimized trace looks like this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #0099FF; font-style: italic;"># inst.getattr("a")</span>
+map1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>map
+guard(map1 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb74af4a8</span>)
+storage1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>storage
+result1 <span style="color: #555555;">=</span> storage1[<span style="color: #FF6600;">0</span>]
+
+<span style="color: #0099FF; font-style: italic;"># inst.getattr("b")</span>
+cls1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>cls
+methods1 <span style="color: #555555;">=</span> cls1<span style="color: #555555;">.</span>methods
+result2 <span style="color: #555555;">=</span> <span style="color: #336666;">dict</span><span style="color: #555555;">.</span>get(methods1, <span style="color: #CC3300;">"b"</span>)
+guard(result2 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>)
+v2 <span style="color: #555555;">=</span> result1 <span style="color: #555555;">+</span> result2
+
+<span style="color: #0099FF; font-style: italic;"># inst.getattr("c")</span>
+cls2 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>cls
+methods2 <span style="color: #555555;">=</span> cls2<span style="color: #555555;">.</span>methods
+result3 <span style="color: #555555;">=</span> <span style="color: #336666;">dict</span><span style="color: #555555;">.</span>get(methods2, <span style="color: #CC3300;">"c"</span>)
+guard(result3 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>)
+
+v4 <span style="color: #555555;">=</span> v2 <span style="color: #555555;">+</span> result3
+<span style="color: #006699; font-weight: bold;">return</span>(v4)
+</pre></div>
+<p>The index <tt class="docutils literal">0</tt> that is used to read out of the <tt class="docutils literal">storage</tt> array is the result
+of the constant-folded <tt class="docutils literal">getindex</tt> call. This trace is already much better than
+the original one. Now we are down from five dictionary lookups to just two.</p>
+</div>
+<div class="section" id="versioning-of-classes">
+<h2>Versioning of Classes</h2>
+<p>Instances were optimized making the assumption that the total number of
+Instance layouts is small compared to the number of instances. For classes we
+will make an even stronger assumption. We simply assume that it is rare for
+classes to change at all. This is not totally reasonable (sometimes classes contain
+counters or similar things) but for this simple example it is good enough.</p>
+<p>What we would really like is if the <tt class="docutils literal">Class.find_method</tt> method were pure.
+But it cannot be, because it is always possible to change the class itself.
+Every time the class changes, <tt class="docutils literal">find_method</tt> can potentially return a
+new value.</p>
+<p>Therefore, we give every class a version number, which is increased every time a
+class gets changed (i.e., the content of the <tt class="docutils literal">methods</tt> dictionary changes).
+This means that the result of <tt class="docutils literal">methods.get()</tt> for a given <tt class="docutils literal">(name,
+version)</tt> pair will always be the same, i.e. it is a pure operation.  To help
+the JIT to detect this case, we factor it out in a helper method which is
+explicitly marked as <tt class="docutils literal">@purefunction</tt>. The refactored <tt class="docutils literal">Class</tt> looks like
+this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">VersionTag</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">pass</span>
+
+<span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Class</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, name):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>name <span style="color: #555555;">=</span> name
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>methods <span style="color: #555555;">=</span> {}
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>version <span style="color: #555555;">=</span> VersionTag()
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">find_method</span>(<span style="color: #336666;">self</span>, name):
+        <span style="color: #336666;">self</span> <span style="color: #555555;">=</span> hint(<span style="color: #336666;">self</span>, promote<span style="color: #555555;">=</span><span style="color: #336666;">True</span>)
+        version <span style="color: #555555;">=</span> hint(<span style="color: #336666;">self</span><span style="color: #555555;">.</span>version, promote<span style="color: #555555;">=</span><span style="color: #336666;">True</span>)
+        result <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>_find_method(name, version)
+        <span style="color: #006699; font-weight: bold;">if</span> result <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>:
+            <span style="color: #006699; font-weight: bold;">return</span> result
+        <span style="color: #006699; font-weight: bold;">raise</span> <span style="color: #CC0000; font-weight: bold;">AttributeError</span>(name)
+
+    <span style="color: #9999FF;">@purefunction</span>
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_find_method</span>(<span style="color: #336666;">self</span>, name, version):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>methods<span style="color: #555555;">.</span>get(name)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">change_method</span>(<span style="color: #336666;">self</span>, name, value):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>methods[name] <span style="color: #555555;">=</span> value
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>version <span style="color: #555555;">=</span> VersionTag()
+</pre></div>
+<p>What is interesting here is that <tt class="docutils literal">_find_method</tt> takes the <tt class="docutils literal">version</tt>
+argument but it does not use it at all. Its only purpose is to make the call
+pure (because when the version number changes, the result of the call might be
+different than the previous one).</p>
+<p>The trace with this new class implementation looks like this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #0099FF; font-style: italic;"># inst.getattr("a")</span>
+map1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>map
+guard(map1 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb74af4a8</span>)
+index1 <span style="color: #555555;">=</span> Map<span style="color: #555555;">.</span>getindex(map1, <span style="color: #CC3300;">"a"</span>)
+guard(index1 <span style="color: #555555;">!=</span> <span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>)
+storage1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>storage
+result1 <span style="color: #555555;">=</span> storage1[index1]
+
+<span style="color: #0099FF; font-style: italic;"># inst.getattr("b")</span>
+map2 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>map
+guard(map2 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb74af4a8</span>)
+index2 <span style="color: #555555;">=</span> Map<span style="color: #555555;">.</span>getindex(map2, <span style="color: #CC3300;">"b"</span>)
+guard(index2 <span style="color: #555555;">==</span> <span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>)
+cls1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>cls
+guard(cls1 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb7aaaaf8</span>)
+version1 <span style="color: #555555;">=</span> cls1<span style="color: #555555;">.</span>version
+guard(version1 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb7bbbb18</span>)
+result2 <span style="color: #555555;">=</span> Class<span style="color: #555555;">.</span>_find_method(cls, <span style="color: #CC3300;">"b"</span>, version1)
+guard(result2 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>)
+v2 <span style="color: #555555;">=</span> result1 <span style="color: #555555;">+</span> result2
+
+<span style="color: #0099FF; font-style: italic;"># inst.getattr("c")</span>
+map3 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>map
+guard(map3 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb74af4a8</span>)
+index3 <span style="color: #555555;">=</span> Map<span style="color: #555555;">.</span>getindex(map3, <span style="color: #CC3300;">"c"</span>)
+guard(index3 <span style="color: #555555;">==</span> <span style="color: #555555;">-</span><span style="color: #FF6600;">1</span>)
+cls2 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>cls
+guard(cls2 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb7aaaaf8</span>)
+version2 <span style="color: #555555;">=</span> cls2<span style="color: #555555;">.</span>version
+guard(version2 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb7bbbb18</span>)
+result3 <span style="color: #555555;">=</span> Class<span style="color: #555555;">.</span>_find_method(cls, <span style="color: #CC3300;">"c"</span>, version2)
+guard(result3 <span style="color: #000000; font-weight: bold;">is</span> <span style="color: #000000; font-weight: bold;">not</span> <span style="color: #336666;">None</span>)
+
+v4 <span style="color: #555555;">=</span> v2 <span style="color: #555555;">+</span> result3
+<span style="color: #006699; font-weight: bold;">return</span>(v4)
+</pre></div>
+<p>The calls to <tt class="docutils literal">Class._find_method</tt> can now be optimized away, also the
+promotion of the class and the version, except for the first one. The final
+optimized trace looks like this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #0099FF; font-style: italic;"># inst.getattr("a")</span>
+map1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>map
+guard(map1 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb74af4a8</span>)
+storage1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>storage
+result1 <span style="color: #555555;">=</span> storage1[<span style="color: #FF6600;">0</span>]
+
+<span style="color: #0099FF; font-style: italic;"># inst.getattr("b")</span>
+cls1 <span style="color: #555555;">=</span> inst<span style="color: #555555;">.</span>cls
+guard(cls1 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb7aaaaf8</span>)
+version1 <span style="color: #555555;">=</span> cls1<span style="color: #555555;">.</span>version
+guard(version1 <span style="color: #555555;">==</span> <span style="color: #FF6600;">0xb7bbbb18</span>)
+v2 <span style="color: #555555;">=</span> result1 <span style="color: #555555;">+</span> <span style="color: #FF6600;">41</span>
+
+<span style="color: #0099FF; font-style: italic;"># inst.getattr("c")</span>
+v4 <span style="color: #555555;">=</span> v2 <span style="color: #555555;">+</span> <span style="color: #FF6600;">17</span>
+<span style="color: #006699; font-weight: bold;">return</span>(v4)
+</pre></div>
+<p>The constants <tt class="docutils literal">41</tt> and <tt class="docutils literal">17</tt> are the results of the folding of the
+<cite>_find_method`</cite> calls. This final trace is now very good. It no longer performs any
+dictionary lookups. Instead it contains several guards. The first guard
+checks that the map is still the same. This guard will fail if the same
+code is executed with an instance that has another layout. The second guard
+checks that the class of <tt class="docutils literal">inst</tt> is still the same. It will fail if trace is
+executed with an instance of another class. The third guard checks that the
+class did not change since the trace was produced. It will fail if somebody
+calls the <tt class="docutils literal">change_method</tt> method on the class.</p>
+</div>
+<div class="section" id="real-world-considerations">
+<h2>Real-World Considerations</h2>
+<p>The techniques used above for the simple object model are used for the object
+model of PyPy's Python interpreter too. Since Python's object model is
+considerably more complex, some additional work needs to be done.</p>
+<p>The first problem that needs to be solved is that Python supports (multiple)
+inheritance. Therefore looking up a method in a class needs to consider the
+whole method resolution order. This makes the versioning of classes more
+complex. If a class is changed its version changes. At the same time, the
+versions of all the classes inheriting from it need to be changed as well,
+recursively. This makes class changes expensive, but they should be rare.  On the
+other hand, a method lookup in a complex class hierarchy is as optimized in the
+trace as in our object model here.</p>
+<p>A downside of the versioning of classes that we haven't yet fixed in PyPy, is
+that some classes <em>do</em> change a lot. An example would be a class that keeps a
+counter of how many instances have been created so far. This is very slow right
+now, but we have ideas about how to fix it in the future.</p>
+<p>Another optimization is that in practice the shape of an instance is correlated
+with its class. In our code above, we allow both to vary independently.
+In PyPy's Python interpreter we act somewhat more cleverly. The class of
+an instance is not stored on the instance itself, but on the map. This means
+that we get one fewer promotion (and thus one fewer guard) in the trace, because the class doesn't need to
+be promoted after the map has been.</p>
+</div>
+<div class="section" id="more-general-patterns">
+<h2>More General Patterns</h2>
+<p>The techniques we used above to make instance and class lookups faster are
+applicable in more general cases than the one we developed them for. A more
+abstract view of maps is that of splitting a data-structure into a part that
+changes slowly, and a part that changes quickly. In the concrete example of maps
+we split the original dictionary into the map (the slow-changing part) and the
+storage array (the quick-changing part). All the computation on the
+slow-changing part can be constant-folded during tracing so that only the
+manipulation of the quick-changing part remains.</p>
+<p>Similarly, versions can be used to constant-fold arbitrary functions of large data
+structures. The version needs to be updated carefully every time the result of
+this function can change. Therefore this is useful only if the data structure is
+expected to change slowly.</p>
+</div>
+<div class="section" id="conclusion">
+<h2>Conclusion</h2>
+<p>In this post I showed how to use <tt class="docutils literal">purefunction</tt> and <tt class="docutils literal">promote</tt> to make a
+small but still relevant dynamic object model no longer use any dictionary lookups
+after tracing. Instead a number of guards are inserted into the
+trace to check whether the assumptions about the objects are still true. This
+makes operations on objects seriously faster. I plan to write <a href="http://morepypy.blogspot.com/2011/03/controlling-tracing-of-interpreter-with_26.html">another small post</a>
+that shows the speed benefits for PyPy's Python interpreter for exactly these
+operations.</p>
+</div></body></html>

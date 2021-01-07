@@ -1,0 +1,101 @@
+<html><body><div dir="ltr" style="text-align: left;">
+<p>Hello everyone.</p>
+<p>I'm pleased to inform that we've finished another round of
+improvements to the warmup performance of PyPy. Before I go
+into details, I'll recap the achievements that we've done since we've started
+working on the warmup performance. I picked a random PyPy from November 2014
+(which is definitely before we started the warmup work) and compared it with
+a recent one, after 5.0. The exact revisions are respectively <tt class="docutils literal">ffce4c795283</tt>
+and <tt class="docutils literal">cfbb442ae368</tt>. First let's compare <a class="reference external" href="https://bitbucket.org/pypy/benchmarks/src/59290b59a24e54057d4c694fa4f47e7879a347a0/warmup/?at=default">pure warmup benchmarks</a> that
+can be found in our benchmarking suite. Out of those,
+<tt class="docutils literal"><span class="pre">pypy-graph-alloc-removal</span></tt> numbers should be taken with a grain of salt,
+since other work could have influenced the results.
+The rest of the benchmarks mentioned is bottlenecked purely by warmup times.</p>
+<p>You can see how much your program spends in warmup running
+<tt class="docutils literal"><span class="pre">PYPYLOG=jit-summary:-</span> pypy <span class="pre">your-program.py</span></tt> under "tracing" and "backend"
+fields (in the first three lines). An example looks like that:</p>
+<pre class="literal-block">
+[e00c145a41] {jit-summary
+Tracing:        71      0.053645 &lt;- time spent tracing &amp; optimizing
+Backend:        71      0.028659 &lt;- time spent compiling to assembler
+TOTAL:                  0.252217 &lt;- total run time of the program
+</pre>
+<p>The results of the benchmarks</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="29%">
+<col width="13%">
+<col width="13%">
+<col width="10%">
+<col width="17%">
+<col width="17%">
+</colgroup>
+<tbody valign="top">
+<tr><td>benchmark</td>
+<td>time - old</td>
+<td>time - new</td>
+<td>speedup</td>
+<td>JIT time - old</td>
+<td>JIT time - new</td>
+</tr>
+<tr><td>function_call</td>
+<td>1.86</td>
+<td>1.42</td>
+<td>1.3x</td>
+<td>1.12s</td>
+<td>0.57s</td>
+</tr>
+<tr><td>function_call2</td>
+<td>5.17s</td>
+<td>2.73s</td>
+<td>1.9x</td>
+<td>4.2s</td>
+<td>1.6s</td>
+</tr>
+<tr><td>bridges</td>
+<td>2.77s</td>
+<td>2.07s</td>
+<td>1.3x</td>
+<td>1.5s</td>
+<td>0.8s</td>
+</tr>
+<tr><td>pypy-graph-alloc-removal</td>
+<td>2.06s</td>
+<td>1.65s</td>
+<td>1.25x</td>
+<td>1.25s</td>
+<td>0.79s</td>
+</tr>
+</tbody>
+</table>
+<p>As we can see, the overall warmup benchmarks got up to <strong>90% faster</strong> with
+JIT time dropping by up to <strong>2.5x</strong>. We have more optimizations in the pipeline,
+with an idea how to transfer some of the JIT gains into more of a total program
+runtime by jitting earlier and more eagerly.</p>
+<div class="section" id="details-of-the-last-round-of-optimizations">
+<h1>Details of the last round of optimizations</h1>
+<p>Now the nitty gritty details - what did we actually do? I covered a lot of
+warmup improvements in the <a class="reference external" href="http://morepypy.blogspot.com/2015/10/pypy-memory-and-warmup-improvements-2.html">past</a> <a class="reference external" href="http://morepypy.blogspot.com/2015/09/pypy-warmup-improvements.html">blog</a> posts so I'm going to focus on
+the last change, the jit-leaner-frontend branch. This last change is simple, instead of using
+pointers to store the "operations" objects created during tracing, we use a compact list of
+16-bit integers (with 16bit pointers in between). On 64bit machine the memory wins are
+tremendous - the new representation is 4x more efficient to use 16bit pointers than full 64bit pointers.
+Additionally, the smaller representation has much better cache behavior and much less
+pointer chasing in memory. It also has a better defined lifespan, so we don't need to
+bother tracking them by the GC, which also saves quite a bit of time.</p>
+<p>The change sounds simple, but the details in the underlaying data mean that
+everything in the JIT had to be changed which took quite a bit of effort :-)</p>
+<p>Going into the future on the JIT front, we have an exciting set of optimizations,
+ranging from faster loops through faster warmup to using better code generation
+techniques and broadening the kind of program that PyPy speeds up. Stay tuned
+for the updates.</p>
+<p>We would like to thank our commercial partners for making all of this possible.
+The work has been performed by <a class="reference external" href="http://baroquesoftware.com">baroquesoftware</a> and would not be possible
+without support from people using PyPy in production. If your company uses
+PyPy and want it to do more or does not use PyPy but has performance problems
+with the Python installation, feel free to get in touch with me, trust me using
+PyPy ends up being a lot cheaper than rewriting everything in go :-)</p>
+<p>Best regards,<br>
+Maciej Fijalkowski</p>
+</div>
+<br></div></body></html>

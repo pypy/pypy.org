@@ -1,0 +1,74 @@
+<html><body><p>The last five days we have been sprinting in a meeting room in the Computing
+Center at <a class="reference external" href="http://cern.ch">CERN</a> in Genève, Switzerland. Present are Armin Rigo, Antonio Cuni,
+Carl Friedrich Bolz and Wim Lavrijsen (<a class="reference external" href="http://www.lbl.gov">LBL</a>). The goal of the sprint was to use
+some of the C++ technology developed at CERN to make it possible to use C++
+libraries from PyPy's Python interpreter. For this we used the <a class="reference external" href="http://root.cern.ch/drupal/content/reflex">Reflex</a>
+library, which provides reflection information for C++ classes. We discussed
+using <a class="reference external" href="http://morepypy.blogspot.com/2008/10/sprint-discussions-c-library-bindings.html">Reflex in PyPy</a> during the <a class="reference external" href="http://morepypy.blogspot.com/2008/10/dsseldorf-sprint-report-days-1-3.html">Düsseldorf sprint</a> of 2008, please read
+that blog post if you want some more details on how Reflex works. There is
+support for this sort of C++/Python integration also for CPython, using the
+<a class="reference external" href="http://root.cern.ch/drupal/content/how-use-use-python-pyroot-interpreter">PyROOT</a> module.</p>
+<p>The sprint was very successful. On Monday we had a few discussion about how
+Reflex could best be integrated with PyPy. One of the goals of the sprint was to
+make the approach JIT-friendly from the start, so that calls to C++ libraries
+can be reasonably fast. After the discussion we started coding on the
+<a class="reference external" href="http://codespeak.net/viewvc/pypy/branch/reflex-support">reflex-support</a> branch. This branch adds a new <tt class="docutils literal">cppyy</tt> builtin module to
+PyPy's Python interpreter (why we chose that name is left as an exercise to the
+reader). This module can be used to load C++ classes, construct instances and
+call static and instance methods on them.</p>
+<p>The work has just started, as of now, the argument and return types of the
+methods are restricted to some simple C types, such as <tt class="docutils literal">int</tt>, <tt class="docutils literal">double</tt> and
+<tt class="docutils literal">char*</tt> and pointers to class instances. Most of the work necessary to
+properly resolve overloaded methods is done, but default arguments are not.</p>
+<p>As an example, suppose there is a C++ class like this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">example01</span> {
+<span style="color: #006699; font-weight: bold;">private</span><span style="color: #555555;">:</span>
+    <span style="color: #006699; font-weight: bold;">static</span> <span style="color: #007788; font-weight: bold;">int</span> count;
+    <span style="color: #007788; font-weight: bold;">int</span> somedata;
+<span style="color: #006699; font-weight: bold;">public</span><span style="color: #555555;">:</span>
+
+    example01(<span style="color: #007788; font-weight: bold;">int</span> a) <span style="color: #555555;">:</span> somedata(a) {
+        count<span style="color: #555555;">++</span>;
+    }
+    <span style="color: #555555;">~</span>example01() {
+        count<span style="color: #555555;">--</span>;
+    }
+    <span style="color: #006699; font-weight: bold;">static</span> <span style="color: #007788; font-weight: bold;">int</span> getCount() {
+        <span style="color: #006699; font-weight: bold;">return</span> count;
+    }
+
+    <span style="color: #007788; font-weight: bold;">int</span> addDataToInt(<span style="color: #007788; font-weight: bold;">int</span> a) {
+        <span style="color: #006699; font-weight: bold;">return</span> somedata <span style="color: #555555;">+</span> a;
+    }
+};
+<span style="color: #007788; font-weight: bold;">int</span> example01<span style="color: #555555;">::</span>count <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>;
+</pre></div>
+<p>You can now use it from PyPy's Python interpreter in the following way, after
+you have used Reflex to generate reflection information for the class:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">import</span> <span style="color: #00CCFF; font-weight: bold;">cppyy</span>
+cppyy<span style="color: #555555;">.</span>load_lib(<span style="color: #CC3300;">"example01Dict.so"</span>) <span style="color: #0099FF; font-style: italic;"># contains the Reflex information</span>
+example01_class <span style="color: #555555;">=</span> cppyy<span style="color: #555555;">.</span>gbl<span style="color: #555555;">.</span>example01
+instance <span style="color: #555555;">=</span> example01_class(<span style="color: #FF6600;">7</span>)
+<span style="color: #006699; font-weight: bold;">assert</span> example01_class<span style="color: #555555;">.</span>getCount() <span style="color: #555555;">==</span> <span style="color: #FF6600;">1</span>
+res <span style="color: #555555;">=</span> instance<span style="color: #555555;">.</span>addDataToInt(<span style="color: #FF6600;">4</span>)
+<span style="color: #006699; font-weight: bold;">assert</span> res <span style="color: #555555;">==</span> <span style="color: #FF6600;">11</span>
+res <span style="color: #555555;">=</span> instance<span style="color: #555555;">.</span>addDataToInt(<span style="color: #555555;">-</span><span style="color: #FF6600;">4</span>)
+<span style="color: #006699; font-weight: bold;">assert</span> res <span style="color: #555555;">==</span> <span style="color: #FF6600;">3</span>
+instance<span style="color: #555555;">.</span>destruct() <span style="color: #0099FF; font-style: italic;"># so far explicit destruction needed</span>
+<span style="color: #006699; font-weight: bold;">assert</span> example01_class<span style="color: #555555;">.</span>getCount() <span style="color: #555555;">==</span> <span style="color: #FF6600;">0</span>
+</pre></div>
+<p>We also did some very early JIT work and some early performance measurements.
+The rough figures are that <tt class="docutils literal">cppyy</tt> is two times faster at calling a simple C++
+method from Python than <tt class="docutils literal">PyROOT</tt>. To get a feeling for how fast things could
+go in the end, we also implemented a proof-of-concept for some more advanced JIT
+technology (which requires a patch for Reflex and uses a GCC extension). With
+this, the speedup over <tt class="docutils literal">PyROOT</tt> is a factor of 20. Of course, this is still a
+lot slower than a C++ to C++ method call (probably by at least an order of
+magnitude).</p>
+<p>The sprint was very productive because we managed to get the right people into
+the same room working together. Wim has a lot of experience with C++ and Reflex,
+and is the author of <tt class="docutils literal">PyROOT</tt>, and of course the others know a lot about PyPy
+(at the end of the sprint, Anto was very glad that he stopped using C++ a long
+time ago). Also, working at CERN was very cool. The atmosphere is amazing, and
+we got to visit the <a class="reference external" href="http://atlas.ch/news/2006/control-room.html">ATLAS control room</a>. Extremely advanced technology, and
+also research on a completely different scale than what we are used to.</p></body></html>

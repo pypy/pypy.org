@@ -1,0 +1,52 @@
+<html><body><p>Finally, we managed to squeeze in some time to write a report about what
+has been going on the mysterious JIT sprint in Gothenburg, Sweden.
+The main goals of the sprint were to lay down the groundwork for getting
+more JIT work going in the next months and get more of PyPy developers
+up to speed with the current state of the JIT. One of the elements was
+to get better stability of the JIT, moving it slowly from being a prototype to
+actually work nicely on larger programs.</p>
+
+<p>The secret goal of the sprint was to seek more speed, which Anto and
+Carl Friedrich did even during the break day:</p>
+
+<a href="http://1.bp.blogspot.com/_5R1EBmwBBTs/SpPO4UtSbsI/AAAAAAAAAMI/kgnIUZtrLec/s1600-h/Immag005.jpg"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5373866247409790658" src="http://1.bp.blogspot.com/_5R1EBmwBBTs/SpPO4UtSbsI/AAAAAAAAAMI/kgnIUZtrLec/s400/Immag005.jpg" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 300px;"></a>
+<p>We spent the first two days improving test coverage of the x86 backend
+and the optimizer. Now we have 100% coverage with unittests
+(modulo figleaf bugs), which does not mean anything, but it's better
+than before.</p>
+
+<p>Then we spent quite some time improving the optimizer passes, so
+now we generate far less code than before the sprint, because a lot of
+it is optimized away. On the interpreter side, we marked more objects
+(like code objects) as immutable, so that reading fields from them
+can be constant-folded.</p>
+<p>Another important optimization that we did is to remove consecutive
+reading of the same fields from the same structure, if no code in between
+can change it.</p>
+<p>Our JIT is a hybrid environment, where only hot loops of code are jitted
+and the rest stays being interpreted. We found out that the performance
+of the non-jitted part was suboptimal, because all accesses to python
+frames went through an extra layer of indirection. We removed this layer
+of indirection, in the case where the jit and the interpreter cannot
+access the same frame (which is the common case).</p>
+<p>We also spent some time improving the performance of our x86 backend,
+by making it use more registers and by doing more advanced variable
+renaming at the end of loops. It seems that using more registerd is not as
+much of a win as we hoped, because modern day processors are much
+smarter than we thought.</p>
+<p>The most mind bending part was finding why we loose performance by
+making the JIT see more of the interpreter. It took us two very frustrating
+days and 36 gray hairs to find out that from the JIT we call a different malloc
+function in the Boehm GC, which is by far slower than the version that
+we use from the interpreter. This meant that the more we jitted, the
+slower our code got, purely because of the mallocs.</p>
+<p>Now that this is fixed, the world makes much more sense again.</p>
+<p>A lot of the sprint's work is not directly measurable in the performance
+figures, but we did a lot of work that is necessary for performance to
+improve in the next weeks. After we have done a bit more work, we should
+be able to provide some performance figures for programs that are
+more realistic than just loops that count to ten millions (which are
+very fast already :).</p>
+<p>Now we're going to enjoy a couple of days off to recover from the sprint.</p>
+<p>Bästa hälsningar,<br>
+Carl Friedrich, fijal</p></body></html>

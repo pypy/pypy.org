@@ -1,0 +1,77 @@
+<html><body><h2>Background</h2>
+<p>Finally, the JIT post :-). First some background: Despite our plans at the end
+of the EU period, PyPy's Python interpreter didn't get a good and widely
+applicable JIT in the last year. The reason for that was that we discovered that
+although the basic idea to generate JIT compilers is good, the concrete
+prototype made during the EU period is basically flawed. It could have
+been pushed a bit farther, but would have run into deep troubles eventually. One
+of the problems would have been performance instability: change a seemingly
+unrelated bit in your source program, and the performance changes in unexpected
+ways, which is clearly not desirable. Another problem with that old approach is
+that too much assembler code is generated, leading to memory problems, and also
+that the generated assembler is bad in various ways, e.g. it is hard in that
+approach to do proper register allocation.</p>
+<p>Therefore we decided that it would be worthless to pursue this direction much
+further. Instead we tried to research approaches to fixing the inherent
+problems. This research was <a class="reference" href="http://morepypy.blogspot.com/2008/06/hi-all-some-news-from-jit-front.html">largely done in Prolog</a> and I eventually wrote my
+<a class="reference" href="http://morepypy.blogspot.com/2008/10/prolog-jit-masters-thesis-finished.html">Master's thesis</a> about it. From the Prolog work we got some good insights into
+what needs to be done and what sorts of techniques are needed. Also, it inspired
+Armin to do some more exploration on a small <a class="reference" href="http://codespeak.net/svn/user/cfbolz/jitpl/branch/pyjitpl/">Python prototype</a> which used the
+lessons learned from Prolog and also some additional ideas from tracing JITs. So
+far, however, the prototype is neither in RPython, nor much integrated with
+PyPy.</p>
+<p>This research is not the only thing happening in the JIT-area. During the last
+year, Antonio Cuni was working on <a class="reference" href="http://morepypy.blogspot.com/2008/05/progresses-on-cli-jit-backend-front.html">bringing the JIT to pypy-cli</a>. This
+consisted mostly of writing a .NET backend for the old JIT-generator. Some
+further work is being done since August by John Witulski, who is writing an
+AMD64 backend for the JIT-generator for his Bachelor's thesis.</p>
+
+<h2>Where to go from there</h2><a href="http://3.bp.blogspot.com/_zICyAWqZbLA/SPSRF3IFyqI/AAAAAAAAAFs/5rg6Vg9wqMI/s1600-h/jit.JPG"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5256986194931468962" src="http://3.bp.blogspot.com/_zICyAWqZbLA/SPSRF3IFyqI/AAAAAAAAAFs/5rg6Vg9wqMI/s320/jit.JPG" style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer;"></a><p>During the sprint we discussed in which directions we should continue now. We
+plan to work quite a bit on the JIT in the coming months. Both Armin and Anto
+are in Düsseldorf for four months, and them and me plan to mostly work on the
+JIT (as well as giving a lecture on "Dynamic Programming Languages", trying to
+ensnare some more students).</p>
+<p>The first step will be to experiment a bit more with Armin's prototype. So far
+it looks rather promising, but there are some unsolved issues that we need to
+look into first. The first issue is to think a bit about how to efficiently do
+profiling to compile only important code paths. The other large issue are
+so-called "virtualizables". Roughly speaking, they are the frame objects of the
+interpreter from which the JIT is generated. They need special treatment,
+because on the one hand it is important that they get optimized away to make the
+code fast, since the frames are accessed all the time for the local variables;
+on the other hand they should still be usable for introspection if code is
+around that is trying to look into them.</p>
+<p>When this is done, the prototype needs to be ported to RPython, which is a
+non-trivial task, since it is rather dynamic so far (it is rather important that
+the unresolved issues are done before the porting, because once the prototype is
+in RPython, experimentation will be harder). The porting has the potential to be
+tedious, but in a sense it is "just work", as opposed to unclear research.</p>
+<p>At this point it will become important to think about the backend interface. The
+interface that the old frontend used to produce assembler code won't be usable
+for the new approach, so things need to be rearranged slightly. Afterwards the
+backends will have more information and be invoked at a slightly higher level,
+which should allow them to produce better code.</p>
+<p>When all this is done, the JIT generator will be in a rather good state and it
+should become possible (modulo a lot of details, of course), to use it on the
+Python interpreter.</p>
+<h2>Conclusion</h2>
+<p>I am intentionally not attaching any time estimates to this blog post. So far
+our time estimates have not been very accurate when it comes to the JIT, which
+only lead to disappointment when the JIT failed to materialize. We hope that we
+will progress in interesting ways in the next four months, but who knows. Note
+that we are really quite disappointed ourselves that it took so much longer than
+we planned and hoped. The reason for this is mostly that this work really is
+research and sometimes it is just hard to predict what sort of problems turn up.
+Partial evaluation (the basis for our JIT generator) is a 30 years old technique
+that was always just promising and never really successful, so the fact that we
+think we can solve its problems in a few years is very much hubris anyway :-).
+On the positive side, we think that we now know these problems much better than
+ever before and that we have a plan that has a chance to succeed.</p>
+<p>Also we are still convinced that our approach has huge potential, despite the
+difficulties. If we manage to pull it off, it should be significantly simpler to
+support new language features in the JIT and also to get speedups on some rather
+interesting bits of the language. Some ideas we are having include generating a
+JIT for the regex engine or speed up ctypes-bindings to be nearly as fast as an
+extension module (or faster?). Also the JIT will be such that by construction
+the JIT-generated code behaves identical to the original code, which isn't
+always true for Psyco, for example.</p></body></html>

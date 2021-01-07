@@ -1,0 +1,403 @@
+<html><body><h2>Part 4 of Comparing Partial Evaluation to Tracing</h2>
+<p>This is the fourth and final blog post in a series about comparing partial evaluation and
+tracing. We've come a long way: In the <a class="reference external" href="http://morepypy.blogspot.com/2012/01/comparing-partial-evaluation-and.html">first post of the series</a> I showed an interpreter for a small flow-graph
+language together with a partial evaluator it. In the <a class="reference external" href="http://morepypy.blogspot.com/2012/01/simple-tracer-for-flow-graph-language.html">second post</a> I showed how a tracer for
+the same language works and how it relates to both execution and to partial
+evaluation. The <a class="reference external" href="http://morepypy.blogspot.com/2012/02/optimizing-traces-of-flow-graph.html">third post</a> described an optimizer for traces.</p>
+<p>In this final post we can compare and contrast the two different approaches of
+tracing and partial evaluation by means of an example. The programs in the flow
+chart language seen so far have been rather small, so I want to give an example
+of a larger program: an interpreter for an extremely simple bytecode
+instruction set. I will look at how the partial evaluator deals with that
+interpreter, and
+what the tracer does with it. The code for
+that, as well as all the code of the series can be found here: <a class="reference external" href="http://paste.pocoo.org/show/550282/">http://paste.pocoo.org/show/550282/</a> (some small
+additions have been made, such as a nicer way to print traces).</p>
+<h2>A Bytecode Interpreter</h2>
+<p>Writing programs in the flow graph language is painful, but I still want to give
+an example that is a bit more interesting than the tiny ones that we've seen so
+far. The example is an interpreter for the bytecode of a very trivial
+register-based language. The language has four registers, one of which is an
+accumulator on which all the actual operations are performed.</p>
+<p>The opcodes of the language are:</p>
+<ul class="simple">
+<li><tt class="docutils literal">jump_if_a</tt>, jumps to a target address when the accumulator is non-zero</li>
+<li><tt class="docutils literal">mov_a_r0</tt>, <tt class="docutils literal">mov_a_r1</tt>, <tt class="docutils literal">mov_a_r2</tt> move the value of the accumulator to
+the respective register</li>
+<li><tt class="docutils literal">mov_r0_a</tt>, <tt class="docutils literal">mov_r1_a</tt>, <tt class="docutils literal">mov_r2_a</tt> move the value of a register to
+the accumulator</li>
+<li><tt class="docutils literal">add_r0_to_a</tt>, <tt class="docutils literal">add_r1_to_a</tt>, <tt class="docutils literal">add_r2_to_a</tt> add the value of the
+register to the accumulator</li>
+<li><tt class="docutils literal">decr_a</tt> decrement the accumulator</li>
+<li><tt class="docutils literal">return_a</tt> stop the program and print the accumulator</li>
+</ul>
+<p>The interpreter has a main loop that reads the opcode at the current program
+counter, does a (lengthy) dispatch to the right bytecode via a series of if
+statements and then executes the right opcode. Afterwards the next opcode is
+treated equivalently.</p>
+<p>Here is a part of the source code in the flow graph language. As pseudocode:</p>
+<pre class="literal-block">
+bytecode_loop:
+    opcode = bytecode[pc]
+    pc = pc + 1
+    c = opcode == 'jump_if_a'
+    if c goto op_jump_if_a else goto not_jump_if_a
+
+# select the right bytecode via a long series of if statements
+not_jump_if_a:
+    c = opcode == 'mov_a_r0'
+    if y goto op_mov_a_r0 else goto not_mov_a_r0
+not_mov_a_r0:
+    c = opcode == 'mov_a_r0'
+    if y goto op_mov_a_r1 else goto not_mov_a_r1
+...
+
+# bytecode implementations
+op_mov_a_r0:
+    r0 = a
+    goto bytecode_loop
+
+op_jump_if_a:
+    c = a == 0
+    target = bytecode[pc]
+    pc += 1
+    if c goto bytecode_loop else goto op_jump_if_a_jump
+
+op_jump_if_a_jump:
+    pc = target
+    goto bytecode_loop
+...
+</pre>
+<p>And actually working, as Prolog facts (the full implementation can be found at
+the link above):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #0099FF; font-style: italic;">% bytecode dispatch loop</span>
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">bytecode_loop</span>,
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">opcode</span>, <span style="color: #CC3300;">readlist</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">bytecode</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>),
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">pc</span>, <span style="color: #CC3300;">add</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">eq</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">jump_if_a</span>),
+      <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">op_jump_if_a</span>, <span style="color: #CC3300;">not_jump_if_a</span>))))).
+
+<span style="color: #0099FF; font-style: italic;">% select the right bytecode via a long series of if statements</span>
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_jump_if_a</span>,
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">eq</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_a_r0</span>),
+      <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">op_mov_a_r0</span>, <span style="color: #CC3300;">not_mov_a_r0</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_mov_a_r0</span>,
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">eq</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_a_r1</span>),
+      <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">op_mov_a_r1</span>, <span style="color: #CC3300;">not_mov_a_r1</span>))).
+...
+
+<span style="color: #0099FF; font-style: italic;">% bytecode implementations</span>
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">op_jump_if_a</span>,
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">eq</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">target</span>, <span style="color: #CC3300;">readlist</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">bytecode</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>),
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">pc</span>, <span style="color: #CC3300;">add</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+      <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">bytecode_loop</span>, <span style="color: #CC3300;">op_jump_if_a_jump</span>))))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">op_jump_if_a_jump</span>,
+      <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">pc</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">target</span>),
+      <span style="color: #CC00FF;">promote</span>(<span style="color: #CC3300;">bytecode</span>, <span style="color: #CC3300;">bytecode_loop</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">op_mov_a_r0</span>,
+      <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">r0</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">bytecode_loop</span>))).
+...
+</pre></div>
+<p>The <tt class="docutils literal">bytecode_loop</tt> block is the main dispatch loop. It reads an opcode out of the
+bytecode list at the program counter position, then has a long series of <tt class="docutils literal">if</tt>
+statements that compares the current opcode to the various existing opcodes.
+The full code of the interpreter can be found under the link above.</p>
+<p>The bytecodes of the interpreter don't really permit hugely complex
+programs, but it can be used to write a program that computes the square of a
+number with the following program:</p>
+<pre class="literal-block">
+mov_a_r0     # r0 = a
+mov_a_r1     # r1 = a
+# 2:
+mov_r0_a     # r0--
+decr_a
+mov_a_r0
+mov_r2_a     # r2 += a
+add_r1_to_a
+mov_a_r2
+mov_r0_a     # if r0!=0: goto 2
+jump_if_a 2
+mov_r2_a     # return r2
+return_a
+</pre>
+<h2>Partially Evaluating the Bytecode Interpreter</h2>
+<p>The partial evaluator from the first blog post can be easily used to partially
+evaluate the bytecode interpreter. The static input is the bytecode for
+computing the square and the initial program counter value, as given above. The
+dynamic input are the content of the accumulator (the number to be squared).
+This can be done as follows:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">bytecode_square</span>(<span style="color: #003333;">B</span>),
+<span style="color: #003333;">Env</span> <span style="color: #555555;">=</span> [<span style="color: #CC3300;">bytecode</span><span style="color: #555555;">/</span><span style="color: #003333;">B</span>, <span style="color: #CC3300;">pc</span><span style="color: #555555;">/</span><span style="color: #FF6600;">0</span>],
+<span style="color: #CC00FF;">do_pe</span>(<span style="color: #CC3300;">bytecode_loop</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Label</span>),
+<span style="color: #003333;">REnv</span> <span style="color: #555555;">=</span> [<span style="color: #CC3300;">a</span><span style="color: #555555;">/</span><span style="color: #FF6600;">16</span>, <span style="color: #CC3300;">r0</span><span style="color: #555555;">/</span><span style="color: #FF6600;">0</span>, <span style="color: #CC3300;">r1</span><span style="color: #555555;">/</span><span style="color: #FF6600;">0</span>, <span style="color: #CC3300;">r2</span><span style="color: #555555;">/</span><span style="color: #FF6600;">0</span>],
+<span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">Label</span>), <span style="color: #003333;">REnv</span>), <span style="color: #CC00FF;">listing</span>(<span style="color: #CC3300;">block</span>).
+<span style="color: #FF6600;">256</span>
+:- <span style="color: #CC3300;">dynamic</span> <span style="color: #CC3300;">block</span><span style="color: #555555;">/</span><span style="color: #FF6600;">2</span>.
+
+<span style="color: #555555;">&lt;</span><span style="color: #CC3300;">lots</span> <span style="color: #CC3300;">of</span> <span style="color: #CC3300;">generated</span> <span style="color: #CC3300;">code</span><span style="color: #555555;">&gt;</span>
+</pre></div>
+<p>The code that is generated by the partial evaluation process is somewhat hard to
+read. It contains a lot of passages like this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;">...
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">op_return_a1</span>, <span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_decr_a1</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">op_return_a1</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_add_r2_to_a2</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_decr_a1</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_add_r1_to_a2</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_add_r2_to_a2</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_add_r0_to_a3</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_add_r1_to_a2</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_mov_r2_a3</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_add_r0_to_a3</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_mov_r1_a5</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_mov_r2_a3</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_mov_r0_a5</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_mov_r1_a5</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_mov_a_r27</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_mov_r0_a5</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_mov_a_r18</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_mov_a_r27</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_mov_a_r09</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_mov_a_r18</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">not_jump_if_a11</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_mov_a_r09</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">bytecode_loop12</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">not_jump_if_a11</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">op_mov_r2_a2</span>, <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r2</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">bytecode_loop12</span>))).
+...
+</pre></div>
+<p>I.e. lots of blocks that do nothing but jump to another block, interspersed with
+some blocks that contain an actual operation. I cleaned the output up manually
+and got something like the following (this sort of cleanup is something a good
+partial evaluation system would do itself, after partial evaluation has
+occurred):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">bytecode_loop1</span>,
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">r0</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>),
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">r1</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>),
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r0</span>),
+    <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">sub</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">r0</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>),
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r2</span>),
+    <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">add</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r1</span>),
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">r2</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>),
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r0</span>),
+    <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">eq</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),
+    <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">bytecode_loop11</span>, <span style="color: #CC3300;">op_jump_if_a_jump1</span>)))))))))))).
+
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">bytecode_loop11</span>,
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r2</span>),
+    <span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>))).
+
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">op_jump_if_a_jump1</span>,
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r0</span>),
+    <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">sub</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">r0</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>),
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r2</span>),
+    <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">add</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r1</span>),
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">r2</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>),
+    <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r0</span>),
+    <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">eq</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),
+    <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">bytecode_loop11</span>, <span style="color: #CC3300;">op_jump_if_a_jump1</span>)))))))))).
+</pre></div>
+<p>What do we see here? The partial evaluator has generated a block <tt class="docutils literal">bytecode_loop1</tt>,
+which corresponds to the initialization opcodes <tt class="docutils literal">mov_a_r0</tt> and <tt class="docutils literal">mov_a_r1</tt> together
+with one iteration of the loop. Then it either jumps to a copy of the main loop
+(label <tt class="docutils literal">op_jump_if_a_jump1</tt>) or to block <tt class="docutils literal">bytecode_loop11</tt>, which prints the result
+and then stops. The residual code does exactly what the bytecode did: It
+squares the accumulator then prints that. All the uses of the <tt class="docutils literal">bytecode</tt> and
+<tt class="docutils literal">pc</tt> variable are gone.</p>
+<p>Why did the partial evaluator produce two copies of the main loop that
+look the same? The reason for that is that in the second copy, the additional
+static information <tt class="docutils literal">target = 2</tt> is known, where <tt class="docutils literal">target</tt> is a variable in
+the interpreter source that stores the jump target, for very brief periods of
+time. This additional static information does not have any effect on the
+residual code, so the same code is uselessly generated twice. This is an
+example of overspecialization.</p>
+<h2>Tracing the Interpreter</h2>
+<p>In this section we will look at what happens if we try to trace the interpreter.
+The naive way of doing that yields traces that are not very useful, because they
+abort after one iteration. We will look at a way of avoiding this problem. The
+problems described in this section are at the core of the paper <a class="reference external" href="https://bitbucket.org/pypy/extradoc/src/tip/talk/icooolps2009/bolz-tracing-jit-final.pdf">Tracing the
+meta-level: PyPy's tracing JIT compiler</a> (that paper uses a slightly more
+advanced version of the bytecode interpreter as an example).</p>
+<p>To trace the interpreter, it is useful to change the <tt class="docutils literal">bytecode_loop</tt> block from above
+to always promote the <tt class="docutils literal">bytecode</tt> and the <tt class="docutils literal">pc</tt> variables, because without
+knowing them the trace produced is not really interesting. This is similar to
+making these variables static in the partial evaluation example above:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">bytecode_loop</span>,
+      <span style="color: #CC00FF;">promote</span>(<span style="color: #CC3300;">bytecode</span>, <span style="color: #CC3300;">bytecode_loop_promote_bytecode</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">bytecode_loop_promote_bytecode</span>,
+      <span style="color: #CC00FF;">promote</span>(<span style="color: #CC3300;">pc</span>, <span style="color: #CC3300;">bytecode_loop_promote_pc</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">bytecode_loop_promote_pc</span>,
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">opcode</span>, <span style="color: #CC3300;">readlist</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">bytecode</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>),
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">pc</span>, <span style="color: #CC3300;">add</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+      <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">eq</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),
+      <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">op_jump_if_a</span>, <span style="color: #CC3300;">not_jump_if_a</span>))))).
+...
+</pre></div>
+<p>The rest of the interpreter stays unchanged.</p>
+<p>To trace the interpreter we would start naively at the <tt class="docutils literal">bytecode_loop</tt> label, because
+that's the label in the interpreter that is jumped to most often (which a
+profiler could establish easily). The following command can be used for that
+(this output prints traces in a slightly more readable way than in previous blog
+posts):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">bytecode_square</span>(<span style="color: #003333;">B</span>),
+        <span style="color: #003333;">A</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">16</span>, <span style="color: #003333;">Env</span> <span style="color: #555555;">=</span> [<span style="color: #CC3300;">bytecode</span><span style="color: #555555;">/</span><span style="color: #003333;">B</span>, <span style="color: #CC3300;">pc</span><span style="color: #555555;">/</span><span style="color: #FF6600;">2</span>, <span style="color: #CC3300;">a</span><span style="color: #555555;">/</span><span style="color: #003333;">A</span>, <span style="color: #CC3300;">r0</span><span style="color: #555555;">/</span><span style="color: #003333;">A</span>, <span style="color: #CC3300;">r1</span><span style="color: #555555;">/</span><span style="color: #003333;">A</span>, <span style="color: #CC3300;">r2</span><span style="color: #555555;">/</span><span style="color: #FF6600;">0</span>],
+        <span style="color: #CC00FF;">do_trace</span>(<span style="color: #CC3300;">bytecode_loop</span>, <span style="color: #003333;">Env</span>).
+<span style="color: #CC3300;">trace</span>
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">bytecode</span>,[<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>],[],<span style="color: #CC3300;">bytecode_loop_promote_bytecode</span>)
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #FF6600;">2</span>,[],<span style="color: #CC3300;">bytecode_loop_promote_pc</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">opcode</span>,<span style="color: #CC3300;">readlist</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">bytecode</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #CC3300;">add</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">jump_if_a</span>))
+  <span style="color: #CC00FF;">guard_false</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">op_jump_if_a</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_a_r0</span>))
+  <span style="color: #CC00FF;">guard_false</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">op_mov_a_r0</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_a_r1</span>))
+  <span style="color: #CC00FF;">guard_false</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">op_mov_a_r1</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_a_r2</span>))
+  <span style="color: #CC00FF;">guard_false</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">op_mov_a_r2</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_r0_a</span>))
+  <span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">not_mov_r0_a</span>)
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r0</span>))
+  <span style="color: #CC3300;">loop</span>
+
+<span style="color: #CC3300;">opttrace</span>
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">bytecode</span>,[<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>],[],<span style="color: #CC3300;">bytecode_loop_promote_bytecode</span>)
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #FF6600;">2</span>,[<span style="color: #CC3300;">bytecode</span><span style="color: #555555;">/</span>[<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>]],<span style="color: #CC3300;">bytecode_loop_promote_pc</span>)
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r0</span>))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">bytecode</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">const</span>([<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>]))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">3</span>))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">opcode</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_r0_a</span>))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>))
+  <span style="color: #CC3300;">loop</span>
+
+<span style="color: #FF6600;">256</span>
+<span style="color: #003333;">B</span> <span style="color: #555555;">=</span> [<span style="color: #CC3300;">mov_a_r0</span>, <span style="color: #CC3300;">mov_a_r1</span>, <span style="color: #CC3300;">mov_r0_a</span>, <span style="color: #CC3300;">decr_a</span>, <span style="color: #CC3300;">mov_a_r0</span>, <span style="color: #CC3300;">mov_r2_a</span>, <span style="color: #CC3300;">add_r1_to_a</span>, <span style="color: #CC3300;">mov_a_r2</span>, <span style="color: #CC3300;">mov_r0_a</span>|...],
+<span style="color: #003333;">A</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">16</span>,
+<span style="color: #003333;">Env</span> <span style="color: #555555;">=</span> [<span style="color: #CC3300;">bytecode</span><span style="color: #555555;">/</span>[<span style="color: #CC3300;">mov_a_r0</span>, <span style="color: #CC3300;">mov_a_r1</span>, <span style="color: #CC3300;">mov_r0_a</span>, <span style="color: #CC3300;">decr_a</span>, <span style="color: #CC3300;">mov_a_r0</span>, <span style="color: #CC3300;">mov_r2_a</span>, <span style="color: #CC3300;">add_r1_to_a</span>|...], <span style="color: #CC3300;">pc</span><span style="color: #555555;">/</span><span style="color: #FF6600;">2</span>, <span style="color: #CC3300;">a</span><span style="color: #555555;">/</span><span style="color: #FF6600;">16</span>, <span style="color: #CC3300;">r0</span><span style="color: #555555;">/</span><span style="color: #FF6600;">16</span>, <span style="color: #CC3300;">r1</span><span style="color: #555555;">/</span><span style="color: #FF6600;">16</span>, <span style="color: #CC3300;">r2</span><span style="color: #555555;">/</span><span style="color: #FF6600;">0</span>]
+</pre></div>
+<p>These traces are very short. They start with promoting the <tt class="docutils literal">bytecode</tt> and the
+<tt class="docutils literal">pc</tt>, followed by the execution of the opcode <tt class="docutils literal">mov_r0_a</tt>, which is the
+one at position <tt class="docutils literal">2</tt> in the given bytecode. Then they increment the <tt class="docutils literal">pc</tt> and
+loop back to the beginning. Looking at the optimized trace, it is clear that the
+trace is essentially useless. It will run only for one iteration, because in the
+second iteration the <tt class="docutils literal">pc</tt> is <tt class="docutils literal">3</tt>, thus the <tt class="docutils literal">guard_value</tt> at the beginning
+will fail.</p>
+<p>This problem can be solved by tracing more than just one iteration of the
+bytecode dispatch loop, which is called meta-tracing. To get this behaviour, in
+this simple example it is enough to start (and thus end) tracing at a different
+label, <tt class="docutils literal">op_jump_if_a_jump</tt>. This label is hit when the interpreter executes a
+<tt class="docutils literal">jump_if_a</tt> bytecode and the jump is taken. In a loop on the level of the
+executed bytecode program there is one such jump. Thus tracing from this label,
+a full loop in the bytecode program is traced, containing potentially many
+iterations of the bytecode dispatch loop in the control flow graph language.</p>
+<p>Doing that yields the following:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">bytecode_square</span>(<span style="color: #003333;">B</span>),
+        <span style="color: #003333;">A</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">16</span>, <span style="color: #003333;">Env</span> <span style="color: #555555;">=</span> [<span style="color: #CC3300;">bytecode</span><span style="color: #555555;">/</span><span style="color: #003333;">B</span>, <span style="color: #CC3300;">pc</span><span style="color: #555555;">/</span><span style="color: #FF6600;">11</span>, <span style="color: #CC3300;">a</span><span style="color: #555555;">/</span><span style="color: #003333;">A</span>, <span style="color: #CC3300;">r0</span><span style="color: #555555;">/</span><span style="color: #003333;">A</span>, <span style="color: #CC3300;">r1</span><span style="color: #555555;">/</span><span style="color: #003333;">A</span>, <span style="color: #CC3300;">r2</span><span style="color: #555555;">/</span><span style="color: #FF6600;">0</span>, <span style="color: #CC3300;">target</span><span style="color: #555555;">/</span><span style="color: #FF6600;">2</span>],
+        <span style="color: #CC00FF;">do_trace</span>(<span style="color: #CC3300;">op_jump_if_a_jump</span>, <span style="color: #003333;">Env</span>).
+<span style="color: #CC3300;">trace</span>
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">target</span>))
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">bytecode</span>,[<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>],[],<span style="color: #CC3300;">bytecode_loop</span>)
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">bytecode</span>,[<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>],[],<span style="color: #CC3300;">bytecode_loop_promote_bytecode</span>)
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #FF6600;">2</span>,[],<span style="color: #CC3300;">bytecode_loop_promote_pc</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">opcode</span>,<span style="color: #CC3300;">readlist</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">bytecode</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #CC3300;">add</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">jump_if_a</span>))
+  <span style="color: #CC00FF;">guard_false</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">op_jump_if_a</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_a_r0</span>))
+  <span style="color: #CC00FF;">guard_false</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">op_mov_a_r0</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_a_r1</span>))
+  <span style="color: #CC00FF;">guard_false</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">op_mov_a_r1</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_a_r2</span>))
+  <span style="color: #CC00FF;">guard_false</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">op_mov_a_r2</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">mov_r0_a</span>))
+  <span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">not_mov_r0_a</span>)
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r0</span>))
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">bytecode</span>,[<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>],[],<span style="color: #CC3300;">bytecode_loop_promote_bytecode</span>)
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #FF6600;">3</span>,[],<span style="color: #CC3300;">bytecode_loop_promote_pc</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">opcode</span>,<span style="color: #CC3300;">readlist</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">bytecode</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>))
+  ...
+  <span style="color: #CC3300;">lots</span> <span style="color: #CC3300;">of</span> <span style="color: #CC3300;">operations</span> <span style="color: #CC3300;">ommitted</span>
+  ...
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">bytecode</span>,[<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>],[],<span style="color: #CC3300;">bytecode_loop_promote_bytecode</span>)
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #FF6600;">9</span>,[],<span style="color: #CC3300;">bytecode_loop_promote_pc</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">opcode</span>,<span style="color: #CC3300;">readlist</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">bytecode</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #CC3300;">add</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">opcode</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">jump_if_a</span>))
+  <span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">not_jump_if_a</span>)
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">target</span>,<span style="color: #CC3300;">readlist</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">bytecode</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #CC3300;">add</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">pc</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>))
+  <span style="color: #CC00FF;">guard_false</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">bytecode_loop</span>)
+  <span style="color: #CC3300;">loop</span>
+
+<span style="color: #CC3300;">opttrace</span>
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">target</span>))
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">bytecode</span>,[<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>],[],<span style="color: #CC3300;">bytecode_loop</span>)
+  <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #FF6600;">2</span>,[<span style="color: #CC3300;">bytecode</span><span style="color: #555555;">/</span>[<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>]],<span style="color: #CC3300;">bytecode_loop_promote_pc</span>)
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r0</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">a</span>,<span style="color: #CC3300;">sub</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">r0</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r2</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">a</span>,<span style="color: #CC3300;">add</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r1</span>))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">r2</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">a</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">r0</span>))
+  <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">eq</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">a</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>))
+  <span style="color: #CC00FF;">guard_false</span>(<span style="color: #CC3300;">c</span>,[<span style="color: #CC3300;">bytecode</span><span style="color: #555555;">/</span>[<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>],<span style="color: #CC3300;">pc</span><span style="color: #555555;">/</span><span style="color: #FF6600;">11</span>,<span style="color: #CC3300;">opcode</span><span style="color: #555555;">/</span><span style="color: #CC3300;">jump_if_a</span>,<span style="color: #CC3300;">target</span><span style="color: #555555;">/</span><span style="color: #FF6600;">2</span>],<span style="color: #CC3300;">bytecode_loop</span>)
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">bytecode</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">const</span>([<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_a_r1</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">decr_a</span>,<span style="color: #CC3300;">mov_a_r0</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">add_r1_to_a</span>,<span style="color: #CC3300;">mov_a_r2</span>,<span style="color: #CC3300;">mov_r0_a</span>,<span style="color: #CC3300;">jump_if_a</span>,<span style="color: #FF6600;">2</span>,<span style="color: #CC3300;">mov_r2_a</span>,<span style="color: #CC3300;">return_a</span>]))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">pc</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">11</span>))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">opcode</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">const</span>(<span style="color: #CC3300;">jump_if_a</span>))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">target</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">2</span>))
+  <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">same</span>,<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>))
+  <span style="color: #CC3300;">loop</span>
+
+<span style="color: #FF6600;">256</span>
+<span style="color: #003333;">B</span> <span style="color: #555555;">=</span> [<span style="color: #CC3300;">mov_a_r0</span>, <span style="color: #CC3300;">mov_a_r1</span>, <span style="color: #CC3300;">mov_r0_a</span>, <span style="color: #CC3300;">decr_a</span>, <span style="color: #CC3300;">mov_a_r0</span>, <span style="color: #CC3300;">mov_r2_a</span>, <span style="color: #CC3300;">add_r1_to_a</span>, <span style="color: #CC3300;">mov_a_r2</span>, <span style="color: #CC3300;">mov_r0_a</span>|...],
+<span style="color: #003333;">A</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">16</span>,
+<span style="color: #003333;">Env</span> <span style="color: #555555;">=</span> [<span style="color: #CC3300;">bytecode</span><span style="color: #555555;">/</span>[<span style="color: #CC3300;">mov_a_r0</span>, <span style="color: #CC3300;">mov_a_r1</span>, <span style="color: #CC3300;">mov_r0_a</span>, <span style="color: #CC3300;">decr_a</span>, <span style="color: #CC3300;">mov_a_r0</span>, <span style="color: #CC3300;">mov_r2_a</span>, <span style="color: #CC3300;">add_r1_to_a</span>|...], <span style="color: #CC3300;">pc</span><span style="color: #555555;">/</span><span style="color: #FF6600;">11</span>, <span style="color: #CC3300;">a</span><span style="color: #555555;">/</span><span style="color: #FF6600;">16</span>, <span style="color: #CC3300;">r0</span><span style="color: #555555;">/</span><span style="color: #FF6600;">16</span>, <span style="color: #CC3300;">r1</span><span style="color: #555555;">/</span><span style="color: #FF6600;">16</span>, <span style="color: #CC3300;">r2</span><span style="color: #555555;">/</span><span style="color: #FF6600;">0</span>, <span style="color: #CC3300;">target</span><span style="color: #555555;">/</span><span style="color: #FF6600;">2</span>] .
+</pre></div>
+<p>That looks better. The trace corresponds to the interpreter running all the
+bytecodes in the loop of the squaring function in the example bytecode above.
+The optimized code starts with
+two guards (checking that the <tt class="docutils literal">bytecode</tt> is still the one for the squaring
+function, checking that the <tt class="docutils literal">pc</tt> is <tt class="docutils literal">2</tt>) and then only does the operations
+that actually do the computation. No bytecode dispatching is performed, thus the
+interpretation overhead is fully removed, apart from the two <tt class="docutils literal">guard_value</tt>
+operations at the beginning.</p>
+<p>Many of the assignments in the trace are superfluous, e.g. all the copying back
+and forth between registers <tt class="docutils literal">r1</tt>, <tt class="docutils literal">r1</tt>, <tt class="docutils literal">r2</tt> and accumulator <tt class="docutils literal">a</tt>. This
+could be easily solved by an even more intelligent optimization utilizing <a class="reference external" href="http://en.wikipedia.org/wiki/Static_single_assignment_form">SSA
+form</a>.</p>
+<h2>Conclusion About the Interpreter</h2>
+<p>Both partial evaluation and meta-tracing can be used to transform the example
+bytecode computing a square into a form that shows the essential computation
+that is going on, without the interpretation overhead. The naive partial evaluator
+produces lots of extra blocks that just jump around, which could be solved with
+a post-processing step. The tracer by itself produces uselessly short traces,
+but with a simple trick of starting the trace at a different point the results
+become a lot better.</p>
+<p>In a real meta-tracing system, the meta-tracer would need a way for the author
+of the interpreter
+to mark which bytecode corresponds to a backward jump. It would also need better
+integration with the interpreter to start tracing automatically, as well as
+cache the traces. Additionally, it would have to deal better with guards that fail a
+lot, attaching new traces to the failing guards. However, all that is "just"
+engineering on top of the ideas presented in this series of blog posts.</p>
+<h2>High-Level Conclusion</h2>
+<p>Some concluding high-level thoughts about the similarities of tracing and
+partial evaluation: Tracing and partial evaluation try to tackle a similar
+problem, that of automatically reducing the interpreter overhead, their
+approaches are slightly different though.</p>
+<p>Tracing is very close to normal evaluation, only keeping some extra information
+in the process. But then, the optimizer that is used in a tracer
+is again very similar in structure to a partial evaluator. The task of the
+optimizer is much simpler though, because it does not need to deal with control
+flow at all, just a linear list of operations.</p>
+<p>So in a sense tracing is taking those parts of partial evaluation that work (the
+"just evaluate those things that you can, and leave the others") and replacing
+the parts that don't (controlling unfolding) by a much more pragmatic mechanism.
+That mechanism observes actual execution runs of the program to choose control
+flow paths that are typical. At the same time, the tracer's focus is on loops,
+because they are where most programs spend significant amounts of time.</p>
+<p>Another point of view of tracing is that it is a form of partial evaluation that
+replaces the control components of a partial evaluator with an oracle (the
+actual execution runs) that provide the information which paths to look at.</p>
+<p>Already in the quite trivial interpreter here the effects of this are visible.
+The simple partial evaluator over-specializes the loop and produces two
+identical versions of it, that aren't different. The tracer doesn't, and it
+also generates only code for the loop itself, not for the initialization
+opcodes.</p>
+<p>That's it for this series. To those that made it, thanks for following along.
+Also thanks to Samuele and Sven, who consistently gave me good feedback on the
+posts before I put them here.</p></body></html>

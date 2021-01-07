@@ -1,0 +1,174 @@
+<html><body><p>Recently, I've become aware of the <a class="reference external" href="http://research.microsoft.com/en-us/projects/spur/">SPUR project</a> of Microsoft Research and
+read some of their papers (the tech report "SPUR: A Trace-Based JIT Compiler
+for CIL" is very cool). I found the project to be very interesting and since
+their approach is in many ways related to what PyPy is doing, I now want to
+compare and contrast the two projects.</p>
+<div class="section" id="a-tracing-jit-for-net">
+<h2>A Tracing JIT for .NET</h2>
+<p>SPUR consist of two parts: On the one hand it is a VM for CIL, the
+bytecode of the .NET VM. This VM uses a tracing JIT compiler to compile the
+programs it is running to machine code. As opposed to most existing VMs that
+have a tracing JIT it does not use an interpreter at all. Instead it
+contains various variants of a JIT compiler that produce different versions of
+each method. Those are:</p>
+<ul class="simple">
+<li>a <em>profiling JIT</em> which produces code that does lightweight profiling when
+running the compiled method</li>
+<li>a <em>tracing JIT</em> which produces code that produces a trace when running the
+compiled method</li>
+<li>a <em>transfer-tail JIT</em> which is used to produce code which is run to get from a
+failing guard back to the normal profiling version of a method</li>
+<li>an <em>optimizing JIT</em> that actually optimizes traces and turns them into machine code</li>
+</ul>
+<div class="section" id="optimizations-done-by-the-optimizing-jit">
+<h3>Optimizations Done by the Optimizing JIT</h3>
+<p>SPUR's optimizing JIT does a number of powerful optimizations on the traces before it
+turns them into machine code. Among them are usual compiler optimizations such
+as register allocation, common subexpression elimination, loop invariant code
+motion, etc.</p>
+<p>It also performs some optimizations that are specific to the tracing context and
+are thus not commonly found in "normal" compilers:</p>
+<ul class="simple">
+<li><em>guard implication</em>: if a guard is implied by an earlier guard, it is removed</li>
+<li><em>guard strengthening</em>: if there is a sequence of guards that become stronger
+and stronger (i.e. each guard implies the previous one), the first guard in
+the sequence is replaced by the last one, and all others are removed. This can
+greatly reduce the number of guards and is generally safe. It can shift a
+guard failure to an earlier point in the trace, but the failure would have
+occurred at some point in the trace anyway.</li>
+<li><em>load/store optimizations</em>: this is an optimization for memory reads/writes.
+If several loads from the same memory location occur without writes in
+between, all but the first one are removed. Similarly, if a write to a memory
+location is performed, this write is delayed as much as possible. If there is
+a write to the same location soon afterwards, the first write can be removed.</li>
+<li><em>escape analysis</em>: for allocations that occur in a loop, the optimizer checks
+whether the resulting object escapes the loop. If not, the allocation is moved
+before the loop, so that only one object needs to be allocated, instead of one
+every loop iteration.</li>
+<li><em>user-controlled loop unrolling</em>: not exactly an optimization, but an
+interesting feature anyway. It is possible to annotate a CIL method with a
+special decorator <tt class="docutils literal">[TraceUnfold]</tt> and then the tracing JIT will fully unroll
+the loops it contains. This can be useful for loops than are known to run a
+small and fixed number of iterations for each call-site.</li>
+<li><em>user controlled tracing</em>: The user can also control tracing up to a point.
+Methods can be annotated with <tt class="docutils literal">[NativeCall]</tt> to tell the tracer to never
+trace their execution. Instead they appear as a direct call in the trace.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="a-javascript-implementation">
+<h2>A JavaScript Implementation</h2>
+<p>In addition to the tracing JIT I just described, SPUR also contains a JavaScript
+implementation for .NET. The approach of this implementation is to translate
+JavaScript to CIL bytecode, doing some amount of type inference to detect
+variables that have fixed types. All operations where no precise type could be
+determined are implemented with calls to a JavaScript runtime system, which does
+the necessary type dispatching. The JavaScript runtime is implemented in C#.</p>
+<p>The JavaScript implementation and the CLI VM with a tracing JIT sound quite
+unrelated at first, but together they amplify each other. The tracing JIT traces
+the JavaScript functions that have been translated to CLI bytecode. Since the
+JavaScript runtime is in C#, it exists as CLI bytecode too. Thus it can be
+inlined into the JavaScript functions by the tracer. This is highly beneficial,
+since it exposes the runtime type dispatching of the JavaScript operations to
+the optimizations of the tracing JIT. Particularly the common expression
+elimination helps the JavaScript code. If a series of operations is performed on
+the same object, the operations will all do the same type checks. All but the
+type checks of the first operation can be removed by the optimizer.</p>
+<div class="section" id="performance-results">
+<h3>Performance Results</h3>
+<p>The speed results of the combined JavaScript implementation and tracing JIT are
+quite impressive. It beats TraceMonkey for most benchmarks in SunSpider (apart
+from some string-heavy benchmarks that are quite slow) and can compete with V8
+in many of them. However, all this is steady-state performance and it seems
+SPUR's compile time is rather bad currently.</p>
+</div>
+<div class="section" id="further-possibilities">
+<h3>Further Possibilities</h3>
+<p>A further (so far still hypothetical) advantage of SPUR is that the approach can
+optimize cases where execution crosses the border of two different systems. If
+somebody wrote an HTML layout engine and a DOM in C# to get a web browser and
+integrated it with the JavaScript implementation described above, the tracing
+JIT could optimize DOM manipulations performed by JavaScript code as well as
+callbacks from the browser into JavaScript code.</p>
+<p>Of course the approach SPUR takes to implement JavaScript is completely
+generalizable. It should be possible to implement other dynamic languages in the
+same way as JavaScript using SPUR. One would have to write a runtime system for
+the language in C#, as well as a compiler from the language into CIL bytecode.
+Given these two elements, SPUR's tracing JIT compiler would probably do a
+reasonable job at optimizing this other language (of course in practise, the
+language implementation would need some tweaking and annotations to make it
+really fast).</p>
+</div>
+</div>
+<div class="section" id="comparison-with-pypy">
+<h2>Comparison With PyPy</h2>
+<p>The goals of PyPy and SPUR are very similar. Both projects want to implement
+dynamic languages in an efficient way by using a tracing JIT. Both apply the
+tracing JIT "one level down", i.e. the runtime system of the dynamic language is
+visible to the tracing JIT. This is the crucial point of the approach of both
+projects. Since the runtime system of the dynamic language is visible to the
+tracing JIT, the JIT can optimize programs in that dynamic language. It does not
+itself need to know about the semantics of the dynamic language. This makes the
+tracing JIT usable for a variety of dynamic languages. It also means that the
+two halves can be implemented and debugged independently.</p>
+<p>In SPUR, C# (or another language that is compilable to CIL) plays the role of
+RPython, and CIL is equivalent to the intermediate format that PyPy's
+translation toolchain uses. Both formats operate on a similar abstraction level,
+they are quite close to C, but still have support for the object system of their
+respective language and are garbage-collected.</p>
+<p>SPUR supports only a JavaScript implementation so far, which could maybe change in
+the future. Thus JavaScript in SPUR corresponds to Python in PyPy, which was the
+first dynamic language implemented in PyPy (and is also the reason for PyPy's
+existence).</p>
+<p>There are obviously also differences between the two projects, although many of
+them are only skin-deep. The largest difference is the reliance of SPUR on
+compilers on all levels. PyPy takes the opposite approach of using interpreters
+almost everywhere. The parts of PyPy that correspond to SPUR's compilers are (I
+will use the Python implementation of PyPy as an example):</p>
+<ul class="simple">
+<li>the <em>JavaScript-to-CIL compiler</em> corresponds to the Python interpreter of PyPy</li>
+<li>the <em>profiling JIT</em> corresponds to a part of PyPy's translation toolchain
+which adds some profiling support in the process of turning RPython code into
+C code,</li>
+<li>the <em>tracing JIT</em> corresponds to a special interpreter in the PyPy JIT which
+executes an RPython program and produces a trace of the execution</li>
+<li>the <em>transfer-tail JIT</em> corresponds to PyPy's <a class="reference external" href="http://morepypy.blogspot.com/2010/06/blackhole-interpreter.html">blackhole interpreter</a>, also
+called fallback interpreter</li>
+<li>the <em>optimizing JIT</em> corresponds to the optimizers and backends of PyPy's JIT</li>
+</ul>
+<div class="section" id="pypy-s-optimizations">
+<h3>PyPy's Optimizations</h3>
+<p>Comparing the optimizations that the two projects perform, the biggest
+difference is that PyPy does "trace stitching" instead of fully supporting trace
+trees. The difference between the two concerns what happens when a new trace
+gets added to an existing loop. The new trace starts from a guard in the
+existing loop that was observed to fail often. Trace stitching means that the
+loop is just patched with a jump to the new trace. SPUR instead recompiles the
+whole trace tree, which gives the optimizers more opportunities, but also makes
+compilation a lot slower. Another difference is that PyPy does not perform
+loop-invariant code motion yet.</p>
+<p>Many of the remaining optimizations are very similar. PyPy supports guard
+implication as well as guard strengthening. It has some load/store
+optimizations, but PyPy's alias analysis is quite rudimentary. On the other
+hand, PyPy's escape analysis is very powerful. PyPy also has support for the
+annotations that SPUR supports, using some decorators in the <tt class="docutils literal">pypy.rlib.jit</tt>
+module. User-controlled loop unrolling is performed using the <tt class="docutils literal">unroll_safe</tt>
+decorator, tracing of a function can be disabled with the <tt class="docutils literal">dont_look_inside</tt>
+decorator.</p>
+<p>PyPy has a few more annotations that were not mentioned in the SPUR tech report.
+Most importantly, it is possible to declare a function as pure, using the
+<tt class="docutils literal">purefunction</tt> decorator. PyPy's optimizers will remove calls to a function
+decorated that way if the arguments to the call are all constant. In addition it
+is possible to declare instances of classes to be immutable, which means that
+field accesses on constant instances can be folded away. Furthermore there is
+the promote hint, which is spelled <tt class="docutils literal">x = hint(x, promote=True)</tt>. This will
+produce a guard in the trace, to turn <tt class="docutils literal">x</tt> into a constant after the guard.</p>
+</div>
+</div>
+<div class="section" id="summary">
+<h2>Summary</h2>
+<p>Given the similarity between the projects' goals, it is perhaps not so
+surprising to see that PyPy and SPUR have co-evolved and reached many similar
+design decisions. It is still very good to see another project that does many
+things in the same way as PyPy.</p>
+</div></body></html>

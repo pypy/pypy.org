@@ -1,0 +1,42 @@
+<html><body><p>Hi all,</p>
+
+<p>Here is one of the first full PyPy's
+(edit: it was r69967+, but the general list of versions is currently <a href="http://cobra.cs.uni-duesseldorf.de/~buildmaster/misc/">here</a>)
+compiled with the new <a href="http://morepypy.blogspot.ch/2014/02/rewrites-of-stm-core-model-again.html">StmGC-c7
+library</a>.  It has no JIT so far, but it runs some small
+single-threaded benchmarks by taking around 40% more time than a
+corresponding non-STM, no-JIT version of PyPy.  It scales --- up to two
+threads only, which is the hard-coded maximum so far in the c7 code.
+But the scaling looks perfect in these small benchmarks without
+conflict: starting two threads each running a copy of the benchmark
+takes almost exactly the same amount of total time, simply using two
+cores.</p>
+
+<p>Feel free to try it!  It is not actually useful so far, because it is
+limited to two cores and CPython is something like 2.5x faster.  One of
+the important next steps is to re-enable the JIT.  Based on our <a href="https://bitbucket.org/pypy/pypy/raw/stmgc-c7/TODO">current
+understanding</a> of the "40%" figure, we can probably reduce it with
+enough efforts; but also, the JIT should be able to easily produce
+machine code that suffers a bit less than the interpreter from these
+effects.  This seems to mean that we're looking at 20%-ish slow-downs
+for the future PyPy-STM-JIT.</p>
+
+<p>Interesting times :-)</p>
+
+<p>For reference, this is what you get by downloading <a href="http://cobra.cs.uni-duesseldorf.de/~buildmaster/misc/pypy-c-r69967+-stm-1d0b870195e7.tbz2">the
+PyPy binary linked above</a>: a Linux 64 binary (Ubuntu 12.04) that
+should behave mostly like a regular PyPy.  (One main missing feature is
+that destructors are never called.)  It uses two cores, but obviously
+only if the Python program you run is multithreaded.  The only new
+built-in feature is <code>with __pypy__.thread.atomic:</code> this gives
+you a way to enforce that a block of code runs "atomically", which means
+without any operation from any other thread randomly interleaved.</p>
+
+<p>If you want to translate it yourself, you need a trunk version of clang
+with <a href="https://bitbucket.org/pypy/stmgc/raw/default/c7/llvmfix">three patches</a> applied.  That's the number of bugs that we couldn't
+find workarounds for, not the total number of bugs we found by (ab)using
+the <a href="http://clang.llvm.org/docs/LanguageExtensions.html#target-specific-extensions">address_space</a> feature...</p>
+
+<p>Stay tuned for more!</p>
+
+<p>Armin &amp; Remi</p></body></html>

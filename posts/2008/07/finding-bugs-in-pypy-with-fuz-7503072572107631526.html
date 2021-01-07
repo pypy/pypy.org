@@ -1,0 +1,25 @@
+<html><body><p>Last week I played a bit with <a class="reference" href="http://fusil.hachoir.org/trac">Fusil</a>, which is a <a class="reference" href="http://en.wikipedia.org/wiki/Fuzz_testing">fuzzing</a> framework.  The idea is
+to feed the interpreter code that calls the functions of a module with random values
+of various types as arguments in the hope that one hits an unchecked case. This is
+done until a problem is hit , the most common problem being a segfault.  Victor Stinner,
+the author of Fusil, is a regular in the PyPy IRC channel and thankfully helped me
+getting started with Fusil. I used his project description for CPython as a starting
+point and tweaked it a bit.  Reason is that PyPy is harder to segfault and so
+I tweaked Fusil to also count uncaught RPython-level exceptions as such a problem.
+(RPython has full exception support, and if an RPython-exception escapes to the top
+level, the Python interpreter aborts.  One should not be able to exploit this but
+but for a user it is bad enough, because such exceptions cannot be caught from
+Python code.)</p>
+<p>Using Fusil I found a number of cases where such exceptions happened (in some
+pickle support-code, in the expat parser, in the <tt class="docutils literal"><span class="pre">os</span></tt> and in the <tt class="docutils literal"><span class="pre">termios</span></tt>
+module) and also one or two segfaults (in the parser module, of all places).
+I fixed all these problems so that by
+now the fuzzer just runs for a very long time and only finds things that take
+too long (so they count as a way to do a DoS attack) like
+<tt class="docutils literal"><span class="pre">pow(12355123123L,</span> <span class="pre">12351512123121L)</span></tt> or <tt class="docutils literal"><span class="pre">round(1,</span> <span class="pre">1000000000)</span></tt> (the latter
+should probably be fixed). This probably just means that the fuzzer is not good
+enough, because there are certainly segfaults left in PyPy. However, the fact
+that it is rather hard to find them validates our approach of using a
+high-level memory-managed language for our interpreter. Victor tells me that it
+is rather easy to find segfaults in CPython this way, he already found <a class="reference" href="http://bugs.python.org/issue?%40search_text=&amp;title=&amp;%40columns=title&amp;id=&amp;%40columns=id&amp;creation=&amp;creator=haypo&amp;activity=2008-07-06&amp;%40columns=activity&amp;%40sort=activity&amp;actor=&amp;nosy=&amp;type=&amp;components=&amp;versions=&amp;dependencies=&amp;assignee=&amp;keywords=&amp;priority=&amp;%40group=priority&amp;status=1&amp;%40columns=status&amp;resolution=&amp;%40pagesize=50&amp;%40startwith=0&amp;%40queryname=&amp;%40old-queryname=&amp;%40action=search">quite
+some problems</a>.</p></body></html>

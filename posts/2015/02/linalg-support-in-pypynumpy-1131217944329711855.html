@@ -1,0 +1,112 @@
+<html><body><div dir="ltr" style="text-align: left;">
+<h2 style="text-align: left;">
+</h2>
+<h1>
+Introduction</h1>
+PyPy's numpy support has matured enough that it can now support the  lapack/blas libraries through the numpy.linalg module. To install the  version of numpy this blog post refers to, install PyPy version 2.5.0 or  newer, and run this:<br>
+<br>
+<pre>pypy -m pip install git+https://bitbucket.org/pypy/numpy.git
+</pre>
+<br>
+This update is a major step forward for PyPy's numpy support. Many of  the basic matrix operations depend on linalg, even matplotlib requires  it to display legends (a pypy-friendly version of matplotlib 1.3 is  available  at <a href="https://github.com/mattip/matplotlib" rel="noreferrer">https://github.com/mattip/matplotlib</a>).<br>
+<br>
+A number of improvements and adaptations, some of which are in the newly-released PyPy 2.5.0, made this possible:<br>
+<ul class="task-list">
+<li>Support for an extended <tt>frompyfunc()</tt>, which in the PyPy  version supports much of the ufunc API (signatures, multiple dtypes)  allowing creation of pure-python, jit-friendly ufuncs. An additional  keyword allows choosing between <tt>out = func(in)</tt> or <tt>func(in, out)</tt> ufunc signatures. More explanation follows.</li>
+<li>Support for GenericUfuncs via PyPy's (slow) capi-compatibility  layer. The underlying mechanism actually calls the internal  implementation of <tt>frompyfunc()</tt>.</li>
+<li>A cffi version of <tt>_umath_linalg</tt>. Since cffi uses <tt>dlopen()</tt>  to call into shared objects, we added support in the numpy build system  to create non-python shared libraries from source code in the numpy  tree. We also rewrote parts of the c-based <tt>_umath_linalg.c.src</tt> in python, renamed numpy's <tt>umath_linalg</tt> capi module to <tt>umath_linag_capi</tt>, and use it as a shared object through cffi.</li>
+</ul>
+<div>
+<h1>
+<a class="anchor" href="https://gist.github.com/mattip/25680e68fe7e2856fe0c#status" name="user-content-status" rel="noreferrer"></a>Status</h1>
+We have not completely implemented all the linalg features. dtype  resolution via casting is missing, especially for complex ndarrays,  which leads to slight numerical errors where numpy uses a more precise  type for intermediate calculations. Other missing features in PyPy's  numpy support may have implications for complete linalg support.<br>
+<br>
+Some OSX users have noticed they need to update pip to version 6.0.8 to overcome a regression in pip, and it is not clear if we support all combinations of blas/lapack implementations on all platforms.<br>
+<br>
+Over  the next few weeks we will be ironing out these issues.</div>
+<div>
+<h1>
+<a class="anchor" href="https://gist.github.com/mattip/25680e68fe7e2856fe0c#performance" name="user-content-performance" rel="noreferrer"></a>Performance</h1>
+A simple benchmark is shown below, but let's state the obvious:  PyPy's JIT and the iterators built into PyPy's ndarray implementation  will in most cases be no faster than CPython's numpy. The JIT can help  where there is a mixture of python and numpy-array code. We do have  plans to implement lazy evaluation and to further optimize PyPy's  support for numeric python, but numpy is quite good at what it does.</div>
+<div>
+<h1>
+<a class="anchor" href="https://gist.github.com/mattip/25680e68fe7e2856fe0c#howto-for-pypys-extended-frompyfunc" name="user-content-howto-for-pypys-extended-frompyfunc" rel="noreferrer"></a>HowTo for PyPy's extended <tt>frompyfunc</tt> </h1>
+The magic enabling blas support is a rewrite of the <tt>_umath_linalg</tt> c-based module as a cffi-python module that creates ufuncs via <tt>frompyfunc</tt>. We extended the numpy <tt>frompyfunc</tt> to allow it to function as a replacement for the generic ufunc available in numpy only through the c-api.<br>
+<br>
+We start with the basic <tt>frompyfunc</tt>, which wraps a python function into a ufunc:<br>
+<pre> </pre>
+<pre>def times2(in0):
+    return in0 * 2
+ufunc = frompyfunc(times2, 1, 1)
+</pre>
+<br>
+In cpython's numpy the dtype of the result is always object, which is  not implemented (yet) in PyPy, so this example will fail. While the  utility of object dtypes can be debated, in the meantime we add a  non-numpy-compatible keyword argument <tt>dtypes</tt> to <tt>frompyfunc</tt>. If <tt>dtype=['match']</tt> the output dtype will match the dtype of the first input ndarray:<br>
+<br>
+<pre>ufunc = frompyfunc(times2, 1, 1, dtype=['match'])
+ai = arange(24).reshape(3, 4, 2)
+ao = ufunc(ai)
+assert  (ao == ai * 2).all()
+</pre>
+<br>
+I hear you ask "why is the dtypes keyword argument a list?" This is so we can support the <a href="http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html" rel="noreferrer">Generalized Universal Function API</a>, which allows specifying a number of specialized functions and the input-output dtypes each specialized function accepts.<br>
+Note that the function feeds the values of <tt>ai</tt> one at a time,  the function operates on scalar values. To support more complicated  ufunc calls, the generalized ufunc API allows defining a signature,  which specifies the layout of the ndarray inputs and outputs. So we extended <tt>frompyfunc </tt>with a signature keyword as well.<br>
+We add one further extension to <tt>frompyfunc</tt>: we allow a Boolean keyword <tt>stack_inputs</tt> to specify the argument layout of the function itself. If the function is of the form:<br>
+<pre> </pre>
+<pre>out0, out1, ... = func(in0, in1,...)
+</pre>
+<br>
+then stack_inputs is False. If it is True the function is of the form:<br>
+<pre> </pre>
+<pre>func(in0, in1, ... out0, out1, ...)
+</pre>
+<br>
+Here is a complete example of using <tt>frompyfunc</tt> to create a ufunc, based on <a href="http://docs.scipy.org/doc/numpy/user/c-info.ufunc-tutorial.html" rel="noreferrer">this link</a>:<br>
+<pre> </pre>
+<pre>def times2(in_array, out_array):
+    in_flat = in_array.flat
+    out_flat = out_array.flat
+    for i in range(in_array.size):
+        out_flat[i] = in_flat[i] * 2
+ufunc = frompyfunc([times2, times2], 1, 1,
+                signature='(i)-&gt;(i)',
+                dtypes=[dtype(int), dtype(int),
+                        dtype(float), dtype(float),
+                       ],
+                stack_inputs=True,
+                )
+ai = arange(10, dtype=int)
+ai2 = ufunc(ai)
+assert all(ai2 == ai * 2)
+</pre>
+<br>
+Using this extended syntax, we rewrote the lapack calls into the blas  functions in pure python, no c needed. Benchmarking this approach  actually was <b>much slower</b> than using the upstream <tt>umath_linalg</tt>  module via cpyext, as can be seen in the following benchmarks. This is  due to the need to copy c-aligned data into Fortran-aligned format. Our <tt>__getitem__</tt> and <tt>__setitem__</tt> iterators are not as fast as pointer arithmetic in C. So we next tried a hybrid approach: compile and use numpy's <tt>umath_linalg</tt> python module as a shared object, and call the optimized specific wrapper function from it.</div>
+<div>
+<h1>
+<a class="anchor" href="https://gist.github.com/mattip/25680e68fe7e2856fe0c#benchmarks" name="user-content-benchmarks" rel="noreferrer"></a>Benchmarks</h1>
+Here are some benchmarks, running a tight loop of the different versions of <tt>linalg.inv(a)</tt>, where <tt>a</tt> is a 10x10 double ndarray. The benchmark ran on an i7 processor running ubuntu 14.04 64 bit:<br>
+<table border="all"><thead valign="bottom">
+<tr> <th>Impl.</th> <th>Time after warmup</th> </tr>
+</thead> <tbody valign="top">
+<tr> <td>CPython 2.7 + numpy 1.10.dev + lapack</td> <td>8.9 msec/1000 loops</td> </tr>
+<tr> <td>PyPy 2.5.0  + numpy + lapack via cpyext</td> <td>8.6 msec/1000 loops</td> </tr>
+<tr> <td>PyPy 2.5.0  + numpy + lapack via pure python + cffi</td> <td>19.9 msec/1000 loops</td> </tr>
+<tr> <td>PyPy 2.5.0  + numpy + lapack via python + c + cffi</td> <td>9.5 msec/1000 loops</td></tr>
+</tbody></table>
+<br>
+<table border="all"><tbody valign="top">
+<tr></tr>
+</tbody></table>
+</div>
+<div>
+<br>
+While no general conclusions may be drawn from a single micro-benchmark, it does indicate that there is some merit in the approach taken. <br>
+<h1>
+Conclusion</h1>
+PyPy's numpy now includes a working linalg module. There are still  some rough corners, but hopefully we have implemented the parts you  need. While the speed of the isolated linalg function is no faster than  CPython and upstream numpy, it should not be significantly slower  either. Your use case may see an improvement if you use a mix of python  and lapack, which is the usual case.<br>
+<br>
+Please let us know how it goes. We love to hear success stories too.<br>
+<br>
+We still have challenges at all levels of programming,and are always  looking for people willing to contribute, so stop by on IRC at #pypy.<br>
+<br>
+mattip and the PyPy Team</div>
+</div></body></html>

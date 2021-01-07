@@ -1,0 +1,25 @@
+<html><body><p>PyPy contains a framework for writing custom Garbage Collectors, and a few simple GCs have been written in this framework. A common issue with all these GCs is how to find all the <span style="font-style: italic;">stack roots,</span> i.e. all the pointers to live GC-managed objects currently stored in local variables, in all the callers of the current function. The current solution is to maintain a custom <span style="font-style: italic;">shadow stack</span> of roots, where all functions push and pop copies of their local variables of type "GC pointer". Clearly this is an overhead. Can we remove it?</p>
+
+<p>LLVM has recently grown some support for this. By emitting markers in the LLVM source and with the help of a bit of custom C++ code, we can generate <span style="font-style: italic;">stack maps</span> for the functions compiled by LLVM.  Then, with 100% <span style="font-style: italic;">non-portable</span> code in our framework GC's root finding algorithm, we can walk the machine stack and locate where in each stack frame LLVM stores the GC pointers. (Yes, I mean <span style="font-style: italic;">non-portable:</span> LLVM offers no help for doing that.  Maybe it will at some point, though I didn't manage to explain why this is an issue to people working on  this in LLVM so far...).  I've tried that approach in the <a href="http://codespeak.net/svn/pypy/branch/llvmgcroot/">llvmgcroot</a> branch.  Over the manually-managed shadow stack, this gives speed improvements which are, very roughly, on the order of 5%.</p>
+
+<p>Note that this prevents some optimizations in LLVM, because it forces it to allocate all local variables of type "GC pointer" in the stack; it cannot keep them in registers and it must assume that they can be changed more or less at any time (as moving GCs do). Can we do better?</p>
+
+<p>Actually, yes.  We can even do better in the C backend, using a GCC hack.  GCC has this nice extension:
+</p><pre>asm("bla", constrains);</pre>
+This is meant to generate assembler instructions directly from C. Internally, GCC considers the whole asm() as a single regular instruction of its intermediate language; the constrains are expressed in the same way as the constrains for all the prebuilt intermediate language instructions. They express things like input and output operands of the instruction, whether they can live in memory or in registers, whether the whole instruction has side-effects, etc. The nice thing about asm() is that it doesn't kill any optimization whatsoever in GCC - it's your job to make sure that you use the correct constrains.
+
+<p>So what I've tried in the <a href="http://codespeak.net/svn/pypy/branch/asmgcroot/">asmgcroot</a> branch is to use asm() as markers. In this branch, the C backend produces code like this after each function call, for each local variable containing a live GC pointer:</p>
+
+<pre>asm("/* GCROOT %0 */" : "=g"(<span style="font-style: italic;">localvar</span>) : "0"(<span style="font-style: italic;">localvar</span>) : "memory");</pre>
+
+<p>This causes GCC to emit the following line in the assembler file it generates:</p>
+
+<pre>/* GCROOT <span style="font-style: italic;">register-or-memory-containing-localvar</span> */</pre>
+
+<p>I won't go in the details of the asm() line above - the constrains are just enough to make sure that GCC doesn't optimize too much, but don't prevent most optimizations from occurring. For example, the <span style="font-style: italic;">localvar</span> can be in a register.</p>
+
+<p>The assembler will just ignore the line above; it is a comment. But what we can do is write our own tool parsing the assembler files. This tool locates the /* GCROOT */ comments and follows where the register or memory location in the comment comes from (to do this it must follow the control flow and data flow of the function). This allows it to build a stack map: for each <span style="font-style: italic;">call</span> instruction it knows exactly which registers and frame stack locations contain a live GC pointer. The stack map is then emitted in an extra assembler file that we link with the rest. As with LLVM above, the stack map is then used at run-time by non-portable code written in our GC's stack root tracker.</p>
+
+<p>Yes, that's rather insane. But at least, we don't need to modify the assembler file - just read it. If GCC is too clever in its optimizations, the custom parser will get lost and complain cleanly; but I think that it is relatively safe in the sense that GCC optimizations should not be able to make the custom parser produce wrong results.</p>
+
+<p>The branch is not merged because it's probably too insane to merge (not to mention, it's probably not portable to non-GCC compilers, and it is completely platform-specific). Still, it gives good results, better that the pure LLVM approach - on the order of 10% to 25% speed-ups for pypy-c.</p></body></html>

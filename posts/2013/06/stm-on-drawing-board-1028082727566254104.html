@@ -1,0 +1,113 @@
+<html><body><p>Hi all!</p>
+
+<p>This is an update about the Software Transactional Memory subproject of
+PyPy.  I have some good news of progress.  Also,
+<a href="https://bitbucket.org/Raemi">Remi Meier</a> will
+likely help me this summer.  He did various
+investigations with PyPy-STM for his Master's Thesis and contributed back
+a lot of ideas and some code.  Welcome again Remi!</p>
+
+<p>I am also sorry that it seems to advance so slowly.  Beyond the usual
+excuses --- I was busy with other things, e.g. releasing PyPy 2.0 --- I
+would like to reassure people: I'm again working on it, and the financial
+contributions are still there and reserved for STM (almost half the money is
+left, a big thank you again if you contributed!).</p>
+
+<p>The real reason for the apparent slowness, though, is that it is really
+a research project.  It's possible to either have hard deadlines, or to
+follow various tracks and keep improving the basics, but not both at the
+same time.</p>
+
+<p>During the past month where I have worked again on STM, I worked still on
+the second option; and I believe it was worth every second of it.  Let me try
+to convince you :-)</p>
+
+<p>The main blocker was that the STM subsystem, written in C, and the
+Garbage Collection (GC) subsystem, written in RPython, were getting
+harder and harder to coordinate.  So what I did instead is to give up
+using RPython in favor of using only C for both.  C is a good language
+for some things, which includes low-level programming where we must take
+care of delicate multithreading issues; RPython is not a good fit in
+that case, and wasn't designed to be.</p>
+
+<p>I started a fresh <a href="https://bitbucket.org/pypy/stmgc">Mercurial repo</a>
+which is basically a stand-alone C library.  This library (in heavy development
+right now!) gives any C
+program some functions to allocate and track GC-managed objects, and
+gives an actual STM+GC combination on these objects.  It's possible
+(though rather verbose) to use it directly in C programs, like in a
+small example interpreter.  Of course the eventual purpose is to link it
+with PyPy during translation to C, with all the verbose calls
+automatically generated.</p>
+
+<p>Since I started this, bringing the GC closer to the STM, I kept finding
+new ways that the two might interact to improve the performance, maybe
+radically.  Here is a summary of the current ideas.</p>
+
+<p>When we run
+multiple threads, there are two common cases: one is to access (read and write)
+objects that have only been seen by the current thread; the other is to read
+objects seen by all threads, like in Python the modules/functions/classes,
+but not to write to them.  Of course, writing to the same object from
+multiple threads occurs too, and it is handled correctly (that's the whole
+point), but it is a relatively rare case.</p>
+
+<p>So each object is classified as "public" or "protected" (or "private",
+when they belong to the current transaction).  Newly created objects, once
+they are no longer private, remain protected until
+they are read by a different thread.  Now, the point is to use very
+different mechanisms for public and for protected objects.  Public
+objects are visible by all threads, but read-only in memory; to change
+them, a copy must be made, and the changes are written to the copy (the
+"redolog" approach to STM).  Protected objects, on the other hand, are
+modified in-place, with (if necessary) a copy of them being made
+for the sole purpose of a possible abort of the transaction (the "undolog"
+approach).</p>
+
+<p>This is combined with a generational GC similar to PyPy's --- but here,
+each thread gets its own nursery and does its own "minor collections",
+independently of the others.</p>
+
+<p>So objects are by default protected; when another thread tries to follow a
+pointer to them, then it is that other thread's job to carefully "steal"
+the object and turn it public (possibly making a copy of it if needed,
+e.g. if it was still a young object living in the original nursery).</p>
+
+<p>The same object can exist temporarily in multiple versions: any number
+of public copies; at most one active protected copy; and optionally one
+private copy per thread (this is the copy as currently seen by the
+transaction in progress on that thread).  The GC cleans up the
+unnecessary copies.</p>
+
+<p>These ideas are variants and extensions of the same basic idea
+of keeping multiple copies with revision numbers to track them.
+Moreover, "read barriers" and "write barriers" are used by the C program
+calling into this library in order to be sure that it is accessing the
+right version of the object.  In the currently investigated variant
+I believe it should be possible to have rather cheap
+read barriers, which would definitely be a major speed improvement over
+the previous variants.  Actually, as far as I know, it would be a major
+improvement over most of the other existing STMs: in them, the typical read barrier
+involves following chains of pointers, and checking some dictionary to see if this
+thread has a modified local copy of the object.  The difference with a
+read barrier that can resolve most cases in a few CPU cycles should be
+huge.</p>
+
+<p>So, this is research :-)  It is progressing, and at some point I'll be
+satisfied with it and stop rewriting everything; and then the actual
+integration into PyPy should be straightforward (there is already code
+to detect where the read and write barriers need to be inserted, where
+transactions can be split, etc.).  Then there is support for the
+JIT to be written, and so on.  But more about it later.</p>
+
+<p>The purpose of this post was to give you some glimpses into what I'm
+working on right now.  As usual, no plan for release yet.  But you can
+look forward to seeing the C library progress.  I'll probably also start
+soon some sample interpreter in C, to test the waters (likely a
+revival of <a href="https://bitbucket.org/arigo/duhton">duhton</a>).
+If you know nothing about Python but all about the C-level
+multithreading issues, now is a good time to get involved :-)</p>
+
+<p>Thanks for reading!</p>
+
+<p>Armin</p></body></html>

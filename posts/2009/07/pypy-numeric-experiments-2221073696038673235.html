@@ -1,0 +1,32 @@
+<html><body><p>
+Because PyPy will be presenting at the upcoming <a href="http://www.euroscipy.org/">euroscipy</a> conference, I have been playing recently with the idea of NumPy and PyPy integration. My idea is to integrate PyPy's JIT with NumPy or at least a very basic subset of it.  Time constraints make it impossible to hand write a JIT compiler that understands NumPy. But given PyPy's architecture we actually have a <b>JIT generator</b>, so we don't need to write one :-)
+</p>
+
+<p>
+Our JIT has shown that it can speed up small arithmetic examples <a href="http://morepypy.blogspot.com/2009/03/good-news-everyone.html">significantly</a>. What happens with something like NumPy?
+</p>
+<p>
+I wrote a very minimal subset of NumPy in RPython, called micronumpy (only single-dimension int arrays that can only get and set items), and a <a href="http://paste.pocoo.org/show/129187/">benchmark</a> against it. The point of this benchmark is to compare the performance of a builtin function (numpy.minimum) against the equivalent hand-written function, written in pure Python and compiled by our JIT.
+</p>
+<p>
+The goal is to prove that it is possible to write algorithms in Python instead of C without loss of efficiency. Sure, we can write some functions (like minimum in the following example), but there is a whole universe of other ufuncs which would be cool to have in Python instead, assuming this could be done without a huge loss in efficiency.
+</p>
+<p>
+Here are the results. This is comparing PyPy svn revision 66303 in the pyjitpl5 branch against python 2.6 with NumPy 1.2.1. The builtin numpy.minimum in PyPy is just a naive implementation in RPython, which is comparable to the speed of a naive implementation written in C (and thus a bit slower than the optimized
+version in NumPy):
+</p>
+<table>
+<tr>
+<td>NumPy (builtin function)</td><td>0.12s</td></tr>
+<tr><td>PyPy's micronumpy (builtin function)</td><td>0.28s</td></tr>
+<tr><td>CPython (pure Python)</td><td>11s</td></tr>
+<tr><td>PyPy with JIT (pure Python)</td><td>0.91s</td></tr>
+</table>
+<p>
+As we can see, PyPy's JIT is slower than the optmized NumPy's C version, but still much faster than CPython (12x).
+</p>
+<p>
+Why is it slower? When you actually look at assembler, it's pretty obvious that it's atrocious. There's a lot of speedup to be gained out of just doing simple optimizations on resulting assembler. There are also pretty obvious limitations, like x86 backend not being able to emit opcodes for floats or x86_64 not being there. Those limitations are not fundamental in any sense and can be relatively straightforward to overcome. Therefore it seems we can get C-level speeds for pure Python implementations of numeric algorithms using NumPy arrays in PyPy. I think it's an interesting perspective that Python has the potential of becoming less of a glue language and more of a real implementation language in the scientific field.
+</p>
+Cheers,<br>
+fijal</body></html>

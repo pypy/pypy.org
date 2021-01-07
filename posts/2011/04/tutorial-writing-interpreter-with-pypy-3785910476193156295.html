@@ -1,0 +1,293 @@
+<html><body><p>This is a guest blog post <a href="http://codespeak.net/pipermail/pypy-dev/2011q2/007128.html">written by Andrew Brown</a>, with help from the PyPy developers
+on the pypy-dev mailing list.</p>
+<p>This tutorial's master copy and supporting files live at
+<a class="reference external" href="https://bitbucket.org/brownan/pypy-tutorial/">https://bitbucket.org/brownan/pypy-tutorial/</a></p>
+<hr>
+<p>When I first learned about the PyPy project, it took me a while to figure out
+exactly what it was about. For those that don't already know, it's two things:</p>
+<ul class="simple">
+<li>A set of tools for implementing interpreters for interpreted languages</li>
+<li>An implementation of Python using this toolchain</li>
+</ul>
+<p>The second part is probably what most people think PyPy is, but this tutorial
+is <em>not</em> about their Python interpreter.  It is about writing your own
+interpreter for your own language.</p>
+<p>This is the project I undertook to help myself better understand how PyPy works
+and what it's all about.</p>
+<p>This tutorial assumes you know very little about PyPy, how it works, and even
+what it's all about. I'm starting from the very beginning here.</p>
+<div class="section" id="what-pypy-does">
+<h2>What PyPy Does</h2>
+<p>Here's a brief overview of what PyPy can do. Let's say you want to write an
+interpreted language. This involves writing some kind of source code parser, a
+bytecode interpretation loop, and lots of standard library code.</p>
+<p>That's quite a bit of work for moderately complicated languages, and there's a
+lot of low level work involved. Writing the parser and compiler code usually
+isn't fun, that's why there are tools out there to generate parsers and
+compilers for you.</p>
+<p>Even then, you still must worry about memory management in your interpreter,
+and you're going to be re-implementing a lot if you want data types like
+arbitrary precision integers, nice general hash tables, and such. It's enough
+to put someone off from implementing their idea for a language.</p>
+<p>Wouldn't it be nice if you could write your language in an existing high level
+language like, for example, Python? That sure would be ideal, you'd get all the
+advantages of a high level language like automatic memory management and rich
+data types at your disposal.  Oh, but an interpreted language interpreting
+another language would be slow, right? That's twice as much interpreting going
+on.</p>
+<p>As you may have guessed, PyPy solves this problem. PyPy is a sophisticated
+toolchain for analyzing and translating your interpreter code to C code (or JVM
+or CLI). This process is called "translation", and it knows how to translate
+quite a lot of Python's syntax and standard libraries, but not everything. All
+you have to do is write your interpreter in <strong>RPython</strong>, a subset of the Python
+language carefully defined to allow this kind of analysis and translation, and
+PyPy will produce for you a very efficient interpreter.</p>
+<p>Because efficient interpreters should not be hard to write.</p>
+</div>
+<div class="section" id="the-language">
+<h2>The Language</h2>
+<p>The language I've chosen to implement is dead simple. The language runtime
+consists of a tape of integers, all initialized to zero, and a single pointer
+to one of the tape's cells. The language has 8 commands, described here:</p>
+<dl class="docutils">
+<dt>&gt;</dt>
+<dd>Moves the tape pointer one cell to the right</dd>
+</dl>
+<dl class="docutils">
+<dt>&lt;</dt>
+<dd>Moves the tape pointer one cell to the left</dd>
+<dt>+</dt>
+<dd>Increments the value of the cell underneath the pointer</dd>
+<dt>-</dt>
+<dd>Decrements the value of the cell underneath the pointer</dd>
+</dl>
+<dl class="docutils">
+<dt>[</dt>
+<dd>If the cell under the current pointer is 0, skip to the instruction after
+the matching ]</dd>
+</dl>
+<dl class="docutils">
+<dt>]</dt>
+<dd>Skip back to the matching [ (evaluating its condition)</dd>
+</dl>
+<dl class="docutils">
+<dt>.</dt>
+<dd>Print out a single byte to stdout from the cell under the pointer</dd>
+</dl>
+<dl class="docutils">
+<dt>,</dt>
+<dd>Read in a single byte from stdin to the cell under the pointer</dd>
+</dl>
+<p>Any unrecognized bytes are ignored.</p>
+<p>Some of you may recognize this language. I will be referring to it as BF.</p>
+<p>One thing to notice is that the language is its own bytecode; there is no
+translation from source code to bytecode. This means that the language can be
+interpreted directly: the main eval loop of our interpreter will operate right
+on the source code. This simplifies the implementation quite a bit.</p>
+</div>
+<div class="section" id="first-steps">
+<h2>First Steps</h2>
+<p>Let's start out by writing a BF interpreter in plain old Python. The first step
+is sketching out an eval loop:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">mainloop</span>(program):
+    tape <span style="color: #555555;">=</span> Tape()
+    pc <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>
+    <span style="color: #006699; font-weight: bold;">while</span> pc <span style="color: #555555;">&lt;</span> <span style="color: #336666;">len</span>(program):
+        code <span style="color: #555555;">=</span> program[pc]
+
+        <span style="color: #006699; font-weight: bold;">if</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"&gt;"</span>:
+            tape<span style="color: #555555;">.</span>advance()
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"&lt;"</span>:
+            tape<span style="color: #555555;">.</span>devance()
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"+"</span>:
+            tape<span style="color: #555555;">.</span>inc()
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"-"</span>:
+            tape<span style="color: #555555;">.</span>dec()
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"."</span>:
+            sys<span style="color: #555555;">.</span>stdout<span style="color: #555555;">.</span>write(<span style="color: #336666;">chr</span>(tape<span style="color: #555555;">.</span>get()))
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">","</span>:
+            tape<span style="color: #555555;">.</span>set(<span style="color: #336666;">ord</span>(sys<span style="color: #555555;">.</span>stdin<span style="color: #555555;">.</span>read(<span style="color: #FF6600;">1</span>)))
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"["</span> <span style="color: #000000; font-weight: bold;">and</span> value() <span style="color: #555555;">==</span> <span style="color: #FF6600;">0</span>:
+            <span style="color: #0099FF; font-style: italic;"># Skip forward to the matching ]</span>
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"]"</span> <span style="color: #000000; font-weight: bold;">and</span> value() <span style="color: #555555;">!=</span> <span style="color: #FF6600;">0</span>:
+            <span style="color: #0099FF; font-style: italic;"># Skip back to the matching [</span>
+
+        pc <span style="color: #555555;">+=</span> <span style="color: #FF6600;">1</span>
+</pre></div>
+<p>As you can see, a program counter (pc) holds the current instruction index. The
+first statement in the loop gets the instruction to execute, and then a
+compound if statement decides how to execute that instruction.</p>
+<p>The implementation of [ and ] are left out here, but they should change the
+program counter to the value of the matching bracket. (The pc then gets
+incremented, so the condition is evaluated once when entering a loop, and once
+at the end of each iteration)</p>
+<p>Here's the implementation of the Tape class, which holds the tape's values as
+well as the tape pointer:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Tape</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape <span style="color: #555555;">=</span> [<span style="color: #FF6600;">0</span>]
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>position <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">get</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape[<span style="color: #336666;">self</span><span style="color: #555555;">.</span>position]
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">set</span>(<span style="color: #336666;">self</span>, val):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape[<span style="color: #336666;">self</span><span style="color: #555555;">.</span>position] <span style="color: #555555;">=</span> val
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">inc</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape[<span style="color: #336666;">self</span><span style="color: #555555;">.</span>position] <span style="color: #555555;">+=</span> <span style="color: #FF6600;">1</span>
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">dec</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape[<span style="color: #336666;">self</span><span style="color: #555555;">.</span>position] <span style="color: #555555;">-=</span> <span style="color: #FF6600;">1</span>
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">advance</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>position <span style="color: #555555;">+=</span> <span style="color: #FF6600;">1</span>
+        <span style="color: #006699; font-weight: bold;">if</span> <span style="color: #336666;">len</span>(<span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape) <span style="color: #555555;">&lt;=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>position:
+            <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape<span style="color: #555555;">.</span>append(<span style="color: #FF6600;">0</span>)
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">devance</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>position <span style="color: #555555;">-=</span> <span style="color: #FF6600;">1</span>
+</pre></div>
+<p>As you can see, the tape expands as needed to the right, indefinitely. We
+should really add some error checking to make sure the pointer doesn't go
+negative, but I'm not worrying about that now.</p>
+<p>Except for the omission of the "[" and "]" implementation, this code will work
+fine.  However, if the program has a lot of comments, it will have to skip over
+them one byte at a time at runtime. So let's parse those out once and for all.</p>
+<p>At the same time, we'll build a dictionary mapping between brackets, so that
+finding a matching bracket is just a single dictionary lookup. Here's how:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">parse</span>(program):
+    parsed <span style="color: #555555;">=</span> []
+    bracket_map <span style="color: #555555;">=</span> {}
+    leftstack <span style="color: #555555;">=</span> []
+
+    pc <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>
+    <span style="color: #006699; font-weight: bold;">for</span> char <span style="color: #000000; font-weight: bold;">in</span> program:
+        <span style="color: #006699; font-weight: bold;">if</span> char <span style="color: #000000; font-weight: bold;">in</span> (<span style="color: #CC3300;">'['</span>, <span style="color: #CC3300;">']'</span>, <span style="color: #CC3300;">'&lt;'</span>, <span style="color: #CC3300;">'&gt;'</span>, <span style="color: #CC3300;">'+'</span>, <span style="color: #CC3300;">'-'</span>, <span style="color: #CC3300;">','</span>, <span style="color: #CC3300;">'.'</span>):
+            parsed<span style="color: #555555;">.</span>append(char)
+
+            <span style="color: #006699; font-weight: bold;">if</span> char <span style="color: #555555;">==</span> <span style="color: #CC3300;">'['</span>:
+                leftstack<span style="color: #555555;">.</span>append(pc)
+            <span style="color: #006699; font-weight: bold;">elif</span> char <span style="color: #555555;">==</span> <span style="color: #CC3300;">']'</span>:
+                left <span style="color: #555555;">=</span> leftstack<span style="color: #555555;">.</span>pop()
+                right <span style="color: #555555;">=</span> pc
+                bracket_map[left] <span style="color: #555555;">=</span> right
+                bracket_map[right] <span style="color: #555555;">=</span> left
+            pc <span style="color: #555555;">+=</span> <span style="color: #FF6600;">1</span>
+
+    <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #CC3300;">""</span><span style="color: #555555;">.</span>join(parsed), bracket_map
+</pre></div>
+<p>This returns a string with all invalid instructions removed, and a dictionary
+mapping bracket indexes to their matching bracket index.</p>
+<p>All we need is some glue code and we have a working BF interpreter:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">run</span>(<span style="color: #336666;">input</span>):
+    program, <span style="color: #336666;">map</span> <span style="color: #555555;">=</span> parse(<span style="color: #336666;">input</span><span style="color: #555555;">.</span>read())
+    mainloop(program, <span style="color: #336666;">map</span>)
+
+<span style="color: #006699; font-weight: bold;">if</span> __name__ <span style="color: #555555;">==</span> <span style="color: #CC3300;">"__main__"</span>:
+    <span style="color: #006699; font-weight: bold;">import</span> <span style="color: #00CCFF; font-weight: bold;">sys</span>
+    run(<span style="color: #336666;">open</span>(sys<span style="color: #555555;">.</span>argv[<span style="color: #FF6600;">1</span>], <span style="color: #CC3300;">'r'</span>))
+</pre></div>
+<p>If you're following along at home, you'll also need to change the signature of
+mainloop() and implement the bracket branches of the if statement. Here's the
+complete example: <a class="reference external" href="https://bitbucket.org/brownan/pypy-tutorial/src/tip/example1.py">example1.py</a></p>
+<p>At this point you can try it out to see that it works by running the
+interpreter under python, but be warned, it will be <em>very</em> slow on the more
+complex examples:</p>
+<pre class="literal-block">
+$ python example1.py 99bottles.b
+</pre>
+<p>You can find mandel.b and several other example programs (not written by me) in
+my repository.</p>
+</div>
+<div class="section" id="pypy-translation">
+<h2>PyPy Translation</h2>
+<p>But this is not about writing a BF interpreter, this is about PyPy. So what
+does it take to get PyPy to translate this into a super-fast executable?</p>
+<p>As a side note, there are some simple examples in the pypy/translator/goal
+directory of the PyPy source tree that are helpful here. My starting point for
+learning this was the example "targetnopstandalone.py", a simple hello world
+for PyPy.</p>
+<p>For our example, the module must define a name called "target" which returns the
+entry point. The translation process imports your module and looks for that
+name, calls it, and the function object returned is where it starts the
+translation.</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">run</span>(fp):
+    program_contents <span style="color: #555555;">=</span> <span style="color: #CC3300;">""</span>
+    <span style="color: #006699; font-weight: bold;">while</span> <span style="color: #336666;">True</span>:
+        read <span style="color: #555555;">=</span> os<span style="color: #555555;">.</span>read(fp, <span style="color: #FF6600;">4096</span>)
+        <span style="color: #006699; font-weight: bold;">if</span> <span style="color: #336666;">len</span>(read) <span style="color: #555555;">==</span> <span style="color: #FF6600;">0</span>:
+            <span style="color: #006699; font-weight: bold;">break</span>
+        program_contents <span style="color: #555555;">+=</span> read
+    os<span style="color: #555555;">.</span>close(fp)
+    program, bm <span style="color: #555555;">=</span> parse(program_contents)
+    mainloop(program, bm)
+
+<span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">entry_point</span>(argv):
+    <span style="color: #006699; font-weight: bold;">try</span>:
+        filename <span style="color: #555555;">=</span> argv[<span style="color: #FF6600;">1</span>]
+    <span style="color: #006699; font-weight: bold;">except</span> <span style="color: #CC0000; font-weight: bold;">IndexError</span>:
+        <span style="color: #006699; font-weight: bold;">print</span> <span style="color: #CC3300;">"You must supply a filename"</span>
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #FF6600;">1</span>
+
+    run(os<span style="color: #555555;">.</span>open(filename, os<span style="color: #555555;">.</span>O_RDONLY, <span style="color: #FF6600;">0777</span>))
+    <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #FF6600;">0</span>
+
+<span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">target</span>(<span style="color: #555555;">*</span>args):
+    <span style="color: #006699; font-weight: bold;">return</span> entry_point, <span style="color: #336666;">None</span>
+
+<span style="color: #006699; font-weight: bold;">if</span> __name__ <span style="color: #555555;">==</span> <span style="color: #CC3300;">"__main__"</span>:
+    entry_point(sys<span style="color: #555555;">.</span>argv)
+</pre></div>
+<p>The entry_point function is passed the command line arguments when you run the
+resulting executable.</p>
+<p>A few other things have changed here too. See the next section...</p>
+</div>
+<div class="section" id="about-rpython">
+<h2>About RPython</h2>
+<p>Let's talk a bit about RPython at this point. PyPy can't translate arbitrary
+Python code because Python is a bit too dynamic. There are restrictions on what
+standard library functions and what syntax constructs one can use. I won't be
+going over all the restrictions, but for more information see
+<a class="reference external" href="http://readthedocs.org/docs/pypy/en/latest/coding-guide.html#restricted-python">http://readthedocs.org/docs/pypy/en/latest/coding-guide.html#restricted-python</a></p>
+<p>In the example above, you'll see a few things have changed.  I'm now using low
+level file descriptors with os.open and os.read instead of file objects.
+The implementation of "." and "," are similarly tweaked (not shown above).
+Those are the only changes to make to this code, the rest is simple enough for
+PyPy to digest.</p>
+<p>That wasn't so hard, was it? I still get to use dictionaries, expandable lists,
+and even classes and objects! And if low level file descriptors are too low for
+you, there are some helpful abstractions in the rlib.streamio module included
+with PyPy's "RPython standard library."</p>
+<p>For the example thus far, see <a class="reference external" href="https://bitbucket.org/brownan/pypy-tutorial/src/tip/example2.py">example2.py</a></p>
+</div>
+<div class="section" id="translating">
+<h2>Translating</h2>
+<p>If you haven't already, check yourself out the latest version of PyPy from
+their bitbucket.org repository:</p>
+<pre class="literal-block">
+$ hg clone https://bitbucket.org/pypy/pypy
+</pre>
+<p>(A recent revision is necessary because of a bugfix that makes my example
+possible)</p>
+<p>The script to run is in "pypy/translator/goal/translate.py". Run this script,
+passing in our example module as an argument.</p>
+<p><b><i>[A note added much later: this script has been moved to "rpython/bin/rpython".]</i></b></p>
+<pre class="literal-block">
+$ python ./pypy/pypy/translator/goal/translate.py example2.py
+</pre>
+<p>(You can use PyPy's python interpreter for extra speed, but it's not necessary)</p>
+<p>PyPy will churn for a bit, drawing some nice looking fractals to your console
+while it works. It takes around 20 seconds on my machine.</p>
+<p>The result from this is an executable binary that interprets BF programs.
+Included in my repository are some example BF programs, including a mandelbrot
+fractal generator, which takes about 45 seconds to run on my computer. Try it
+out:</p>
+<pre class="literal-block">
+$ ./example2-c mandel.b
+</pre>
+<p>Compare this to running the interpreter un-translated on top of python:</p>
+<pre class="literal-block">
+$ python example2.py mandel.b
+</pre>
+<p>Takes forever, doesn't it?</p>
+<p>So there you have it. We've successfully written our own interpreter in RPython
+and translated it with the PyPy toolchain.</p>
+<hr>
+<p>(more in the next blog post...)</p>
+</div></body></html>

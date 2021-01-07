@@ -1,0 +1,233 @@
+<html><body><div class="document" id="how-to-make-your-code-80-times-faster">
+I often hear people who are happy because PyPy makes their code 2 times faster
+or so. Here is a short personal story which shows PyPy can go well beyond
+that.<br>
+<br>
+<strong>DISCLAIMER</strong>: this is not a silver bullet or a general recipe: it worked in
+this particular case, it might not work so well in other cases. But I think it
+is still an interesting technique. Moreover, the various steps and
+implementations are showed in the same order as I tried them during the
+development, so it is a real-life example of how to proceed when optimizing
+for PyPy.<br>
+<br>
+Some months ago I <a class="reference external" href="https://github.com/antocuni/evolvingcopter">played a bit</a> with evolutionary algorithms: the ambitious
+plan was to automatically evolve a logic which could control a (simulated)
+quadcopter, i.e. a <a class="reference external" href="https://en.wikipedia.org/wiki/PID_controller">PID controller</a> (<strong>spoiler</strong>: it doesn't fly).<br>
+<br>
+The idea is to have an initial population of random creatures: at each
+generation, the ones with the best fitness survive and reproduce with small,
+random variations.<br>
+<br>
+However, for the scope of this post, the actual task at hand is not so
+important, so let's jump straight to the code. To drive the quadcopter, a
+<tt class="docutils literal">Creature</tt> has a <tt class="docutils literal">run_step</tt> method which runs at each <tt class="docutils literal">delta_t</tt> (<a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/creature.py">full
+code</a>):<br>
+<pre class="code python literal-block"><span class="keyword">class</span> <span class="name class">Creature</span><span class="punctuation">(</span><span class="name builtin">object</span><span class="punctuation">):</span>
+    <span class="name">INPUTS</span> <span class="operator">=</span> <span class="literal number integer">2</span>  <span class="comment single"># z_setpoint, current z position</span>
+    <span class="name">OUTPUTS</span> <span class="operator">=</span> <span class="literal number integer">1</span> <span class="comment single"># PWM for all 4 motors</span>
+    <span class="name">STATE_VARS</span> <span class="operator">=</span> <span class="literal number integer">1</span>
+    <span class="operator">...</span>
+
+    <span class="keyword">def</span> <span class="name function">run_step</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="name">inputs</span><span class="punctuation">):</span>
+        <span class="comment single"># state: [state_vars ... inputs]</span>
+        <span class="comment single"># out_values: [state_vars, ... outputs]</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">state</span><span class="punctuation">[</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">:]</span> <span class="operator">=</span> <span class="name">inputs</span>
+        <span class="name">out_values</span> <span class="operator">=</span> <span class="name">np</span><span class="operator">.</span><span class="name">dot</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">matrix</span><span class="punctuation">,</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">state</span><span class="punctuation">)</span> <span class="operator">+</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">constant</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">state</span><span class="punctuation">[:</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="name">out_values</span><span class="punctuation">[:</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">]</span>
+        <span class="name">outputs</span> <span class="operator">=</span> <span class="name">out_values</span><span class="punctuation">[</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">:]</span>
+        <span class="keyword">return</span> <span class="name">outputs</span>
+</pre>
+<ul class="simple">
+<li><tt class="docutils literal">inputs</tt> is a numpy array containing the desired setpoint and the current
+position on the Z axis;</li>
+<li><tt class="docutils literal">outputs</tt> is a numpy array containing the thrust to give to the motors. To
+start easy, all the 4 motors are constrained to have the same thrust, so
+that the quadcopter only travels up and down the Z axis;</li>
+<li><tt class="docutils literal">self.state</tt> contains arbitrary values of unknown size which are passed from
+one step to the next;</li>
+<li><tt class="docutils literal">self.matrix</tt> and <tt class="docutils literal">self.constant</tt> contains the actual logic. By putting
+the "right" values there, in theory we could get a perfectly tuned PID
+controller. These are randomly mutated between generations.</li>
+</ul>
+<tt class="docutils literal">run_step</tt> is called at 100Hz (in the virtual time frame of the simulation). At each
+generation, we test 500 creatures for a total of 12 virtual seconds each. So,
+we have a total of 600,000 executions of <tt class="docutils literal">run_step</tt> at each generation.<br>
+<br>
+At first, I simply tried to run this code on CPython; here is the result:<br>
+<pre class="code literal-block">$ python -m ev.main
+Generation   1: ... [population = 500]  [12.06 secs]
+Generation   2: ... [population = 500]  [6.13 secs]
+Generation   3: ... [population = 500]  [6.11 secs]
+Generation   4: ... [population = 500]  [6.09 secs]
+Generation   5: ... [population = 500]  [6.18 secs]
+Generation   6: ... [population = 500]  [6.26 secs]
+</pre>
+Which means ~6.15 seconds/generation, excluding the first.<br>
+<br>
+Then I tried with PyPy 5.9:<br>
+<pre class="code literal-block">$ pypy -m ev.main
+Generation   1: ... [population = 500]  [63.90 secs]
+Generation   2: ... [population = 500]  [33.92 secs]
+Generation   3: ... [population = 500]  [34.21 secs]
+Generation   4: ... [population = 500]  [33.75 secs]
+</pre>
+Ouch! We are ~5.5x slower than CPython. This was kind of expected: numpy is
+based on cpyext, which is infamously slow.  (Actually, <a class="reference external" href="https://morepypy.blogspot.it/2017/10/cape-of-good-hope-for-pypy-hello-from.html">we are working on
+that</a> and on the <tt class="docutils literal"><span class="pre">cpyext-avoid-roundtrip</span></tt> branch we are already faster than
+CPython, but this will be the subject of another blog post.)<br>
+<br>
+So, let's try to avoid cpyext. The first obvious step is to use <a class="reference external" href="http://doc.pypy.org/en/latest/faq.html#what-about-numpy-numpypy-micronumpy">numpypy</a>
+instead of numpy (actually, there is a <a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/pypycompat.py">hack</a> to use just the micronumpy
+part). Let's see if the speed improves:<br>
+<pre class="code literal-block">$ pypy -m ev.main   # using numpypy
+Generation   1: ... [population = 500]  [5.60 secs]
+Generation   2: ... [population = 500]  [2.90 secs]
+Generation   3: ... [population = 500]  [2.78 secs]
+Generation   4: ... [population = 500]  [2.69 secs]
+Generation   5: ... [population = 500]  [2.72 secs]
+Generation   6: ... [population = 500]  [2.73 secs]
+</pre>
+So, ~2.7 seconds on average: this is 12x faster than PyPy+numpy, and more than
+2x faster than the original CPython. At this point, most people would be happy
+and go tweeting how PyPy is great.<br>
+<br>
+In general, when talking of CPython vs PyPy, I am rarely satified of a 2x
+speedup: I know that PyPy can do much better than this, especially if you
+write code which is specifically optimized for the JIT. For a real-life
+example, have a look at <a class="reference external" href="http://capnpy.readthedocs.io/en/latest/benchmarks.html">capnpy benchmarks</a>, in which the PyPy version is
+~15x faster than the heavily optimized CPython+Cython version (both have been
+written by me, and I tried hard to write the fastest code for both
+implementations).<br>
+<br>
+So, let's try to do better. As usual, the first thing to do is to profile and
+see where we spend most of the time. Here is the <a class="reference external" href="http://vmprof.com/#/449ca8ee-3ab2-49d4-b6f0-9099987e9000">vmprof profile</a>. We spend a
+lot of time inside the internals of numpypy, and allocating tons of temporary
+arrays to store the results of the various operations.<br>
+<br>
+Also, let's look at the <a class="reference external" href="http://vmprof.com/#/28fd6e8f-f103-4bf4-a76a-4b65dbd637f4/traces">jit traces</a> and search for the function <tt class="docutils literal">run</tt>:
+this is loop in which we spend most of the time, and it is composed of 1796
+operations.  The operations emitted for the line <tt class="docutils literal"><span class="pre">np.dot(...)</span> +
+self.constant</tt> are listed between lines 1217 and 1456. Here is the excerpt
+which calls <tt class="docutils literal"><span class="pre">np.dot(...)</span></tt>; most of the ops are cheap, but at line 1232 we
+see a call to the RPython function <a class="reference external" href="https://bitbucket.org/pypy/pypy/src/89d1f31fabc86778cfaa1034b1102887c063de66/pypy/module/micronumpy/ndarray.py?at=default&amp;fileviewer=file-view-default#ndarray.py-1168">descr_dot</a>; by looking at the
+implementation we see that it creates a new <tt class="docutils literal">W_NDimArray</tt> to store the
+result, which means it has to do a <tt class="docutils literal">malloc()</tt>:<br>
+<div class="separator" style="clear: both; text-align: center;">
+<a href="https://4.bp.blogspot.com/-_h6BuLTtEO8/Wfb6BXDg93I/AAAAAAAABNY/BY2XBg4ZtwokB9f1mWSmzI9gn_qanb81QCLcBGAs/s1600/2017-10-trace1.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="450" src="https://4.bp.blogspot.com/-_h6BuLTtEO8/Wfb6BXDg93I/AAAAAAAABNY/BY2XBg4ZtwokB9f1mWSmzI9gn_qanb81QCLcBGAs/s640/2017-10-trace1.png" width="640"></a></div>
+<br>
+The implementation of the <tt class="docutils literal">+ self.constant</tt> part is also interesting:
+contrary the former, the call to <tt class="docutils literal">W_NDimArray.descr_add</tt> has been inlined by
+the JIT, so we have a better picture of what's happening; in particular, we
+can see the call to <tt class="docutils literal">__0_alloc_with_del____</tt> which allocates the
+<tt class="docutils literal">W_NDimArray</tt> for the result, and the <tt class="docutils literal">raw_malloc</tt> which allocates the
+actual array. Then we have a long list of 149 simple operations which set the
+fields of the resulting array, construct an iterator, and finally do a
+<tt class="docutils literal">call_assembler</tt>: this is the actual logic to do the addition, which was
+JITtted indipendently; <tt class="docutils literal">call_assembler</tt> is one of the operations to do
+JIT-to-JIT calls:<br>
+<div class="separator" style="clear: both; text-align: center;">
+<a href="https://1.bp.blogspot.com/-vmo0pWharIU/Wfb3VfwHjxI/AAAAAAAABNE/a6Em09qZizwGiWJeTbGzKfHQH70dB7RKgCEwYBhgL/s1600/2017-10-trace2.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="640" src="https://1.bp.blogspot.com/-vmo0pWharIU/Wfb3VfwHjxI/AAAAAAAABNE/a6Em09qZizwGiWJeTbGzKfHQH70dB7RKgCEwYBhgL/s640/2017-10-trace2.png" width="625"></a></div>
+<br>
+All of this is very suboptimal: in this particular case, we know that the
+shape of <tt class="docutils literal">self.matrix</tt> is always <tt class="docutils literal">(3, 2)</tt>: so, we are doing an incredible
+amount of work, including calling <tt class="docutils literal">malloc()</tt> twice for the temporary arrays, just to
+call two functions which ultimately do a total of 6 multiplications
+and 6 additions.  Note also that this is not a fault of the JIT: CPython+numpy
+has to do the same amount of work, just hidden inside C calls.<br>
+<br>
+One possible solution to this nonsense is a well known compiler optimization:
+loop unrolling.  From the compiler point of view, unrolling the loop is always
+risky because if the matrix is too big you might end up emitting a huge blob
+of code, possibly uselss if the shape of the matrices change frequently: this
+is the main reason why the PyPy JIT does not even try to do it in this case.<br>
+<br>
+However, we <strong>know</strong> that the matrix is small, and always of the same
+shape. So, let's unroll the loop manually:<br>
+<pre class="code python literal-block"><span class="keyword">class</span> <span class="name class">SpecializedCreature</span><span class="punctuation">(</span><span class="name">Creature</span><span class="punctuation">):</span>
+
+    <span class="keyword">def</span> <span class="name function magic">__init__</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="operator">*</span><span class="name">args</span><span class="punctuation">,</span> <span class="operator">**</span><span class="name">kwargs</span><span class="punctuation">):</span>
+        <span class="name">Creature</span><span class="operator">.</span><span class="name function magic">__init__</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="operator">*</span><span class="name">args</span><span class="punctuation">,</span> <span class="operator">**</span><span class="name">kwargs</span><span class="punctuation">)</span>
+        <span class="comment single"># store the data in a plain Python list</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data</span> <span class="operator">=</span> <span class="name builtin">list</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">matrix</span><span class="operator">.</span><span class="name">ravel</span><span class="punctuation">())</span> <span class="operator">+</span> <span class="name builtin">list</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">constant</span><span class="punctuation">)</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data_state</span> <span class="operator">=</span> <span class="punctuation">[</span><span class="literal number float">0.0</span><span class="punctuation">]</span>
+        <span class="keyword">assert</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">matrix</span><span class="operator">.</span><span class="name">shape</span> <span class="operator">==</span> <span class="punctuation">(</span><span class="literal number integer">2</span><span class="punctuation">,</span> <span class="literal number integer">3</span><span class="punctuation">)</span>
+        <span class="keyword">assert</span> <span class="name builtin">len</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data</span><span class="punctuation">)</span> <span class="operator">==</span> <span class="literal number integer">8</span>
+
+    <span class="keyword">def</span> <span class="name function">run_step</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="name">inputs</span><span class="punctuation">):</span>
+        <span class="comment single"># state: [state_vars ... inputs]</span>
+        <span class="comment single"># out_values: [state_vars, ... outputs]</span>
+        <span class="name">k0</span><span class="punctuation">,</span> <span class="name">k1</span><span class="punctuation">,</span> <span class="name">k2</span><span class="punctuation">,</span> <span class="name">q0</span><span class="punctuation">,</span> <span class="name">q1</span><span class="punctuation">,</span> <span class="name">q2</span><span class="punctuation">,</span> <span class="name">c0</span><span class="punctuation">,</span> <span class="name">c1</span> <span class="operator">=</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data</span>
+        <span class="name">s0</span> <span class="operator">=</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data_state</span><span class="punctuation">[</span><span class="literal number integer">0</span><span class="punctuation">]</span>
+        <span class="name">z_sp</span><span class="punctuation">,</span> <span class="name">z</span> <span class="operator">=</span> <span class="name">inputs</span>
+        <span class="comment single">#</span>
+        <span class="comment single"># compute the output</span>
+        <span class="name">out0</span> <span class="operator">=</span> <span class="name">s0</span><span class="operator">*</span><span class="name">k0</span> <span class="operator">+</span> <span class="name">z_sp</span><span class="operator">*</span><span class="name">k1</span> <span class="operator">+</span> <span class="name">z</span><span class="operator">*</span><span class="name">k2</span> <span class="operator">+</span> <span class="name">c0</span>
+        <span class="name">out1</span> <span class="operator">=</span> <span class="name">s0</span><span class="operator">*</span><span class="name">q0</span> <span class="operator">+</span> <span class="name">z_sp</span><span class="operator">*</span><span class="name">q1</span> <span class="operator">+</span> <span class="name">z</span><span class="operator">*</span><span class="name">q2</span> <span class="operator">+</span> <span class="name">c1</span>
+        <span class="comment single">#</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data_state</span><span class="punctuation">[</span><span class="literal number integer">0</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="name">out0</span>
+        <span class="name">outputs</span> <span class="operator">=</span> <span class="punctuation">[</span><span class="name">out1</span><span class="punctuation">]</span>
+        <span class="keyword">return</span> <span class="name">outputs</span>
+</pre>
+In the <a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/creature.py#L100">actual code</a> there is also a sanity check which asserts that the
+computed output is the very same as the one returned by <tt class="docutils literal">Creature.run_step</tt>.<br>
+<br>
+So, let's try to see how it performs. First, with CPython:<br>
+<pre class="code literal-block">$ python -m ev.main
+Generation   1: ... [population = 500]  [7.61 secs]
+Generation   2: ... [population = 500]  [3.96 secs]
+Generation   3: ... [population = 500]  [3.79 secs]
+Generation   4: ... [population = 500]  [3.74 secs]
+Generation   5: ... [population = 500]  [3.84 secs]
+Generation   6: ... [population = 500]  [3.69 secs]
+</pre>
+This looks good: 60% faster than the original CPython+numpy
+implementation. Let's try on PyPy:<br>
+<pre class="code literal-block">Generation   1: ... [population = 500]  [0.39 secs]
+Generation   2: ... [population = 500]  [0.10 secs]
+Generation   3: ... [population = 500]  [0.11 secs]
+Generation   4: ... [population = 500]  [0.09 secs]
+Generation   5: ... [population = 500]  [0.08 secs]
+Generation   6: ... [population = 500]  [0.12 secs]
+Generation   7: ... [population = 500]  [0.09 secs]
+Generation   8: ... [population = 500]  [0.08 secs]
+Generation   9: ... [population = 500]  [0.08 secs]
+Generation  10: ... [population = 500]  [0.08 secs]
+Generation  11: ... [population = 500]  [0.08 secs]
+Generation  12: ... [population = 500]  [0.07 secs]
+Generation  13: ... [population = 500]  [0.07 secs]
+Generation  14: ... [population = 500]  [0.08 secs]
+Generation  15: ... [population = 500]  [0.07 secs]
+</pre>
+Yes, it's not an error. After a couple of generations, it stabilizes at around
+~0.07-0.08 seconds per generation. This is around <strong>80 (eighty) times faster</strong>
+than the original CPython+numpy implementation, and around 35-40x faster than
+the naive PyPy+numpypy one.<br>
+<br>
+Let's look at the <a class="reference external" href="http://vmprof.com/#/402af746-2966-4403-a61d-93015abac033/traces">trace</a> again: it no longer contains expensive calls, and
+certainly no more temporary <tt class="docutils literal">malloc()</tt> s. The core of the logic is between
+lines 386-416, where we can see that it does fast C-level multiplications and
+additions: <tt class="docutils literal">float_mul</tt> and <tt class="docutils literal">float_add</tt> are translated straight into
+<tt class="docutils literal">mulsd</tt> and <tt class="docutils literal">addsd</tt> x86 instructions.<br>
+<br>
+As I said before, this is a very particular example, and the techniques
+described here do not always apply: it is not realistic to expect an 80x
+speedup on arbitrary code, unfortunately. However, it clearly shows the potential of PyPy when
+it comes to high-speed computing. And most importantly, it's not a toy
+benchmark which was designed specifically to have good performance on PyPy:
+it's a real world example, albeit small.<br>
+<br>
+You might be also interested in the talk I gave at last EuroPython, in which I
+talk about a similar topic: "The Joy of PyPy JIT: abstractions for free"
+(<a class="reference external" href="https://ep2017.europython.eu/conference/talks/the-joy-of-pypy-jit-abstractions-for-free">abstract</a>, <a class="reference external" href="https://speakerdeck.com/antocuni/the-joy-of-pypy-jit-abstractions-for-free">slides</a> and <a class="reference external" href="https://www.youtube.com/watch?v=NQfpHQII2cU">video</a>).<br>
+<br>
+<div class="section" id="how-to-reproduce-the-results">
+<h3>
+How to reproduce the results</h3>
+<pre class="code literal-block">$ git clone https://github.com/antocuni/evolvingcopter
+$ cd evolvingcopter
+$ {python,pypy} -m ev.main --no-specialized --no-numpypy
+$ {python,pypy} -m ev.main --no-specialized
+$ {python,pypy} -m ev.main
+</pre>
+</div>
+</div></body></html>

@@ -1,0 +1,129 @@
+<html><body><p>For the last year, my halftime job has been to teach non-CS uni students
+to program in Python. While doing that, I have been trying to see what common
+stumbling blocks exist for novice programmers. There are many
+things that could be said here, but a common theme that emerges is
+hard-to-understand error messages. One source of such error messages,
+particularly when starting out, is <tt class="docutils literal">SyntaxErrors</tt>.</p>
+<p>PyPy's parser (mostly following the architecture of CPython) uses a
+regular-expression-based tokenizer with some cleverness to deal with
+indentation, and a simple LR(1) parser. Both of these components obviously
+produce errors for invalid syntax, but the messages are not very helpful. Often,
+the message is just "invalid syntax", without any hint of what exactly is wrong.
+In the last couple of weeks I have invested a little bit of effort to make them a
+tiny bit better. They will be part of the upcoming PyPy 6.0 release. Here are
+some examples of what changed.</p>
+<div class="section" id="missing-characters">
+<h1>Missing Characters</h1>
+<p>The first class of errors occurs when a token is missing, often there is only one
+valid token that the parser expects. This happens most commonly by leaving out
+the ':' after control flow statements (which is the syntax error I personally
+still make at least a few times a day). In such situations, the parser will now
+tell you which character it expected:</p>
+<pre class="code pycon literal-block">
+<span class="generic output">&gt;&gt;&gt;&gt; # before
+&gt;&gt;&gt;&gt; if 1
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">if</span> <span class="literal number integer">1</span>
+       <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # after
+&gt;&gt;&gt;&gt; if 1
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">if</span> <span class="literal number integer">1</span>
+       <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax (expected ':')</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+<p>Another example of this feature:</p>
+<pre class="code pycon literal-block">
+<span class="generic output">&gt;&gt;&gt;&gt; # before
+&gt;&gt;&gt;&gt; def f:
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">def</span> <span class="name function">f</span><span class="punctuation">:</span>
+        <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # after
+&gt;&gt;&gt;&gt; def f:
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">def</span> <span class="name function">f</span><span class="punctuation">:</span>
+         <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax (expected '(')</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+</div>
+<div class="section" id="parentheses">
+<h1>Parentheses</h1>
+<p>Another source of errors are unmatched parentheses. Here, PyPy has always had
+slightly better error messages than CPython:</p>
+<pre class="code pycon literal-block">
+<span class="comment single"></span><span class="generic prompt">&gt;&gt;&gt; </span><span class="comment single"># CPython</span>
+<span class="generic prompt">&gt;&gt;&gt; </span><span class="punctuation">)</span>
+<span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">)</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # PyPy
+</span><span class="punctuation"></span><span class="generic prompt">&gt;&gt;&gt; </span><span class="punctuation">)</span>
+<span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">)</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">unmatched ')'</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+<p>The same is true for parentheses that are never closed (the call to <tt class="docutils literal">eval</tt> is
+needed to get the error, otherwise the repl will just wait for more input):</p>
+<pre class="code pycon literal-block">
+<span class="comment single"></span><span class="generic prompt">&gt;&gt;&gt; </span><span class="comment single"># CPython</span>
+<span class="generic prompt">&gt;&gt;&gt; </span><span class="name builtin">eval</span><span class="punctuation">(</span><span class="literal string single">'('</span><span class="punctuation">)</span>
+<span class="generic traceback"></span>  File <span class="name builtin">"&lt;string&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">(</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">unexpected EOF while parsing</span>
+<span class="generic output">&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # PyPy
+&gt;&gt;&gt;&gt; eval('(')
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;string&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">(</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">parenthesis is never closed</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+<p>What I have now improved is the case of parentheses that are matched wrongly:</p>
+<pre class="code pycon literal-block">
+<span class="generic output">&gt;&gt;&gt;&gt; # before
+&gt;&gt;&gt;&gt; (1,
+.... 2,
+.... ]
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">3</span>
+    <span class="punctuation">]</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # after
+&gt;&gt;&gt;&gt; (1,
+.... 2,
+.... ]
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">3</span>
+    <span class="punctuation">]</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">closing parenthesis ']' does not match opening parenthesis '(' on line 1</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+</div>
+<div class="section" id="conclusion">
+<h1>Conclusion</h1>
+<p>Obviously these are just some very simple cases, and there is still a lot of
+room for improvement (one huge problem is that only a single <tt class="docutils literal">SyntaxError</tt> is
+ever shown per parse attempt, but fixing that is rather hard).</p>
+<p>If you have a favorite unhelpful SyntaxError message you love to hate, please
+tell us in the comments and we might try to improve it. Other kinds of
+non-informative error messages are also always welcome!</p>
+</div></body></html>

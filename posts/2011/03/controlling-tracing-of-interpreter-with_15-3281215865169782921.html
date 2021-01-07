@@ -1,0 +1,260 @@
+<html><body><p>This is part 2 of a series on how to speed up an interpreter written with PyPy
+by adding JIT hints to the interpreter. Part 1 described how to <a class="reference external" href="http://morepypy.blogspot.com/2011/03/controlling-tracing-of-interpreter-with.html">control the
+extent of tracing</a>. In this post I will describe how to add hints that
+influence the optimizer.  If applied correctly these techniques can give
+really big speedups by pre-computing parts of what happens at runtime. On the other
+hand, if applied incorrectly they might lead to code bloat, thus making the
+resulting program actually slower.</p>
+<div class="section" id="background">
+<h2>Background</h2>
+<p>Before sending the trace to the backend to produce actual machine code, it is
+optimized.  The optimizer applies a number of techniques to remove or reduce
+the number of operations: most of these are well known <a class="reference external" href="http://en.wikipedia.org/wiki/Compiler_optimization#Optimization_techniques">compiler optimization
+techniques</a>, with the difference that it is easier to apply them in a tracing
+JIT because it only has to deal with linear traces.  Among the techniques:</p>
+<ul class="simple">
+<li><a class="reference external" href="http://en.wikipedia.org/wiki/Constant_folding">constant folding</a></li>
+<li><a class="reference external" href="http://en.wikipedia.org/wiki/Common_subexpression_elimination">common subexpression elimination</a></li>
+<li>allocation removal, as described in the paper that I recently <a class="reference external" href="http://morepypy.blogspot.com/2011/03/us-trip-report-popl-microsoft-ibm.html">presented at
+PEPM</a></li>
+<li>store/load propagation</li>
+<li><a class="reference external" href="http://morepypy.blogspot.com/2011/01/loop-invariant-code-motion.html">loop invariant code motion</a></li>
+</ul>
+<p>In some places it turns out that if the interpreter author rewrites some parts
+of the interpreter with these optimizations in mind the traces that are produced
+by the optimizer can be vastly improved.</p>
+<p>In this post I will describe two hints that allow the interpreter author to
+increase the optimization opportunities for constant folding. For constant
+folding to work, two conditions need
+to be met:</p>
+<ul class="simple">
+<li>the arguments of an operation actually need to all be constant,
+i.e. statically known by the optimizer</li>
+<li>the operation needs to be <em>pure</em>, i.e. always yield the same result given
+the same arguments.</li>
+</ul>
+<p>The PyPy JIT generator automatically detects the majority of these conditions.
+However, for the cases in which the automatic detection does not work, the
+interpreter author can apply <strong>hints</strong> to improve the optimization
+opportunities. There is one kind of hint for both of the conditions above.</p>
+<p><strong>Note</strong>: These hints are written by an interpreter developer and applied to the
+RPython source of the interpreter. Normal Python users will never see them.</p>
+</div>
+<div class="section" id="where-do-all-the-constants-come-from">
+<h2>Where Do All the Constants Come From</h2>
+<p>It is worth clarifying what is a "constant" in this context.  A variable of
+the trace is said to be constant if its value is statically known by the
+optimizer.</p>
+<p>The simplest example of constants are literal values.  For example, if in the
+RPython source code we have a line like <tt class="docutils literal">y = x + 1</tt>, the second operand will
+be a constant in the trace.</p>
+<p>However, the optimizer can statically know the value of a variable even if it
+is not a constant in the original source code. For example, consider the
+following fragment of RPython code:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">if</span> x <span style="color: #555555;">==</span> <span style="color: #FF6600;">4</span>:
+    y <span style="color: #555555;">=</span> y <span style="color: #555555;">+</span> x
+</pre></div>
+<p>If the fragment is traced with <tt class="docutils literal">x</tt> being <tt class="docutils literal">4</tt>, the following trace is
+produced:</p>
+<pre class="literal-block">
+guard(x == 4)
+y = y + x
+</pre>
+<p>In the trace above, the value of <tt class="docutils literal">x</tt> is statically known thanks to the
+guard. Remember that a guard is a runtime check. The above trace will run to
+completion when <tt class="docutils literal">x == 4</tt>. If the check fails, execution of the trace is
+stopped and the interpreter continues to run.</p>
+<p>There are cases in which it is useful to turn an arbitrary variable
+into a constant value. This process is called <em>promotion</em> and it is an old idea
+in partial evaluation (it's called "the trick" there). Promotion is also heavily
+used by <a class="reference external" href="http://psyco.sourceforge.net/">Psyco</a> and by all older versions of PyPy's JIT. Promotion is a technique
+that only works well in JIT compilers, in
+static compilers it is significantly less applicable.</p>
+<p>Promotion is essentially a tool for trace specialization. In some places in the
+interpreter it would be very useful if a variable were constant, even though it
+could have different values in practice. In such a place, promotion is used. The
+typical reason to do that is if there is
+a lot of computation depending on the value of that variable.</p>
+<p>Let's make this more concrete. If we trace a call to the following function:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">f1</span>(x, y):
+    z <span style="color: #555555;">=</span> x <span style="color: #555555;">*</span> <span style="color: #FF6600;">2</span> <span style="color: #555555;">+</span> <span style="color: #FF6600;">1</span>
+    <span style="color: #006699; font-weight: bold;">return</span> z <span style="color: #555555;">+</span> y
+</pre></div>
+<p>We get a trace that looks like this:</p>
+<pre class="literal-block">
+v1 = x * 2
+z = v1 + 1
+v2 = z + y
+return(v2)
+</pre>
+<p>Observe how the first two operations could be constant-folded if the value of
+<tt class="docutils literal">x</tt> were known. Let's assume that the value of <tt class="docutils literal">x</tt> can vary, but does so
+rarely, i.e. only takes a few different values at runtime. If this is the
+case, we can add a hint to promote <tt class="docutils literal">x</tt>, like this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">f2</span>(x, y):
+    x <span style="color: #555555;">=</span> hint(x, promote<span style="color: #555555;">=</span><span style="color: #336666;">True</span>)
+    z <span style="color: #555555;">=</span> x <span style="color: #555555;">*</span> <span style="color: #FF6600;">2</span> <span style="color: #555555;">+</span> <span style="color: #FF6600;">1</span>
+    <span style="color: #006699; font-weight: bold;">return</span> z <span style="color: #555555;">+</span> y
+</pre></div>
+<p>The meaning of this hint is that the tracer should pretend that <tt class="docutils literal">x</tt> is a
+constant
+in the code that follows. When just running the code, the function has no
+effect, as it simply returns its first argument. When tracing, some extra work
+is done. Let's assume that this changed function is traced with
+the arguments <tt class="docutils literal">4</tt> and <tt class="docutils literal">8</tt>. The trace will be the same, except for one
+operation at the beginning:</p>
+<pre class="literal-block">
+guard(x == 4)
+v1 = x * 2
+z = v1 + 1
+v2 = z + y
+return(v2)
+</pre>
+<p>The promotion is turned into a <tt class="docutils literal">guard</tt> operation in the trace. The guard
+captures the value of <tt class="docutils literal">x</tt> as it was at runtime. From the point of view of the
+optimizer, this guard is not any different than the one produced by the <tt class="docutils literal">if</tt>
+statement in the example above. After the guard, the rest of the trace can
+assume that <tt class="docutils literal">x</tt> is equal to <tt class="docutils literal">4</tt>, meaning that the optimizer will turn this
+trace into:</p>
+<pre class="literal-block">
+guard(x == 4)
+v2 = 9 + y
+return(v2)
+</pre>
+<p>Notice how the first two arithmetic operations were constant folded. The hope is
+that the guard is executed quicker than the multiplication and the addition that
+was now optimized away.</p>
+<p>If this trace is executed with values of <tt class="docutils literal">x</tt> other than <tt class="docutils literal">4</tt>, the guard will
+fail, and execution will continue in the interpreter. If the guard fails often
+enough, a new trace will be started from the guard. This other trace will
+capture a different value of <tt class="docutils literal">x</tt>. If it is e.g. <tt class="docutils literal">2</tt>, then the optimized
+trace looks like this:</p>
+<pre class="literal-block">
+guard(x == 2)
+v2 = 5 + y
+return(v2)
+</pre>
+<p>This new trace will be attached to the guard instruction of the first trace. If
+<tt class="docutils literal">x</tt> takes on even more values, a new trace will eventually be made for all of them,
+linking them into a chain. This is clearly not desirable, so we should promote
+only variables that don't vary much. However, adding a promotion hint will never produce wrong
+results. It might just lead to too much assembler code.</p>
+<p>Promoting integers, as in the examples above, is not used that often.
+However, the internals of dynamic language interpreters often
+have values that are variable but vary little in the context of parts of a user
+program. An example would be the types of variables in a user function. Even
+though in principle the argument to a Python function could be any Python type,
+in practise the argument types tend to not vary much. Therefore it is possible to
+promote the types. In the next blog post I will give a complete example for how
+this works.</p>
+</div>
+<div class="section" id="declaring-new-pure-operations">
+<h2>Declaring New Pure Operations</h2>
+<p>In the last section we saw a way to turn arbitrary variables into constants. All
+pure operations on these constants can be constant-folded. This works great for
+constant folding of simple types, e.g. integers. Unfortunately, in the context of an
+interpreter for a dynamic
+language, most operations actually manipulate objects, not simple types. The
+operations on objects are often not pure and might even have side-effects. If
+one reads a field out of a constant reference to an object this cannot
+necessarily be folded away because the object can be mutated. Therefore, another
+hint is needed.</p>
+<p>As an example, take the following class:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">A</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, x, y):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>x <span style="color: #555555;">=</span> x
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>y <span style="color: #555555;">=</span> y
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">f</span>(<span style="color: #336666;">self</span>, val):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>y <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>compute() <span style="color: #555555;">+</span> val
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">compute</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>x <span style="color: #555555;">*</span> <span style="color: #FF6600;">2</span> <span style="color: #555555;">+</span> <span style="color: #FF6600;">1</span>
+</pre></div>
+<p>Tracing the call <tt class="docutils literal">a.f(10)</tt> of some instance of <tt class="docutils literal">A</tt> yields the following
+trace (note how the call to <tt class="docutils literal">compute</tt> is inlined):</p>
+<pre class="literal-block">
+x = a.x
+v1 = x * 2
+v2 = v1 + 1
+v3 = v2 + val
+a.y = v3
+</pre>
+<p>In this case, adding a promote of <tt class="docutils literal">self</tt> in the <tt class="docutils literal">f</tt> method to get rid of the
+computation of the first few operations does not help. Even if <tt class="docutils literal">a</tt> is a
+constant reference to an object, reading the <tt class="docutils literal">x</tt> field does not necessarily
+always yield the same value. To solve this problem, there is another annotation,
+which lets the interpreter author communicate invariants to the optimizer. In
+this case, she could decide that the <tt class="docutils literal">x</tt> field of instances of <tt class="docutils literal">A</tt> is
+immutable, and therefore <tt class="docutils literal">compute</tt>
+is a pure function. To communicate this, there is a <tt class="docutils literal">purefunction</tt> decorator.
+If the code in <tt class="docutils literal">compute</tt> should be constant-folded away, we would change the
+class as follows:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">A</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, x, y):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>x <span style="color: #555555;">=</span> x
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>y <span style="color: #555555;">=</span> y
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">f</span>(<span style="color: #336666;">self</span>, val):
+        <span style="color: #336666;">self</span> <span style="color: #555555;">=</span> hint(<span style="color: #336666;">self</span>, promote<span style="color: #555555;">=</span><span style="color: #336666;">True</span>)
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>y <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>compute() <span style="color: #555555;">+</span> val
+
+    <span style="color: #9999FF;">@purefunction</span>
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">compute</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>x <span style="color: #555555;">*</span> <span style="color: #FF6600;">2</span> <span style="color: #555555;">+</span> <span style="color: #FF6600;">1</span>
+</pre></div>
+<p>Now the trace will look like this:</p>
+<pre class="literal-block">
+guard(a == 0xb73984a8)
+v1 = compute(a)
+v2 = v1 + val
+a.y = v2
+</pre>
+<p>Here, <tt class="docutils literal">0xb73984a8</tt> is the address of the instance of <tt class="docutils literal">A</tt> that was used
+during tracing. The call to <tt class="docutils literal">compute</tt> is not inlined, so that the optimizer
+has a chance to see it. Since <tt class="docutils literal">compute</tt> function is marked as pure, and its
+argument
+is a constant reference, the call will be removed by the optimizer. The final
+trace looks like this:</p>
+<pre class="literal-block">
+guard(a == 0xb73984a8)
+v2 = 9 + val
+a.y = v2
+</pre>
+<p>(assuming that the <tt class="docutils literal">x</tt> field's value is <tt class="docutils literal">4</tt>).</p>
+<p>On the one hand, the <tt class="docutils literal">purefunction</tt> annotation is very powerful. It can be
+used to constant-fold arbitrary parts of the computation in the interpreter.
+However, the annotation also gives you ample opportunity to mess things up. If a
+function is annotated to be pure, but is not really, the optimizer can produce
+subtly wrong code. Therefore, a lot of care has to be taken when using this
+annotation.</p>
+<div class="section" id="observably-pure-functions">
+<h3>Observably Pure Functions</h3>
+<p>Why can't we simply write an analysis to find out that the <tt class="docutils literal">x</tt> fields of the
+<tt class="docutils literal">A</tt> instances is immutable and deduce that <tt class="docutils literal">compute</tt> is a pure function,
+since it only reads the <tt class="docutils literal">x</tt> field and does not have side effects? This might
+be possible in this particular case, but in practice the functions that are
+annotate with the <tt class="docutils literal">purefunction</tt> decorator are usually more complex.
+The easiest example for this is that of a function that uses memoization to
+cache its results. If you analyze this function, it looks like the function has
+side effects, because it changes the memoizing dictionary. However, because this side
+effect is not externally visible, the function from the outside is pure. This is
+a property that is not easily detectable by analysis. Therefore, the purity
+of this function needs to be annotated.</p>
+</div>
+<div class="section" id="immutable-fields">
+<h3>Immutable Fields</h3>
+<p>One of the most common cases of pure functions is reading immutable
+values out of objects. Since this is so common, we have special syntactic sugar
+for it. A RPython class can have a class attribute <tt class="docutils literal">_immutable_fields_</tt> set to
+a list of strings, listing the fields that cannot be changed. This is equivalent
+to using getters and annotating them with <tt class="docutils literal">purefunction</tt>.</p>
+</div>
+</div>
+<div class="section" id="conclusion">
+<h2>Conclusion</h2>
+<p>In this blog post I explained two more hints that can be used in the source code
+of the interpreter. They are used to influence what the optimizer does with the
+trace. I realize the examples given here are a bit too small, in the <a href="http://morepypy.blogspot.com/2011/03/controlling-tracing-of-interpreter-with_21.html">next
+installment</a> I will give a worked-out example that puts all the pieces together.</p>
+</div></body></html>

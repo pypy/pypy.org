@@ -1,0 +1,48 @@
+<html><body><p>As you know, PyPy can emulate the CPython C API to some extent. In this post I will describe an important optimization that we merged to improve the performance and stability of the C-API emulation layer.</p>
+
+<p>The C-API is implemented by passing around <code>PyObject *</code> pointers in the C code.  The problem with providing the same interface with PyPy is that
+objects don't natively have the same <code>PyObject *</code> structure at all; and
+additionally their memory address can change.  PyPy handles the
+difference by maintaining two sets of objects.  More precisely, starting
+from a PyPy object, it can allocate on demand a <code>PyObject</code> structure
+and fill it with information that points back to the original PyPy
+objects; and conversely, starting from a C-level object, it can allocate
+a PyPy-level object and fill it with information in the opposite
+direction.</p>
+
+<p>I have merged a rewrite of the interaction between C-API C-level objects
+and PyPy's interpreter level objects.  This is mostly a simplification
+based on a small hack in our garbage collector.  This hack makes the
+garbage collector aware of the reference-counted <code>PyObject</code>
+structures.  When it considers a pair consisting of a PyPy object and a
+<code>PyObject</code>, it will always free either none or both of them at the
+same time.  They both stay alive if <i>either</i> there is a regular GC
+reference to the PyPy object, <i>or</i> the reference counter in the
+<code>PyObject</code> is bigger than zero.</p>
+
+<p>This gives a more stable result.  Previously, a PyPy object might grow a
+corresponding <code>PyObject</code>, loose it (when its reference counter goes to
+zero), and later have another corresponding <code>PyObject</code> re-created at a
+different address.  Now, once a link is created, it remains alive until
+both objects die.</p>
+
+<p>The rewrite significantly simplifies our previous code (which used to be
+based on at least 4 different dictionaries), and should make using the
+C-API somewhat faster (though it is still slower than using pure
+python or cffi).</p>
+
+<p>A side effect of this work is that now PyPy actually supports the upstream <a href="https://github.com/lxml/lxml">lxml</a> package---which is is one
+of the most popular packages on PyPI.  (Specifically, you need version
+3.5.0 with <a href="https://github.com/lxml/lxml/pull/187">this pull
+request</a> to remove old PyPy-specific hacks that were not really
+working.  <a href="https://bitbucket.org/pypy/compatibility/wiki/lxml">See
+details</a>.)  At this point, we no longer recommend using the
+<code>cffi-lxml</code> alternative: although it may still be faster, it might be
+incomplete and old.</p>
+
+<p>We are actively working on extending our C-API support, and hope to soon
+merge a branch to support more of the C-API functions (some numpy news
+coming!).  Please <a href="http://buildbot.pypy.org/nightly/trunk/">try
+it out</a> and let us know how it works for you.</p>
+
+<p>Armin Rigo and the PyPy team</p></body></html>

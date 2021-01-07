@@ -1,0 +1,292 @@
+<html><body><p>Hi all.  Here is (an extract of) a short summary paper about my current position on
+Software Transactional Memory as a general tool in the implementation
+of Python or Python-like languages.  Thanks to people on IRC for discussion on making
+this blog post better (lucian, Alex Gaynor, rguillebert, timonator, Da_Blitz).
+For the purpose of the present discussion, we are comparing Java with Python
+when it comes to multi-threading.</p>
+
+<h2>The problem in complex high-level languages</h2>
+<p>Like Java, the Python language gives guarantees: it is not acceptable
+for the Python virtual machine to crash due to incorrect usage of
+threads.  A primitive operation in Java is something like reading or
+writing a field of an object; the corresponding guarantees are along the
+lines of: if the program reads a field of an object, and another thread
+writes to the same field of the same object, then the program will see
+either the old value, or the new value, but not something else entirely,
+and the virtual machine will not crash.</p>
+<p>Higher-level languages like Python differ from Java by the fact that a
+"primitive operation" is far more complex.  It may for example involve
+looking in several hash maps, perhaps doing updates.  In general, it is
+completely impossible to map every operation that must be atomic to a
+single processor instruction.</p>
+
+<h2>Jython: fine-grained locking</h2>
+<p>This problem has been solved "explicitly" in the Jython interpreter that
+runs on top of Java.  The solution is explicit in the following sense:
+throughout the Jython interpreter, every single operation makes careful
+use of Java-level locking mechanisms.  This is an application of
+"fine-grained locking".  For example, operations like attribute lookup,
+which need to perform look-ups in a number of hash maps, are protected
+by acquiring and releasing locks (in __getattribute__).</p>
+<p>A draw-back of this solution is the attention to detail required.
+If even one place misses a lock, then there is either a
+bug --- and such bugs occur in cases that are increasingly rare and hard
+to debug as the previous bugs are fixed --- or we just file it under "differences
+from CPython".  There is however the risk of
+deadlock, if two threads attempt to lock the same objects in different
+order.</p>
+
+<p>In practice, the situation is actually not as bad as
+I may paint it: the number of locks in Jython is reasonable, and allows for
+all the "common cases" to work as expected.
+(For the uncommon cases, see below.)</p>
+
+<p>Performance-wise, the Java virtual machine itself comes with locks that
+have been heavily optimized over a long period of time, so the
+performance is acceptable.  However if this solution were coded in C, it
+would need a lot of extra work to optimize the locks manually (possibly
+introducing more of the subtle bugs).</p>
+
+<h2>CPython: coarse-grained locking</h2>
+<p>CPython, the standard implementation of Python in C, took a different
+and simpler approach: it has a single global lock, called the Global
+Interpreter Lock (GIL).  It uses "coarse-grained locking": the lock is
+acquired and released around the whole execution of one bytecode (or
+actually a small number of bytecodes, like 100).  This solution is
+enough to ensure that no two operations can conflict with each other,
+because the two bytecodes that invoke them are themselves
+serialized by the GIL.  It is a solution which avoids --- unlike Jython
+--- writing careful lock-acquiring code all over the interpreter.  It
+also offers even stronger guarantees: every bytecode runs entirely
+atomically.</p>
+<p>Nowadays, the draw-back of the GIL approach is obvious on multi-core
+machines: by serializing the execution of bytecodes, starting multiple
+threads does not actually let the interpreter use of more than one core.</p>
+<p>PyPy, the Python implementation in Python, takes the same approach so
+far.</p>
+
+<h2>Existing usage</h2>
+<p>As we have seen, we have the following situation: the existing Python
+language, as CPython implements it, offers very strong guarantees about
+multi-threaded usage.  It is important to emphasize that most existing
+multi-threaded Python programs actually rely on such strong guarantees.
+This can be seen for example in a problem that takes a populated list
+and does in several threads:</p>
+<pre class="literal-block">
+next_item = global_list.pop()
+</pre>
+<p>This implicitly relies on the fact that pop() will perform atomic
+removal from the list.  If two threads try to pop() from the same list
+at the same time, then the two operations will occur in one order or the
+other; but they will not e.g. return the same object to both threads or
+mess up the internal state of the list object.</p>
+<p>With such an example in mind, it should be clear that we do not want a
+solution to the multi-core issue that involves dropping these strong
+guarantees.  It is ok however to lower the barrier, as Jython does; but
+any Python implementation must offer <i>some</i> guarantees, or not offer
+multi-threading at all.  This includes the fact that a lot of methods on
+built-in types are supposed to be atomic.</p>
+
+<p>(It should be noted that not offering multi-threading at all is actually
+also a (partial) solution to the problem.  Recently, several "hacks"
+have appeared that give a programmer more-or-less transparent access to
+multiple independent processes (e.g. <a href="http://docs.python.org/library/multiprocessing.html">multiprocessing</a>).  While these provide appropriate
+solutions in some context, they are not as widely applicable as
+multi-threading.  As a typical example, they fail to apply when the
+mutiple cores need to process information that cannot be serialized at
+all --- a requirement for any data exchange between several processes.)</p>
+
+<p>Here is an example of how Jython's consistency is weaker than CPython's GIL.
+It takes uncommon examples to show it, and the fact that it does not work
+like a CPython programmer expect them to is generally considered as an
+implementation detail.  Consider:</p>
+<pre>Thread 1:  set1.update(set2)
+Thread 2:  set2.update(set3)
+Thread 3:  set3.update(set1)</pre>
+<p>Each operation is atomic in the case of CPython, but decomposed in two steps
+(which can each be considered atomic) in the case of Jython: reading from the
+argument, and then updating the target set.  Suppose that initially
+set1 = {1}, set2 = {2}, set3 = {3}.  On CPython, independently on
+the order in which the threads run, we will end up with at least one of the
+sets being {1, 2, 3}.  On Jython, it is possible that all
+three sets end up as containing two items only.  The example is a bit
+far-fetched but should show that CPython's consistency is strictly stronger
+than Jython's.</p>
+
+<h2>PyPy</h2>
+<p>PyPy is a Python interpreter much like CPython or Jython, but the way it
+is produced is particular.  It is an interpreter written in RPython, a
+subset of Python, which gets turned into a complete virtual machine (as
+generated C code) automatically by a step called the "translation".  In
+this context, the trade-offs are different from the ones in CPython and
+in Jython: it is possible in PyPy, and even easy, to apply arbitrary
+whole-program transformations to the interpreter at "translation-time".</p>
+<p>With this in mind, it is possible to imagine a whole-program
+transformation that would add locking on every object manipulated in
+RPython by the interpreter.  This would end up in a situation similar to
+Jython.  However, it would not automatically solve the issue of
+deadlocks, which is avoided in the case of Jython by careful manual
+placement of the locks.  (In fact, being deadlock-free is a global
+program property that cannot be automatically ensured or verified; any
+change to Jython can in theory break this property, and thus introduce
+subtle deadlocks.  The same applies to non-atomicity.)</p>
+<p>In fact, we can easily check that if the interpreter accesses (for
+both reading and writing)
+objects A and B in a bytecode of thread 1, and objects B and A (in the
+opposite order) in a bytecode of thread 2 --- and moreover if you need to
+have accessed the first object before you can decide that you will need
+to access the second object --- then there is no way (apart from the GIL) to avoid
+a deadlock while keeping the strong guarantee of atomicity.  Indeed, if
+both threads have progressed to the middle of the execution of their
+bytecode, then A has already been mutated by thread 1 and similarly B
+has already been mutated by thread 2.  It is not possible to
+successfully continue running the threads in that case.</p>
+
+<h2>Using Software Transactional Memory</h2>
+<p>Software Transactional Memory (STM) is an approach that gives a solution
+to precisely the above problem.  If a thread ended up in a situation
+where continuing to run it would be wrong, then we can <i>abort and
+rollback.</i>  This is similar to the notion of transaction on databases.
+In the above example, one or both threads would notice that they are
+about to run into troubles and abort.  This means more concretely that
+they need to have a way to restart execution at the start of the
+bytecode, with all the side-effects of what they did so far being either
+cancelled or just not committed yet.</p>
+<p>We think that this capacity to abort and rollback is the missing piece
+of the puzzle of multi-threaded implementations of Python.
+Actually, according to the presentation of the problem given
+above, it is unavoidable that any solution that wants to offer the
+same level of consistency and atomicity as CPython would involve
+the capacity of aborting and rolling back --- <i>which means precisely
+that STM cannot be avoided.</i></p>
+
+<p>Ok, but why not settle down with Jython's
+approach and put careful locks left and right throughout the interpreter?
+Because (1) we would have to consider every operation's atomicity and make decisions
+(or steal Jython's) and document them
+<a href="http://doc.pypy.org/en/latest/cpython_differences.html">here</a>;
+(2) it would also be really a lot of work, to optimize these locks e.g. with the
+JIT as well as the JVM does; and (3) it is not the PyPy way to require manually
+tweaking your code everywhere for a feature that should be orthogonal.  Point
+(3) is probably the most important here: you need to redo the work for every
+language you implement in PyPy.
+It also implies my own point (4): <i>it is not fun :-)</i></p>
+
+<p>In more details, the process would work as follows.  (This gives an
+overview of one possible model; it is possible that a different model
+will end up being better.)  In every thread:</p>
+<ul>
+<li>At the start of a bytecode, we start a "transaction".  This means
+setting up a thread-local data structure to record a log of what
+occurs in the transaction.</li>
+<li>We record in the log all objects that are read, as well as the
+modifications that we would like to make.</li>
+<li>During this time, we detect "read" inconsistencies, shown by the
+object's "last-modified" timestamp being later than the start time
+of the current transaction, and abort.  This prevents the rest of
+the code from running with inconsistent values.</li>
+<li>If we reach the end of the bytecode without a "read" inconsistency,
+then we atomically check for "write" inconsistencies.  These are
+inconsistencies which arise from concurrent updates to objects
+in the other threads --- either our "write" objects, or our "read"
+objects.</li>
+<li>If no inconsistency is found, we "commit" the transaction by copying
+the delayed writes from the log into main memory.</li>
+</ul>
+
+<p>The points at which a transaction starts or ends are exactly the
+points at which, in CPython, the Global Interpreter Lock is
+respectively acquired and released.  If we ignore the fact that (purely for
+performance) CPython acquires and releases the GIL only every N bytecodes,
+then this means:</p>
+<ol>
+<li>Before any bytecode we acquire the GIL (start a transaction), and after
+the bytecode we release it (ends the transaction); and
+</li><li>Before doing an external call to the C library or the OS we release the GIL
+(ends the transaction) and afterwards re-acquire it (start the next transaction).
+</li></ol>
+So in particular this model is well suited to the STM condition that we cannot
+do anything in a transaction that cannot be rolled back, like --- precisely ---
+system calls.  Indeed, by construction, these system calls occur outside a
+transaction, because in CPython they occur with the GIL released.
+
+<h2>Performance</h2>
+<p>A large number of implementation details are still open for now.
+From a user's point of view (i.e. the programmer using Python),
+the most relevant one is the overall performance impact.  We
+cannot give precise numbers so far, and we expect the initial
+performance to be abysmally bad (maybe 10x slower); however, with
+successive improvements to the locking mechanism, to the global
+program transformation inserting the locks, to the garbage 
+collector (GC), and to the Just-in-Time (JIT) compiler, we
+believe that it should be possible to get a roughly reasonable
+performance (up to maybe 2x slower).  For example, the GC can
+maintain flags on the objects to know that they did not escape
+their creation thread, and do not need any logging; and the JIT
+compiler can aggregate several reads or writes to an object into
+one.  We believe that these are the kind of optimizations that
+can give back a lot of the performance lost.</p>
+
+<h2>The state of STM</h2>
+<p>Transactional Memory is itself a relatively old idea, originating
+from a 1986 paper by Tom Knight.  At first based on hardware
+support, the idea of software-only transactional memory (STM) was
+popularized in 1995 and has recently been the focus of intense 
+research.</p>
+<p>The approach outlined above --- using STM to form the core of the
+implementation of a language --- is new, as far as we know.  So
+far, most implementations provide STM as a library feature.  It
+requires explicit usage, often in the form of explicitly
+declaring which objects must be protected by STM (object-based
+STMs).  It is only recently that native STM support has started
+to appear, notably in the Clojure language.</p>
+<p>STM is described on Wikipedia as an approach that "greatly
+simplifies conceptual understanding of multithreaded programs and
+helps make programs more maintainable by working in harmony with
+existing high-level abstractions such as objects and modules."
+We actually think that these benefits are important enough to
+warrant being exposed to the Python programmer as well, instead
+of being used only internally.  This would give the Python
+programmer a very simple interface:</p>
+<pre class="literal-block">
+with atomic:
+    &lt;these operations are executed atomically&gt;
+</pre>
+<p>(This is <a href="http://mail.python.org/pipermail/python-dev/2003-February/033259.html">an old idea.</a>  Funny how back in 2003 people, including me, thought that this was a hack.  Now I'm writing a blog post to say "it was not a hack; it's explicitly using locks that is a hack."  I'm buying the idea of <a href="http://en.wikipedia.org/wiki/Software_transactional_memory#Composable_operations">composability.</a>)</p>
+
+<p>From a practical point of view, I started looking seriously at
+the University of Rochester STM (RSTM), a C++ library that has
+been a focus of --- and a collection of results from --- recent
+research.  One particularly representative paper is
+<a href="http://www.cs.rochester.edu/u/spear/ppopp09.pdf">A
+Comprehensive Strategy for Contention Management in Software
+Transactional Memory</a> by Michael F. Spear, Luke Dalessandro,
+Virendra J. Marathe and Michael L. Scott.</p>
+
+<h2>Conclusion</h2>
+<p>Taking these ideas and applying them in the context of an
+implementation of a complex high-level language like Python comes
+with its own challanges.  In this context, using PyPy makes sense
+as both an experimentation platform and as a platform that is
+recently gaining attention for its performance.  The alternatives
+are unattractive: doing it in CPython for example would mean
+globally rewriting the interpreter.  In PyPy instead, we write it
+as a transformation that is applied systematically at translation-time.
+Also, PyPy is a general platform for generating fast interpreters
+for dynamic languages; the STM implementation in PyPy would work
+out of the box for other language implementations as well, instead
+of just for Python.</p>
+<br>
+<p><b>Update:</b>
+</p><ul>
+<li>This is mostly me (Armin Rigo) ranting aloud and trying experiments;
+this post should not be confused as meaning that the whole PyPy team
+will now spend the next years working on it full-time.
+As I said it is orthogonal to the actual Python interpreter, and it is in
+any case a feature that can be turned on or off during translation; I know
+that in many or most use cases, people are more interested in getting a
+fast PyPy rather than one which is twice as slow but scales well.
+</li><li>Nothing I said is really new.  For proof, see
+<a href="http://sabi.net/nriley/pubs/dls6-riley.pdf">Riley and Zilles (2006)</a>
+as well as <a href="http://www.cs.auckland.ac.nz/~fuad/parpycan.pdf">Tabba (2010)</a> who both experimented with <i>Hardware</i> Transactional Memory, turning CPython or PyPy interpreter's GIL into start/end transactions, as I describe here.
+</li></ul></body></html>

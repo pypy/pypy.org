@@ -1,0 +1,108 @@
+<html><body><p>Hello.</p>
+<p>I recently did some benchmarking of <a class="reference external" href="http://twistedmatrix.com">twisted</a> on top of PyPy. For the very
+impatient: <b>PyPy is up to 285% faster than CPython</b>. For more patient people,
+there is a full explanation of what I did and how I performed measurments,
+so they can judge themselves.</p>
+<p>The benchmarks are living in <a class="reference external" href="https://code.launchpad.net/~exarkun/+junk/twisted-benchmarks">twisted-benchmarks</a> and were mostly written
+by <a class="reference external" href="http://jcalderone.livejournal.com/">Jean Paul Calderone</a>. Even though he called them "initial exploratory
+investigation into a potential direction for future development resulting
+in performance oriented metrics guiding the process of optimization and
+avoidance of complexity regressions", they're still much much better than
+average benchmarks found out there.</p>
+<p>The methodology was to run each benchmark for
+quite some time (about 1 minute), measuring number of requests each 5s.
+Then I looked at <a class="reference external" href="http://codespeak.net/svn/user/fijal/txt/twisted-data.txt">dump</a> of data and substracted some time it took
+for JIT-capable interpreters to warm up (up to 15s), averaging
+everything after that. Averages of requests per second are in the table below (the higher the better):</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="19%">
+<col width="16%">
+<col width="31%">
+<col width="34%">
+</colgroup>
+<tbody valign="top">
+<tr><td>benchname</td>
+<td>CPython</td>
+<td>Unladen swallow</td>
+<td>PyPy</td>
+</tr>
+<tr><td>names</td>
+<td style="background-color: red;">10930</td>
+<td>11940 (9% faster)</td>
+<td style="background-color: #0C0;">15429 (40% faster)</td>
+</tr>
+<tr><td>pb</td>
+<td style="background-color: red;">1705</td>
+<td>2280 (34% faster)</td>
+<td style="background-color: #0C0;">3029 (78% faster)</td>
+</tr>
+<tr><td>iterations</td>
+<td style="background-color: red;">75569</td>
+<td>94554 (25% faster)</td>
+<td style="background-color: #0C0;">291066 (285% faster)</td>
+</tr>
+<tr><td>accept</td>
+<td>2176</td>
+<td>2166 (same speed)</td>
+<td>2290 (5% faster)</td>
+</tr>
+<tr><td>web</td>
+<td>879</td>
+<td>854 (3% slower)</td>
+<td style="background-color: #0C0;">1040 (18% faster)</td>
+</tr>
+<tr><td>tcp</td>
+<td>105M</td>
+<td style="background-color: #0C0;">119M (7% faster)</td>
+<td style="background-color: red;">60M (46% slower)</td>
+</tr>
+</tbody>
+</table>
+<p>To reproduce, run each benchmark with:</p>
+<blockquote>
+benchname.py -n 12 -d 5</blockquote>
+<p><em>WARNING</em>: running tcp-based benchmarks that open new connection for each
+request (web &amp; accept) can exhaust number of some kernel structures,
+limit <strong>n</strong> or wait until next run if you see drops in request per second.</p>
+<p>The first obvious thing is that various benchmarks are more or less amenable
+to speedups by JIT compilation. Accept and tcp getting smallest speedups, if at
+all. This is understandable, since JIT is mostly about reducing interpretation
+and frame overhead, which is probably not large when it comes to accepting
+connections. However, if you actually loop around, doing something, JIT
+can give you a lot of speedup.</p>
+<p>The other obvious thing is that <b>PyPy is the fastest python interpreter
+here</b>, almost across-the board (Jython and IronPython won't run twisted),
+except for raw tcp throughput. However, speedups can vary and I expect
+this to improve after the release, as there are points, where PyPy can
+be improved. Regarding raw tcp throughput - this can be a problem for
+some applications and we're looking forward to improve this particular
+bit.</p>
+<p>The main reason to use twisted for this comparison is a lot of support from
+twisted team and JP Calderone in particular, especially when it comes to
+providing benchmarks. If some open source project wants to be looked at
+by PyPy team, please <b>provide a reasonable set of benchmarks and infrastructure</b>.</p>
+<p>If, however, you're a closed source project fighting with performance problems
+of Python, we're providing <b>contracting for investigating opportunities</b>, how
+PyPy and not only PyPy, can speed up your project.</p>
+<p>Cheers,<br>
+fijal</p>
+<br>
+<p>Benchmark descriptions:</p>
+<ul class="simple">
+<li><em>names</em> - simple DNS server</li>
+<li><em>web</em> - simple http hello world server</li>
+<li><em>pb</em> - perspective broker, RPC mechanism for twisted</li>
+<li><em>iterations</em> - empty twisted loop</li>
+<li><em>accept</em> - number of tcp connections accepted per second</li>
+<li><em>tcp</em> - raw socket transfer throughput</li>
+</ul>
+<p>Used interpreters:</p>
+<ul class="simple">
+<li>CPython 2.6.2 - as packaged by ubuntu</li>
+<li>Unladen swallow svn trunk, revision 1109</li>
+<li>PyPy svn trunk, revision 71439</li>
+</ul>
+<p>Twisted version used: svn trunk, revision 28580</p>
+<p>Machine: unfortunately 32bit virtual-machine under qemu, running ubuntu karmic,
+on top of Quad core intel Q9550 with 6M cache. Courtesy of Michael Schneider.</p></body></html>

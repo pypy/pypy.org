@@ -1,0 +1,83 @@
+<html><body><p>Fancy hi-level interfaces often come with a high runtime overhead
+making them slow. Here is an experiment with building such an
+interface using constructions that PyPy should be good at
+optimizing. The idea is to allow the JIT in PyPy to remove the
+overhead introduced by using a fancy high-level python interface
+on top of a low-level C interface. The application considered is
+<a href="http://en.wikipedia.org/wiki/Linear_programming">Linear
+programming</a>. It is a tool used to solve linear optimization
+problems. It can for example be used to find the nonnegative values
+x, y and z that gives the maximum value of
+
+</p><center>
+<img src="http://4.bp.blogspot.com/-WZq2bkIyCu8/Tct9px6L9vI/AAAAAAAAAEc/1cAAIqo6Lbk/s320/eqsource1.png">
+</center>
+
+without violating the constraints
+
+<center>
+<img alt="" border="0" id="BLOGGER_PHOTO_ID_5603193483237811810" src="http://2.bp.blogspot.com/-Sz2pbOB-2jI/TcKKyTgsZmI/AAAAAAAAAEE/_B5_wHCXbxE/s320/eqsource4.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 143px; height: 15px;">
+<img alt="" border="0" id="BLOGGER_PHOTO_ID_5603193442782682514" src="http://4.bp.blogspot.com/-Bh4OdLbZN_0/TcKKv8zcHZI/AAAAAAAAAD8/CXBq2l48HV4/s320/eqsource3.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 145px; height: 16px;">
+<img alt="" border="0" id="BLOGGER_PHOTO_ID_5603193369540695138" src="http://3.bp.blogspot.com/-6mQW30hs9vE/TcKKrr9MFGI/AAAAAAAAAD0/_x8dND-knN4/s320/eqsource2.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 114px; height: 15px;">
+</center>
+
+There exists general purpose solvers for these kind of problems that
+are very fast and can literally handle millions of variables. To use
+them however the problem has to be transformed into some specific
+matrix form, and the coefficients of all the matrices
+has to be passed to the solver using some API. This transformation is
+a tedious and error prone step that forces you to work with matrix
+indexes instead of readable variable names. Also it makes maintaining
+an implementation hard since any modification has to be transformed
+too.
+
+<p></p>
+The example above comes from the manual of
+the <a href="ftp://ftp.gnu.org/pub/gnu/glpk/">glpk</a> library. That
+manual continues by describing how to convert this problem into the
+standard form of glpk (which involves introducing three new variables)
+and then gives the <a href="https://bitbucket.org/hakanardo/pplp/src/825cdbc5cae6/blog/sample.c">c-code</a> needed to call the
+library. Relating that c-code to the problem above without the
+intermediate explanation of the manual is not easy. A common
+solution here is to build a hi-level interface that allows a more
+natural way of defining the matrices and/or allow the equations to be
+entered symbolically. Unfortunately, such interfaces often become
+slow. For the benchmark below for example, 
+<a href="http://abel.ee.ucla.edu/cvxopt">cvxopt</a>
+requires 20 minutes to setup a problem that takes 9.43 seconds to solve
+(this seems a bit extreme, am I doing something wrong?).
+
+<p></p>
+The high-level interface I constructed on top of the
+<a href="ftp://ftp.gnu.org/pub/gnu/glpk/">glpk</a> library is 
+<a href="https://bitbucket.org/hakanardo/pplp">pplp</a> and it allows
+the equations to be entered symbolically. The above problem can be
+solved using
+<pre>
+    lp = LinearProgram()
+    x, y, z = lp.IntVar(), lp.IntVar(), lp.IntVar()
+    lp.objective = 10*x + 6*y + 4*z
+    lp.add_constraint( x + y + z &lt;= 100 )
+    lp.add_constraint( 10*x + 4*y + 5*z &lt;= 600 )
+    lp.add_constraint( 2*x + 2*y + 6*z &lt;= 300 )
+    lp.add_constraint( x &gt;= 0 )
+    lp.add_constraint( y &gt;= 0 )
+    lp.add_constraint( z &gt;= 0 )
+
+    maxval = lp.maximize()
+    print maxval
+    print x.value, y.value, z.value
+</pre>
+
+<p></p>
+To benchmark the API I used it to solve a 
+<a href="http://en.wikipedia.org/wiki/Minimum-cost_flow_problem">minimum-cost
+  flow problem</a> with 154072 nodes and 390334 arcs. The C library
+  needs 9.43 s to solve this and the pplp interface adds another 5.89
+  s under PyPy and 28.17 s under CPython. A large amount of time is
+  still spend setting up the problem, but it's a significant
+  improvement over the 20 minutes required on CPython by
+  <a href="http://abel.ee.ucla.edu/cvxopt">cvxopt</a>. It is
+  probably not designed to be fast on this kind of benchmark. I have
+  not been able to get cvxopt to work under PyPy. The benchmark used is
+  available <a href="https://bitbucket.org/hakanardo/pplp/src/default/benchmark/">here</a></body></html>

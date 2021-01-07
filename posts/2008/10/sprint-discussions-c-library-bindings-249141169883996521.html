@@ -1,0 +1,39 @@
+<html><body><p>At the beginning of this year, PyPy grew <a class="reference" href="http://morepypy.blogspot.com/2008/02/running-pyglet-on-pypy.html">ctypes support</a>, thanks to generous
+<a class="reference" href="http://morepypy.blogspot.com/2008/06/pypy-improvements.html">support by Google</a>. This made it possible to interface with C libraries from
+our Python interpreter, something that was possible but <a class="reference" href="http://codespeak.net/pypy/dist/pypy/doc/rffi.html">rather tedious</a> before.
+What we are lacking so far is a way to interface to large C++ libraries (like
+GUI libraries). During the sprint we had a brainstorming session about possible
+approaches for fixing this shortcoming.</p><a href="http://3.bp.blogspot.com/_zICyAWqZbLA/SPSLYmHqcDI/AAAAAAAAAFk/1qE8zrafv7c/s1600-h/cpp_bindings.jpg"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5256979919714021426" src="http://3.bp.blogspot.com/_zICyAWqZbLA/SPSLYmHqcDI/AAAAAAAAAFk/1qE8zrafv7c/s320/cpp_bindings.jpg" style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer;"></a><p>For CPython there are a number of approaches in common use:</p>
+<blockquote>
+<ul class="simple">
+<li><a class="reference" href="http://www.riverbankcomputing.com/software/sip/intro">SIP</a>, mainly used for <a class="reference" href="http://www.riverbankcomputing.com/software/pyqt/intro">PyQT</a></li>
+<li><a class="reference" href="http://www.swig.org/">SWIG</a></li>
+<li><a class="reference" href="http://www.boost.org/doc/libs/1_36_0/libs/python/doc/index.html">Boost.Python</a></li>
+</ul>
+</blockquote>
+<p>Those all have the property that they produce some code that is then compiled
+with a compiler to produce a CPython extension. The produced code also uses
+functions from CPython's C-API. This model is not simple to use for PyPy in its
+current state. Since PyPy generates C code automatically, a fixed C-level API
+does not exist (it is not unlikely that at one point in the future we might have
+to provide one, but not yet). At the moment, PyPy very much has a "Don't call
+us, we call you"-approach.</p>
+<p>A very different approach is followed by the <a class="reference" href="http://seal-reflex.web.cern.ch/seal-reflex/index.html">Reflex package</a>, which is
+developed at CERN (which has an incredible amount of C++ libraries). It is not
+mainly intended for writing Python bindings for C++ libraries but instead
+provides reflection capabilities for C++. The idea is that for every C++ shared
+library, an additional shared library is produced, which allows together with
+Reflex to introspect properties of C++ classes, methods, etc. at runtime. These
+facilities are then used for writing a small generic CPython extension module,
+that allows CPython to use any C++ library for which this reflection information
+was generated.</p>
+<p>This approach is a bit similar to the <tt class="docutils literal"><span class="pre">ctypes</span></tt> module, apart from the fact
+that <tt class="docutils literal"><span class="pre">ctypes</span></tt> does not use any reflection information, but the user has to
+specify the data structures that occur in the C code herself. This makes it
+sometimes rather burdensome to write cross-platform library bindings.</p>
+<p>For PyPy the approach seems rather fitting: We would need to implement only the
+generic extension module and could then use any number of C++ libraries. Of
+course some more evaluation is needed (e.g. to find out whether there are any
+restrictions for the C++ code that the library can use and how bothersome it is
+to get this reflection information for a large library) but so far it seems
+promising.</p></body></html>

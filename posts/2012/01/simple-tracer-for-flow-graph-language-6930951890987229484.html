@@ -1,0 +1,335 @@
+<html><body><h2>Part 2 of Comparing Partial Evaluation to Tracing</h2>
+<p>This is the second blog post in a series about comparing partial evaluation and
+tracing. In the <a class="reference external" href="http://morepypy.blogspot.com/2012/01/comparing-partial-evaluation-and.html">first post of the series</a> I introduced a small flow-graph
+language together with an interpreter for it. Then I showed a partial evaluator
+for the language. In this post I will show how a tracer for the same language
+works and how it relates to both execution and to partial evaluation.
+The code from this post can be found here: <a class="reference external" href="http://paste.pocoo.org/show/543542/">http://paste.pocoo.org/show/543542/</a></p>
+<h2>Tracing Execution</h2>
+<p>The idea of a tracer (for the described language and also in general) is to do completely normal
+interpretation but at the same time keep a log of all the normal operations
+(i.e. non-control-flow operations) that were performed. This continues until the
+tracer executes the code block where it started at, in which case the trace
+corresponds to a closed loop. Then tracing stops and the last operation is
+replaced by a jump to the start. After tracing has ended, the trace can be
+executed, optionally optimizing it before that.</p>
+<p>To write a tracer, we start from the rules of the interpreter, rename the
+predicate to <tt class="docutils literal">trace</tt> and add some extra arguments. Thus, the following rules
+in the interpreter:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg</span>),
+    <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg</span>, <span style="color: #003333;">Res</span>),
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>).
+
+<span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg1</span>),
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg2</span>),
+    <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg1</span>, <span style="color: #003333;">RArg2</span>, <span style="color: #003333;">Res</span>),
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>).
+</pre></div>
+<p>become the following rules in the tracer:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">trace</span>(<span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>, <span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg</span>, <span style="color: #003333;">T</span>), <span style="color: #003333;">TraceAnchor</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg</span>),
+    <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg</span>, <span style="color: #003333;">Res</span>),
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">trace</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">T</span>, <span style="color: #003333;">TraceAnchor</span>).
+
+<span style="color: #CC00FF;">trace</span>(<span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Arg2</span>, <span style="color: #003333;">T</span>), <span style="color: #003333;">TraceAnchor</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg1</span>),
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg2</span>),
+    <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg1</span>, <span style="color: #003333;">RArg2</span>, <span style="color: #003333;">Res</span>),
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">trace</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">T</span>, <span style="color: #003333;">TraceAnchor</span>).
+</pre></div>
+<p>Note how the bodies of the <tt class="docutils literal">trace</tt> rules correspond exactly to the bodies of
+the <tt class="docutils literal">interp</tt> rules, the only difference is the recursive call to <tt class="docutils literal">trace</tt>.
+The meaning of the arguments of <tt class="docutils literal">trace</tt> is as follows: The first and second argument are
+the operation currently executed and the environment,
+like in the interpreter. The argument
+after that is an output argument that collects the currently traced operation,
+in the example above it is exactly like the operation that was executed.
+<tt class="docutils literal">TraceAnchor</tt> is additional information about the trace that is being built
+right now, most of the time it is just handed on to the recursive call of
+<tt class="docutils literal">trace</tt>. We will see later what it contains.</p>
+<p>The rule for <tt class="docutils literal">print_and_stop</tt> is very simple, as execution (and therefore also
+tracing) simply stops there:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">trace</span>(<span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #003333;">V</span>), <span style="color: #003333;">Env</span>, <span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #003333;">V</span>), <span style="color: #006699; font-weight: bold;">_</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Val</span>),
+    <span style="color: #CC00FF;">print</span>(<span style="color: #003333;">Val</span>), <span style="color: #CC3300;">nl</span>.
+</pre></div>
+<p>Left are the rules for the control operations <tt class="docutils literal">jump</tt> and <tt class="docutils literal">if</tt>. A trace
+linearizes one execution path, it contains no jumps. However, when a jump to the
+starting label is reached, tracing should stop. Therefore, the implementation of
+<tt class="docutils literal">jump</tt> contains two cases:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">trace</span>(<span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">L</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">T</span>, <span style="color: #003333;">TraceAnchor</span>) :-
+    (<span style="color: #003333;">TraceAnchor</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">traceanchor</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">FullTrace</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #003333;">T</span> <span style="color: #555555;">=</span> <span style="color: #CC3300;">loop</span>,
+        <span style="color: #CC00FF;">write</span>(<span style="color: #CC3300;">trace</span>), <span style="color: #CC3300;">nl</span>, <span style="color: #CC00FF;">write</span>(<span style="color: #003333;">FullTrace</span>), <span style="color: #CC3300;">nl</span>,
+        <span style="color: #CC00FF;">do_optimize</span>(<span style="color: #003333;">FullTrace</span>, <span style="color: #003333;">OptTrace</span>),
+        <span style="color: #CC00FF;">write</span>(<span style="color: #CC3300;">opttrace</span>), <span style="color: #CC3300;">nl</span>, <span style="color: #CC00FF;">write</span>(<span style="color: #003333;">OptTrace</span>), <span style="color: #CC3300;">nl</span>,
+        <span style="color: #CC00FF;">runtrace</span>(<span style="color: #003333;">OptTrace</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">OptTrace</span>)
+    ;
+        <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">Block</span>),
+        <span style="color: #CC00FF;">trace</span>(<span style="color: #003333;">Block</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">T</span>, <span style="color: #003333;">TraceAnchor</span>)
+    ).
+</pre></div>
+<p>Let's disect this code in small increments. First, we see what <tt class="docutils literal">TraceAnchor</tt>
+is. It is a term of the form
+<tt class="docutils literal">traceanchor(StartLabel, FullTrace)</tt>. <tt class="docutils literal">StartLabel</tt> is a label in the program
+where tracing started (and where it should end as well, when the loop is
+closed). The argument <tt class="docutils literal">FullTrace</tt> is an accumulator which contains the full
+trace that is being built right now.</p>
+<p>The condition at the start of the rule checks whether the taget-label <tt class="docutils literal">L</tt> is
+the same as the one stored in the trace anchor. If that is the case, we can stop
+tracing. The rest of the trace <tt class="docutils literal">T</tt> is assigned the operation <tt class="docutils literal">loop</tt>, which
+jumps back to the beginning of the trace. Afterwards we print and optimize the
+trace, then run it, using the <tt class="docutils literal">FullTrace</tt> part of the <tt class="docutils literal">traceanchor</tt>.</p>
+<p>If the label we jump to is <em>not</em> the <tt class="docutils literal">StartLabel</tt> we simply continue tracing
+without recording any operation. This part of the rule is again extremely
+similar to the interpretation of <tt class="docutils literal">jump</tt>.</p>
+<p>For now, we will not use any interesting optimizations, just return the
+unoptimized trace unchanged:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">do_optimize</span>(<span style="color: #003333;">FullTrace</span>, <span style="color: #003333;">FullTrace</span>).
+</pre></div>
+<p>The missing operation now is <tt class="docutils literal">if</tt>. An if statement needs special treatment,
+because it is a way where control flow can diverge from the trace. The trace is
+linear, therefore it can only record one of the two possible paths. When
+executing the trace it is possible for the other path to be taken. Therefore
+we need to make sure that the same conditions that were true or false during
+tracing are still true or false during the execution of the trace. This is done
+with a guard operation, which checks for this condition. The following rule
+implements it:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">trace</span>(<span style="color: #CC00FF;">if</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">L1</span>, <span style="color: #003333;">L2</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">T</span>, <span style="color: #003333;">TraceAnchor</span>) :-
+    <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">==</span> <span style="color: #FF6600;">0</span> <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #003333;">L</span> <span style="color: #555555;">=</span> <span style="color: #003333;">L2</span>, <span style="color: #003333;">T</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">guard_false</span>(<span style="color: #003333;">V</span>, [], <span style="color: #003333;">L1</span>, <span style="color: #003333;">NT</span>)
+    ;
+        <span style="color: #003333;">L</span> <span style="color: #555555;">=</span> <span style="color: #003333;">L1</span>, <span style="color: #003333;">T</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">guard_true</span>(<span style="color: #003333;">V</span>, [], <span style="color: #003333;">L2</span>, <span style="color: #003333;">NT</span>)
+    ),
+    <span style="color: #CC00FF;">trace</span>(<span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">L</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">NT</span>, <span style="color: #003333;">TraceAnchor</span>).
+</pre></div>
+<p>It is very similar to the <tt class="docutils literal">interp</tt> rule of <tt class="docutils literal">if</tt>. The rule inserts a
+<tt class="docutils literal">guard_true</tt> into the case, if the condition is true, and a <tt class="docutils literal">guard_false</tt> if
+the condition is false. The arguments of the guard are: The variable that is
+being guarded, an empty list (the reason for that will be explained in a later
+post), the label where execution needs to continue when the guard fails and the
+rest of the trace.</p>
+<p>Let's also add a small helper predicate that can be used to conveniently start
+tracing:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">do_trace</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">StartBlock</span>),
+    <span style="color: #CC00FF;">trace</span>(<span style="color: #003333;">StartBlock</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">ProducedTrace</span>, <span style="color: #CC00FF;">traceanchor</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">ProducedTrace</span>)).
+</pre></div>
+<p>The predicate takes a label and an environment and executes the label with the
+given environment by first producing a trace, then executing the trace and
+eventually jumping back to interpretation, if a guard fails. It does this by
+reading the code at label <tt class="docutils literal">L</tt> with the <tt class="docutils literal">block</tt> statement, and then calling
+trace with an unbound variable <tt class="docutils literal">ProducedTrace</tt> to hold the trace and a trace
+anchor that contains the label where tracing started and the produced trace
+variable.</p>
+<p>With that predicate and the trace so far we can already trace the <tt class="docutils literal">power</tt>
+implementation from the last blog post, just not execute the trace (which we
+will do in the next section):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">do_trace</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">res</span><span style="color: #555555;">/</span><span style="color: #FF6600;">1</span>, <span style="color: #CC3300;">x</span><span style="color: #555555;">/</span><span style="color: #FF6600;">10</span>, <span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">20</span>]).
+<span style="color: #CC3300;">trace</span>
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>,<span style="color: #CC3300;">mul</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">y</span>,<span style="color: #CC3300;">sub</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">y</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),<span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">y</span>,[],<span style="color: #CC3300;">power_done</span>,<span style="color: #CC3300;">loop</span>)))
+<span style="color: #CC3300;">opttrace</span>
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>,<span style="color: #CC3300;">mul</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">y</span>,<span style="color: #CC3300;">sub</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">y</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),<span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">y</span>,[],<span style="color: #CC3300;">power_done</span>,<span style="color: #CC3300;">loop</span>)))
+...
+</pre></div>
+<p>The computed trace is:</p>
+<pre class="literal-block">
+op2(res,mul,var(res),var(x),
+op2(y,sub,var(y),const(1),
+guard_true(y,[],power_done,
+loop)))
+</pre>
+<p>which is exactly the content of the loop from <tt class="docutils literal">power_rec</tt>. Note how the <tt class="docutils literal">if</tt>
+is turned into a <tt class="docutils literal">guard_true</tt> which jumps to <tt class="docutils literal">power_done</tt> if the guard
+fails.</p>
+<p>A real tracing system would need a way for the tracer to get started, e.g. by
+doing profiling in an interpreter and starting the tracer for labels that are
+jumped to often. Also, traces for the same label are usually cached in some way.
+These details are left out in this simple model.</p>
+<h2>Executing Traces</h2>
+<p>In a real tracing system, the traces would be turned into machine code and
+executed by the CPU. In our small model, we will simply write another
+interpreter for them. This interpreter is very simple and looks again very
+similar to <tt class="docutils literal">interp</tt>.</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">runtrace</span>(<span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">TraceFromStart</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg</span>),
+    <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg</span>, <span style="color: #003333;">Res</span>),
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">runtrace</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">TraceFromStart</span>).
+
+<span style="color: #CC00FF;">runtrace</span>(<span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">TraceFromStart</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg1</span>),
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg2</span>),
+    <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg1</span>, <span style="color: #003333;">RArg2</span>, <span style="color: #003333;">Res</span>),
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">runtrace</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">TraceFromStart</span>).
+</pre></div>
+<p>These rules are completely equivalent to the <tt class="docutils literal">interp</tt> rules for <tt class="docutils literal">op1</tt> and
+<tt class="docutils literal">op2</tt>. <tt class="docutils literal">runtrace</tt> needs an extra argument, <tt class="docutils literal">TraceFromStart</tt>, which is
+always just handed over to the recursive call of <tt class="docutils literal">runtrace</tt>.</p>
+<p>When the end of the trace is reached and the <tt class="docutils literal">loop</tt> statement is encountered,
+we simply start from the beginning:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">runtrace</span>(<span style="color: #CC3300;">loop</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">TraceFromStart</span>) :-
+    <span style="color: #CC00FF;">runtrace</span>(<span style="color: #003333;">TraceFromStart</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">TraceFromStart</span>).
+</pre></div>
+<p>The remaining question is what to do when encountering guards. In that case the
+guard condition needs to be checked. If the guard succeeds, executing the trace can
+continue. Otherwise the trace is aborted and the interpreter resumes execution:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">runtrace</span>(<span style="color: #CC00FF;">guard_true</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">ResumeVars</span>, <span style="color: #003333;">L</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">TraceFromStart</span>) :-
+    <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">==</span> <span style="color: #FF6600;">0</span> <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">resume_interp</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResumeVars</span>, <span style="color: #003333;">L</span>)
+    ;
+        <span style="color: #CC00FF;">runtrace</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">TraceFromStart</span>)
+    ).
+
+<span style="color: #CC00FF;">runtrace</span>(<span style="color: #CC00FF;">guard_false</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">ResumeVars</span>, <span style="color: #003333;">L</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">TraceFromStart</span>) :-
+    <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">==</span> <span style="color: #FF6600;">0</span> <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">runtrace</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">TraceFromStart</span>)
+    ;
+        <span style="color: #CC00FF;">resume_interp</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResumeVars</span>, <span style="color: #003333;">L</span>)
+    ).
+
+
+<span style="color: #CC00FF;">resume_interp</span>(<span style="color: #003333;">Env</span>, [], <span style="color: #003333;">L</span>) :-
+    <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">Block</span>),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Block</span>, <span style="color: #003333;">Env</span>).
+</pre></div>
+<p>Note how the execution is handed over to the interpreter at the label that was
+encoded as the third argument in the guard operation.
+What the <tt class="docutils literal">ResumeVars</tt> are for we will see in a later post. For now we assume
+that it is always an empty list.</p>
+<p>With this interpreter for traces we can now trace and then execute the example:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;">:- <span style="color: #CC00FF;">do_trace</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">res</span><span style="color: #555555;">/</span><span style="color: #FF6600;">1</span>, <span style="color: #CC3300;">x</span><span style="color: #555555;">/</span><span style="color: #FF6600;">10</span>, <span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">20</span>]).
+<span style="color: #CC3300;">trace</span>
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>,<span style="color: #CC3300;">mul</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">y</span>,<span style="color: #CC3300;">sub</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">y</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),<span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">y</span>,[],<span style="color: #CC3300;">power_done</span>,<span style="color: #CC3300;">loop</span>)))
+<span style="color: #CC3300;">opttrace</span>
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>,<span style="color: #CC3300;">mul</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">y</span>,<span style="color: #CC3300;">sub</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">y</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),<span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">y</span>,[],<span style="color: #CC3300;">power_done</span>,<span style="color: #CC3300;">loop</span>)))
+<span style="color: #FF6600;">100000000000000000000</span>
+</pre></div>
+<p>Of course this is example is not very exciting, because the trace looks more or less exactly
+like the original code as well. There will be more exciting examples in a later
+post.</p>
+<h2>Extension: Promotion</h2>
+<p>As it is, the tracer does not actually add much to the interpreter. It
+linearizes control flow, but nothing deeply advanced happens. In this section I
+will add a crucial but simple to implement extension to the control flow language that allows the tracer
+to do more interesting things. This extension is called <em>promotion</em>.</p>
+<p>Promotion is basically a hint that the programmer can add to her control flow
+graph program. A promotion is an operation <tt class="docutils literal">promote(V, L)</tt> that takes a
+variable <tt class="docutils literal">V</tt> and a label <tt class="docutils literal">L</tt>. When the interpreter runs this statement, it
+simply jumps to the label <tt class="docutils literal">L</tt> and ignores the variable:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">promote</span>(<span style="color: #006699; font-weight: bold;">_</span>, <span style="color: #003333;">L</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">L</span>), <span style="color: #003333;">Env</span>).
+</pre></div>
+<p>However, the tracer does something much more interesting. For the tracer, the
+<tt class="docutils literal">promote</tt> statement is a hint that it would be very useful to know the value
+of <tt class="docutils literal">V</tt> and that the rest of the trace should keep that value as a constant.
+Therefore, when the tracer encounters a promotion, it inserts a special kind of
+guard called <tt class="docutils literal">guard_value</tt></p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">trace</span>(<span style="color: #CC00FF;">promote</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">L</span>), <span style="color: #003333;">Env</span>, <span style="color: #CC00FF;">guard_value</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">Val</span>, [], <span style="color: #003333;">L</span>, <span style="color: #003333;">T</span>), <span style="color: #003333;">TraceAnchor</span>) :-
+    <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Val</span>),
+    <span style="color: #CC00FF;">trace</span>(<span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">L</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">T</span>, <span style="color: #003333;">TraceAnchor</span>).
+</pre></div>
+<p>The <tt class="docutils literal">guard_value</tt> is an interesting operation, because it freezes the current
+value <tt class="docutils literal">FVal</tt> of variable <tt class="docutils literal">V</tt> into the trace. When the trace is executed, the
+guard checks that the current value of the variable and the frozen value are the
+same. If yes, execution continues, if not, the trace is aborted:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">runtrace</span>(<span style="color: #CC00FF;">guard_value</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">FVal</span>, <span style="color: #003333;">ResumeVars</span>, <span style="color: #003333;">L</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">TraceFromStart</span>) :-
+    <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">==</span> <span style="color: #003333;">FVal</span> <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">runtrace</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">TraceFromStart</span>)
+    ;
+        <span style="color: #CC00FF;">resume_interp</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResumeVars</span>, <span style="color: #003333;">L</span>)
+    ).
+</pre></div>
+<p>What can this operation be used for? It's a way to communicate to the tracer
+that variable <tt class="docutils literal">V</tt> is not changing very often and that it is therefore useful
+to freeze the current value into the trace. This can be done even without
+knowing the value of <tt class="docutils literal">V</tt> in advance.</p>
+<p>Let's look at a (slightly contrived) example:</p>
+<pre class="literal-block">
+l:
+    c = i &gt;= 0
+    if c goto b else goto l_done
+
+l_done:
+    print_and_stop(var(i))
+
+b:
+    promote(x, b2)
+
+b2:
+    x2 = x * 2
+    x3 = x2 + 1
+    i = i - x3
+    goto l
+</pre>
+<p>Encoded in Prolog syntax:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">l</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">ge</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),
+         <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">b</span>, <span style="color: #CC3300;">l_done</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">l_done</span>, <span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>))).
+
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">b</span>, <span style="color: #CC00FF;">promote</span>(<span style="color: #CC3300;">x</span>, <span style="color: #CC3300;">b2</span>)).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">b2</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x2</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">2</span>),
+          <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x3</span>, <span style="color: #CC3300;">add</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x2</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+          <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">i</span>, <span style="color: #CC3300;">sub</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x3</span>),
+          <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">l</span>))))).
+</pre></div>
+<p>This is a simple loop that counts down in steps of <tt class="docutils literal">x * 2 + 1</tt>, whatever <tt class="docutils literal">x</tt>
+might be, until <tt class="docutils literal">i &gt;= 0</tt> is no longer true. Assuming that <tt class="docutils literal">x</tt> doesn't change
+often, it is worth to promote it to be able to constant-fold <tt class="docutils literal">x * 2 + 1</tt> to
+not have to redo it every iteration. This is done with the promotion of <tt class="docutils literal">x</tt>
+(of course optimizing this loop with loop invariant code motion would work as
+well, because <tt class="docutils literal">x</tt> doesn't actually change during the loop).</p>
+<p>To trace this, we can run the following query:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">do_trace</span>(<span style="color: #CC3300;">b</span>, [<span style="color: #CC3300;">i</span><span style="color: #555555;">/</span><span style="color: #FF6600;">100</span>, <span style="color: #CC3300;">x</span><span style="color: #555555;">/</span><span style="color: #FF6600;">5</span>]).
+<span style="color: #CC3300;">trace</span>
+<span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">x</span>,<span style="color: #FF6600;">5</span>,[],<span style="color: #CC3300;">b2</span>,<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x2</span>,<span style="color: #CC3300;">mul</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">2</span>),<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x3</span>,<span style="color: #CC3300;">add</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x2</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">i</span>,<span style="color: #CC3300;">sub</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x3</span>),<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">ge</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),<span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">l_done</span>,<span style="color: #CC3300;">loop</span>))))))
+<span style="color: #CC3300;">opttrace</span>
+<span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">x</span>,<span style="color: #FF6600;">5</span>,[],<span style="color: #CC3300;">b2</span>,<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x2</span>,<span style="color: #CC3300;">mul</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">2</span>),<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x3</span>,<span style="color: #CC3300;">add</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x2</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">i</span>,<span style="color: #CC3300;">sub</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x3</span>),<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">ge</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),<span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">l_done</span>,<span style="color: #CC3300;">loop</span>))))))
+<span style="color: #555555;">-</span><span style="color: #FF6600;">10</span>
+</pre></div>
+<p>Writing the trace in a more readable way:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">x</span>,<span style="color: #FF6600;">3</span>,[],<span style="color: #CC3300;">b2</span>,
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x2</span>,<span style="color: #CC3300;">mul</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">2</span>),
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x3</span>,<span style="color: #CC3300;">add</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x2</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">i</span>,<span style="color: #CC3300;">sub</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x3</span>),
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">ge</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),
+<span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">l_done</span>,
+<span style="color: #CC3300;">loop</span>))))))
+</pre></div>
+<p>After the <tt class="docutils literal">guard_value</tt> the operations performed on <tt class="docutils literal">x</tt> could be
+constant-folded away, because the guard ensures that <tt class="docutils literal">x</tt> is <tt class="docutils literal">5</tt> before
+execution continues. To actually do the constant-folding we would need some
+optimization component that optimizes traces. This will be done in the next blog
+post.</p>
+<p>In this section I mostly talked about how promotion is realized in the tracer,
+not what and how to use to use it for. Promotion is one of the most important
+ingredients that's responsible for the success of PyPy's tracing approach. How
+this works is discussed in detail in the paper "<a class="reference external" href="https://bitbucket.org/pypy/extradoc/src/tip/talk/icooolps2011/bolz-hints-final.pdf">Runtime feedback in a
+meta-tracing JIT for efficient dynamic languages</a>".</p>
+<h2>Conclusion</h2>
+<p>In this blog post we have seen a very minimalistic tracer and an interpreter for
+the produced traces. The tracer is very much like the original interpreter, it
+just also keeps track of which operations were executed, in addition to
+executing the program. Tracing stops when a loop is closed, then the trace can
+be optimized and run. Running a trace continues until a failing guard is hit. At
+that point, execution goes back to the normal interpreter (and stays there, in
+this very simple implementation).</p>
+<p>I also presented an extension of tracing that makes it possible to add a hint
+called <tt class="docutils literal">promote</tt> to the original program that tells the tracer to feed back a
+runtime value into the trace and freeze it there. This extension would be
+impossible to do in the partial evaluator from the last post, because partial
+evaluation is done strictly before run time, so if a variable isn't already
+known, its likely runtime value cannot be found out.</p>
+<p>In the next post I will show how to optimize traces before executing them and
+how the optimizer for traces is related to partial evaluation.</p></body></html>

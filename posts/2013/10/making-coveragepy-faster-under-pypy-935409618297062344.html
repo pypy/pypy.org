@@ -1,0 +1,84 @@
+<html><body><p>If you've ever tried to run your programs with <tt class="docutils literal">coverage.py</tt> under PyPy,<br>
+you've probably experienced some incredible slowness. Take this simple<br>
+program:</p><pre class="code python literal-block"><span class="keyword">def</span> <span class="name function">f</span><span class="punctuation">():</span>
+    <span class="keyword">return</span> <span class="literal number integer">1</span>
+
+
+<span class="keyword">def</span> <span class="name function">main</span><span class="punctuation">():</span>
+    <span class="name">i</span> <span class="operator">=</span> <span class="literal number integer">10000000</span>
+    <span class="keyword">while</span> <span class="name">i</span><span class="punctuation">:</span>
+        <span class="name">i</span> <span class="operator">-=</span> <span class="name">f</span><span class="punctuation">()</span>
+
+<span class="name">main</span><span class="punctuation">()</span>
+</pre><p>Running <tt class="docutils literal">time coverage.py run test.py</tt> five times, and looking at the best<br>
+run, here's how PyPy 2.1 stacks up against CPython 2.7.5:</p><table border="1" class="docutils"><colgroup>
+<col width="32%">
+<col width="19%">
+<col width="49%">
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">Python</th>
+<th class="head">Time</th>
+<th class="head">Normalized to CPython</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>CPython 2.7.5</td>
+<td>3.879s</td>
+<td>1.0x</td>
+</tr>
+<tr><td>PyPy 2.1</td>
+<td>53.330s</td>
+<td>13.7x slower</td>
+</tr>
+</tbody>
+</table><p>Totally ridiculous. I got turned onto this problem because on one of my<br>
+projects CPython takes about 1.5 minutes to run our test suite on the build<br>
+bot, but PyPy takes 8-10 minutes.</p><p>So I sat down to address it. And the results:</p><table border="1" class="docutils"><colgroup>
+<col width="32%">
+<col width="19%">
+<col width="49%">
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">Python</th>
+<th class="head">Time</th>
+<th class="head">Normalized to CPython</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>CPython 2.7.5</td>
+<td>3.879s</td>
+<td>1.0x</td>
+</tr>
+<tr><td>PyPy 2.1</td>
+<td>53.330s</td>
+<td>13.7x slower</td>
+</tr>
+<tr><td>PyPy head</td>
+<td>1.433s</td>
+<td>2.7x faster</td>
+</tr>
+</tbody>
+</table><p>Not bad.</p><div class="section" id="technical-details"><h1>Technical details</h1><p>So how'd we do it? Previously, using <tt class="docutils literal">sys.settrace()</tt> (which <tt class="docutils literal">coverage.py</tt><br>
+uses under the hood) disabled the JIT. Except it didn't just disable the JIT,<br>
+it did it in a particularly insidious way — the JIT had no idea it was being<br>
+disabled!</p><p>Instead, every time PyPy discovered that one of your functions was a hotspot,<br>
+it would start tracing to observe what the program was doing, and right when it<br>
+was about to finish, <tt class="docutils literal">coverage</tt> would run and cause the JIT to abort. Tracing<br>
+is a slow process, it makes up for it by generating fast machine code at the<br>
+end, but tracing is still incredibly slow. But we never actually got to the<br>
+"generate fast machine code" stage. Instead we'd pay all the cost of tracing,<br>
+but then we'd abort, and reap none of the benefits.</p><p>To fix this, we adjusted some of the heuristics in the JIT, to better show it<br>
+how <tt class="docutils literal"><span class="pre">sys.settrace(&lt;tracefunc&gt;)</span></tt> works. Previously the JIT saw it as an opaque<br>
+function which gets the frame object, and couldn't tell whether or not it<br>
+messed with the frame object. Now we let the JIT look inside the<br>
+<tt class="docutils literal">&lt;tracefunc&gt;</tt> function, so it's able to see that <tt class="docutils literal">coverage.py</tt> isn't<br>
+messing with the frame in any weird ways, it's just reading the line number and<br>
+file path out of it.</p><p>I asked several friends in the VM implementation and research field if they<br>
+were aware of any other research into making VMs stay fast when debugging tools<br>
+like <tt class="docutils literal">coverage.py</tt> are running. No one I spoke to was aware of any (but I<br>
+didn't do a particularly exhaustive review of the literature, I just tweeted at<br>
+a few people), so I'm pleased to say that PyPy is quite possibly the first VM<br>
+to work on optimizing code in debugging mode! This is possible because of our<br>
+years spent investing in meta-tracing research.</p></div><p>Happy testing,<br>
+Alex</p></body></html>

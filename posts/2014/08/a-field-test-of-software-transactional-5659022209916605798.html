@@ -1,0 +1,121 @@
+<html><body><h2>
+Extending the Smalltalk RSqueakVM with STM</h2>
+<p>by Conrad Calmez, Hubert Hesse, Patrick Rein and Malte Swart supervised by Tim Felgentreff and Tobias Pape</p>
+<h2>
+Introduction</h2>
+<p>After pypy-stm we can announce that through the <a href="https://bitbucket.org/pypy/lang-smalltalk">RSqueakVM</a> (which used to be called <em>SPyVM</em>) a second VM implementation supports software transactional memory. RSqueakVM is a Smalltalk implementation based on the RPython toolchain. We have added STM support based on the <a href="http://morepypy.blogspot.de/2014/07/pypy-stm-first-interesting-release.html">STM tools from RPython (rstm)</a>. The benchmarks indicate that linear scale up is possible, however in some situations the STM overhead limits speedup.</p>
+<p>The work was done as a master's project at the <a href="http://www.hpi.uni-potsdam.de/hirschfeld/">Software Architechture Group</a> of Professor Robert Hirschfeld at at the <a href="http://hpi.de/">Hasso Plattner Institut</a> at the <a href="http://www.uni-potsdam.de/">University of Potsdam</a>. We - four students - worked about one and a half days per week for four months on the topic. The RSqueakVM was <a href="http://pypysqueak.blogspot.de/2007/10/first-day-discussions.html">originally developped during a sprint at the University of Bern</a>. When we started the project we were new to the topic of building VMs / interpreters.</p>
+<p>We would like to thank  Armin, Remi and the #pypy IRC channel who supported us over the course of our project. We also like to thank Toni Mattis and Eric Seckler, who have provided us with an <a href="http://bitbucket.org/amintos/lang-smalltalk">initial code base</a>.</p>
+<h2 id="introduction-to-rsqueakvm">
+Introduction to RSqueakVM</h2>
+<p>As the original Smalltalk implementation, the RSqueakVM executes a given Squeak Smalltalk image, containing the Smalltalk code and a snapshot of formerly created objects and active execution contexts. These execution contexts are scheduled inside the image (greenlets) and not mapped to OS threads. Thereby the non-STM RSqueakVM runs on only one OS thread.</p>
+<h2 id="changes-to-rsqueakvm">
+Changes to RSqueakVM</h2>
+<p>The core adjustments to support STM were inside the VM and transparent from the view of a Smalltalk user. Additionally we added Smalltalk code to influence the behavior of the STM. As the RSqueakVM has run in one OS thread so far, we added the capability to start OS threads. Essentially, we added an additional way to launch a new Smalltalk execution context (thread). But in contrast to the original one this one creates a new native OS thread, not a Smalltalk internal green thread.</p>
+
+<p>STM (with automatic transaction boundaries) already solves the problem of concurrent access on one value as this is protected by the STM transactions (to be more precise one instruction). But there are cases were the application relies on the fact that a bigger group of changes is executed either completely or not at all (atomic). Without further information transaction borders could be in the middle of such a set of atomic statements. rstm allows to aggregate multiple statements into one higher level transaction. To let the application mark the beginning and the end of these atomic blocks (high-level transactions), we added two more STM specific extensions to Smalltalk.</p>
+
+<h2 id="benchmarks">
+Benchmarks</h2>
+<p>RSqueak was executed in a single OS thread so far. rstm enables us to execute the VM using several OS threads. Using OS threads we expected a speed-up in benchmarks which use multiple threads. We measured this speed-up by using two benchmarks: a simple parallel summation where each thread sums up a predefined interval and an implementation of Mandelbrot where each thread computes a range of predefined lines.</p>
+
+<p>To assess the speed-up, we used one RSqueakVM compiled with rstm enabled, but once running the benchmarks with OS threads and once with Smalltalk green threads. The workload always remained the same and only the number of threads increased. To assess the overhead imposed by the STM transformation we also ran the green threads version on an unmodified RSqueakVM. All VMs were translated with the JIT optimization and all benchmarks were run once before the measurement to warm up the JIT. As the JIT optimization is working it is likely to be adoped by VM creators (the baseline RSqueakVM did that) so that results with this optimization are more relevant in practice than those without it. We measured the execution time by getting the system time in Squeak. The results are:</p>
+<h4>
+Parallel Sum Ten Million</h4>
+<table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="margin-left: auto; margin-right: auto; text-align: center;"><tbody>
+<tr><td style="text-align: center;">
+
+<div class="separator" style="clear: both; text-align: center;"><a href="http://1.bp.blogspot.com/-7J05whp07m8/U-iEdb3Ce0I/AAAAAAAAAVw/91sD_1KEiGc/s1600/parallelSum10MioChart.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="http://1.bp.blogspot.com/-7J05whp07m8/U-iEdb3Ce0I/AAAAAAAAAVw/91sD_1KEiGc/s320/parallelSum10MioChart.png"></a></div>
+
+</td></tr>
+<tr><td class="tr-caption" style="text-align: center;"><span style="font-size: small; text-align: start;">Benchmark Parallel Sum 10,000,000</span></td></tr>
+</tbody></table>
+<table><thead>
+<tr> <th>Thread Count</th> <th>RSqueak green threads</th> <th>RSqueak/STM green threads</th> <th>RSqueak/STM OS threads</th> <th>Slow down from  RSqueak green threads to RSqueak/STM green threads</th> <th>Speed up from RSqueak/STM green threads to RSQueak/STM OS Threads</th> </tr>
+</thead> <tbody>
+<tr>   <td>1</td>   <td>168.0 ms</td>   <td>240.0 ms</td>   <td>290.9 ms</td>   <td>0.70</td>   <td>0.83</td>  </tr>
+<tr>   <td>2</td>   <td>167.0 ms</td>   <td>244.0 ms</td>   <td>246.1 ms</td>   <td>0.68</td>   <td>0.99</td>  </tr>
+<tr>   <td>4</td>   <td>167.8 ms</td>   <td>240.7 ms</td>   <td>366.7 ms</td>   <td>0.70</td>   <td>0.66</td>  </tr>
+<tr>   <td>8</td>   <td>168.1 ms</td>   <td>241.1 ms</td>   <td>757.0 ms</td>   <td>0.70</td>   <td>0.32</td>  </tr>
+<tr>   <td>16</td>   <td>168.5 ms</td>   <td>244.5 ms</td>   <td>1460.0 ms</td>   <td>0.69</td>   <td>0.17</td>  </tr>
+</tbody> </table>
+<br>
+
+<h4>
+Parallel Sum One Billion</h4>
+<table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="margin-left: auto; margin-right: auto; text-align: center;"><tbody>
+<tr><td style="text-align: center;">
+
+<div class="separator" style="clear: both; text-align: center;"><a href="http://3.bp.blogspot.com/-wN-Bad8Pnd8/U-iE43ZtHcI/AAAAAAAAAV4/dii8NU0rseE/s1600/parallelSum1BioChart.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="http://3.bp.blogspot.com/-wN-Bad8Pnd8/U-iE43ZtHcI/AAAAAAAAAV4/dii8NU0rseE/s320/parallelSum1BioChart.png"></a></div>
+
+</td></tr>
+<tr><td class="tr-caption" style="text-align: center;">Benchmark Parallel Sum 1,000,000,000</td></tr>
+</tbody></table>
+<br>
+<table><thead>
+<tr><th>Thread Count</th><th>RSqueak green threads</th><th>RSqueak/STM green threads</th><th>RSqueak/STM OS threads</th><th>Slow down from  RSqueak green threads to RSqueak/STM green threads</th><th>Speed up from RSqueak/STM green threads to RSQueak/STM OS Threads</th></tr>
+</thead><tbody>
+<tr>   <td>1</td>   <td>16831.0 ms</td>   <td>24111.0 ms</td>   <td>23346.0 ms</td>   <td>0.70</td>   <td>1.03</td>  </tr>
+<tr>   <td>2</td>   <td>17059.9 ms</td>   <td>24229.4 ms</td>   <td>16102.1 ms</td>   <td>0.70</td>   <td>1.50</td>  </tr>
+<tr>   <td>4</td>   <td>16959.9 ms</td>   <td>24365.6 ms</td>   <td>12099.5 ms</td>   <td>0.70</td>   <td>2.01</td>  </tr>
+<tr>   <td>8</td>   <td>16758.4 ms</td>   <td>24228.1 ms</td>   <td>14076.9 ms</td>   <td>0.69</td>   <td>1.72</td>  </tr>
+<tr>   <td>16</td>   <td>16748.7 ms</td>   <td>24266.6 ms</td>   <td>55502.9 ms</td>   <td>0.69</td>   <td>0.44</td>  </tr>
+</tbody></table>
+
+<br>
+
+<h4>
+Mandelbrot Iterative</h4>
+<table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="margin-left: auto; margin-right: auto; text-align: center;"><tbody>
+<tr><td style="text-align: center;">
+
+<div class="separator" style="clear: both; text-align: center;"><a href="http://2.bp.blogspot.com/-_wLcNRFGkQc/U-iFOB3wDmI/AAAAAAAAAWA/He1oxb0hEpc/s1600/mandelbrotChart.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="http://2.bp.blogspot.com/-_wLcNRFGkQc/U-iFOB3wDmI/AAAAAAAAAWA/He1oxb0hEpc/s320/mandelbrotChart.png"></a></div>
+
+</td></tr>
+<tr><td class="tr-caption" style="text-align: center;">Benchmark Mandelbrot</td></tr>
+</tbody></table>
+<table><thead>
+<tr> <th>Thread Count</th> <th>RSqueak green threads</th> <th>RSqueak/STM green threads</th> <th>RSqueak/STM OS threads</th> <th>Slow down from  RSqueak green threads to RSqueak/STM green threads</th> <th>Speed up from RSqueak/STM green threads to RSqueak/STM OS Threads</th> </tr>
+</thead> <tbody>
+<tr>   <td>1</td>   <td>724.0 ms</td>   <td>983.0 ms</td>   <td>1565.5 ms</td>   <td>0.74</td>   <td>0.63</td>  </tr>
+<tr>   <td>2</td>   <td>780.5 ms</td>   <td>973.5 ms</td>   <td>5555.0 ms</td>   <td>0.80</td>   <td>0.18</td>  </tr>
+<tr>   <td>4</td>   <td>781.0 ms</td>   <td>982.5 ms</td>   <td>20107.5 ms</td>   <td>0.79</td>   <td>0.05</td>  </tr>
+<tr>   <td>8</td>   <td>779.5 ms</td>   <td>980.0 ms</td>   <td>113067.0 ms</td>   <td>0.80</td>   <td>0.01</td></tr>
+</tbody></table>
+
+<br>
+
+<h2>
+Discussion of benchmark results</h2>
+<p>First of all, the ParallelSum benchmarks show that the parallelism is actually paying off, at least for sufficiently large embarrassingly parallel problems. Thus RSqueak can also benefit from rstm.</p>
+<p>On the other hand, our Mandelbrot implementation shows the limits of our current rstm integration. We implemented two versions of the algorithm one using one low-level array and one using two nested collections. In both versions, one job only calculates a distinct range of rows and both lead to a slowdown. The summary of the state of rstm transactions shows that there are a lot of inevitable transactions (transactions which must be completed). One reason might be the interactions between the VM and its low-level extensions, so called plugins. We have to investigate this further.</p>
+<h2 id="limitations">
+Limitations</h2>
+<p>Although the current VM setup is working well enough to support our benchmarks, the VM still has limitations. First of all, as it is based on rstm, it has the current limitation of only running on 64-bit Linux.</p>
+<p>Besides this, we also have two major limitations regarding the VM itself. First, the atomic interface exposed in Smalltalk is currently not working, when the VM is compiled using the just-in-time compiler transformation. Simple examples such as concurrent parallel sum work fine while more complex benchmarks such as <a href="http://benchmarksgame.alioth.debian.org/u32/performance.php?test=chameneosredux#about">chameneos</a> fail. The reasons for this are currently beyond our understanding. Second, Smalltalk supports green threads, which are threads which are managed by the VM and are not mapped to OS threads. We currently support starting new Smalltalk threads as OS threads instead of starting them as green threads. However, existing threads in a Smalltalk image are not migrated to OS threads, but remain running as green threads.</p>
+<h2 id="future-work-for-stm-in-rsqueak">
+Future work for STM in RSqueak</h2>
+The work we presented showed interesting problems, we propose the following problem statements for further analysis:<br>
+<ul>
+<li><strong>Inevitable transactions</strong> in benchmarks. This looks like it could limit other applications too so it should be solved.</li>
+<li><strong>Collection implementation aware of STM</strong>: The current implementation of collections can cause a lot of STM collisions due to their internal memory structure. We believe it could bear potential for performance improvements,  if we replace these collections in an STM enabled interpreter with implementations with less STM collisions. As already proposed by Remi Meier, bags, sets and lists are of particular interest.</li>
+<li>Finally, we exposed <strong>STM through languages features</strong> such as the atomic method, which is provided through the VM. Originally, it was possible to model STM transactions barriers implicitly by using clever locks, now its exposed via the atomic keyword. From a language design point of view, the question arises whether this is a good solution and what features an stm-enabled interpreter must provide to the user in general? Of particular interest are for example, access to the transaction length and hints for transaction borders to and their  performance impact.</li>
+</ul>
+<ul></ul>
+<h2 id="details-for-the-technically-inclined">
+Details for the technically inclined</h2>
+<ul>
+<li><a href="https://bitbucket.org/pypy/lang-smalltalk/diff/spyvm/interpreter.py?diff1=7a217be69118&amp;diff2=a772ee2447d96041e7db6550e160e90251d0dd85&amp;at=stmgc-c7#Lspyvm/interpreter.pyT233">Adjustments to the interpreter loop were minimal</a>.</li>
+<li>STM works on bytecode granularity that means, there is a implicit transaction border after every bytecode executed. Possible alternatives: only break transactions after certain  bytecodes, break transactions on one abstraction layer above, e.g. object methods (setter, getter).</li>
+<li>rstm calls were exposed using primtives (a way to expose native code in Smalltalk), this was mainly used for atomic.</li>
+<li>Starting and stopping OS threads is exposed via primitives as well. Threads are started from within the interpreter.</li>
+<li>For Smalltalk enabled STM code we currently have different image versions. However another way to add, load and replace code to the Smalltalk code base is required to make a switch between STM and non-STM code simple.</li>
+</ul>
+<ul></ul>
+<h2 id="details-on-the-project-setup">
+Details on the project setup</h2>
+<p>From a non-technical perspective, a problem we encountered was the huge roundtrip times (on our machines up to 600s, 900s with JIT enabled). This led to a tendency of bigger code changes ("Before we compile, let's also add this"), lost flow ("What where we doing before?") and different compiled interpreters in parallel testing ("How is this version different from the others?") As a consequence it was harder to test and correct errors. While this is not as much of a problem for other RPython VMs, RSqueakVM needs to execute the entire image, which makes running it untranslated even slower.</p>
+<h2 id="summary">
+Summary</h2>
+<p>The benchmarks show that speed up is possible, but also that the STM overhead in some situations can eat up the speedup. The  resulting STM-enabled VM still has some limitations: As rstm is  currently only running on 64-bit Linux the RSqueakVM is doing so as  well. Eventhough it is possible for us now to create new threads that  map to OS threads within the VM, the migration of exiting Smalltalk threads keeps being problematic.</p>
+<p>We showed that an existing VM code base can benefit of STM in terms of scaling up. Further it was relatively easy to enable STM support. This may also be valuable to VM developers considering to get STM support for their VMs.</p></body></html>
