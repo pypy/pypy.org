@@ -13,7 +13,7 @@ all: build
 
 venv_nikola/bin/nikola:  ## create a virtualenv to build the website
 > @virtualenv -ppython3 ./venv_nikola
-> @venv_nikola/bin/python -mpip install nikola==8.0.3 jinja2 aiohttp watchdog ruamel.yaml
+> @venv_nikola/bin/python -mpip install nikola==8.0.3 jinja2 aiohttp watchdog ruamel.yaml feedparser
 
 plugins/import_blogger: venv_nikola/bin/nikola
 > venv_nikola/bin/nikola plugin -i import_blogger

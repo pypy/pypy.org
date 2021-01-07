@@ -66,6 +66,13 @@ class CommandImportBlogger(Command, ImportMixin):
             'type': bool,
             'help': "Don't import drafts",
         },
+        {
+            'name': 'export_comments',
+            'long': 'export-comments',
+            'default': False,
+            'type': bool,
+            'help': "Export comments to be used by the static_comments plugin",
+        },
     ]
 
     def _execute(self, options, args):
@@ -84,6 +91,7 @@ class CommandImportBlogger(Command, ImportMixin):
         self.output_folder = options['output_folder']
         self.import_into_existing_site = False
         self.exclude_drafts = options['exclude_drafts']
+        self.export_comments = options.get('export_comments', False)
         self.url_map = {}
         channel = self.get_channel_from_file(self.blogger_export_file)
         self.context = self.populate_context(channel)
@@ -150,21 +158,41 @@ class CommandImportBlogger(Command, ImportMixin):
         link = item.link
         link_path = urlparse(link).path
 
-        title = item.title
+        if link_path.lower().endswith('.html'):
+            link_path = link_path[:-5]
+        link_path = link_path.lstrip('/')
+
+        tags = []
+        meta = {}
+        if item.get('app_draft'):
+            tags.append('draft')
+            is_draft = True
+            link_path = 'drafts/' + item.published[:10]
+        else:
+            is_draft = False
+
+        id = item.id.split('-')[-1]
+        if out_folder == 'comments':
+            out_folder = 'posts'
+            link_path += '-comment'
+            title = item.authors[0]['name'] + ' said ...'
+            # This corresponds to the post's id
+            meta['in-reply-to'] = item.get('thr_in-reply-to')['ref'].split('-')[-1]
+        else:
+            title = item.title
+        meta['id'] = id
+        meta['authors'] = ','.join([it['name'] for it in item.authors])
+        link_path += '-' + id
+        out_path = os.path.join(self.output_folder, out_folder, link_path)
+        link_fragments = link_path.split('/')
+        slug = utils.slugify(link_fragments[-1])
+
 
         # blogger supports empty titles, which Nikola doesn't
         if not title:
             LOGGER.warn("Empty title in post with URL {0}. Using NO_TITLE "
                         "as placeholder, please fix.".format(link))
             title = "NO_TITLE"
-
-        if link_path.lower().endswith('.html'):
-            link_path = link_path[:-5]
-        link_path = link_path.lstrip('/')
-
-        out_path = os.path.join(self.output_folder, out_folder, link_path)
-        link_fragments = link_path.split('/')
-        slug = utils.slugify(link_fragments[-1])
 
         if not slug:  # should never happen
             LOGGER.error("Error converting post:", title)
@@ -179,27 +207,22 @@ class CommandImportBlogger(Command, ImportMixin):
                 content = candidate.value
                 break
                 #  FIXME: handle attachments
-
-        tags = []
         for tag in item.tags:
             if tag.scheme == 'http://www.blogger.com/atom/ns#':
                 tags.append(tag.term)
 
-        if item.get('app_draft'):
-            tags.append('draft')
-            is_draft = True
-        else:
-            is_draft = False
-
-        self.url_map[link] = (self.context['SITE_URL'] + out_folder + '/' + link_path + '.html')
-        if is_draft and self.exclude_drafts:
+        if 'This comment has been removed' in content:
+            pass
+        elif 0 and is_draft and self.exclude_drafts:
             LOGGER.notice('Draft "{0}" will not be imported.'.format(title))
         elif content.strip():
             # If no content is found, no files are written.
+            self.url_map[link] = (self.context['SITE_URL'] + out_folder + '/' + link_path + '.html')
             content = self.transform_content(content)
 
             self.write_metadata(
-                out_path + '.meta', title, slug, post_date, description, tags
+                out_path + '.meta', title, slug, post_date, description, tags,
+                **meta,
             )
             self.write_content(out_path + '.html', content)
         else:
@@ -211,7 +234,7 @@ class CommandImportBlogger(Command, ImportMixin):
         'http://schemas.google.com/blogger/2008/kind#page': 'pages',
         'http://schemas.google.com/blogger/2008/kind#settings': '',
         'http://schemas.google.com/blogger/2008/kind#template': '',
-        'http://schemas.google.com/blogger/2008/kind#comment': '',
+        'http://schemas.google.com/blogger/2008/kind#comment': 'comments',
     }
 
     def process_item(self, item):
