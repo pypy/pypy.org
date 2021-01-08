@@ -147,6 +147,8 @@ class StaticComments(SignalHandler):
                     return None
             elif header == 'author':
                 comment.author = value
+            elif header == 'authors':
+                comment.author = value
             elif header == 'author_email':
                 comment.author_email = value
             elif header == 'author_url':
@@ -164,34 +166,60 @@ class StaticComments(SignalHandler):
                 pass
             elif header == 'compiler':
                 compiler_name = value
+            elif header == 'slug':
+                comment.slug = value
+            elif header == 'title':
+                comment.title = value
+            elif header == 'date':
+                comment.set_utc_date(value)
+            elif header == 'in-reply-to':
+                comment.parent_id = value
             else:
                 _LOGGER.error("Unknown comment header: '{0}' (in file {1})".format(header, filename))
                 exit(1)
-        # check compiler name
         if compiler_name is None:
-            _LOGGER.warn("Comment file '{0}' doesn't specify compiler! Using default 'wordpress'.".format(filename))
-            compiler_name = 'wordpress'
-        # compile content
-        comment.content = self._compile_content(compiler_name, content, filename)
+            # Try to read an html file next to the filename
+            html = '.'.join([filename.rsplit('.', 1)[0], 'html'])
+            if os.path.exists(html):
+                with open(html) as fid:
+                    comment.content = fid.read()
+            else:
+                _LOGGER.warn("Comment file '{0}' doesn't specify compiler! Using default 'wordpress'.".format(filename))
+                compiler_name = 'wordpress'
+                comment.content = self._compile_content(compiler_name, content, filename)
+        else:
+            # compile content
+            comment.content = self._compile_content(compiler_name, content, filename)
         return comment
 
     def _scan_comments(self, path, file, owner):
         """Scan comments for post."""
         comments = {}
+        try:
+            post_base, post_id = file.rsplit('-', 1)
+        except:
+            # not a post, no comments
+            return []
+        if 'comment' in file:
+            return []
         for dirpath, dirnames, filenames in os.walk(path, followlinks=True):
             if dirpath != path:
                 continue
             for filename in filenames:
-                if not filename.startswith(file + '.'):
+                if not ('comment' in filename and filename[0] == '.'):
                     continue
-                rest = filename[len(file):].split('.')
-                if len(rest) != 3:
+                # make sure this is a comment to "file"
+                if not filename[1:].startswith(post_base + '-comment'):
                     continue
-                import pdb;pdb.set_trace()
-                if rest[0] != '' or rest[2] != 'wpcomment':
+                # There is both a *.mata and a *.html. Send only the base of
+                # the *.meta for parsing
+                parts = filename.rsplit('.', 1)
+                if parts[1] != 'meta':
                     continue
+                # pull off the id
+                parts = parts[0].rsplit('-', 1)
                 try:
-                    comment = self._read_comment(os.path.join(dirpath, filename), owner, rest[1])
+                    comment = self._read_comment(os.path.join(dirpath, filename), owner, parts[1])
                     if comment is not None:
                         # _LOGGER.info("Found comment '{0}' with ID {1}".format(os.path.join(dirpath, filename), comment.id))
                         comments[comment.id] = comment
@@ -247,12 +275,14 @@ class StaticComments(SignalHandler):
         # Add dependency to post
         digest = self._hash_post_comments(post)
         post.add_dependency_uptodate(utils.config_changed({1: digest}, 'nikola.plugins.comments.static_comments:' + post.base_path), is_callable=False, add='page')
+        return comments
 
     def _process_posts_and_pages(self, site):
         """Add comments to all posts."""
         if site is self.site:
+            comments = []
             for post in site.timeline:
-                self._process_post_object(post)
+                comments += self._process_post_object(post)
 
     def set_site(self, site):
         """Set Nikola site object."""
