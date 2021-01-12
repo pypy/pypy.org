@@ -70,7 +70,7 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - compatible with CentOS6 and later
+     - compatible with Ubuntu 18 only
 
 .. __: https://downloads.python.org/pypy/pypy3.7-v7.3.3-linux64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.3-linux64.tar.bz2
