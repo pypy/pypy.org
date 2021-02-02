@@ -152,7 +152,7 @@ NAVIGATION_LINKS = {
         ),
         ('/download.html', 'Download'),
         ('http://doc.pypy.org', 'Dev Documentation'),
-        ('http://morepypy.blogspot.com', 'Blog'),
+        ('/blog', 'Blog'),
         (
             (
                 ('/people.html', 'People'),
@@ -962,7 +962,7 @@ LICENSE = ""
 CONTENT_FOOTER = """
 <div class="myfooter">
   <div>
-    <img src="images/pypy-logo-nav-grey.png" alt="PyPy Logo" />
+    <img src="/images/pypy-logo-nav-grey.png" alt="PyPy Logo" />
   </div>
   <div class=logotext>
     &nbsp;Contents &copy; {date} <a href="mailto:{email}">{author}</a>
