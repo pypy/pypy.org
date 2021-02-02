@@ -1,3 +1,4 @@
+SHELL := bash 
 # pypy.org static page and blog makefile
 # type `make help` to see all options 
 
@@ -14,6 +15,7 @@ all: build
 venv_nikola/bin/nikola:  ## create a virtualenv to build the website
 > @virtualenv -ppython3 ./venv_nikola
 > @venv_nikola/bin/python -mpip install nikola==8.0.3 jinja2 aiohttp watchdog ruamel.yaml feedparser
+> @venv_nikola/bin/nikola plugin -i sidebar
 
 plugins/import_blogger: venv_nikola/bin/nikola
 > venv_nikola/bin/nikola plugin -i import_blogger
@@ -21,6 +23,11 @@ plugins/import_blogger: venv_nikola/bin/nikola
 
 build: venv_nikola/bin/nikola  ## build the website if needed, the result is in ./public
 > venv_nikola/bin/nikola build
+> @for f in $$(grep "include.*sidebar-en.inc" -lr public/) ;do \
+>    sed -i -e'/<!-- include sidebar-en.inc -->/r public/sidebar-en.inc' $$f; \
+>    sed -i -e'/<!-- include sidebar-en.inc -->/d' $$f; \
+>    echo $${f}; \
+> done;
 
 auto: venv_nikola/bin/nikola ## build and serve the website, autoupdate on changes
 > venv_nikola/bin/nikola auto -a 0.0.0.0
