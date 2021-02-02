@@ -152,7 +152,16 @@ NAVIGATION_LINKS = {
         ),
         ('/download.html', 'Download'),
         ('http://doc.pypy.org', 'Dev Documentation'),
-        ('/blog', 'Blog'),
+        (
+            (
+                ('/blog', 'Index'),
+                ('/categories', 'Tags'),
+                ('/archive.html', 'Archive by year'),
+                ('https://morepypy.blogspot.com/', 'Old site'),
+            ),
+            'Blog',
+        ),
+            
         (
             (
                 ('/people.html', 'People'),
