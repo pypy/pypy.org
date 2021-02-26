@@ -157,11 +157,11 @@ To read more about its features, try ``pypy_interact.py --help`` or go to
 .. _`our documentation site`: http://pypy.readthedocs.org/en/latest/sandbox.html
 
 .. _`contact us`: contact.html
-.. _Prolog: https://bitbucket.org/cfbolz/pyrolog/
-.. _Smalltalk: https://bitbucket.org/pypy/lang-smalltalk/
-.. _JavaScript: https://bitbucket.org/pypy/lang-js/
-.. _Io: https://bitbucket.org/pypy/lang-io/
-.. _Scheme: https://bitbucket.org/pypy/lang-scheme/
-.. _Gameboy: https://bitbucket.org/pypy/lang-gameboy/
+.. _Prolog: https://github.com/cosmoharrigan/pyrolog
+.. _Smalltalk: https://bitbucket-archive.softwareheritage.org/projects/py/pypy/lang-smalltalk.html
+.. _JavaScript: https://bitbucket-archive.softwareheritage.org/projects/py/pypy/lang-js.html
+.. _Io: https://bitbucket-archive.softwareheritage.org/projects/py/pypy/lang-io.html
+.. _Scheme: https://bitbucket-archive.softwareheritage.org/projects/py/pypy/lang-scheme.html
+.. _Gameboy: https://bitbucket-archive.softwareheritage.org/projects/py/pypy/lang-gameboy.html
 .. _Topaz: https://github.com/topazproject/topaz
 .. _HippyVM: http://www.hippyvm.com/

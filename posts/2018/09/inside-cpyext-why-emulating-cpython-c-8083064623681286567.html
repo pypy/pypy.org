@@ -156,7 +156,7 @@ make sure that the GC does not collect the <tt class="docutils literal">W_Root</
 </ol>
 </blockquote>
 The <tt class="docutils literal">PyObject*</tt> ⇨ <tt class="docutils literal">W_Root</tt> link is maintained by the special field
-<a class="reference external" href="https://bitbucket.org/pypy/pypy/src/942ad6c1866e30d8094d1dae56a9b8f492554201/pypy/module/cpyext/parse/cpyext_object.h#lines-5">ob_pypy_link</a> which is added to all <tt class="docutils literal">PyObject*</tt>. On a 64 bit machine this
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/parse/cpyext_object.h#lines-5">ob_pypy_link</a> which is added to all <tt class="docutils literal">PyObject*</tt>. On a 64 bit machine this
 means that all <tt class="docutils literal">PyObject*</tt> have 8 bytes of overhead, but then the
 conversion is very quick, just reading the field.<br>
 For the other direction, we generally don't want to do the same: the
@@ -164,7 +164,7 @@ assumption is that the vast majority of <tt class="docutils literal">W_Root</tt>
 passed to C, and adding an overhead of 8 bytes to all of them is a
 waste. Instead, in the general case the link is maintained by using a
 dictionary, where <tt class="docutils literal">W_Root</tt> are the keys and <tt class="docutils literal">PyObject*</tt> the values.<br>
-However, for a <a class="reference external" href="https://bitbucket.org/pypy/pypy/src/942ad6c1866e30d8094d1dae56a9b8f492554201/pypy/module/cpyext/pyobject.py#lines-66">few selected</a> <tt class="docutils literal">W_Root</tt> subclasses we <strong>do</strong> maintain a
+However, for a <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/pyobject.py#lines-66">few selected</a> <tt class="docutils literal">W_Root</tt> subclasses we <strong>do</strong> maintain a
 direct link using the special <tt class="docutils literal">_cpy_ref</tt> field to improve performance. In
 particular, we use it for <tt class="docutils literal">W_TypeObject</tt> (which is big anyway, so a 8 bytes
 overhead is negligible) and <tt class="docutils literal">W_NoneObject</tt>. <tt class="docutils literal">None</tt> is passed around very
@@ -188,11 +188,11 @@ creating an exception value and storing it in some global variable. The
 function then signals that an exception has occurred by returning an error value,
 usually <tt class="docutils literal">NULL</tt>.<br>
 On the other hand, in the PyPy interpreter, exceptions are propagated by raising the
-RPython-level <a class="reference external" href="https://bitbucket.org/pypy/pypy/src/b9bbd6c0933349cbdbfe2b884a68a16ad16c3a8a/pypy/interpreter/error.py#lines-20">OperationError</a> exception, which wraps the actual app-level
+RPython-level <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/interpreter/error.py#lines-20">OperationError</a> exception, which wraps the actual app-level
 exception values. To harmonize the two worlds, whenever we return from C to
 RPython, we need to check whether a C API exception was raised and if so turn it
 into an <tt class="docutils literal">OperationError</tt>.<br>
-We won't dig into details of <a class="reference external" href="https://bitbucket.org/pypy/pypy/src/b9bbd6c0933349cbdbfe2b884a68a16ad16c3a8a/pypy/module/cpyext/api.py#lines-205">how the GIL is handled in cpyext</a>.
+We won't dig into details of <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-205">how the GIL is handled in cpyext</a>.
 For the purpose of this post, it is enough to know that whenever we enter
 C land, we store the current thread id into a global variable which is
 accessible also from C; conversely, whenever we go back from RPython to C, we
@@ -200,7 +200,7 @@ restore this value to 0.<br>
 Similarly, we need to do the inverse operations whenever you need to cross the
 border between C and RPython, e.g. by calling a Python callback from C code.<br>
 All this complexity is automatically handled by the RPython function
-<a class="reference external" href="https://bitbucket.org/pypy/pypy/src/b9bbd6c0933349cbdbfe2b884a68a16ad16c3a8a/pypy/module/cpyext/api.py#lines-1757">generic_cpy_call</a>. If you look at the code you see that it takes care of 4
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-1757">generic_cpy_call</a>. If you look at the code you see that it takes care of 4
 things:<br>
 <blockquote>
 <ol class="arabic simple">
@@ -255,7 +255,7 @@ Another source of slow down was the implementation of <tt class="docutils litera
 At the C level, these are function pointers which the interpreter calls to do
 certain operations, e.g. <a class="reference external" href="https://docs.python.org/2/c-api/typeobj.html#c.PyTypeObject.tp_new">tp_new</a> to allocate a new instance of that type.<br>
 As usual, we have some magic to implement slots in RPython; in particular,
-<a class="reference external" href="https://bitbucket.org/pypy/pypy/src/b9bbd6c0933349cbdbfe2b884a68a16ad16c3a8a/pypy/module/cpyext/api.py#lines-362">_make_wrapper</a> does the opposite of <tt class="docutils literal">generic_cpy_call</tt>: it takes a
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-362">_make_wrapper</a> does the opposite of <tt class="docutils literal">generic_cpy_call</tt>: it takes a
 RPython function and wraps it into a C function which can be safely called
 from C, handling the GIL, exceptions and argument conversions automatically.<br>
 This was very handy during the development of cpyext, but it might result in
@@ -291,7 +291,7 @@ idea.<br>
 The solution is simple: rewrite as much as we can in C instead of RPython,
 to avoid unnecessary roundtrips. This was the topic of most of the Cape Town
 sprint and resulted in the <tt class="docutils literal"><span class="pre">cpyext-avoid-roundtrip</span></tt> branch, which was
-eventually <a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/7b550e9b3cee">merged</a>.<br>
+eventually <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/cpyext_avoid-roundtrip">merged</a>.<br>
 Of course, it is not possible to move <strong>everything</strong> to C: there are still
 operations which need to be implemented in RPython. For example, think of
 <tt class="docutils literal">PyList_Append</tt>: the logic to append an item to a list is complex and
@@ -320,13 +320,13 @@ To run this code, you need to create a different <tt class="docutils literal">Py
 of <tt class="docutils literal">i</tt>: if implemented naively, it means calling <tt class="docutils literal">N</tt> times <tt class="docutils literal">malloc()</tt>
 and <tt class="docutils literal">free()</tt>, which kills performance.<br>
 CPython has the very same problem, which is solved by using a <a class="reference external" href="https://en.wikipedia.org/wiki/Free_list">free list</a> to
-<a class="reference external" href="https://github.com/python/cpython/blob/2.7/Objects/intobject.c#L16">allocate ints</a>. So, what we did was to simply <a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/e5c7b7f85187">steal the code</a> from CPython
+<a class="reference external" href="https://github.com/python/cpython/blob/2.7/Objects/intobject.c#L16">allocate ints</a>. So, what we did was to simply <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/commit/d8754ab9ba6371c83eaeb80cdf8cc13a37ee0c89">steal the code</a> from CPython
 and do the exact same thing. This was also done in the
 <tt class="docutils literal"><span class="pre">cpyext-avoid-roundtrip</span></tt> branch, and the benchmarks show that it worked
 perfectly.<br>
 Every type which is converted often to <tt class="docutils literal">PyObject*</tt> must have a very fast
 allocator. At the moment of writing, PyPy uses free lists only for ints and
-<a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/ccf12107e805">tuples</a>: one of the next steps on our TODO list is certainly to use this
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/commit/35e2fb9903f2483940d7970bd83ce8c65aa1c1a3">tuples</a>: one of the next steps on our TODO list is certainly to use this
 technique with more types, like <tt class="docutils literal">float</tt>.<br>
 Conversely, we also need to optimize the converstion from <tt class="docutils literal">PyObject*</tt> to
 <tt class="docutils literal">W_Root</tt>: this happens when an object is originally allocated in C and
@@ -356,7 +356,7 @@ unresolved problem in <tt class="docutils literal">cpyext</tt>, and it is what c
 We are well aware of the problem, and we have a plan for how to fix it. The
 explanation is too technical for the scope of this blog post as it requires a
 deep knowledge of the GC internals to be understood, but the details are
-<a class="reference external" href="https://bitbucket.org/pypy/extradoc/src/cd51a2e3fc4dac278074997c7dc198caee819769/planning/cpyext.txt#lines-27">here</a>.</div>
+<a class="reference external" href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/extradoc/planning/cpyext.txt#L27">here</a>.</div>
 <div class="section" id="c-api-quirks">
 <h1>
 C API quirks</h1>
@@ -378,7 +378,7 @@ stored as a C array of <tt class="docutils literal">long</tt>.  How to implement
 cannot simply create a <tt class="docutils literal">PyObject*</tt> on the fly, because the caller will never
 decref it and it will result in a memory leak.<br>
 The current solution is very inefficient. The first time we do a
-<tt class="docutils literal">PyList_GetItem</tt>, we <a class="reference external" href="https://bitbucket.org/pypy/pypy/src/b9bbd6c0933349cbdbfe2b884a68a16ad16c3a8a/pypy/module/cpyext/listobject.py#lines-28">convert</a> the <strong>whole</strong> list to a list of
+<tt class="docutils literal">PyList_GetItem</tt>, we <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/listobject.py#lines-28">convert</a> the <strong>whole</strong> list to a list of
 <tt class="docutils literal">PyObject*</tt>. This is bad in two ways: the first is that we potentially pay a
 lot of unneeded conversion cost in case we will never access the other items
 of the list. The second is that by doing that we lose all the performance
