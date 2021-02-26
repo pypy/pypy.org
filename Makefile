@@ -13,7 +13,7 @@ all: build
 
 venv_nikola/bin/nikola:  ## create a virtualenv to build the website
 > @virtualenv -ppython3 ./venv_nikola
-> @venv_nikola/bin/python -mpip install nikola==8.0.3 jinja2 aiohttp watchdog ruamel.yaml
+> @venv_nikola/bin/python -mpip install nikola==8.0.3 jinja2 aiohttp watchdog ruamel.yaml ghp-import2
 
 plugins/import_blogger: venv_nikola/bin/nikola
 > venv_nikola/bin/nikola plugin -i import_blogger
@@ -27,6 +27,9 @@ auto: venv_nikola/bin/nikola ## build and serve the website, autoupdate on chang
 
 clean:  venv_nikola/bin/nikola  ## clean the website, usually not needed at all
 > venv_nikola/bin/nikola clean
+
+deploy:  venv_nikola/bin/nikola  ## build and deploy the website
+> @export PATH=$$PATH:$$PWD/venv_nikola/bin && nikola github_deploy
 
 import_blogger: plugins/import_blogger  ## download and import the content from morepypy.blogspot.com
 > @if [ -z "${BLOGGER_XML}" ] || [ ! -s "${BLOGGER_XML}" ]; then \
