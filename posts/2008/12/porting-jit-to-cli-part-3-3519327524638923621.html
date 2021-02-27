@@ -1,14 +1,14 @@
-<html><body><p>In my two <a class="reference" href="http://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-1.html">previous</a> <a class="reference" href="http://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-2.html">posts</a>, we talked about the PyPy JIT generator, seeing
+<html><body><p>In my two <a class="reference" href="https://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-1.html">previous</a> <a class="reference" href="https://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-2.html">posts</a>, we talked about the PyPy JIT generator, seeing
 that it can produce huge speedups and how its backend-independent frontend
 works.</p>
 <p>In this post, we will look closer at the internals of the CLI JIT backend; in
 particular, we will see how we work around some serious limitations of the
 platform, and why these workarounds didn't have any serious impact on the
-performances of our <a class="reference" href="http://codespeak.net/svn/pypy/branch/oo-jit/pypy/jit/tl/tlc.py">toy virtual machine</a>.</p>
+performances of our <a class="reference" href="https://codespeak.net/svn/pypy/branch/oo-jit/pypy/jit/tl/tlc.py">toy virtual machine</a>.</p>
 <div class="section">
 <h2>Graphs, blocks, links</h2>
 
-<a href="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvSnEbJOxI/AAAAAAAAAEo/hu23h0n0mIc/s1600-h/flowgraph.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277042957038992146" src="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvSnEbJOxI/AAAAAAAAAEo/hu23h0n0mIc/s320/flowgraph.png" style="margin: 0pt 0pt 10px 10px; float: right; cursor: pointer; width: 239px; height: 301px;"></a>
+<a href="https://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvSnEbJOxI/AAAAAAAAAEo/hu23h0n0mIc/s1600-h/flowgraph.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277042957038992146" src="https://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvSnEbJOxI/AAAAAAAAAEo/hu23h0n0mIc/s320/flowgraph.png" style="margin: 0pt 0pt 10px 10px; float: right; cursor: pointer; width: 239px; height: 301px;"></a>
 
 
 <p>One of the core aspect of PyPy translator is the concept of <strong>flow graph</strong>: a
@@ -19,7 +19,7 @@ carry a variable number of arguments whose value is passed to the target
 block.  In case a block contains more than one outgoing links, the one to
 follow is selected by looking at the value of a designated variable (the
 <strong>exitswitch</strong>), thus making possible to implement conditional jumps.  To have
-a more complete description of the flow graphs model, check the <a class="reference" href="http://codespeak.net/pypy/dist/pypy/doc/translation.html#the-flow-model">documentation</a>.</p>
+a more complete description of the flow graphs model, check the <a class="reference" href="https://codespeak.net/pypy/dist/pypy/doc/translation.html#the-flow-model">documentation</a>.</p>
 
 <p>As we saw in the previous post, the generated JIT compiler makes heavy use of
 <strong>flexswitches</strong> to generate efficient code, continuously intermixing
@@ -30,9 +30,9 @@ equivalent to create a link whose target is a new block where the just
 generated code starts.  Thus, the graphs <strong>grows</strong> over the time, as showed by
 the following images:</p>
 
-<a href="http://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTL5PHePI/AAAAAAAAAEw/5-hp6dXBLSo/s1600-h/promotion-1.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277043589690915058" src="http://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTL5PHePI/AAAAAAAAAEw/5-hp6dXBLSo/s320/promotion-1.png" style="cursor: pointer; width: 254px; height: 320px;"></a><a href="http://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMOTC1WI/AAAAAAAAAE4/RzLhmkE3IbE/s1600-h/promotion-2.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277043595344532834" src="http://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMOTC1WI/AAAAAAAAAE4/RzLhmkE3IbE/s320/promotion-2.png" style="cursor: pointer; width: 305px; height: 320px;"></a>
+<a href="https://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTL5PHePI/AAAAAAAAAEw/5-hp6dXBLSo/s1600-h/promotion-1.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277043589690915058" src="https://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTL5PHePI/AAAAAAAAAEw/5-hp6dXBLSo/s320/promotion-1.png" style="cursor: pointer; width: 254px; height: 320px;"></a><a href="https://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMOTC1WI/AAAAAAAAAE4/RzLhmkE3IbE/s1600-h/promotion-2.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277043595344532834" src="https://4.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMOTC1WI/AAAAAAAAAE4/RzLhmkE3IbE/s320/promotion-2.png" style="cursor: pointer; width: 305px; height: 320px;"></a>
 
-<a href="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMf84hxI/AAAAAAAAAFA/bXnegFVvIqI/s1600-h/promotion-3.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277043600083420946" src="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMf84hxI/AAAAAAAAAFA/bXnegFVvIqI/s320/promotion-3.png" style="cursor: pointer; width: 320px; height: 178px;"></a>
+<a href="https://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMf84hxI/AAAAAAAAAFA/bXnegFVvIqI/s1600-h/promotion-3.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277043600083420946" src="https://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvTMf84hxI/AAAAAAAAAFA/bXnegFVvIqI/s320/promotion-3.png" style="cursor: pointer; width: 320px; height: 178px;"></a>
 
 
 <p>In the images above, the block containing the flexswitch is colored in
@@ -85,7 +85,7 @@ called <em>parent graph</em>, i.e. the graph its blocks logically belongs to.</l
 nothing to do with the <tt class="docutils literal"><span class="pre">Main</span></tt> static methods found in <tt class="docutils literal"><span class="pre">.exe</span></tt> files); other
 methods are called <strong>children methods</strong>.</p>
 <p>When we want to add a new case to the flexswitch, we create a method
-containing all the new code; then we wrap the method inside a <a class="reference" href="http://msdn.microsoft.com/en-us/magazine/cc301810.aspx">delegate</a> (the
+containing all the new code; then we wrap the method inside a <a class="reference" href="https://msdn.microsoft.com/en-us/magazine/cc301810.aspx">delegate</a> (the
 .NET equivalent of a function pointer) and pass it to the flexswitch, so that
 it can later invoke it.</p>
 </div>
@@ -107,7 +107,7 @@ a method is assigned a progressive 16 bit <em>block number</em>.  From this two
 numbers, we can compute the <em>block id</em> as an <tt class="docutils literal"><span class="pre">unsigned</span> <span class="pre">integer</span></tt>, by storing
 the method id in the first 16 bits and the block number in the second 16 bits.
 By construction, the block id is guaranteed to be unique in the graph.</p>
-<p>The following picture shows a graph composed of three methods; the id of<a href="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvT8_6SS1I/AAAAAAAAAFI/8JIdzVaTHPk/s1600-h/flexswitch-cli.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277044433296182098" src="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvT8_6SS1I/AAAAAAAAAFI/8JIdzVaTHPk/s320/flexswitch-cli.png" style="margin: 0pt 0pt 10px 10px; float: right; cursor: pointer; width: 266px; height: 320px;"></a> each
+<p>The following picture shows a graph composed of three methods; the id of<a href="https://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvT8_6SS1I/AAAAAAAAAFI/8JIdzVaTHPk/s1600-h/flexswitch-cli.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5277044433296182098" src="https://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvT8_6SS1I/AAAAAAAAAFI/8JIdzVaTHPk/s320/flexswitch-cli.png" style="margin: 0pt 0pt 10px 10px; float: right; cursor: pointer; width: 266px; height: 320px;"></a> each
 method is shown in red, while the block ids are shown in red (for the method
 id part) and black (for the block number part).  The graph contains three
 non-local links; in particular, note the link between blocks <tt class="docutils literal"><span class="pre">0x00020001</span></tt>
@@ -118,7 +118,7 @@ and <tt class="docutils literal"><span class="pre">0x00010001</span></tt> which 
 <p>Every method contains a special <strong>dispatch block</strong>, (not shown in the picture above) whose goal is to jump to
 the specified block number inside the method itself.  The first argument of a
 child method is always a block id; when the method starts, it immediately
-jumps to the dispatch block, and thus to the desired block.</p><a href="http://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvT8_6SS1I/AAAAAAAAAFI/8JIdzVaTHPk/s1600-h/flexswitch-cli.png"></a><p>For example, suppose to have a method which contains 3 blocks numbered 0, 1,
+jumps to the dispatch block, and thus to the desired block.</p><a href="https://3.bp.blogspot.com/_4gR6Ggu8oHQ/STvT8_6SS1I/AAAAAAAAAFI/8JIdzVaTHPk/s1600-h/flexswitch-cli.png"></a><p>For example, suppose to have a method which contains 3 blocks numbered 0, 1,
 2; here is how its dispatch blocks looks like; for simplicity it is shown as
 C# code, but it is actually generated as IL bytecode:</p>
 <pre class="literal-block">
@@ -246,7 +246,7 @@ downcast.</li>
 <p>To mitigate the performance drop, we avoid to allocate a new <tt class="docutils literal"><span class="pre">InputArgs</span></tt>
 object each time we do a non-local jump; instead, we preallocate one at the
 beginning of the main method, and reuse it all the time.</p>
-<p>Our <a class="reference" href="http://codespeak.net/svn/user/antocuni/cli-bench/arguments.cs">benchmarks</a> show that passing arguments in arrays is about 10 times slower
+<p>Our <a class="reference" href="https://codespeak.net/svn/user/antocuni/cli-bench/arguments.cs">benchmarks</a> show that passing arguments in arrays is about 10 times slower
 than passing them as real parameter of a method.  Unfortunately, we couldn't
 come up with anything better.</p>
 </div>
@@ -308,9 +308,9 @@ offers very little support, so we need an incredible amount of workarounds.
 Moreover, the code generated is much worse than what an assembly backend could
 produce, and the cost of following a non-local link is very high compared to
 local links.</p>
-<p>However, our first <a class="reference" href="http://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-1.html">blog post</a> showed that we still get very good
+<p>However, our first <a class="reference" href="https://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-1.html">blog post</a> showed that we still get very good
 performances; how is it possible?</p>
-<p><a class="reference" href="http://en.wikipedia.org/wiki/Optimization_%28computer_science%29#Bottlenecks">As usual</a> in computer science, most of the time of a running program in
+<p><a class="reference" href="https://en.wikipedia.org/wiki/Optimization_%28computer_science%29#Bottlenecks">As usual</a> in computer science, most of the time of a running program in
 spent in a tiny fraction of the code; our benchmark is no exception, and the
 vast majority of the time is spent in the inner loop that multiplies numbers;
 the graph is built in such a way that all the blocks that are part of the
@@ -339,7 +339,7 @@ think it's really elegant and nice, but since this post is already too long,
 I'll stop here :-).</p>
 <p>In theory, if the .NET JIT were smart enough it could inline and optimize away
 the tail calls (or at least many of those) and give us very efficient code.
-However, one <a class="reference" href="http://codespeak.net/svn/user/antocuni/cli-bench/tailcall.il">benchmark</a> I wrote shows that tail calls are up to 10 times
+However, one <a class="reference" href="https://codespeak.net/svn/user/antocuni/cli-bench/tailcall.il">benchmark</a> I wrote shows that tail calls are up to 10 times
 slower (!!!) than normal calls, thus making impractical to use them for our
 purposes.</p>
 </div>
@@ -366,7 +366,7 @@ like to know more.</p>
 machines are not designed to support it in a native way, and this forces us to
 put a lot of workarounds that slow down the generated code.  The hope is that
 in the future the virtual machines will grow features that help us to generate
-such kind of code.  The experimental <a class="reference" href="http://openjdk.java.net/projects/mlvm/">Da Vinci VM</a> seems to go in the right
+such kind of code.  The experimental <a class="reference" href="https://openjdk.java.net/projects/mlvm/">Da Vinci VM</a> seems to go in the right
 direction, so it is possible that in the future I will try to write a JIT
 backend for it.</p>
 <p>At the moment, the CLI JIT backend is almost complete, and all the hardest
