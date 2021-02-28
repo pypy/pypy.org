@@ -1,6 +1,8 @@
 # pypy.org webpages
 
-This is the source repository for the pypy.org webpages.
+This is the source repository for the [pypy.org](https://www.pypy.org) webpages.
+
+You can see the Netlify previews here [![Netlify preview](https://api.netlify.com/api/v1/badges/dcd980ae-706c-4efe-a825-d7f04b054d27/deploy-status)](https://app.netlify.com/sites/keen-mestorf-442210/deploys) 
 
 ## Working with the repo to generate new content
 
