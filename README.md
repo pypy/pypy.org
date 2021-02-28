@@ -2,10 +2,11 @@
 
 This is the source repository for the pypy.org webpages.
 
-The webpages are generated using the static site generator *nikola* (https://getnikola.com/).
+## Working with the repo to generate new content
 
-To change content of the pages, please change the 
-files in the `posts`, `files` and `pages` directories only. 
+The webpages are generated using the static site generator *nikola* (https://getnikola.com/).
+To create a new post, first create a virtualenv with `make
+venv_nikola/bin/nikola`, then `./venv_nikola/bin/nikola new_post`.
 
 !! The content of `public` (with all helper directories, like js, css, ...) 
    is not written by hand, 
@@ -17,9 +18,29 @@ rebuilt and commited via a CI deploy step. You can also do ``make auto`` to
 start a server that will serve the pages, and rebuild them when any changes are
 mede ot the sources.
 
-PRs can be previewed with Netlify. Any changes to the master branch (including
-merging PRs) regenerates the gh-pages branch, which is a copy of the `public`
-directory.
+PRs previews will be generated  with Netlify. After pushing a PR, a CI run will
+have a "Deploy preview ready!" run, clicking on the "details" link will show the
+newly-rendered site preview.
+
+
+### Comments
+Comments to blog posts are generated via the [utterances](https://utteranc.es/)
+javascript plugin. This is the only part of the website that requires
+javascript, the rest is static HTML. The comments appear as issues in the repo,
+When viewing the site, a query is made to fetch the comments to the issue with
+that name. To comment, users must authorize the utterances app to post on their
+behalf using the [GitHub
+OAuth](https://developer.github.com/v3/oauth/#web-application-flow) flow.
+Alternatively, users can comment on the GitHub issue directly.
+
+[Historic posts](https://morepypy.blogspot.com/) (before the transition to
+github in March 2021) were imported with their comments, additional commenting
+is disabled.
+
+## Deployment
+
+Any changes to the master branch (including merging PRs) regenerates and pushes
+to the gh-pages branch, which is a copy of the `public` directory.
 
 For historical reasons, and in order to allow us to change webpage hosting
 easily,  the gh-pages branch is pulled into pypy.org by a cron job on a
