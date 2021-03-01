@@ -100,24 +100,26 @@ NAVIGATION_LINKS = {
             'Features',
         ),
         ('/download.html', 'Download'),
-        ('http://doc.pypy.org', 'Dev Documentation'),
+        ('http://doc.pypy.org', 'Dev Docs'),
         (
-            (
-                ('/blog', 'Index'),
-                ('/categories', 'Tags'),
-                ('/archive.html', 'Archive by year'),
-                ('https://morepypy.blogspot.com/', 'Old site'),
-            ),
-            'Blog',
+          (
+            ('/blog', 'Index'),
+            ('/categories', 'Tags'),
+            ('/archive.html', 'Archive by year'),
+            ('https://morepypy.blogspot.com/', 'Old site'),
+          ),
+          'Blog',
         ),
             
         (
-            (
-                ('/people.html', 'People'),
-                ('/howtohelp.html', 'How To Help?'),
-                ('/contact.html', 'Contact'),
-            ),
-            'About',
+          (
+            ('https://twitter.com/pypyproject', 'Twitter'),
+            ('https://quodlibet.duckdns.org/irc/pypy/latest.log.html#irc-end', 'IRC'),
+            ('/people.html', 'People'),
+            ('/howtohelp.html', 'How To Help?'),
+            ('/contact.html', 'Contact'),
+          ),
+          'About',
         ),
         #("/rss.xml", "RSS feed"),
     ),
@@ -964,6 +966,8 @@ CONTENT_FOOTER = """
     &nbsp;Contents &copy; {date} <a href="mailto:{email}">{author}</a>
     Powered by <a href="https://getnikola.com" rel="nofollow">Nikola</a> {license}
   </div>
+  <div style="margin-left: auto">
+  <a href=rss.xml>RSS feed</a>
 </div>
 """
 
