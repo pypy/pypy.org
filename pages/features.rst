@@ -11,7 +11,7 @@
 language that was co-developed with it.  The main reason to use it
 instead of CPython is speed: it runs generally faster (see next section).
 
-**PyPy** implements **Python 2.7.13 and 3.6.9**.
+**PyPy** implements **Python 2.7.13, 3.6.12, and 3.7.9**.
 It supports all of the core language, passing the Python 2.7 test suite
 and most of the 3.6 test suite (with minor modifications) It supports most of
 the commonly used Python standard library modules. For known differences with
@@ -29,7 +29,7 @@ PyPy's x86 version runs on several operating systems, such as Linux
 (32/64 bits), Mac OS X (64 bits), Windows (32 bits), OpenBSD, FreeBSD.
 All non-x86 versions are only supported on Linux.
 
-If you are interested in helping to move forward, see our `howtohelp`_ page.
+If you are interested in helping, see our `howtohelp`_ page.
 
 .. _`compatibility`: compat.html
 .. _`x86 (IA-32)`: http://en.wikipedia.org/wiki/IA-32
