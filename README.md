@@ -41,7 +41,7 @@ is disabled.
 
 ## Deployment
 
-Any changes to the master branch (including merging PRs) regenerates and pushes
+Any changes to the main branch (including merging PRs) regenerates and pushes
 to the gh-pages branch, which is a copy of the `public` directory.
 
 For historical reasons, and in order to allow us to change webpage hosting
