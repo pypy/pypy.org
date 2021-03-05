@@ -1,0 +1,139 @@
+.. title: Benchmarking Sphinx
+.. slug: benchmarking-sphinx
+.. date: 2021-02-28 10:10:45 UTC
+.. tags: jit, benchmarking
+.. category: 
+.. link: 
+.. description: Breaking down why Sphinx is slow
+.. type: text
+
+PyPy has an extensive benchmark suite. On most of the microbenchmarks we do
+quite well. One of the more complete benchmarks is one that builds a sphinx
+document website. The benchmark takes ~175 seconds on PyPy3 without the JIT and
+~80 seconds with the JIT on the benchmarking machine, CPython finishes the
+benchmark in about 45 seconds. This is a good opportunity to explore how to
+analyze PyPy’ performance and suggest paths forward to speed it up.
+
+.. TEASER_END
+
+The problem is to find out what exactly is going on, where the slowdowns
+are. Ususally, you need to combine cprofile and JIT profiling. A typical
+workflow is to use cprofile with CPython and PyPy to get a deterministic
+call tree. Then use vmprof for a sampling profiler, and use the JIT log
+for the actual Jitted code.
+
+Running the benchmark
+~~~~~~~~~~~~~~~~~~~~~
+
+Here is how to run the benchmark in a posix shell:
+
+::
+
+    hg clone https://foss.heptapod.net/pypy/benchmarks
+    cd benchmarks
+    PYTHONPATH=lib:lib/jinja2/ <python> \
+        benchmarks/lib/cpython-doc/tools/sphinx-build.py -b html
+
+Since we want the benchmark to run consistently over many versions of
+python, all the third-party packages are part of the benchmark repo:
+``docutils``, ``sphinx``, and of course the source documentation itself.
+So we use ``PYTHONPATH`` to run the benchmark. Replace ``<python>`` with
+the version of python you wish to benchmark. To run PyPy without the
+JIT, use ``<pypy> --jit off``
+
+Getting started: ``cprofile``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+OK, now we know how to run the benchmark, but we aer looking for places
+PyPy could do better. One way to profile is to use the built-in
+``cprofile`` module. We can write the output to a file. However, any
+deterministic profiler will slow down the program being profiled
+considerably, so this is best used for a rought measure of performance.
+We can run the command above, but instead of ``<python>``, use
+``<python> -m cprofile``.
+
+Pickle
+^^^^^^
+
+The output from a CPython run and a PyPy run can be diffed. That quickly
+pointed to ``write_tree`` as a place where something is off: CPython
+runs it in ~1 sec and PyPy takes ~44 secs. Sphinx uses pickle underneath
+to save intermediary results. CPython has the ``_pickle`` c-extension
+module built in, PyPy uses a pure-python implementation. So some of this
+slowdown may be due to cprofile overhead on the python code. We know
+pickling dictionaries is 8x slower on PyPy, but 44x is a bit extreme. So
+if PyPy had a faster pickle implementation that would make many things
+faster. A nice task for someone who wants to learn about RPython might
+be to transpile the ``_pickle.c`` code (or the pure-python parts of
+``pickle.py`` that ``_pickle.c`` reimplements), add tests and make it
+fast.
+
+docutils
+^^^^^^^^
+
+Another easy comparison is in the ``docutils`` (a pure-python library)
+``nodes._fast_traverse`` functions. PyPy takes 70s on where CPython
+needs ~18. ``_fast_traverse`` is a six-line function:
+
+::
+
+        def _fast_traverse(self, cls):
+            """Specialized traverse() that only supports instance checks."""
+            result = []
+            if isinstance(self, cls):
+                result.append(self)
+            for child in self.children:
+                result.extend(child._fast_traverse(cls))
+            return result
+
+It does a check, appends to a list, then recurses, and returns the list.
+Recursion is slow on both CPython and PyPy: rewriting this as a
+non-recursive function would be a clear win. But this benchmark is now
+fixed in time. We could add a new benchmark with the changed code, that
+would not help with this one.
+
+Next step: the JIT log
+~~~~~~~~~~~~~~~~~~~~~~
+
+Now that we know a bit more about the performance bottlenecks, let's
+dive into what is going on inside the JIT. We can run the command above
+a little differently in order to create a log of the JIT activity:
+
+``PYPYLOG=jit-log-opt,jit-summary,jit-backend-counts:out-sphinx PYTHONPATH=lib:lib/jinja2/ ~/bin/pypy lib/cpython-doc/tools/sphinx-build.py -b html lib/cpython-doc/ lib/cpython-doc/build/ -E``
+
+The ``PYPYLOG`` value saves only some of the JIT information. Like
+``cprofile``, writing this information out slows down the JIT.
+
+The last section of the log (backend-counts) summarizes counts of the
+bridges and loops, so you can see which are the "busiest" loops. You
+search for the target token (the address of the loop)
+
+Just before that is the jit-summary. It can tell you the time spent
+tracing and in the backend. That is about 15% in our case.
+
+One other hack is to sort the ``debug_merge_points`` by function name:
+
+``grep debug_merge_point out-sphinx | cut -d ' ' -f 5,6,7,9 | sort | uniq -c | sort --numeric-sort``
+
+We made way too many versions of ``_fast_traverse``, and it is
+recursive. This is because it makes bridges (failed guard calling out to
+other code). So in the log there is a ``# bridge ...`` comment, it has
+an address. We found one that points to the guard on the loop call,
+generating a new version for each combination of ``type(self)`` and
+``type(cls)``. This is silly, most of the calls to ``_fast_travserse``
+will create such a bridge.
+
+Aside: why is there a jit code ``ll_listcontains...`` ? This always
+happens when looking at a trace: you find things that drag you down a
+rabbit hole.
+
+One approach to solving this would be "give up": do not create another
+guard/bridge for each specialization. Another solution: check the depth
+of the chain of bridges and do something if it is too deep. We need to
+be careful not to, for instance, make translation slower.
+
+In order to create a test for this in the JIT, we would need to recreate
+it in a test. We would need a simple class implementation with a
+function that looks like ``_fast_traverse``, and a class generator
+factory that would create the classes in a way that approximately
+recreates the sphinx situation.
