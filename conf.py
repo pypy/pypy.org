@@ -106,6 +106,7 @@ NAVIGATION_LINKS = {
             ('/blog', 'Index'),
             ('/categories', 'Tags'),
             ('/archive.html', 'Archive by year'),
+            ('/rss.xml', 'RSS feed'),
             ('https://morepypy.blogspot.com/', 'Old site'),
           ),
           'Blog',
