@@ -1252,7 +1252,7 @@ COPY_SOURCES = False
 # BODY_END = ""
 
 SEARCH_FORM = """
-<form class="navbar-form navbar-left" action="/search.html/" role="search">
+<form class="navbar-form navbar-left" action="/search.html" role="search">
     <div class="form-group">
         <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search&hellip;" autocomplete="off">
     </div>
