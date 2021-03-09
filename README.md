@@ -18,7 +18,7 @@ After you make changes, you can do `make build` to regenerate the pages in
 ``public/`` for local viewing, but **do not commit these**, they will be
 rebuilt and commited via a CI deploy step. You can also do ``make auto`` to
 start a server that will serve the pages, and rebuild them when any changes are
-mede ot the sources. Note that the search page will not work via Nikola's
+made to the sources. Note that the search page will not work via Nikola's
 server.
 
 PRs previews will be generated  with Netlify. After pushing a PR, a CI run will
