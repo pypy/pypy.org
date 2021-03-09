@@ -1249,6 +1249,21 @@ COPY_SOURCES = False
 # (translatable)
 # BODY_END = ""
 
+SEARCH_FORM = """
+<form class="navbar-form navbar-left" action="/search.html/" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search&hellip;" autocomplete="off">
+    </div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+"""
+
+EXTRA_HEAD_DATA = """
+<link rel="stylesheet" type="text/css" href="/assets/css/tipuesearch.css">
+"""
+
+
+
 # The possibility to extract metadata from the filename by using a
 # regular expression.
 # To make it work you need to name parts of your regular expression.
