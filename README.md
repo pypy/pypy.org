@@ -18,7 +18,7 @@ After you make changes, you can do `make build` to regenerate the pages in
 ``public/`` for local viewing, but **do not commit these**, they will be
 rebuilt and commited via a CI deploy step. You can also do ``make auto`` to
 start a server that will serve the pages, and rebuild them when any changes are
-mede ot the sources.
+made to the sources.
 
 PRs previews will be generated  with Netlify. After pushing a PR, a CI run will
 have a "Deploy preview ready!" run, clicking on the "details" link will show the
@@ -27,8 +27,7 @@ newly-rendered site preview.
 
 ### Comments
 Comments to blog posts are generated via the [utterances](https://utteranc.es/)
-javascript plugin. This is the only part of the website that requires
-javascript, the rest is static HTML. The comments appear as issues in the repo,
+javascript plugin. The comments appear as issues in the repo.
 When viewing the site, a query is made to fetch the comments to the issue with
 that name. To comment, users must authorize the utterances app to post on their
 behalf using the [GitHub
