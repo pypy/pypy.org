@@ -11,8 +11,9 @@
 -->
 
 For many years, PyPy has been publishing blog posts at
-https://morepypy.blogspot.com. From now on, the posts will be here, at
-https://pypy.org/blog. The RSS feed is https://pypy.org/rss.xml. The original
+[https://morepypy.blogspot.com](https://morepypy.blogspot.com). From now on,
+the posts will be here, at [https://pypy.org/blog](https://pypy.org/blog). The
+RSS feed is [https://pypy.org/rss.xml](https://pypy.org/rss.xml). The original
 content has been migrated to the newer site, including comments.
 
 <!-- TEASER_END -->
@@ -23,19 +24,20 @@ Among the motivations for the move were:
 Adding the blog posts here seems like a natural extension of the web site
 rather than outsourcing it to a third-party. Since the site is generated using
 the static site generator [nikola](https://getnikola.com/) from the github repo
-https://github.com/pypy/pypy.org, we also have good source control for the
-content.
+[https://github.com/pypy/pypy.org](https://github.com/pypy/pypy.org), we also
+have good source control for the content.
 
 ### CI previews, and github
 
 Those of you who follow PyPy may note something new in the URL for the repo:
 until now PyPy has been using [mercurial](https://mercurial-scm.org) as hosted
-on https://foss.heptapod.net.  While [heptapod](https://heptapod.net/) (a
-community driven effort to bring mercurial support to GitLab™) does provide a
-GitLab CI runner for the open source offering, on github we can use netlify for
-previews. Hopefully the move to the more popular github platform will encourage
-new contributors to publish their success stories around using PyPy and
-the RPython toolchain.
+on [https://foss.heptapod.net](https://foss.heptapod.net).  While
+[heptapod](https://heptapod.net/) (a community driven effort to bring mercurial
+support to GitLab™) does provide a GitLab CI runner for the open source
+offering, on github it is easier to integrate [netlify](https://netlify.com)
+for previews. Hopefully the move to the more popular github platform will
+encourage new contributors to publish their success stories around using PyPy
+and the RPython toolchain.
 
 ### Comments
 
