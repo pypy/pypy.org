@@ -15,7 +15,7 @@ all: build
 
 venv_nikola/bin/nikola:  ## create a virtualenv to build the website
 > @virtualenv -ppython3 ./venv_nikola
-> @venv_nikola/bin/python -mpip install nikola==8.1.2 jinja2 aiohttp watchdog ruamel.yaml feedparser 
+> @venv_nikola/bin/python -mpip install nikola==8.1.3 jinja2 aiohttp watchdog ruamel.yaml feedparser 
 > @venv_nikola/bin/nikola plugin -i sidebar
 > @venv_nikola/bin/nikola plugin -i localsearch
 
