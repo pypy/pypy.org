@@ -973,7 +973,7 @@ CONTENT_FOOTER = """
     Powered by <a href="https://getnikola.com" rel="nofollow">Nikola</a> {license}
   </div>
   <div style="margin-left: auto">
-  <a href=rss.xml>RSS feed</a>
+  <a href=/rss.xml>RSS feed</a>
 </div>
 """
 
