@@ -1,10 +1,10 @@
 .. title: Download (advanced)
 .. slug: download_advanced
 .. date: 2020-11-21 16:14:02 UTC
-.. tags: 
-.. category: 
-.. link: 
-.. description: 
+.. tags:
+.. category:
+.. link:
+.. description:
 
 .. contents::
     :depth: 2
@@ -31,16 +31,16 @@ We provide pre-compiled binaries for many platforms and OSes:
 ..
   table start
 
-.. 
+..
   Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.6>``
 
-.. list-table:: `PyPy v7.3.3`_ 
+.. list-table:: `PyPy v7.3.3`_
    :widths: 20 15 15 15 35
    :header-rows: 1
 
    * - OS
-     - PyPy3.7 
-     - PyPy3.6 
+     - PyPy3.7
+     - PyPy3.6
      - PyPy2.7
      - Notes
 
@@ -129,9 +129,6 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - built on Redhat Linux 7.2 [1]_
-
-   
-
 
 
 .. __: https://downloads.python.org/pypy/pypy3.7-v7.3.3-linux32.tar.bz2
@@ -304,7 +301,7 @@ There are as yet few distribution-ready packages. `conda`_ is one easy
 way to get packages with a minimum of compilation.
 We recommend installing ``pip``, which is the standard package
 manager of Python.  It works like it does on CPython as explained in the
-`installation documentation`_. 
+`installation documentation`_.
 
 If you use your distribution's PyPy package we recommend you install packages
 into a virtualenv. If you try to build a module and the build process complains
@@ -483,13 +480,24 @@ pre-compiling them, normal users will get errors:
 .. _`package.py`: https://foss.heptapod.net/pypy/pypy/-/blob/release-pypy3.7-v7.3.3/pypy/tool/release/package.py
 
 
-.. 
+..
   checksum start
 
 Checksums
 ---------
 
 Here are the checksums for latest downloads
+
+pypy2.7-7.3.4 sha256::
+
+    ee4894169260d3e4c55e06232c96d690e41d13e9f82f1512edcf6b8d960b695d  pypy2.7-v7.3.4rc1-aarch64.tar.bz2
+    fd736003d5a7f5f2744269d67dc9a96005a5a2ceac8987007bd27ab57681c0f2  pypy2.7-v7.3.4rc1-linux32.tar.bz2
+    ec1cd67c28416c359dbe1caddf7ae7a0be10e3fbe6435150d39d4b7492469852  pypy2.7-v7.3.4rc1-linux64.tar.bz2
+    cce4e360b31010e415e397ce8982535db482e36c0f13934eaa6d9e1e30eb2bc3  pypy2.7-v7.3.4rc1-osx64.tar.bz2
+    84930e433a81f16dcf81b678c12167ef951cd74534ee1ee8e6b0b27b0a128e1d  pypy2.7-v7.3.4rc1-src.tar.bz2
+    7bdc1e5431a7429bd2ec2853c86a68f09069f080b9765a87084904f52adab789  pypy2.7-v7.3.4rc1-src.zip
+    02befc534dbcc2da6ad4c7e60735d977dc8b4f6901630eb599d1684cb86a58c7  pypy2.7-v7.3.4rc1-win64.zip
+
 
 pypy3.7-7.3.3 sha256::
 
