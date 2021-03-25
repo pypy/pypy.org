@@ -7,6 +7,9 @@ assignees: ''
 
 ---
 
+** Do not report PyPy bugs or issues here, use the [PyPy issue
+tracker](https://foss.heptapod.net/pypy/pypy/-/issues)
+
 **Describe the problem**
 A clear and concise description of what the bug is: what pages it affects and how to see it
 
