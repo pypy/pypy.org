@@ -1056,6 +1056,7 @@ PRETTY_URLS = False
 # If True, publish future dated posts right away instead of scheduling them.
 # Defaults to False.
 # FUTURE_IS_NOW = False
+FUTURE_IS_NOW = True
 
 # If True, future dated posts are allowed in deployed output
 # Only the individual posts are published/deployed; not in indexes/sitemap
