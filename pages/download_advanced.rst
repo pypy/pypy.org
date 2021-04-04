@@ -70,7 +70,7 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - compatible with Ubuntu 18 only
+     - compatible with CentOS7 and later
 
 .. __: https://downloads.python.org/pypy/pypy3.7-v7.3.3-linux64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.6-v7.3.3-linux64.tar.bz2
@@ -488,26 +488,27 @@ Checksums
 
 Here are the checksums for latest downloads
 
+pypy3.7-7.3.4 sha256::
+
+    647e34857d181e7560205eb877915b787836237929c7bd52860de626d5e85e9d  pypy3.7-v7.3.4rc2-aarch64.tar.bz2
+    cfc661034347d79ba907078b4e3acea4f09d0de0eaf474c5bde173666319780c  pypy3.7-v7.3.4rc2-linux32.tar.bz2
+    dcf1fa6dd5da4076f040ed4302a22c8da3838335e64cd118c29d69eb7d443d6b  pypy3.7-v7.3.4rc2-linux64.tar.bz2
+    c9ecc213cdc3169ef230d85e49d9d073ffc1ba0a36bc1d8483f724e31b9d9d12  pypy3.7-v7.3.4rc2-osx64.tar.bz2
+    fcc5c02382f67c7ee6f267b459131519b6a72e60ae370d6e398d54c0e07080f9  pypy3.7-v7.3.4rc2-s390x.tar.bz2
+    f1257d4d8a3d84e84ff85c83f4f5bc2e126727d7595c536ccbe1a03a280c0df6  pypy3.7-v7.3.4rc2-src.tar.bz2
+    dfab9881e2c42ae61115aa6ed77389f835094fd783dc08cf4dee1ebfdd4c1d47  pypy3.7-v7.3.4rc2-src.zip
+    b62b7aad962a8c42895a13b08d68b32254934d6d1b1f5f1f02f762cbe111b035  pypy3.7-v7.3.4rc2-win64.zip
+
 pypy2.7-7.3.4 sha256::
 
-    958a562528d24fdb33b9fd12f2076f4b546dc218e0793324558560823234adb1  pypy3.7-v7.3.4rc1-aarch64.tar.bz2
-    d05299744ac8c6f12bb3587541ce106f3a93d9ed64b0529c46e79b56efd27b24  pypy3.7-v7.3.4rc1-linux32.tar.bz2
-    bb7ee16bdf7c1bbbca45d1228502a5c276be33e27e849525aa5a61c0eaec5b4a  pypy3.7-v7.3.4rc1-linux64.tar.bz2
-    6d3aea12b744413c874e33ff456f6591049e12dc1a356d975dc0e29a047a151e  pypy3.7-v7.3.4rc1-osx64.tar.bz2
-    8deb01eb54b95e480d2ee03ee9148ba0c1684b410165c198e9f68a015656246e  pypy3.7-v7.3.4rc1-src.tar.bz2
-    bf247839954a4518327d5cbc9ab1a1b4296982c2fe78671d59a58373239e675e  pypy3.7-v7.3.4rc1-src.zip
-    0819de5a5212bddef0f615f7ced03dfd9f5d4ee115ec3564119d45b6b447843f  pypy3.7-v7.3.4rc1-win64.zip
-
-pypy2.7-7.3.4 sha256::
-
-    ee4894169260d3e4c55e06232c96d690e41d13e9f82f1512edcf6b8d960b695d  pypy2.7-v7.3.4rc1-aarch64.tar.bz2
-    fd736003d5a7f5f2744269d67dc9a96005a5a2ceac8987007bd27ab57681c0f2  pypy2.7-v7.3.4rc1-linux32.tar.bz2
-    ec1cd67c28416c359dbe1caddf7ae7a0be10e3fbe6435150d39d4b7492469852  pypy2.7-v7.3.4rc1-linux64.tar.bz2
-    cce4e360b31010e415e397ce8982535db482e36c0f13934eaa6d9e1e30eb2bc3  pypy2.7-v7.3.4rc1-osx64.tar.bz2
-    84930e433a81f16dcf81b678c12167ef951cd74534ee1ee8e6b0b27b0a128e1d  pypy2.7-v7.3.4rc1-src.tar.bz2
-    7bdc1e5431a7429bd2ec2853c86a68f09069f080b9765a87084904f52adab789  pypy2.7-v7.3.4rc1-src.zip
-    02befc534dbcc2da6ad4c7e60735d977dc8b4f6901630eb599d1684cb86a58c7  pypy2.7-v7.3.4rc1-win64.zip
-
+    f0a11bd48a01b27595e659c3a1b7fb936ac6e0a21574f1fc2f57fd032830342a  pypy2.7-v7.3.4rc2-aarch64.tar.bz2
+    81dd5ac16b11f6f9ba0ff2536306dd85997a6cad86aa4e7971e7805264d61716  pypy2.7-v7.3.4rc2-linux32.tar.bz2
+    077acdb14e797878341fc6f50d87a2f0c9b7d25215c6b2f73541bacb7730f64d  pypy2.7-v7.3.4rc2-linux64.tar.bz2
+    6a220785a962c56db26dd56245aacb7cb6658879ecaad9ada04d26df56da172c  pypy2.7-v7.3.4rc2-osx64.tar.bz2
+    a3201493550457f932ddf743118635a7e8ff6b5c5fd69d0b8596dfeabcc5bffd  pypy2.7-v7.3.4rc2-s390x.tar.bz2
+    1965dfc3de6fdae83bd954fed206111a020898708d8754705fb1312473be35bf  pypy2.7-v7.3.4rc2-src.tar.bz2
+    1072727a4a948b16ccebb165015e43716ffc586f5249356c97c454b24aacb2dd  pypy2.7-v7.3.4rc2-src.zip
+    e20f206ba8751d2c17ad80c66b7f4bd63c2f500cbfa9e8a3906cd7d77955e00f  pypy2.7-v7.3.4rc2-win64.zip
 
 pypy3.7-7.3.3 sha256::
 
