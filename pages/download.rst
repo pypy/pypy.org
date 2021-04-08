@@ -22,18 +22,15 @@ We provide pre-compiled binaries for many platforms and OSes.
     :start-after: table start
     :end-before: table finish
 
-.. _`PyPy v7.3.3`: https://doc.pypy.org/en/latest/release-v7.3.3.html
-.. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
-
 Source
 ------
 
 .. class:: download_menu
 
-* `3.6 Source (tar.bz2)`__; `3.6 Source (zip)`__. 
+* `3.7 Source (tar.bz2)`__; `3.7 Source (zip)`__. 
 
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.3-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.6-v7.3.3-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.4-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.4-src.zip
 
 
 More information
