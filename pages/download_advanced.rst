@@ -44,12 +44,12 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - compatible with CentOS6 and later
 
-   * - **Windows 32 bit**
+   * - **Windows 64 bit**
      - Download__
      - Download__
      - compatible with any windows 64-bit
 
-       you might need the VC runtime library installer `vcredist.x86.exe`_
+       you might need the VC runtime library installer `vcredist.x64.exe`_
 
    * - **MacOS**
 
