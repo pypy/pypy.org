@@ -76,7 +76,7 @@ We provide pre-compiled binaries for many platforms and OSes:
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.4-aarch64.tar.bz2
 
 .. _`PyPy v7.3.4`: https://doc.pypy.org/en/latest/release-v7.3.4.html
-.. _`vcredist.x86.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
+.. _`vcredist.x64.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
 
 ..
   table finish
