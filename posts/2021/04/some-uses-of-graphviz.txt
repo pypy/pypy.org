@@ -1,0 +1,110 @@
+.. title: Some Ways that PyPy uses Graphviz
+.. slug: ways-pypy-graphviz
+.. date: 2021-04-26 16:00:00 UTC
+.. tags:
+.. category: 
+.. link: 
+.. description: 
+.. type: rest
+.. author: Carl Friedrich Bolz-Tereick
+
+================================
+Some way that PyPy uses Graphviz
+================================
+
+Somebody wrote this super cool thread on Twitter about using Graphviz_ to make
+software visualize its internal state:
+
+.. _Graphviz: https://graphviz.org
+
+.. raw:: html
+
+    <blockquote class="twitter-tweet"><p lang="en" dir="ltr">🧵 Make yours and everybody else&#39;s lives slightly less terrible by having all your programs print out their internal stuff as pictures; ✨ a thread ✨ <a href="https://t.co/NjQ42bXN2E">pic.twitter.com/NjQ42bXN2E</a></p>&mdash; Kate (@thingskatedid) <a href="https://twitter.com/thingskatedid/status/1386077306381242371?ref_src=twsrc%5Etfw">April 24, 2021</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
+
+PyPy is using this approach a lot too and I collected a few screenshots of that
+technique `on Twitter`_ and I thought it would make a nice blog post too!
+
+.. _`on Twitter`: https://twitter.com/cfbolz/status/1386315196982079491
+
+
+The most important view early in the project, and the way that our Graphviz
+visualizations got started was that we implemented a way to look at the control
+flow graphs of our RPython functions after type inference. They are in static
+single information form (SSI_), a variant of SSA_ form. Hovering over the
+variables shows the inferred types in the footer: 
+
+.. _SSI: https://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.1.9976
+.. _SSA: https://en.wikipedia.org/wiki/Static_single_assignment_form
+
+.. image:: /images/2021-graphviz-02-cfg-types.png
+
+There's another view that shows the inferred call graph of the program:
+
+.. image:: /images/2021-graphviz-05-call-graph.png
+
+A related viewer shows the inferred class hierarchy (in this case the exception
+hierarchy) and you can focus on a single class, which will show you its base
+classes and all the methods and instance attributes that were found:
+
+.. image:: /images/2021-graphviz-03-classhier.png
+
+.. image:: /images/2021-graphviz-04-classhier-detailed.png
+
+We also have a view to show us the traces that are produced by the tracing JIT
+tests. this viewer doesn't really scale to the big traces that the full Python
+interpreter produces, but it's really useful during testing:
+
+.. image:: /images/2021-graphviz-06-trace.png
+
+Then there are more traditional tree views, eg here is a parse tree for a small
+piece of Python source code:
+
+.. image:: /images/2021-graphviz-07-parse-tree.png
+
+Parsing-related we have visualized the `DFAs of the parser`_ in the past,
+though the code is unfortunately lost.
+
+.. _`DFAs of the parser`: https://www.pypy.org/posts/2008/01/visualizing-python-tokenizer-5020282079473796926.html
+
+All these visualizations are made by walking the relevant data structures and
+producing a Graphviz input file using a bit of string manipulation, which is
+quite easy to do. Knowing a bit of Graphviz is a really useful skill, it's
+super easy to make throwaway visualizations.
+
+For example here is a one-off thing I did when debugging our `JSON parser`_ to
+show the properties of the objects used in a huge example json file:
+
+.. image:: /images/2021-graphviz-08-json-parser.png
+
+.. _`JSON parser`: https://morepypy.blogspot.com/2019/10/pypys-new-json-parser.html
+
+On top of graphviz, we have a custom tool called the dotviewer_, which is
+written in Python and uses Pygame_ to give you a zoomable, pannable, searchable
+way to look at huge Graphviz graphs. All the images in this post are
+screenshots of that tool. In its simplest form it takes any .dot files as
+input.
+
+.. _dotviewer: https://foss.heptapod.net/pypy/pypy/-/tree/branch/default/dotviewer
+
+.. _Pygame: https://pygame.org
+
+Here's a small video dotviewer, moving around and searching in the json graph.
+By writing a bit of extra Python code the dotviewer can also be extended to add
+hyperlinks in the graphs to navigate to different views (for example, we did
+that for the callgraphs above).
+
+.. raw:: html
+
+    <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/SsTmJ5_Yzh8" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+
+All in all this is a really powerful approach to understand the behaviour of
+some of code, or when debugging complicated problems and we have gotten a
+huge amount of milage out of this over the years. It can be seen as an instance
+of `moldable development`_ ("a way of programming through which you construct
+custom tools for each problem"). And it's really easy to get into! The Graphviz
+language is quite a simple text-based language that can be applied to a huge
+amount of different visualization situations.
+
+.. _`moldable development`: https://moldabledevelopment.com/
+
