@@ -459,6 +459,16 @@ Checksums
 Here are the checksums for latest downloads
 
 pypy3.7-7.3.5 sha256::
+
+    c01e59167a26976e764f7b230f6febe0af59982911cd727c551191aed0a843c4  pypy3.7-v7.3.5rc2-aarch64.tar.bz2
+    7f8e55f34bf9422576a501c22ae8b82d5d6ffcbf40251a9daf53b5d8d96c2f43  pypy3.7-v7.3.5rc2-linux32.tar.bz2
+    93f9ccf44ec92145cf2fe17ac98a07f0adc08866b001c7f023b64a3729ed9710  pypy3.7-v7.3.5rc2-linux64.tar.bz2
+    4902ac65329447f2451d2b2b264a12fb95d97a4bb734c75410d2b5abc6e6de52  pypy3.7-v7.3.5rc2-osx64.tar.bz2
+    f0d4bbbe4000c836c17168cc709b233b6184039aad69bc9929c415a92bc462a9  pypy3.7-v7.3.5rc2-s390x.tar.bz2
+    b1ac30e5e7cd8d04c4472b5c4a71a414d6b0cf08a2026fd1bfc84994598abfda  pypy3.7-v7.3.5rc2-src.tar.bz2
+    c6c004550444c2f8749d7e34bcdfe404333b5f4bdf08af7745e28371c8358050  pypy3.7-v7.3.5rc2-src.zip
+    ea41d9e5cb94c7b9e7df2652b74fcc1018ce3e786c9636791b70e46d90e7e8ac  pypy3.7-v7.3.5rc2-win64.zip
+
     8dcd20e35e26bf92ce08fc8c97350acb4c773e19a78a89d3b4f28a8be63006d3  pypy3.7-v7.3.5rc1-aarch64.tar.bz2
     04573fd71618d5c26b0828dd306fa02e9eece8a33a020081e55b60d9a6bc6240  pypy3.7-v7.3.5rc1-linux32.tar.bz2
     97c1142f7ac99af03b2c56eb379af6e9ed4eef7d0d37675f4ca5ec33c841d62f  pypy3.7-v7.3.5rc1-linux64.tar.bz2
@@ -469,6 +479,15 @@ pypy3.7-7.3.5 sha256::
     ab8c5e6bf756f6dda2eba5c2e8d65d8d5de9b3a2c54f2f7a3dfb4f111e40ba0d  pypy3.7-v7.3.5rc1-win64.zip
 
 pypy2.7-7.3.5 sha256::
+
+    8250c8db8f227aec3d85f8866f8ad78d925ed338a5622f64c22d6a7fb0963b5a  pypy2.7-v7.3.5rc2-aarch64.tar.bz2
+    978ed1e445809adbaa0ca593abd445384c28d72344bf67184b5cee5e0f76fc3c  pypy2.7-v7.3.5rc2-linux32.tar.bz2
+    a933976a2adc840d07be9ed4ac1dc1b1986fd68f875c4258ed214a2ce9f5f659  pypy2.7-v7.3.5rc2-linux64.tar.bz2
+    cbdfe3f9e49cb96b5b182b19ce257a086dbb7204ba01c178db13b4e6272a3260  pypy2.7-v7.3.5rc2-osx64.tar.bz2
+    da2bf8e5e8f03f10ffd8c7e970e20ff702a91fc44a6bd0de51f1a79401804e79  pypy2.7-v7.3.5rc2-s390x.tar.bz2
+    b47ce66e8d716b22e7b78f1ec0e2d212a27afd355adcb94e00b6d76ffa9a513f  pypy2.7-v7.3.5rc2-src.tar.bz2
+    b031352443dff2202fcc0ee131887a232214363af1d87ba35886dc683b18eb85  pypy2.7-v7.3.5rc2-src.zip
+    47a355033a4c61e679f5ed34274a320adda8df2c27ed313bda0841dc8e11a354  pypy2.7-v7.3.5rc2-win64.zip
 
     4431bc2193f76b97add9726420c6d6ab14b46178e9cfeade5f596016b66b6549  pypy2.7-v7.3.5rc1-aarch64.tar.bz2
     b0d2432bf50bfeeb00e91e048db6df1bba40ca54b0d19d9f61db0f3a4e6e2bf5  pypy2.7-v7.3.5rc1-linux32.tar.bz2
