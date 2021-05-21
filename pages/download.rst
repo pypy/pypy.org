@@ -42,6 +42,7 @@ running PyPy, STM, instructions on building from source and more.
 .. _`more information`: download_advanced.html
 
 
-.. include:: pages/download_advanced.rst
-    :start-after: checksum start
 
+Checksums
+---------
+Checksums for the downloads are :doc:`here <checksums>`
