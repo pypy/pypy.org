@@ -34,7 +34,7 @@ ongoing work, and helping us find the source of these problems.
 
   - `BPO 42988`_ to remove ``pydoc.getfile`` 
   - `BPO 43285`_ to not trust the ``PASV`` response in ``ftplib``.
-  - `BPO 43075`_ to remove a possible ReDoS in urllib AbstractBasicAuthHandler
+  - `BPO 43075`_ to remove a possible ReDoS in ``urllib`` ``AbstractBasicAuthHandler``
   - `BPO 43882`_ to sanitize urls containing ASCII newline and tabs in
     ``urllib.parse``
 
