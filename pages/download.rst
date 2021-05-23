@@ -29,8 +29,8 @@ Source
 
 * `3.7 Source (tar.bz2)`__; `3.7 Source (zip)`__. 
 
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.4-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.4-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.5-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.5-src.zip
 
 
 More information
