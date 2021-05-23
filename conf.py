@@ -1062,6 +1062,7 @@ FUTURE_IS_NOW = True
 # Only the individual posts are published/deployed; not in indexes/sitemap
 # Generally, you want FUTURE_IS_NOW and DEPLOY_FUTURE to be the same value.
 # DEPLOY_FUTURE = False
+DEPLOY_FUTURE = True
 # If False, draft posts will not be deployed
 # DEPLOY_DRAFTS = True
 
