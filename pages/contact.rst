@@ -7,7 +7,10 @@
 .. description: 
 
 
-* irc: **#pypy** on **irc.freenode.net**
+* irc:
+
+  * **#pypy** on **irc.freenode.net** (still the official channel)
+  * **#pypy** on **irc.libera.chat** (will become official soon?)
 
 * mailing list: `pypy-dev at python.org`__
 
