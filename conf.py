@@ -115,8 +115,7 @@ NAVIGATION_LINKS = {
         (
           (
             ('https://twitter.com/pypyproject', 'Twitter'),
-            ('https://quodlibet.duckdns.org/irc/pypy/latest.log.html#irc-end', 'IRC logs'),
-            ('https://libera.irclog.whitequark.org/pypy', 'IRC logs (libera.chat)'),
+            ('https://libera.irclog.whitequark.org/pypy', 'IRC logs'),
             ('https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt', 'YouTube'),
             ('https://www.twitch.tv/pypyproject', 'Twitch'),
             ('/people.html', 'People'),

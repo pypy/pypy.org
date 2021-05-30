@@ -7,10 +7,10 @@
 .. description: 
 
 
-* irc:
+* irc: **#pypy** on **irc.libera.chat**
 
-  * **#pypy** on **irc.freenode.net** (still the official channel)
-  * **#pypy** on **irc.libera.chat** (will become official soon?)
+    - **NOTE**: the official #pypy channel used to be on Freenode, `but it is no
+      longer the case`_
 
 * mailing list: `pypy-dev at python.org`__
 
@@ -25,3 +25,4 @@
 .. __: https://mail.python.org/mailman/listinfo/pypy-dev
 .. _`issue tracker`: https://foss.heptapod.net/pypy/pypy/issues?status=new&status=open
 .. _`dev site`: https://doc.pypy.org
+.. _`but it is no longer the case`: /posts/2021/05/pypy-irc-moves-to-libera-chat.html
