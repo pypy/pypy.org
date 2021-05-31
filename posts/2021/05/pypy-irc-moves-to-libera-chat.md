@@ -12,7 +12,7 @@
 
 Following the example of many other FOSS projects, the PyPy team has
 decided to move its official ``#pypy`` IRC channel from Freenode to
-[Libera.Chat](https://libera.chat/): [irc.libera.chat/hpy](irc://irc.libera.chat/pypy)
+[Libera.Chat](https://libera.chat/): [irc.libera.chat/pypy](irc://irc.libera.chat/pypy)
 
 The core devs will no longer be present on the Freenode channel, so we recommend to
 join the new channel as soon as possible.
