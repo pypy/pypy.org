@@ -6,48 +6,17 @@
 .. link: 
 .. description: 
 
-PyPy implements the Python language version 2.7.18. It supports all of the core
-language, passing Python test suite (with minor modifications that were
-already accepted in the main python in newer versions). It supports most
-of the commonly used Python `standard library modules`_; details below.
+Pure python code works, but there are a few differences with object lifetime
+management. Modules that use the `CPython C API`_ will probably work, but will
+not achieve a speedup via the JIT. We encourage library authors to use `CFFI`_
+instead.
 
-PyPy3 implements the Python language version 3.7.9.  It has been released,
-but Python is a large language and it is quite possible that a few things are missing.
+If you are looking for how to use PyPy with the scientific python ecosystem,
+we encourage you to use `conda`_, since they repackage common libraries like
+scikit-learn and SciPy for PyPy.
 
-PyPy has support for the `CPython C API`_, however there are constructs
-that are `not compatible`.  We strongly advise use of `CFFI`_
-instead. CFFI come builtin with PyPy. Many libraries will require
-a bit of effort to work, but there are known success stories. Check out
-PyPy blog for updates
-
-C extensions need to be recompiled for PyPy in order to work. Depending on
-your build system, it might work out of the box or will be slightly harder.
-
-Standard library modules supported by PyPy. Note that large parts of python
-library are implemented in pure python, so they don't have to be listed
-there. Please just check if it imports. If it imports, it should work:
-
-    ``__builtin__``, ``__pypy__``, ``_ast``, ``_cffi_backend``, ``_codecs``,
-    ``_collections``, ``_continuation``, ``_csv``, ``_file``, ``_hashlib``,
-    ``_io``, ``_locale``, ``_lsprof``, ``_md5``, ``_minimal_curses``,
-    ``_multibytecodec``, ``_multiprocessing``, ``_numpypy``, ``_pickle_support``,
-    ``_pypyjson``, ``_random``, ``_rawffi``, ``_sha``, ``_socket``, ``_sre``,
-    ``_ssl``, ``_struct``, ``_testing``, ``_warnings``, ``_weakref``, ``array``,
-    ``binascii``, ``bz2``, ``cStringIO``, ``cmath``, ``cppyy``, ``cpyext``,
-    ``crypt``, ``errno``, ``exceptions``, ``fcntl``, ``gc``, ``imp``,
-    ``itertools``, ``marshal``, ``math``, ``mmap``, ``operator``, ``parser``,
-    ``posix``, ``pwd``, ``pyexpat``, ``pypyjit``, ``select``, ``signal``,
-    ``symbol``, ``sys``, ``termios``, ``thread``, ``time``, ``token``,
-    ``unicodedata``, ``zipimport``, ``zlib``
-
-Supported, and written in pure Python:
-
-    ``cPickle``, ``ctypes``, ``datetime``, ``dbm``, ``_functools``, ``grp``,
-    ``readline``, ``resource``, ``sqlite3``, ``syslog``
-
-All modules that are pure python in CPython of course work.
-
-The main difference that is not going to be fixed is that PyPy does
+The main difference in pure-python code that is not going to be fixed is that
+PyPy does
 not support refcounting semantics. The following code won't fill the
 file immediately, but only after a certain period of time, when the GC
 does a collection and flushes the output:
@@ -116,8 +85,6 @@ A more complete list of known differences is available at `our dev site`_.
 
 .. _`CPython C API`: http://docs.python.org/c-api/
 .. _`CFFI`: http://cffi.readthedocs.org/
-.. _`not compatible`: http://doc.pypy.org/en/latest/cpython_differences.html#c-api-differences
-.. _`standard library modules`: http://docs.python.org/library/
+.. _`conda`: https://conda-forge.org/blog/posts/2020-03-10-pypy/
 .. _`our dev site`: http://pypy.readthedocs.org/en/latest/cpython_differences.html
 .. _`more details here`: http://pypy.readthedocs.org/en/latest/cpython_differences.html#differences-related-to-garbage-collection-strategies
-.. _`List of installable top 1000 PyPI packages`: http://packages.pypy.org
