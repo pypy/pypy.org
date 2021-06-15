@@ -6,6 +6,12 @@
 .. link: 
 .. description: 
 
+The goal of this page is to point out some of the differences between running
+python with PyPy and with CPython
+
+TL;DR
+-----
+
 Pure python code works, but there are a few differences with object lifetime
 management. Modules that use the `CPython C API`_ will probably work, but will
 not achieve a speedup via the JIT. We encourage library authors to use `CFFI`_
@@ -15,11 +21,16 @@ If you are looking for how to use PyPy with the scientific python ecosystem,
 we encourage you to use `conda`_, since they repackage common libraries like
 scikit-learn and SciPy for PyPy.
 
+Refcounting, ``__del__``, and resource use
+------------------------------------------
+
 The main difference in pure-python code that is not going to be fixed is that
 PyPy does
-not support refcounting semantics. The following code won't fill the
+not support refcounting semantics for "automatically" releasing state when
+an object's ``__del__`` is called. The following code won't fill the
 file immediately, but only after a certain period of time, when the GC
-does a collection and flushes the output:
+does a collection and flushes the output, since the file is only closed when
+the ``__del__`` method is called:
 
 .. code-block:: python
 
@@ -71,8 +82,11 @@ as on CPython: they run "some time later" in PyPy (or not at all if
 the program finishes running in the meantime).  See `more details
 here`_.
 
-Note that PyPy returns unused memory to the operating system if there
-is a madvise() system call (at least Linux, OS X, BSD) or on Windows.  It is
+Why is memory usage so high?
+----------------------------
+
+Note that PyPy returns unused memory to the operating system only after
+a madvise() system call (at least Linux, OS X, BSD) or on Windows.  It is
 important to realize that you may not see this in ``top``.  The unused
 pages are marked with ``MADV_FREE``, which tells the system "if you
 need more memory at some point, grab this page".  As long as memory is
@@ -80,6 +94,9 @@ plentiful, the ``RES`` column in ``top`` might remains high.  (Exceptions to
 this rule are systems with no ``MADV_FREE``, where we use
 ``MADV_DONTNEED``, which forcefully lowers the ``RES``.  This includes
 Linux <= 4.4.)
+
+More info
+---------
 
 A more complete list of known differences is available at `our dev site`_.
 
