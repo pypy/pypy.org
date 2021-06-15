@@ -1,0 +1,608 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about jit)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/jit.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2021 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Tue, 15 Jun 2021 11:21:22 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>Almost There - PyPy's ARM Backend</title><link>https://www.pypy.org/posts/2012/02/almost-there-pypys-arm-backend_01-3216759488618774525.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;div style="text-align: left;"&gt;
+In this post I want to give an update on the status of the ARM backend for PyPy's JIT and describe some of the issues and details of the backend.&lt;/div&gt;
+&lt;div class="section" id="current-status"&gt;
+&lt;br&gt;
+&lt;h2&gt;
+
+
+
+
+Current Status&lt;/h2&gt;
+It has been a more than a year that I have been working on the ARM backend. Now it is in a shape, that we can measure meaningful numbers and also ask for some feedback. Since the &lt;a class="reference external" href="https://morepypy.blogspot.com/2011/01/jit-backend-for-arm-processors.html"&gt;last post about the backend&lt;/a&gt; we have added support floating point operations as well as for PyPy's framework GC's. Another area of work was to keep up with the constant improvements done in the main development branch, such as out-of-line guards, labels, etc. It has been possible for about a year to cross-translate the PyPy Python interpreter and other interpreters such as &lt;a class="reference external" href="https://bitbucket.org/cfbolz/pyrolog/"&gt;Pyrolog&lt;/a&gt;, with a JIT, to run benchmarks on ARM. Up until now there remained some hard to track bugs that would cause the interpreter to crash with a segmentation fault in certain cases when running with the JIT on ARM. Lately it was possible to run all benchmarks without problems, but when running the translation toolchain itself it would crash. During the last PyPy sprint in &lt;a class="reference external" href="https://morepypy.blogspot.com/2011/12/leysin-winter-sprint.html"&gt;Leysin&lt;/a&gt; Armin and I managed to fix several of these hard to track bugs in the ARM backend with the result that, it is now possible to run the PyPy translator on ARM itself (at least unless until it runs out of memory), which is a kind of litmus test for the backend itself and used to crash before. Just to point it out, we are not able to complete a PyPy translation on ARM, because on the hardware we have currently available there is not enough memory. But up to the point we run out of memory the JIT does not hit any issues.&lt;br&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="section" id="implementation-details"&gt;
+&lt;h2&gt;
+
+
+
+
+Implementation Details&lt;/h2&gt;
+The hardware requirements to run the JIT on ARM follow those for Ubuntu on ARM which targets ARMv7 with a VFP unit running in little endian mode. The JIT can be translated without floating point support, but there might be a few places that need to be fixed to fully work in this setting. We are targeting the ARM instruction set, because at least at the time we decided to use it seemed to be the best choice in terms of speed while having some size overhead compared to the Thumb2 instruction set. It appears that the Thumb2 instruction set should give comparable speed with better code density but has a few restriction on the number of registers available and the use of conditional execution. Also the implementation is a bit easier using a fixed width instruction set and we can use the full set of registers in the generated code when using the ARM instruction set.&lt;br&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="section" id="the-calling-convention-on-arm"&gt;
+&lt;h2&gt;
+
+
+
+
+The calling convention on ARM&lt;/h2&gt;
+The calling convention on ARM uses 4 of the general purpose registers to pass arguments to functions, further arguments are passed on the stack. The presence of a floating point unit is not required for ARM cores, for this reason there are different ways of handling floats with relation to the calling convention. There is a so called soft-float calling convention that is independent of the presence of a floating point unit. For this calling convention floating point arguments to functions are stored in the general purpose registers and on the stack. Passing floats around this way works with software and hardware floating point implementations. But in presence of a floating point unit it produces some overhead, because floating point numbers need to be moved from the floating point unit to the core registers to do a call and moved back to the floating point registers by the callee. The alternative calling convention is the so-called hard-float calling convention which requires the presence of a floating point unit but has the advantage of getting rid of the overhead of moving floating point values around when performing a call. Although it would be better in the long term to support the hard-float calling convention, we need to be able to interoperate with external code compiled for the operating system we are running on. For this reason at the moment we only support the soft-float to interoperate with external code. We implemented and tested the backend on a &lt;a class="reference external" href="https://beagleboard.org/hardware-xM/"&gt;BeagleBoard-xM&lt;/a&gt; with a &lt;a class="reference external" href="https://www.arm.com/products/processors/cortex-a/cortex-a8.php"&gt;Cortex-A8&lt;/a&gt; processor running &lt;a class="reference external" href="https://wiki.ubuntu.com/ARM"&gt;Ubuntu 11.04 for ARM&lt;/a&gt;.&lt;br&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="section" id="translating-for-arm"&gt;
+&lt;h2&gt;
+
+
+
+
+Translating for ARM&lt;/h2&gt;
+The toolchain used to translate PyPy currently is based on a &lt;a class="reference external" href="https://maemo.gitorious.org/scratchbox2/pages/Home"&gt;Scratchbox2&lt;/a&gt;. Scratchbox2 is a cross-compiling environment. Development had stopped for a while, but it seems to have revived again. We run a 32-bit Python interpreter on the host system and perform all calls to the compiler using a Scratchbox2 based environment. A description on how to setup the cross translation toolchain can be found &lt;a class="reference external" href="https://bitbucket.org/pypy/pypy/src/1f07ea8076c9/pypy/doc/arm.rst"&gt;here&lt;/a&gt;.&lt;br&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="section" id="results"&gt;
+&lt;h2&gt;
+
+
+
+
+Results&lt;/h2&gt;
+The current results on ARM, as shown in the graph below, show that the JIT currently gives a speedup of about 3.5 times compared to CPython on ARM. The benchmarks were run on the before mentioned BeagleBoard-xM with a 1GHz ARM Cortex-A8 processor and 512MB of memory. The operating system on the board is Ubuntu 11.04 for ARM. We measured the PyPy interpreter with the JIT enabled and disabled comparing each to CPython Python 2.7.1+ (r271:86832) for ARM. The graph shows the speedup or slowdown of both PyPy versions for the different benchmarks from our benchmark suite normalized to the runtime of CPython. The data used for the graph can be seen below.&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://2.bp.blogspot.com/-uckc9tOWgnM/TykHMuuGT9I/AAAAAAAAAKg/J8_fC6RS-QA/s1600/graph.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="258" src="https://2.bp.blogspot.com/-uckc9tOWgnM/TykHMuuGT9I/AAAAAAAAAKg/J8_fC6RS-QA/s400/graph.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+The speedup is less than the speedup of 5.2 times we currently  get on x86 on our own benchmark suite (see &lt;a class="reference external" href="https://speed.pypy.org/"&gt;https://speed.pypy.org&lt;/a&gt; for details). There are several possible reasons for this. Comparing the results for the interpreter without the JIT on ARM and x86 suggests that the interpreter generated by PyPy, without the JIT, has a worse performance when compared to CPython that it does on x86. Also it is quite possible that the code we are generating with the JIT is not yet optimal. Also there are some architectural constraints produce some overhead. One of these differences is the handling of constants, most ARM instructions only support 8 bit (that can be shifted) immediate values, larger constants need to be loaded into a register, something that is not necessary on x86.&lt;br&gt;
+&lt;br&gt;
+&lt;table border="1" class="docutils"&gt;&lt;colgroup&gt;&lt;/colgroup&gt;&lt;colgroup&gt;&lt;col width="40%"&gt;&lt;/colgroup&gt;&lt;colgroup&gt;&lt;col width="32%"&gt;&lt;/colgroup&gt;&lt;colgroup&gt;&lt;col width="28%"&gt;&lt;/colgroup&gt;&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;Benchmark&lt;/td&gt;&lt;td&gt;PyPy JIT&lt;/td&gt;&lt;td&gt;PyPy no JIT&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;ai&lt;/td&gt;&lt;td&gt;0.484439780047&lt;/td&gt;&lt;td&gt;3.72756749625&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;chaos&lt;/td&gt;&lt;td&gt;0.0807291691934&lt;/td&gt;&lt;td&gt;2.2908692212&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;crypto_pyaes&lt;/td&gt;&lt;td&gt;0.0711114832245&lt;/td&gt;&lt;td&gt;3.30112318509&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;django&lt;/td&gt;&lt;td&gt;0.0977743245519&lt;/td&gt;&lt;td&gt;2.56779947601&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;fannkuch&lt;/td&gt;&lt;td&gt;0.210423735698&lt;/td&gt;&lt;td&gt;2.49163632938&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;float&lt;/td&gt;&lt;td&gt;0.154275334675&lt;/td&gt;&lt;td&gt;2.12053281495&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;go&lt;/td&gt;&lt;td&gt;0.330483034202&lt;/td&gt;&lt;td&gt;5.84628320479&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;html5lib&lt;/td&gt;&lt;td&gt;0.629264389862&lt;/td&gt;&lt;td&gt;3.60333138526&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;meteor-contest&lt;/td&gt;&lt;td&gt;0.984747426912&lt;/td&gt;&lt;td&gt;2.93838610037&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;nbody_modified&lt;/td&gt;&lt;td&gt;0.236969593082&lt;/td&gt;&lt;td&gt;1.40027234936&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;pyflate-fast&lt;/td&gt;&lt;td&gt;0.367447191807&lt;/td&gt;&lt;td&gt;2.72472422146&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;raytrace-simple&lt;/td&gt;&lt;td&gt;0.0290527461437&lt;/td&gt;&lt;td&gt;1.97270054339&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;richards&lt;/td&gt;&lt;td&gt;0.034575573553&lt;/td&gt;&lt;td&gt;3.29767342015&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;slowspitfire&lt;/td&gt;&lt;td&gt;0.786642551908&lt;/td&gt;&lt;td&gt;3.7397367403&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;spambayes&lt;/td&gt;&lt;td&gt;0.660324379456&lt;/td&gt;&lt;td&gt;3.29059863111&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;spectral-norm&lt;/td&gt;&lt;td&gt;0.063610783731&lt;/td&gt;&lt;td&gt;4.01788986233&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;spitfire&lt;/td&gt;&lt;td&gt;0.43617131165&lt;/td&gt;&lt;td&gt;2.72050579076&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;spitfire_cstringio&lt;/td&gt;&lt;td&gt;0.255538702134&lt;/td&gt;&lt;td&gt;1.7418593111&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;telco&lt;/td&gt;&lt;td&gt;0.102918930413&lt;/td&gt;&lt;td&gt;3.86388866047&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;twisted_iteration&lt;/td&gt;&lt;td&gt;0.122723986805&lt;/td&gt;&lt;td&gt;4.33632475491&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;twisted_names&lt;/td&gt;&lt;td&gt;2.42367797135&lt;/td&gt;&lt;td&gt;2.99878698076&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;twisted_pb&lt;/td&gt;&lt;td&gt;1.30991837431&lt;/td&gt;&lt;td&gt;4.48877805486&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;twisted_tcp&lt;/td&gt;&lt;td&gt;0.927033354055&lt;/td&gt;&lt;td&gt;2.8161624665&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;waf&lt;/td&gt;&lt;td&gt;1.02059811932&lt;/td&gt;&lt;td&gt;1.03793427321&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;br&gt;
+&lt;br&gt;
+&lt;div class="section" id="the-next-steps-and-call-for-help"&gt;
+&lt;h2&gt;
+
+
+
+
+The next steps and call for help&lt;/h2&gt;
+Although there probably still are some remaining issues which have not surfaced yet, the JIT backend for ARM is working. Before we can merge the backend into the main development line there are some things that we would like to do first, in particular it we are looking for a way to run the all PyPy tests to verify that things work on ARM before we can merge. Additionally there are some other longterm ideas. To do this we are looking for people willing to help, either by contributing to implement the open features or that can help us with hardware to test.&lt;br&gt;
+&lt;br&gt;
+The incomplete list of open topics:&lt;br&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;We are looking for a better way to translate PyPy for ARM, than the one describe above. I am not sure if there currently is hardware with enough memory to directly translate PyPy on an ARM based system, this would require between 1.5 or 2 Gig of memory. A fully &lt;a class="reference external" href="https://wiki.qemu.org/Main_Page"&gt;QEMU&lt;/a&gt; based approach could also work, instead of Scratchbox2 that uses QEMU under the hood.&lt;/li&gt;
+&lt;li&gt;Test the JIT on different hardware.&lt;/li&gt;
+&lt;li&gt;Experiment with the JIT settings to find the optimal thresholds for ARM.&lt;/li&gt;
+&lt;li&gt;Continuous integration: We are looking for a way to run the PyPy test suite to make sure everything works as expected on ARM, here QEMU also might provide an alternative.&lt;/li&gt;
+&lt;li&gt;A long term plan would be to port the backend to ARMv5 ISA and improve the support for systems without a floating point unit. This would require to implement the ISA and create different code paths and improve the instruction selection depending on the target architecture.&lt;/li&gt;
+&lt;li&gt;Review of the generated machine code the JIT generates on ARM to see if the instruction selection makes sense for ARM.&lt;/li&gt;
+&lt;li&gt;Build a version that runs on Android.&lt;/li&gt;
+&lt;li&gt;Improve the tools, i.e. integrate with &lt;a class="reference external" href="https://bitbucket.org/pypy/jitviewer"&gt;jitviewer&lt;/a&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+So if you are interested or willing to help in any way contact us.&lt;/div&gt;</description><category>arm</category><category>jit</category><category>pypy</category><guid>https://www.pypy.org/posts/2012/02/almost-there-pypys-arm-backend_01-3216759488618774525.html</guid><pubDate>Wed, 01 Feb 2012 09:43:00 GMT</pubDate></item><item><title>Benchmarking twisted</title><link>https://www.pypy.org/posts/2010/03/hello-5058108566628405592.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;Hello.&lt;/p&gt;
+&lt;p&gt;I recently did some benchmarking of &lt;a class="reference external" href="https://twistedmatrix.com"&gt;twisted&lt;/a&gt; on top of PyPy. For the very
+impatient: &lt;b&gt;PyPy is up to 285% faster than CPython&lt;/b&gt;. For more patient people,
+there is a full explanation of what I did and how I performed measurments,
+so they can judge themselves.&lt;/p&gt;
+&lt;p&gt;The benchmarks are living in &lt;a class="reference external" href="https://code.launchpad.net/~exarkun/+junk/twisted-benchmarks"&gt;twisted-benchmarks&lt;/a&gt; and were mostly written
+by &lt;a class="reference external" href="https://jcalderone.livejournal.com/"&gt;Jean Paul Calderone&lt;/a&gt;. Even though he called them "initial exploratory
+investigation into a potential direction for future development resulting
+in performance oriented metrics guiding the process of optimization and
+avoidance of complexity regressions", they're still much much better than
+average benchmarks found out there.&lt;/p&gt;
+&lt;p&gt;The methodology was to run each benchmark for
+quite some time (about 1 minute), measuring number of requests each 5s.
+Then I looked at &lt;a class="reference external" href="https://codespeak.net/svn/user/fijal/txt/twisted-data.txt"&gt;dump&lt;/a&gt; of data and substracted some time it took
+for JIT-capable interpreters to warm up (up to 15s), averaging
+everything after that. Averages of requests per second are in the table below (the higher the better):&lt;/p&gt;
+&lt;table border="1" class="docutils"&gt;
+&lt;colgroup&gt;
+&lt;col width="19%"&gt;
+&lt;col width="16%"&gt;
+&lt;col width="31%"&gt;
+&lt;col width="34%"&gt;
+&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;benchname&lt;/td&gt;
+&lt;td&gt;CPython&lt;/td&gt;
+&lt;td&gt;Unladen swallow&lt;/td&gt;
+&lt;td&gt;PyPy&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;names&lt;/td&gt;
+&lt;td style="background-color: red;"&gt;10930&lt;/td&gt;
+&lt;td&gt;11940 (9% faster)&lt;/td&gt;
+&lt;td style="background-color: #0C0;"&gt;15429 (40% faster)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;pb&lt;/td&gt;
+&lt;td style="background-color: red;"&gt;1705&lt;/td&gt;
+&lt;td&gt;2280 (34% faster)&lt;/td&gt;
+&lt;td style="background-color: #0C0;"&gt;3029 (78% faster)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;iterations&lt;/td&gt;
+&lt;td style="background-color: red;"&gt;75569&lt;/td&gt;
+&lt;td&gt;94554 (25% faster)&lt;/td&gt;
+&lt;td style="background-color: #0C0;"&gt;291066 (285% faster)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;accept&lt;/td&gt;
+&lt;td&gt;2176&lt;/td&gt;
+&lt;td&gt;2166 (same speed)&lt;/td&gt;
+&lt;td&gt;2290 (5% faster)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;web&lt;/td&gt;
+&lt;td&gt;879&lt;/td&gt;
+&lt;td&gt;854 (3% slower)&lt;/td&gt;
+&lt;td style="background-color: #0C0;"&gt;1040 (18% faster)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;tcp&lt;/td&gt;
+&lt;td&gt;105M&lt;/td&gt;
+&lt;td style="background-color: #0C0;"&gt;119M (7% faster)&lt;/td&gt;
+&lt;td style="background-color: red;"&gt;60M (46% slower)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;To reproduce, run each benchmark with:&lt;/p&gt;
+&lt;blockquote&gt;
+benchname.py -n 12 -d 5&lt;/blockquote&gt;
+&lt;p&gt;&lt;em&gt;WARNING&lt;/em&gt;: running tcp-based benchmarks that open new connection for each
+request (web &amp;amp; accept) can exhaust number of some kernel structures,
+limit &lt;strong&gt;n&lt;/strong&gt; or wait until next run if you see drops in request per second.&lt;/p&gt;
+&lt;p&gt;The first obvious thing is that various benchmarks are more or less amenable
+to speedups by JIT compilation. Accept and tcp getting smallest speedups, if at
+all. This is understandable, since JIT is mostly about reducing interpretation
+and frame overhead, which is probably not large when it comes to accepting
+connections. However, if you actually loop around, doing something, JIT
+can give you a lot of speedup.&lt;/p&gt;
+&lt;p&gt;The other obvious thing is that &lt;b&gt;PyPy is the fastest python interpreter
+here&lt;/b&gt;, almost across-the board (Jython and IronPython won't run twisted),
+except for raw tcp throughput. However, speedups can vary and I expect
+this to improve after the release, as there are points, where PyPy can
+be improved. Regarding raw tcp throughput - this can be a problem for
+some applications and we're looking forward to improve this particular
+bit.&lt;/p&gt;
+&lt;p&gt;The main reason to use twisted for this comparison is a lot of support from
+twisted team and JP Calderone in particular, especially when it comes to
+providing benchmarks. If some open source project wants to be looked at
+by PyPy team, please &lt;b&gt;provide a reasonable set of benchmarks and infrastructure&lt;/b&gt;.&lt;/p&gt;
+&lt;p&gt;If, however, you're a closed source project fighting with performance problems
+of Python, we're providing &lt;b&gt;contracting for investigating opportunities&lt;/b&gt;, how
+PyPy and not only PyPy, can speed up your project.&lt;/p&gt;
+&lt;p&gt;Cheers,&lt;br&gt;
+fijal&lt;/p&gt;
+&lt;br&gt;
+&lt;p&gt;Benchmark descriptions:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;em&gt;names&lt;/em&gt; - simple DNS server&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;web&lt;/em&gt; - simple http hello world server&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;pb&lt;/em&gt; - perspective broker, RPC mechanism for twisted&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;iterations&lt;/em&gt; - empty twisted loop&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;accept&lt;/em&gt; - number of tcp connections accepted per second&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;tcp&lt;/em&gt; - raw socket transfer throughput&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Used interpreters:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;CPython 2.6.2 - as packaged by ubuntu&lt;/li&gt;
+&lt;li&gt;Unladen swallow svn trunk, revision 1109&lt;/li&gt;
+&lt;li&gt;PyPy svn trunk, revision 71439&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Twisted version used: svn trunk, revision 28580&lt;/p&gt;
+&lt;p&gt;Machine: unfortunately 32bit virtual-machine under qemu, running ubuntu karmic,
+on top of Quad core intel Q9550 with 6M cache. Courtesy of Michael Schneider.&lt;/p&gt;</description><category>jit</category><guid>https://www.pypy.org/posts/2010/03/hello-5058108566628405592.html</guid><pubDate>Mon, 01 Mar 2010 15:05:00 GMT</pubDate></item><item><title>Some benchmarking</title><link>https://www.pypy.org/posts/2009/11/some-benchmarking-9211261260383281459.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;Hello.
+&lt;/p&gt;&lt;p&gt;
+Recently, thanks to the surprisingly helpful Unhelpful, also known as Andrew Mahone,
+we have a decent, if slightly arbitrary, set of performances graphs.
+It contains a couple of benchmarks already
+seen on this blog as well as some taken from &lt;a href="https://shootout.alioth.debian.org/"&gt;The Great Computer
+Language Benchmarks Game&lt;/a&gt;. These benchmarks don't even try to represent "real applications"
+as they're mostly small algorithmic benchmarks. Interpreters used:
+&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+PyPy trunk, revision 69331 with --translation-backendopt-storesink, which is
+now on by default
+&lt;/li&gt;
+&lt;li&gt;
+Unladen swallow trunk, r900
+&lt;/li&gt;
+&lt;li&gt;CPython 2.6.2 release&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;
+Here are the graphs; the benchmarks and the runner script are &lt;a href="https://www.looking-glass.us/~chshrcat/python-benchmarks/"&gt;available&lt;/a&gt;
+&lt;/p&gt;
+
+&lt;a href="https://1.bp.blogspot.com/_5R1EBmwBBTs/SwRteBYi01I/AAAAAAAAAOU/BU3h_VUfmH0/s1600/result.png"&gt;&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5405565815286322002" src="https://1.bp.blogspot.com/_5R1EBmwBBTs/SwRteBYi01I/AAAAAAAAAOU/BU3h_VUfmH0/s400/result.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 300px;"&gt;&lt;/a&gt;
+
+And zoomed in for all benchmarks except binary-trees and fannkuch.
+&lt;a href="https://1.bp.blogspot.com/_5R1EBmwBBTs/SwRtnxYPJII/AAAAAAAAAOc/JAvE6pYaEjI/s1600/result2.png"&gt;&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5405565982788756610" src="https://1.bp.blogspot.com/_5R1EBmwBBTs/SwRtnxYPJII/AAAAAAAAAOc/JAvE6pYaEjI/s400/result2.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 300px;"&gt;&lt;/a&gt;
+
+&lt;p&gt;
+As we can see, PyPy is generally somewhere between the same speed
+as CPython to 50x faster (f1int). The places where we're the same
+speed as CPython are places where we know we have problems - for example generators are
+not sped up by the JIT and they require some work (although not as much by far
+as generators &amp;amp; Psyco :-). The glaring inefficiency is in the regex-dna benchmark.
+This one clearly demonstrates that our regular expression engine is really,
+really, bad and urgently requires attention.
+&lt;/p&gt;
+&lt;p&gt;
+The cool thing here is, that although these benchmarks might not represent
+typical python applications, they're not uninteresting. They show
+that algorithmic code does not need to be far slower in Python than in C,
+so using PyPy one need not worry about algorithmic code being dramatically
+slow. As many readers would agree, that kills yet another usage of C in our
+lives :-)
+&lt;/p&gt;
+Cheers,&lt;br&gt;
+fijal</description><category>jit</category><guid>https://www.pypy.org/posts/2009/11/some-benchmarking-9211261260383281459.html</guid><pubDate>Wed, 18 Nov 2009 21:53:00 GMT</pubDate></item><item><title>Logging and nice graphs</title><link>https://www.pypy.org/posts/2009/11/hi-all-this-week-i-worked-on-improving-6515977421244851229.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;Hi all,&lt;/p&gt;
+
+&lt;p&gt;This week I worked on improving the system we use for logging.  Well, it was not really a "system" but rather a pile of hacks to measure in custom ways timings and counts and display them.  So now, we have a system :-)&lt;/p&gt;
+
+&lt;p&gt;The system in question was integrated in the code for the GC and the JIT, which are two independent components as far as the source is concerned.  However, we can now display a unified view.  Here is for example pypy-c-jit running pystone for (only) 5000 iterations:&lt;/p&gt;
+
+&lt;a href="https://codespeak.net/~arigo/raw/pystone.png"&gt;&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5399212353093417154" src="https://3.bp.blogspot.com/_Sg3NUJ-JhgU/Su3bB2UIuMI/AAAAAAAAAAM/2-Vf5zry_4Q/s320/pystone.png" style="cursor: pointer; cursor: hand; width: 320px; height: 51px;"&gt;&lt;/a&gt;
+
+&lt;p&gt;The top long bar represents time.  The bottom shows two summaries of the total time taken by the various components, and also plays the role of a legend to understand the colors at the top.  Shades of red are the GC, shades of green are the JIT.&lt;/p&gt;
+
+&lt;p&gt;Here is another picture, this time on pypy-c-jit running 10 iterations of richards:&lt;/p&gt;
+
+&lt;a href="https://codespeak.net/~arigo/raw/richards.png"&gt;&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5399212511216555922" src="https://4.bp.blogspot.com/_Sg3NUJ-JhgU/Su3bLDXoV5I/AAAAAAAAAAU/VPxEP_hqrFk/s320/richards.png" style="cursor: pointer; cursor: hand; width: 320px; height: 19px;"&gt;&lt;/a&gt;
+
+&lt;p&gt;We have to look more closely at various examples, but a few things immediately show up.  One thing is that the GC is put under large pressure by the jit-tracing, jit-optimize and (to a lesser extent) the jit-backend components.  So large in fact that the GC takes at least 60-70% of the time there.  We will have to do something about it at some point.  The other thing is that on richards (and it's likely generally the case), the jit-blackhole component takes a lot of time.  "Blackholing" is the operation of recovering from a guard failure in the generated assembler, and falling back to the interpreter.  So this is also something we will need to improve.&lt;/p&gt;
+
+&lt;p&gt;That's it!  The images were generated with the following commands:&lt;/p&gt;
+
+&lt;pre&gt;PYPYLOG=/tmp/log pypy-c-jit richards.py
+python pypy/tool/logparser.py draw-time /tmp/log --mainwidth=8000 --output=filename.png&lt;/pre&gt;
+
+&lt;i&gt;&lt;b&gt;EDIT:&lt;/b&gt; nowadays the command-line has changed to:&lt;/i&gt;&lt;pre&gt;python rpython/tool/logparser.py draw-time /tmp/log --mainwidth=8000 filename.png&lt;/pre&gt;</description><category>jit</category><guid>https://www.pypy.org/posts/2009/11/hi-all-this-week-i-worked-on-improving-6515977421244851229.html</guid><pubDate>Sun, 01 Nov 2009 18:59:00 GMT</pubDate></item><item><title>First pypy-cli-jit benchmarks</title><link>https://www.pypy.org/posts/2009/10/first-pypy-cli-jit-benchmarks-6698484455072589492.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;As the readers of this blog &lt;a class="reference external" href="https://morepypy.blogspot.com/2008/11/porting-jit-to-cli-part-1.html"&gt;already know&lt;/a&gt;, I've been working on porting the
+JIT to CLI/.NET for the last months.  Now that it's finally possible to get a
+working pypy-cli-jit, it's time to do some benchmarks.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Warning:&lt;/strong&gt; as usual, all of this has to be considered to be a alpha version:
+don't be surprised if you get a crash when trying to run pypy-cli-jit.  Of
+course, things are improving very quickly so it should become more and more
+stable as days pass.&lt;/p&gt;
+&lt;p&gt;For this time, I decided to run four benchmarks. Note that for all of them we
+run the main function once in advance, to let the JIT recoginizing the hot
+loops and emitting the corresponding code.  Thus, the results reported do
+&lt;strong&gt;not&lt;/strong&gt; include the time spent by the JIT compiler itself, but give a good
+measure of how good is the code generated by the JIT.  At this point in time,
+I know that the CLI JIT backend spends way too much time compiling stuff, but
+this issue will be fixed soon.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://paste.pocoo.org/show/145050/"&gt;f1.py&lt;/a&gt;: this is the classic PyPy JIT benchmark. It is just a function
+that does some computational intensive work with integers.&lt;/li&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://paste.pocoo.org/show/143243/"&gt;floatdemo.py&lt;/a&gt;: this is the same benchmark involving floating point
+numbers that have already been described in a previous &lt;a class="reference external" href="https://morepypy.blogspot.com/2009/10/pypys-jit-now-supports-floats.html"&gt;blog post&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://paste.pocoo.org/show/145051/"&gt;oodemo.py&lt;/a&gt;: this is just a microbenchmark doing object oriented stuff
+such as method calls and attribute access.&lt;/li&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://paste.pocoo.org/show/145052/"&gt;richards2.py&lt;/a&gt;: a modified version of the classic richards.py, with a
+warmup call before starting the real benchmark.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;The benchmarks were run on a Windows machine with an Intel Pentium Dual Core
+E5200 2.5GHz and 2GB RAM, both with .NET (CLR 2.0) and Mono 2.4.2.3.&lt;/p&gt;
+&lt;p&gt;Because of a known &lt;a class="reference external" href="https://bugzilla.novell.com/show_bug.cgi?id=474718"&gt;mono bug&lt;/a&gt;, if you use a version older than 2.1 you need
+to pass the option &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;-O=-branch&lt;/span&gt;&lt;/tt&gt; to mono when running pypy-cli-jit, else it
+will just loop forever.&lt;/p&gt;
+&lt;p&gt;For comparison, we also run the same benchmarks with IronPython 2.0.1 and
+IronPython 2.6rc1.  Note that IronPython 2.6rc1 does not work with mono.&lt;/p&gt;
+&lt;p&gt;So, here are the results (expressed in seconds) with Microsoft CLR:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;table border="1" class="docutils"&gt;
+&lt;colgroup&gt;
+&lt;col width="15%"&gt;
+&lt;col width="20%"&gt;
+&lt;col width="15%"&gt;
+&lt;col width="12%"&gt;
+&lt;col width="20%"&gt;
+&lt;col width="18%"&gt;
+&lt;/colgroup&gt;
+&lt;thead valign="bottom"&gt;
+&lt;tr&gt;&lt;th class="head"&gt;Benchmark&lt;/th&gt;
+&lt;th class="head"&gt;pypy-cli-jit&lt;/th&gt;
+&lt;th class="head"&gt;ipy 2.0.1&lt;/th&gt;
+&lt;th class="head"&gt;ipy 2.6&lt;/th&gt;
+&lt;th class="head"&gt;ipy2.01/ pypy&lt;/th&gt;
+&lt;th class="head"&gt;ipy2.6/ pypy&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;f1&lt;/td&gt;
+&lt;td&gt;0.028&lt;/td&gt;
+&lt;td&gt;0.145&lt;/td&gt;
+&lt;td&gt;0.136&lt;/td&gt;
+&lt;td&gt;5.18x&lt;/td&gt;
+&lt;td&gt;4.85x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;floatdemo&lt;/td&gt;
+&lt;td&gt;0.671&lt;/td&gt;
+&lt;td&gt;0.765&lt;/td&gt;
+&lt;td&gt;0.812&lt;/td&gt;
+&lt;td&gt;1.14x&lt;/td&gt;
+&lt;td&gt;1.21x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;oodemo&lt;/td&gt;
+&lt;td&gt;1.25&lt;/td&gt;
+&lt;td&gt;4.278&lt;/td&gt;
+&lt;td&gt;3.816&lt;/td&gt;
+&lt;td&gt;3.42x&lt;/td&gt;
+&lt;td&gt;3.05x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;richards2&lt;/td&gt;
+&lt;td&gt;1228&lt;/td&gt;
+&lt;td&gt;442&lt;/td&gt;
+&lt;td&gt;670&lt;/td&gt;
+&lt;td&gt;0.36x&lt;/td&gt;
+&lt;td&gt;0.54x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;And with Mono:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;table border="1" class="docutils"&gt;
+&lt;colgroup&gt;
+&lt;col width="21%"&gt;
+&lt;col width="29%"&gt;
+&lt;col width="21%"&gt;
+&lt;col width="29%"&gt;
+&lt;/colgroup&gt;
+&lt;thead valign="bottom"&gt;
+&lt;tr&gt;&lt;th class="head"&gt;Benchmark&lt;/th&gt;
+&lt;th class="head"&gt;pypy-cli-jit&lt;/th&gt;
+&lt;th class="head"&gt;ipy 2.0.1&lt;/th&gt;
+&lt;th class="head"&gt;ipy2.01/ pypy&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;f1&lt;/td&gt;
+&lt;td&gt;0.042&lt;/td&gt;
+&lt;td&gt;0.695&lt;/td&gt;
+&lt;td&gt;16.54x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;floatdemo&lt;/td&gt;
+&lt;td&gt;0.781&lt;/td&gt;
+&lt;td&gt;1.218&lt;/td&gt;
+&lt;td&gt;1.55x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;oodemo&lt;/td&gt;
+&lt;td&gt;1.703&lt;/td&gt;
+&lt;td&gt;9.501&lt;/td&gt;
+&lt;td&gt;5.31x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;richards2&lt;/td&gt;
+&lt;td&gt;720&lt;/td&gt;
+&lt;td&gt;862&lt;/td&gt;
+&lt;td&gt;1.20x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;These results are very interesting: under the CLR, we are between 5x faster
+and 3x slower than IronPython 2.0.1, and between 4.8x faster and 1.8x slower
+than IronPython 2.6.  On the other hand, on mono we are consistently faster
+than IronPython, up to 16x.  Also, it is also interesting to note that
+pypy-cli runs faster on CLR than mono for all benchmarks except richards2.&lt;/p&gt;
+&lt;p&gt;I've not investigated yet, but I think that the culprit is the terrible
+behaviour of tail calls on CLR: as I already wrote in &lt;a class="reference external" href="https://morepypy.blogspot.com/2008/12/porting-jit-to-cli-part-3.html"&gt;another blog post&lt;/a&gt;,
+tail calls are ~10x slower than normal calls on CLR, while being only ~2x
+slower than normal calls on mono.  richads2 is probably the benchmark that
+makes most use of tail calls, thus explaining why we have a much better result
+on mono than CLR.&lt;/p&gt;
+&lt;p&gt;The next step is probably to find an alternative implementation that does not
+use tail calls: this probably will also improve the time spent by the JIT
+compiler itself, which is not reported in the numbers above but that so far it
+is surely too high to be acceptable. Stay tuned.&lt;/p&gt;</description><category>cli</category><category>jit</category><category>pypy</category><guid>https://www.pypy.org/posts/2009/10/first-pypy-cli-jit-benchmarks-6698484455072589492.html</guid><pubDate>Thu, 15 Oct 2009 13:36:00 GMT</pubDate></item><item><title>PyPy's JIT now supports floats</title><link>https://www.pypy.org/posts/2009/10/pypys-jit-now-supports-floats-7003493323596806737.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;
+Hello.
+&lt;/p&gt;
+
+&lt;p&gt;
+We've just merged branch which adds float support to x86 backend.
+This means that floating point operations are now super fast
+in PyPy's JIT. Let's have a look at example, provided by 
+&lt;a href="https://lazypython.blogspot.com/"&gt;Alex Gaynor&lt;/a&gt;
+and stolen from &lt;a href="https://factor-language.blogspot.com/2009/08/performance-comparison-between-factor.html"&gt;Factor blog&lt;/a&gt;.
+&lt;/p&gt;
+
+&lt;p&gt;
+The original version of the &lt;a href="https://paste.pocoo.org/raw/142952/"&gt;benchmark&lt;/a&gt;, was definitely tuned for the performance needs of CPython.
+&lt;/p&gt;&lt;p&gt;
+For running this on PyPy, I changed to a bit &lt;a href="https://paste.pocoo.org/show/143243/"&gt;simpler version of the program&lt;/a&gt;,
+and I'll explain a few changes that I did, which the reflect current
+limitations of PyPy's JIT. They're not very deep and they might be
+already gone while you're reading it:
+&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Usage of &lt;tt&gt;__slots__&lt;/tt&gt;. This is a bit ridiculous, but we spend quite a bit
+  of time to speed up normal instances of new-style classes which are
+  very fast, yet ones with &lt;tt&gt;__slots__&lt;/tt&gt; are slower. To be fixed soon.&lt;/li&gt;
+
+&lt;li&gt;Usage of reduce. This one is even more obscure, but reduce is not
+  perceived as a thing producing loops in a program. Moving to
+  a pure-Python version of reduce fixes the problem.&lt;/li&gt;
+
+&lt;li&gt;Using &lt;tt&gt;x ** 2&lt;/tt&gt; vs &lt;tt&gt;x * x&lt;/tt&gt;. In PyPy, reading a local variable is a
+  no-op when JITted (the same as reading local variable in C). However
+  multiplication is simpler operation that power operation.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;
+I also included the original &lt;a href="https://paste.factorcode.org/paste?id=838"&gt;Java benchmark&lt;/a&gt;. Please
+note that original java version is similar to my modified one
+(not the one specifically tuned for CPython)
+&lt;/p&gt;
+
+The performance figures below (for &lt;tt&gt;n = 1 000 000&lt;/tt&gt;), average of 10 runs:
+
+&lt;ul&gt;
+&lt;li&gt;CPython 2.6: &lt;b&gt;7.56s&lt;/b&gt;&lt;/li&gt;
+&lt;li&gt;CPython &amp;amp; psyco 2.6: &lt;b&gt;4.44s&lt;/b&gt;&lt;/li&gt;
+&lt;li&gt;PyPy: &lt;b&gt;1.63s&lt;/b&gt;&lt;/li&gt;
+&lt;li&gt;Java (JVM 1.6, client mode): &lt;b&gt;0.77s&lt;/b&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;
+and while JVM is much faster, it's very good that we can even compare :-)
+&lt;/p&gt;
+
+Cheers&lt;br&gt;
+fijal</description><category>jit</category><guid>https://www.pypy.org/posts/2009/10/pypys-jit-now-supports-floats-7003493323596806737.html</guid><pubDate>Tue, 06 Oct 2009 14:47:00 GMT</pubDate></item><item><title>First results of the JIT</title><link>https://www.pypy.org/posts/2009/09/first-results-of-jit-6674537807334018925.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;Hi all,&lt;/p&gt;
+
+&lt;p&gt;Just a quick note to tell you that we are progressing on the
+JIT front.  Here are the running times of the &lt;a href="https://codespeak.net/svn/pypy/trunk/pypy/translator/goal/richards.py"&gt;richards&lt;/a&gt;
+benchmark on my laptop:&lt;/p&gt;
+
+&lt;ul&gt;&lt;li&gt;8.18 seconds with CPython 2.5.2;
+
+&lt;/li&gt;&lt;li&gt;2.61 seconds with &lt;code&gt;pypy-c-jit&lt;/code&gt; (3x faster than CPython);
+
+&lt;/li&gt;&lt;li&gt;1.04 seconds if you ignore the time spent making assembler (8x faster than CPython);
+
+&lt;/li&gt;&lt;li&gt;1.59 seconds on Psyco, for reference (5x faster that CPython).&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;Yes, as this table shows, we are spending 1.57 seconds in the JIT
+support code.  That's too much -- even ridiculously so -- for anything but a
+long-running process.  We are working on that :-)&lt;/p&gt;
+
+&lt;p&gt;If you want to build your own &lt;code&gt;pypy-c-jit&lt;/code&gt; (for x86-32 only for now):&lt;/p&gt;
+
+&lt;ul&gt;&lt;li&gt;you need a Subversion checkout of &lt;a href="https://codespeak.net/svn/pypy/trunk"&gt;trunk&lt;/a&gt;;
+
+&lt;/li&gt;&lt;li&gt;run &lt;code&gt;pypy/translator/goal/translate.py&lt;/code&gt; with the &lt;code&gt;-Ojit&lt;/code&gt;
+  option;
+
+&lt;/li&gt;&lt;li&gt;as usual, wait a long time (and be sure you have more than 1GB of RAM).&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;For now &lt;code&gt;pypy-c-jit&lt;/code&gt; spews a lot of debugging output and
+there are a few &lt;a href="https://codespeak.net:8099/summary?category=lib-python"&gt;known
+examples&lt;/a&gt; where it crashes.  As we like to repeat, however, it's a complete JIT:
+apart from the crashes (the bugs are probably in the JIT support code), it supports the whole Python language from the start -- in the sense of doing correct things.  Future work include
+Python-specific improvements by e.g. tweaking the data structures used to store Python objects so that they are more JIT-friendly.&lt;/p&gt;
+
+&lt;p&gt;EDIT: Oh yes, fijal reminds me that CPython 2.6 is 30% faster than CPython 2.5 on this benchmark (which is mostly my "fault", as I extracted a small part of PyPy and submitted it as a patch to CPython that works particularly well for examples like richards).  It does not fundamentally change the fact that we are way faster though.&lt;/p&gt;</description><category>jit</category><guid>https://www.pypy.org/posts/2009/09/first-results-of-jit-6674537807334018925.html</guid><pubDate>Sun, 27 Sep 2009 15:51:00 GMT</pubDate></item><item><title>Gothenburg JIT sprint report</title><link>https://www.pypy.org/posts/2009/08/gothenburg-jit-sprint-report-3309138497953458138.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;Finally, we managed to squeeze in some time to write a report about what
+has been going on the mysterious JIT sprint in Gothenburg, Sweden.
+The main goals of the sprint were to lay down the groundwork for getting
+more JIT work going in the next months and get more of PyPy developers
+up to speed with the current state of the JIT. One of the elements was
+to get better stability of the JIT, moving it slowly from being a prototype to
+actually work nicely on larger programs.&lt;/p&gt;
+
+&lt;p&gt;The secret goal of the sprint was to seek more speed, which Anto and
+Carl Friedrich did even during the break day:&lt;/p&gt;
+
+&lt;a href="https://1.bp.blogspot.com/_5R1EBmwBBTs/SpPO4UtSbsI/AAAAAAAAAMI/kgnIUZtrLec/s1600-h/Immag005.jpg"&gt;&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5373866247409790658" src="https://1.bp.blogspot.com/_5R1EBmwBBTs/SpPO4UtSbsI/AAAAAAAAAMI/kgnIUZtrLec/s400/Immag005.jpg" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 300px;"&gt;&lt;/a&gt;
+&lt;p&gt;We spent the first two days improving test coverage of the x86 backend
+and the optimizer. Now we have 100% coverage with unittests
+(modulo figleaf bugs), which does not mean anything, but it's better
+than before.&lt;/p&gt;
+
+&lt;p&gt;Then we spent quite some time improving the optimizer passes, so
+now we generate far less code than before the sprint, because a lot of
+it is optimized away. On the interpreter side, we marked more objects
+(like code objects) as immutable, so that reading fields from them
+can be constant-folded.&lt;/p&gt;
+&lt;p&gt;Another important optimization that we did is to remove consecutive
+reading of the same fields from the same structure, if no code in between
+can change it.&lt;/p&gt;
+&lt;p&gt;Our JIT is a hybrid environment, where only hot loops of code are jitted
+and the rest stays being interpreted. We found out that the performance
+of the non-jitted part was suboptimal, because all accesses to python
+frames went through an extra layer of indirection. We removed this layer
+of indirection, in the case where the jit and the interpreter cannot
+access the same frame (which is the common case).&lt;/p&gt;
+&lt;p&gt;We also spent some time improving the performance of our x86 backend,
+by making it use more registers and by doing more advanced variable
+renaming at the end of loops. It seems that using more registerd is not as
+much of a win as we hoped, because modern day processors are much
+smarter than we thought.&lt;/p&gt;
+&lt;p&gt;The most mind bending part was finding why we loose performance by
+making the JIT see more of the interpreter. It took us two very frustrating
+days and 36 gray hairs to find out that from the JIT we call a different malloc
+function in the Boehm GC, which is by far slower than the version that
+we use from the interpreter. This meant that the more we jitted, the
+slower our code got, purely because of the mallocs.&lt;/p&gt;
+&lt;p&gt;Now that this is fixed, the world makes much more sense again.&lt;/p&gt;
+&lt;p&gt;A lot of the sprint's work is not directly measurable in the performance
+figures, but we did a lot of work that is necessary for performance to
+improve in the next weeks. After we have done a bit more work, we should
+be able to provide some performance figures for programs that are
+more realistic than just loops that count to ten millions (which are
+very fast already :).&lt;/p&gt;
+&lt;p&gt;Now we're going to enjoy a couple of days off to recover from the sprint.&lt;/p&gt;
+&lt;p&gt;Bästa hälsningar,&lt;br&gt;
+Carl Friedrich, fijal&lt;/p&gt;</description><category>jit</category><guid>https://www.pypy.org/posts/2009/08/gothenburg-jit-sprint-report-3309138497953458138.html</guid><pubDate>Tue, 25 Aug 2009 12:43:00 GMT</pubDate></item><item><title>JIT progress</title><link>https://www.pypy.org/posts/2009/06/jit-progress-7289127796450840053.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;In the last days I finally understood how to do virtualizables.  Now the frame overhead is gone. This was done with the help of discussion with Samuele, porting ideas from PyPy's first JIT attempt.
+&lt;/p&gt;
+&lt;p&gt;
+This is of course work in progress, but it works in PyPy (modulo a few XXXs, but no bugs so far).  The performance of the resulting code is quite good: even with Boehm (the GC that is easy to compile to but gives a slowish pypy-c), a long-running loop typically runs 50% faster than CPython.  That's "baseline" speed, moreover: we will get better speed-ups by applying optimizations on the generated code.  Doing so is in progress, but it suddenly became easier because that optimization phase no longer has to consider virtualizables -- they are now handled earlier.
+&lt;/p&gt;
+&lt;p&gt;&lt;b&gt;Update:&lt;/b&gt;Virtualizables is basically a way to avoid frame overhead. The frame object
+is allocated and has a pointer, but the JIT is free to unpack it's fields (for example python
+level locals) and store them somewhere else (stack or registers). Each external (out of jit) access
+to frame managed by jit, needs to go via special accessors that can ask jit where those variables
+are.&lt;/p&gt;</description><category>jit</category><guid>https://www.pypy.org/posts/2009/06/jit-progress-7289127796450840053.html</guid><pubDate>Tue, 23 Jun 2009 20:56:00 GMT</pubDate></item><item><title>News from the jit front</title><link>https://www.pypy.org/posts/2009/06/news-from-jit-front-367552118380842303.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;
+As usual, progress is going &lt;a href="https://en.wikipedia.org/wiki/Hofstadter's_law"&gt;slower then predicted&lt;/a&gt;,
+but nevertheless, we're working hard to make some progress.
+&lt;/p&gt;
+&lt;p&gt;
+We recently managed to make our nice GCs cooperate with our JIT. This is
+one point from our detailed plan. As of now, we have a JIT with GCs and
+no optimizations. It already speeds up some things, while slowing down
+others. The main reason for this is that the JIT generates assembler which is kind
+of ok, but it does not do the same level of optimizations gcc would do.
+&lt;/p&gt;
+&lt;p&gt;
+So the current status of the JIT is that it can produce assembler out
+of executed python code (or any interpreter written in RPython actually),
+but the results are not high quality enough since we're missing optimizations.
+&lt;/p&gt;
+&lt;p&gt;
+The current plan, as of now, looks as follows:
+&lt;/p&gt;&lt;ul&gt;
+&lt;li&gt;
+Improve the handling of GCs in JIT with inlining of malloc-fast
+  paths, that should speed up things by a constant, not too big factor.
+&lt;/li&gt;
+&lt;li&gt;
+Write a simplified python interpreter, which will be a base for experiments
+  and to make sure that our JIT does correct things with regard to
+  optimizations. That would work as mid-level integration test.
+&lt;/li&gt;
+&lt;li&gt;
+Think about ways to inline loop-less python functions into their parent's loop.
+&lt;/li&gt;
+&lt;li&gt;
+Get rid of frame overhead (by virtualizables)
+&lt;/li&gt;
+&lt;li&gt;
+Measure, write benchmarks, publish
+&lt;/li&gt;
+&lt;li&gt;
+Profit
+&lt;/li&gt;
+&lt;/ul&gt;
+
+Cheers,&lt;br&gt;
+fijal</description><category>jit</category><guid>https://www.pypy.org/posts/2009/06/news-from-jit-front-367552118380842303.html</guid><pubDate>Mon, 15 Jun 2009 23:59:00 GMT</pubDate></item></channel></rss>
