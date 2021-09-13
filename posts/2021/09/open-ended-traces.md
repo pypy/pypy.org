@@ -1,7 +1,7 @@
 <!--
 .. title: Better JIT Support for Auto-Generated Python Code
 .. slug: jit-auto-generated-code
-.. date:
+.. date: 2021-09-15
 .. tags: 
 .. category: 
 .. link: 
@@ -56,7 +56,7 @@ slower than not using the JIT at all!
 # Solution
 
 To get out of the endless cycle of useless retracing we first had the idea of
-simply disable all code generation for such functions, that produce too long
+simply disabling all code generation for such functions, that produce too long
 traces even if there is no inlining at all. However, that lead to disappointing
 performance, because important parts of the code were always interpreted.
 
