@@ -23,6 +23,6 @@
 * code on https://foss.heptapod.net/pypy/pypy
 
 .. __: https://mail.python.org/mailman/listinfo/pypy-dev
-.. _`issue tracker`: https://foss.heptapod.net/pypy/pypy/issues?status=new&status=open
+.. _`issue tracker`: https://foss.heptapod.net/pypy/pypy/-/issues
 .. _`dev site`: https://doc.pypy.org
 .. _`but it is no longer the case`: /posts/2021/05/pypy-irc-moves-to-libera-chat.html
