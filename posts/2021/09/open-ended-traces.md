@@ -7,7 +7,7 @@
 .. link: 
 .. description: 
 .. type: text
-.. author: cfbolz
+.. author: Carl Friedrich Bolz-Tereick
 -->
 
 # Performance Cliffs
