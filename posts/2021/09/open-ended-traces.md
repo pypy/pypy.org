@@ -20,7 +20,8 @@ programmer can be intensely frustrating and turn people off from using PyPy
 altogether. Recently we've been working on trying to remove some of PyPy's
 performance cliffs, and this post describes one such effort.
 
-The problem showed up in an issue where somebody described found the performance
+The problem showed up in an [issue](https://foss.heptapod.net/pypy/pypy/-/issues/3402)
+where somebody described found the performance
 of their website using Tornado a lot worse than what various benchmarks
 suggested. It took some careful digging down into the problem to figure out what
 caused the problem, this blog post will be about how we solved it.
@@ -38,7 +39,13 @@ will mark a called function as uninlinable and the next time we trace the outer
 function we won't inline it, leading to a shorter trace, which hopefully fits
 the trace limit.
 
-IMAGE
+![Diagram illustrating the interaction of the trace limit and inlining](/images/2021-open-ended-traces-01-inlining.png)
+
+In the diagram above we trace a function `f`, which calls a function `g`, which
+is inlined into the trace. The trace ends up being too long, so the JIT
+disables inlining of `g`. The next time we try to trace `f` the trace will
+contain a *call* to `g` instead of inlining it. The trace ends up being not too
+long, so we can turn it into machine code when tracing finishes.
 
 This is where the problem occurs: sometimes, the outermost function itself
 doesn't fit the trace limit, without any inlining going on at all. This is
@@ -49,8 +56,8 @@ Tornado templating engine produces.
 This is what used to happen in such a situation: the function is traced until
 the trace is too long. Then the trace limits stops further tracing. This happens
 again and again. The effect is that the function is even slowed down: we spend
-time tracing it, but that effort is never useful, so the resulting execution is
-slower than not using the JIT at all!
+time tracing it, but that effort is never useful, so the resulting execution
+can be slower than not using the JIT at all!
 
 
 # Solution
@@ -65,8 +72,12 @@ no inlining has happened so far, we mark that function as a source of huge
 traces. The next time we trace such a function, we do so in a special mode. In
 that mode, hitting the trace limit behaves differently: Instead of stopping the
 tracer and throwing away the trace produced so far, we will use the unfinished
-trace to produce machine code. The question is what should happen when execution
-reaches the end of the unfinished trace. We want to be able to extend the trace
+trace to produce machine code. This trace corresponds to the first part of the
+function, but stops at a basically arbitrary point in the middle of the
+function.
+
+The question is what should happen when execution
+reaches the end of this unfinished trace. We want to be able to extend the trace
 from that point and add another piece of machine code, but not do that too
 eagerly to prevent lots and lots of machine code being generated. To achieve
 this behaviour we add a guard to the end of the unfinished trace, which will
@@ -76,7 +87,21 @@ more machine code, that starts from this position. In that way, we can slowly
 explore the full gigantic function and add all those parts of the control flow
 graph that are actually commonly executed at runtime.
 
-IMAGE
+![Diagram showing what happens in the new jit when tracing a huge function](/images/2021-open-ended-traces-02-no-inlining.png)
+
+In the diagram we are trying to trace a huge function `f`, which leads to
+hitting the trace limit. However, nothing was inlined into the trace, so
+disabling inlining won't ensure a successful trace attempt the next time.
+Instead, we mark `f` as "huge". This has the effect that when we trace it again
+and are about to hit the trace limit, we end the trace at an arbitrary point by
+inserting a guard that always fails.
+
+![Diagram showing what happens in the new jit when tracing a huge function until completion](/images/2021-open-ended-traces-03-complete.png)
+
+If this guard failure is executed often enough, we might patch the guard and
+add a jump to a further part of the function `f`. This can continue potentially
+several times, until the trace really hits and end points (for example by
+closing the loop and jumping back to trace 1, or by returning from `f`).
 
 # Evaluation
 
@@ -113,7 +138,7 @@ and for how many traces we produced actual machine code:
 Here we can clearly see the problem: The old JIT would try tracing the
 auto-generated code by the template again and again, but would never produce a
 useful trace, wasting lots of time in the process. The new JIT still traces a
-few times uselessly, but then eventually converges and stops emits cmachine
+few times uselessly, but then eventually converges and stops emitting machine
 code for all the paths through the auto-generated Python code.
 
 
