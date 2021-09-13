@@ -111,7 +111,8 @@ benchmarks – there shouldn't and indeed there isn't any.
 
 Instead, we are going to look at a micro-benchmark that came out of the
 original bug report, one that simply renders a big artificial Tornado template.
-The code of the micro-benchmark can be found here: ...
+The code of the micro-benchmark can be found
+[here](https://gist.github.com/cfbolz/4a346d104fee41affc860a7b928b7291).
 
 All benchmarks were run 10 times in new processes. The means and standard
 deviations of the benchmark runs are:
