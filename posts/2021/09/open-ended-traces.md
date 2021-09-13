@@ -93,10 +93,10 @@ deviations of the benchmark runs are:
 
 | Implementation   | Time taken (lower is better) |
 |------------------|------------------------------|
-|CPython 3.9.5     | 14.191 ± 0.348s              |
-|PyPy3 without JIT | 59.479 ± 5.411s              |
-|PyPy3 JIT old     | 14.469 ± 0.352s              |
-|PyPy3 JIT new     |  4.892 ± 0.098s              |
+|CPython 3.9.5     | 14.19 ± 0.35s                |
+|PyPy3 without JIT | 59.48 ± 5.41s                |
+|PyPy3 JIT old     | 14.47 ± 0.35s                |
+|PyPy3 JIT new     |  4.89 ± 0.10s                |
 
 What we can see is that while the old JIT is very helpful for this
 micro-benchmark, it only brings the performance up to CPython levels, not
