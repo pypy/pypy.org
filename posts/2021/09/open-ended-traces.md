@@ -102,6 +102,20 @@ What we can see is that while the old JIT is very helpful for this
 micro-benchmark, it only brings the performance up to CPython levels, not
 providing any extra benefit. The new JIT gives an almost 3x speedup.
 
+Another interesting number we can look at is how often the JIT started a trace,
+and for how many traces we produced actual machine code:
+
+| Implementation   | Traces Started | Traces sent to backend | Time spent in JIT |
+|------------------|---------------:|-----------------------:|------------------:|
+| PyPy3 JIT old    | 216            | 24                     | 0.65s             |
+| PyPy3 JIT new    | 30             | 25                     | 0.06s             |
+
+Here we can clearly see the problem: The old JIT would try tracing the
+auto-generated code by the template again and again, but would never produce a
+useful trace, wasting lots of time in the process. The new JIT still traces a
+few times uselessly, but then eventually converges and stops emits cmachine
+code for all the paths through the auto-generated Python code.
+
 
 <!--
 1: /home/cfbolz/projects/small-commits-pypy/pypy/goal/pypy-c-38-jit-chunked-traces -jit off render.py
