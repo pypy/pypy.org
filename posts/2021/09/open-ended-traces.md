@@ -84,8 +84,9 @@ Since this is a performance cliff that we didn't observe in any of our own
 benchmarks ourselves, it's pointless to look at its effect on existing
 benchmarks – there shouldn't and indeed there isn't any.
 
-Instead, we are going to look at a micro-benchmark that came out of the original
-report, one that simply renders a big artificial Tornado template.
+Instead, we are going to look at a micro-benchmark that came out of the
+original bug report, one that simply renders a big artificial Tornado template.
+The code of the micro-benchmark can be found here: ...
 
 All benchmarks were run 10 times in new processes. The means and standard
 deviations of the benchmark runs are:
@@ -96,6 +97,10 @@ deviations of the benchmark runs are:
 |PyPy3 without JIT | 59.479 ± 5.411s              |
 |PyPy3 JIT old     | 14.469 ± 0.352s              |
 |PyPy3 JIT new     |  4.892 ± 0.098s              |
+
+What we can see is that while the old JIT is very helpful for this
+micro-benchmark, it only brings the performance up to CPython levels, not
+providing any extra benefit. The new JIT gives an almost 3x speedup.
 
 
 <!--
