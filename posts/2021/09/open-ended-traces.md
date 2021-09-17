@@ -221,6 +221,14 @@ Freed # of bridges:	0
 
 -->
 
+# Related Work
+
+[Tim Felgentreff](https://www.timfelgentreff.de/) pointed me to the fact that
+Truffle also has a
+[mechanism](https://www.graalvm.org/truffle/javadoc/com/oracle/truffle/api/nodes/BlockNode.html)
+to slice huge methods into smaller compilation units (and I am sure other JITs
+have such mechanisms as well).
+
 
 # Conclusion
 
