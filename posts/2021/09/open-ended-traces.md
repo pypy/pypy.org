@@ -147,7 +147,7 @@ All benchmarks were run 10 times in new processes. The means and standard
 deviations of the benchmark runs are:
 
 | Implementation   | Time taken (lower is better) |
-|------------------|------------------------------|
+|------------------|-----------------------------:|
 |CPython 3.9.5     | 14.19 ± 0.35s                |
 |PyPy3 without JIT | 59.48 ± 5.41s                |
 |PyPy3 JIT old     | 14.47 ± 0.35s                |
