@@ -1,7 +1,7 @@
 <!--
 .. title: Better JIT Support for Auto-Generated Python Code
 .. slug: jit-auto-generated-code
-.. date: 2021-09-15
+.. date: 2021-09-17
 .. tags: 
 .. category: 
 .. link: 
@@ -28,8 +28,8 @@ of their website using [Tornado](https://www.tornadoweb.org/en/stable/) a lot
 worse than what various benchmarks suggested. It took some careful digging to
 figure out what caused the problem: The slow performance was caused by the huge
 functions that the Tornado templating engine creates. These functions lead the
-JIT to behave in unproductive ways. This blog post will be about how we fixed
-this problem.
+JIT to behave in unproductive ways. In this blog post I'll describe why the
+problem occurs and how we fixed it.
 
 # Problem
 
@@ -61,7 +61,7 @@ will mark a called function as uninlinable. The next time we trace the outer
 function we won't inline it, leading to a shorter trace, which hopefully fits
 the trace limit.
 
-![Diagram illustrating the interaction of the trace limit and inlining](/images/2021-open-ended-traces-01-inlining.png)
+![Diagram illustrating the interaction of the trace limit and inlining](/images/2021-open-ended-traces-01-inlining.svg)
 
 In the diagram above we trace a function `f`, which calls a function `g`, which
 is inlined into the trace. The trace ends up being too long, so the JIT
@@ -115,7 +115,7 @@ more machine code, that starts from this position. In that way, we can slowly
 explore the full gigantic function and add all those parts of the control flow
 graph that are actually commonly executed at runtime.
 
-![Diagram showing what happens in the new jit when tracing a huge function](/images/2021-open-ended-traces-02-no-inlining.png)
+![Diagram showing what happens in the new jit when tracing a huge function](/images/2021-open-ended-traces-02-no-inlining.svg)
 
 In the diagram we are trying to trace a huge function `f`, which leads to
 hitting the trace limit. However, nothing was inlined into the trace, so
@@ -124,7 +124,7 @@ Instead, we mark `f` as "huge". This has the effect that when we trace it again
 and are about to hit the trace limit, we end the trace at an arbitrary point by
 inserting a guard that always fails.
 
-![Diagram showing what happens in the new jit when tracing a huge function until completion](/images/2021-open-ended-traces-03-complete.png)
+![Diagram showing what happens in the new jit when tracing a huge function until completion](/images/2021-open-ended-traces-03-complete.svg)
 
 If this guard failure is executed often enough, we might patch the guard and
 add a jump to a further part of the function `f`. This can continue potentially
