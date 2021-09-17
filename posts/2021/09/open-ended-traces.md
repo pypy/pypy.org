@@ -264,7 +264,11 @@ have such mechanisms as well).
 In this post we've described a performance cliff in PyPy's JIT, that of really
 big auto-generated functions which hit the trace limit without inlining, that we
 still want to generate machine code for. We achieve this by chunking up the
-trace into several smaller traces, which we compile piece by piece. The work
+trace into several smaller traces, which we compile piece by piece. This is not
+a super common thing to be happening – otherwise we would have run into and
+fixed it earlier – but it's still good to have a fix now.
+
+The work
 described in this post tiny bit experimental still, but we will release it as
 part of the upcoming 3.8 beta release, to get some more experience with it.
 Please grab a [3.8 release
