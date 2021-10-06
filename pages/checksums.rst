@@ -28,7 +28,6 @@ pypy3.8-3.5.6 sha256::
     3c9010fb3d1074c1ac350f0dbc8b215c53b2ab8ca3440d9ca4e903800e2ef1ce  pypy3.8-v7.3.6rc1-src.zip
     cef32837d4ab2cd9fbb6173472b633c6996f6a7915d89c66f87f0f0c69edcda2  pypy3.8-v7.3.6rc1-win64.zip
 
-
 pypy3.7-3.5.6 sha256::
 
     7c5877b27ece045af7603436d64c8589eadc920045341bb16c9a773b924b1dfc  pypy3.7-v7.3.6rc2-aarch64.tar.bz2
