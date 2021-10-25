@@ -30,10 +30,10 @@ Source
 * `3.8 Source (tar.bz2)`__; `3.8 Source (zip)`__. 
 * `3.7 Source (tar.bz2)`__; `3.7 Source (zip)`__. 
 
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.6-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.6-src.zip
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.6-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.6-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.7-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.7-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.7-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.7-src.zip
 
 
 More information
