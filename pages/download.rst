@@ -22,6 +22,10 @@ We provide pre-compiled binaries for many platforms and OSes.
     :start-after: table start
     :end-before: table finish
 
+.. include:: pages/download_advanced.rst
+    :start-after: notes_and_links start
+    :end-before: notes_and_links finish
+
 Source
 ------
 

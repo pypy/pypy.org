@@ -61,7 +61,8 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - High Sierra >= 10.13, not for Sierra and below
+     - High Sierra >= 10.13, not for Sierra and below. Not signed, for signed
+       packages use Homebrew_.
 
    * - **Linux ARM64**
 
@@ -193,6 +194,9 @@ are better solutions:
 
 * or translate_ your own PyPy.
 
+..
+  notes_and_links start
+
 .. note::
 
     SSL Certificates
@@ -215,6 +219,9 @@ are better solutions:
 .. _`recompile the CFFI-based`: https://doc.pypy.org/en/latest/build.html#build-cffi-import-libraries-for-the-stdlib
 .. _`certifi`: https://pypi.org/project/certifi/
 .. _conda: https://conda-forge.org/blog/posts/2020-03-10-pypy/
+
+..
+  notes_and_links finish
 
 
 Previous version can be downloaded from here__, or directly from the buildbot's
