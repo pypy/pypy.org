@@ -22,15 +22,22 @@ We provide pre-compiled binaries for many platforms and OSes.
     :start-after: table start
     :end-before: table finish
 
+.. include:: pages/download_advanced.rst
+    :start-after: notes_and_links start
+    :end-before: notes_and_links finish
+
 Source
 ------
 
 .. class:: download_menu
 
+* `3.8 Source (tar.bz2)`__; `3.8 Source (zip)`__. 
 * `3.7 Source (tar.bz2)`__; `3.7 Source (zip)`__. 
 
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.4-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.4-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.7-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.7-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.7-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.7-src.zip
 
 
 More information
@@ -42,6 +49,7 @@ running PyPy, STM, instructions on building from source and more.
 .. _`more information`: download_advanced.html
 
 
-.. include:: pages/download_advanced.rst
-    :start-after: checksum start
 
+Checksums
+---------
+Checksums for the downloads are :doc:`here <checksums>`
