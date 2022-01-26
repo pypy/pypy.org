@@ -17,7 +17,6 @@ pypy3.9-v3.7.8 sha256::
     c4db62a854c2cc994d46fac0105a8e3bd4273093b9844c1f7cb69118fae6df72  pypy3.9-v7.3.8rc1-src.zip
     ad214e4a44c893dc503e7e0b6f6bdfa7523db80b9d4890523f8ee96339d05fc9  pypy3.9-v7.3.8rc1-win64.zip
 
-
 pypy3.8-v3.7.8 sha256::
 
     56b62c57df91b4a04036535a94814da3c682ac5208d4a565f230fbc657d949e3  pypy3.8-v7.3.8rc1-linux32.tar.bz2
