@@ -46,7 +46,7 @@ language models and speech processing.
 ------------
 
 My name is Vilhjálmur Þorsteinsson, and I’m the founder and CEO of a
-`software startup <https://mideind.is/english.html>`__ in Reykjavík,
+software startup `Miðeind <https://mideind.is/english.html>`__ in Reykjavík,
 Iceland, that employs 10 software engineers and linguists and focuses on
 NLP and AI for the Icelandic language. The company participates in the
 government’s language technology program, and has contributed
