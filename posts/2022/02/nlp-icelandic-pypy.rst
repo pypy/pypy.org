@@ -131,7 +131,7 @@ about setup requirements.
 With the positive experience from the parser project, we proceeded to
 take a similar approach for two other core NLP packages: our compressed
 vocabulary package `BinPackage <https://github.com/mideind/BinPackage>`__ 
-(known on PyPI as `islenska <https://pypi.org/project/islenska/>`__ and our
+(known on PyPI as `islenska <https://pypi.org/project/islenska/>`__) and our
 trigrams database package `Icegrams <https://github.com/mideind/Icegrams>`__.
 These packages both take large text input (3.1 million word forms with
 inflection data in the vocabulary case; 100 million tokens in the
