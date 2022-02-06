@@ -85,8 +85,8 @@ balances these factors, avoids premature optimization and seeks a
 careful compromise between maximal run-time efficiency and minimal
 programming and maintenance effort.
 
-Turning to our use cases, our `Icelandic text
-tokenizer <https://github.com/mideind/Tokenizer>`__ is fairly light,
+Turning to our use cases, our Icelandic text
+tokenizer `"Tokenizer" <https://github.com/mideind/Tokenizer>`__ is fairly light,
 runs tight loops and performs a large number of small, repetitive
 operations. It runs very well on PyPy’s JIT and has not required further
 optimization.
