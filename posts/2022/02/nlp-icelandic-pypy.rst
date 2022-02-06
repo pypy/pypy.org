@@ -91,7 +91,8 @@ runs tight loops and performs a large number of small, repetitive
 operations. It runs very well on PyPy’s JIT and has not required further
 optimization.
 
-Our `Icelandic parser <https://github.com/mideind/GreynirPackage>`__ is,
+Our Icelandic parser `Greynir <https://github.com/mideind/GreynirPackage>`__
+(known on PyPI as `reynir <https://pypi.org/project/reynir/>`__) is,
 if I may say so myself, a piece of work. It `parses natural language
 text <https://aclanthology.org/R19-1160.pdf>`__ according to a
 `hand-written context-free
