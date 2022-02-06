@@ -63,8 +63,8 @@ said, there was a bit of trepidation around the well known fact that
 CPython can be slow for inner-core tasks, such as tokenization and
 parsing, that can see heavy workloads in production.
 
-I first became aware of PyPy in early 2016 when I was developing `a
-crossword game <https://github.com/mideind/Netskrafl>`__ in Python 2.7
+I first became aware of PyPy in early 2016 when I was developing a
+crossword game `Netskrafl <https://github.com/mideind/Netskrafl>`__ in Python 2.7
 for Google App Engine. I had a utility program that compressed a
 dictionary into a Directed Acyclic Word Graph and was taking 160
 seconds  to run on CPython 2.7, so I tried PyPy and to my amazement saw
