@@ -118,7 +118,7 @@ and to call it from PyPy via
 token-terminal matching functions (“business logic”) that remained on
 the Python side. This made the parser much faster (on the order of 100x
 faster than the original on CPython) and quick enough for our production
-use cases.
+use cases. Even after moving much of the heavy processing to C++ and using CFFI, PyPy still gives a significant speed boost over CPython.
 
 Connecting C++ code with PyPy proved to be quite painless using CFFI,
 although we had to figure out a few `magic incantations in our build
