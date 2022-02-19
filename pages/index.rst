@@ -94,13 +94,13 @@ On average, PyPy is **4.2 times faster** than CPython
 .. _`(What is a JIT compiler?)`: http://en.wikipedia.org/wiki/Just-in-time_compilation
 .. _`run untrusted code`: features.html#sandboxing
 .. _`compliant`: compat.html
-.. _`Python docs`: http://docs.python.org/2.7
+.. _`Python docs`: http://docs.python.org/3
 .. _`twisted`: https://twistedmatrix.com/
 .. _`django`: https://www.djangoproject.com/
 .. _`cffi`: https://cffi.readthedocs.org
 .. _`cppyy`: https://cppyy.readthedocs.org
 .. _`features`: features.html
-.. _`less space`: http://morepypy.blogspot.com/2009/10/gc-improvements.html
+.. _`less space`: /posts/2009/10/gc-improvements-6174120095428192954.html
 .. _`highly compatible`: compat.html
 .. _`speed`: http://speed.pypy.org/
 .. _`compatibility`: compat.html
