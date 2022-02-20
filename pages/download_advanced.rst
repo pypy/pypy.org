@@ -35,7 +35,7 @@ We provide pre-compiled binaries for many platforms and OSes:
   Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.7>``
 
 .. list-table:: `PyPy latest`_
-   :widths: 20 15 15 15 35
+   :widths: 20 15 15 15 15 35
    :header-rows: 1
 
    * - OS
@@ -106,7 +106,7 @@ We provide pre-compiled binaries for many platforms and OSes:
 
 
 .. list-table:: Other Platfoms
-   :widths: 20 15 15 15 35
+   :widths: 20 15 15 15 15 35
    :header-rows: 1
 
    * - OS
