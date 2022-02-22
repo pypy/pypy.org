@@ -50,7 +50,7 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - compatible with CentOS7 and later
+     - compatible with CentOS7 and later.
 
    * - **Windows 64 bit**
      - Download__
@@ -76,7 +76,8 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - compatible with CentOS7 and later
+     - compatible with CentOS7 and later. Note there are two aarch64 downloads,
+       the link points to the portable one.
 
 .. __: https://downloads.python.org/pypy/pypy3.9-v7.3.8-linux64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.8-v7.3.8-linux64.tar.bz2
@@ -93,10 +94,10 @@ We provide pre-compiled binaries for many platforms and OSes:
 .. __: https://downloads.python.org/pypy/pypy3.7-v7.3.8-osx64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.8-osx64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.8-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.8-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.8-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.8-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.8-aarch64-portable.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.8-aarch64-portable.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.8-aarch64-portable.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.8-aarch64-portable.tar.bz2
 
 .. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.8.html
 .. _`vcredist.x64.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
