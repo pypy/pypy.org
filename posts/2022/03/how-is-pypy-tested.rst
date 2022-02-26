@@ -124,17 +124,8 @@ There is also a second class of tests for the interpreter. Those are tests that
 don't run on the level of the implementation. Instead, they are executed *by*
 the PyPy Python interpreter, thus running on the level of the applications run
 by PyPy. Since the interpreter is running Python 3, the tests are also written
-in Python 3. They are stored in files with the pattern ``apptest_*.py`` _[#] and
-look like "regular" Python 3 tests.
-
-.. [#] There is also a deprecated different way to write these tests, by putting
-   them in the ``test_*.py`` files that interpreter level tests are using and
-   then having a test class with the pattern ``class AppTest*``. We haven't
-   converted all of them to the new style yet, even though the old style is
-   quite weird: since the ``test_*.py`` files are themselves parsed by
-   Python 2, the tests methods in ``AppTest*`` classes need to be written in the
-   subset of Python 3 that is also valid Python 2 syntax, leading to a lot of
-   confusion.
+in Python 3. They are stored in files with the pattern ``apptest_*.py`` and
+look like "regular" Python 3 tests. `¹`_
 
 Here's an example of how you could write a test equivalent to the one above:
 
@@ -163,13 +154,7 @@ fast, given that they run on a stack of two different interpreters.
 
 Application-level tests correspond quite closely to CPython's tests suite (which
 is using the unittest framework). Of course in CPython it is not possible to run
-the test suite without building the CPython binary using a C compiler.  _[#]
-
-.. [#] Nit-picky side-note: `C interpreters`_ `are a thing`_! But not that
-   widely used in practice, or only in very specific situations.
-
-.. _`C interpreters`: https://root.cern.ch/root/html534/guides/users-guide/CINT.html
-.. _`are a thing`: https://www.youtube.com/watch?v=yyDD_KRdQQU
+the test suite without building the CPython binary using a C compiler. `²`_
 
 So when do we write application-level tests, and when interpreter-level tests?
 Interpreter-level tests are necessary to test internal data structures that
@@ -294,3 +279,27 @@ to develop the PyPy Python interpreter.
 There is a whole other set of tests for the development of the RPython language,
 the garbage collectors it provides as well as the code that does the automatic
 JIT insertion, maybe I'll cover these in a future post.
+
+
+Footnotes
+-----------
+
+.. _`¹`:
+
+¹ There is also a deprecated different way to write these tests, by putting
+them in the ``test_*.py`` files that interpreter level tests are using and
+then having a test class with the pattern ``class AppTest*``. We haven't
+converted all of them to the new style yet, even though the old style is
+quite weird: since the ``test_*.py`` files are themselves parsed by
+Python 2, the tests methods in ``AppTest*`` classes need to be written in the
+subset of Python 3 that is also valid Python 2 syntax, leading to a lot of
+confusion.
+
+.. _`²`:
+
+² Nit-picky side-note: `C interpreters`_ `are a thing`_! But not that
+widely used in practice, or only in very specific situations.
+
+.. _`C interpreters`: https://root.cern.ch/root/html534/guides/users-guide/CINT.html
+.. _`are a thing`: https://www.youtube.com/watch?v=yyDD_KRdQQU
+
