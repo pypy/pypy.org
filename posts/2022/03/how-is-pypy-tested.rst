@@ -88,7 +88,9 @@ written in Python 2, using pytest. They tend to be more on the unit test side of
 things. They are in files with the pattern ``test_*.py``.
 
 Here is an example that tests the implementation of integers (very slightly
-simplified)::
+simplified):
+
+.. code:: python
 
     class TestW_IntObject:
         ...
@@ -134,7 +136,9 @@ look like "regular" Python 3 tests.
    subset of Python 3 that is also valid Python 2 syntax, leading to a lot of
    confusion.
 
-Here's an example of how you could write a test equivalent to the one above::
+Here's an example of how you could write a test equivalent to the one above:
+
+.. code:: python
 
     def test_hash():
         assert hash(42) == 42
@@ -228,7 +232,9 @@ representation`_ that the JIT uses to produce machine code from.
 .. _`intermediate representation`: https://www.pypy.org/posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html
 
 As an example, here is a small test that loading the attribute of a constant
-global instance can be completely constant folded away::
+global instance can be completely constant folded away
+
+.. code:: python
 
     def test_load_attr(self):
         src = '''
