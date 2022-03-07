@@ -1,6 +1,6 @@
 .. title: How is PyPy Tested?
 .. slug: how-is-pypy-tested
-.. date: 2022-03-02 12:00:00 UTC
+.. date: 2022-03-09 12:00:00 UTC
 .. tags:
 .. category: 
 .. link: 
@@ -34,7 +34,8 @@ called "CPython", because it is an interpreter implemented in C code.
 
 Now we can make the statement "PyPy is Python in Python" more precise: PyPy is
 an interpreter for Python 3.9, implemented in RPython. RPython ("Restricted
-Python") is a subset of Python 2, which is statically typed and can be compiled
+Python") is a subset of Python 2, which is statically typed (using type
+inference, not type annotations) and can be compiled
 to C code. That means we can take our Python 3.9 interpreter, and compile it
 into a C binary that can run Python 3.9 code. The final binary behaves pretty
 similarly to CPython.
@@ -109,12 +110,15 @@ the same class, also with the value 42.
 
 These tests can be run on top of any Python 2 implementation, either CPython or
 PyPy. We can then test and debug the internals of the PyPy interpreter using
-familiar tools like indeed pytest and the Python debuggers.
+familiar tools like indeed pytest and the Python debuggers. They can be run,
+because all the involved code like the tests and the class ``W_IntObject`` are
+just completely regular Python 2 classes that behave in the regular way when
+run on top of a Python interpreter.
 
 In CPython, these tests don't really have an equivalent. They would correspond
 to tests that are written in C and that can access test the logic of all the C
 functions of CPython that execute certain functionality, accessing the internals
-of C structs in the process.
+of C structs in the process. `¹`_
 
 
 Application-Level Tests
@@ -125,7 +129,7 @@ don't run on the level of the implementation. Instead, they are executed *by*
 the PyPy Python interpreter, thus running on the level of the applications run
 by PyPy. Since the interpreter is running Python 3, the tests are also written
 in Python 3. They are stored in files with the pattern ``apptest_*.py`` and
-look like "regular" Python 3 tests. `¹`_
+look like "regular" Python 3 tests. `²`_
 
 Here's an example of how you could write a test equivalent to the one above:
 
@@ -154,7 +158,7 @@ fast, given that they run on a stack of two different interpreters.
 
 Application-level tests correspond quite closely to CPython's tests suite (which
 is using the unittest framework). Of course in CPython it is not possible to run
-the test suite without building the CPython binary using a C compiler. `²`_
+the test suite without building the CPython binary using a C compiler. `³`_
 
 So when do we write application-level tests, and when interpreter-level tests?
 Interpreter-level tests are necessary to test internal data structures that
@@ -286,7 +290,15 @@ Footnotes
 
 .. _`¹`:
 
-¹ There is also a deprecated different way to write these tests, by putting
+CPython has the `_testcapimodule.c` and related modules, that are used to
+unit-test the C-API. However, these are still driven from Python tests using
+the ``unittest`` framework and wouldn't run without the Python interpreter
+already working.
+
+
+.. _`²`:
+
+² There is also a deprecated different way to write these tests, by putting
 them in the ``test_*.py`` files that interpreter level tests are using and
 then having a test class with the pattern ``class AppTest*``. We haven't
 converted all of them to the new style yet, even though the old style is
@@ -295,9 +307,9 @@ Python 2, the tests methods in ``AppTest*`` classes need to be written in the
 subset of Python 3 that is also valid Python 2 syntax, leading to a lot of
 confusion.
 
-.. _`²`:
+.. _`³`:
 
-² Nit-picky side-note: `C interpreters`_ `are a thing`_! But not that
+³ Nit-picky side-note: `C interpreters`_ `are a thing`_! But not that
 widely used in practice, or only in very specific situations.
 
 .. _`C interpreters`: https://root.cern.ch/root/html534/guides/users-guide/CINT.html
