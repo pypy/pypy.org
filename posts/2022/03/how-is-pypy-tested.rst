@@ -14,7 +14,7 @@ How is PyPy Tested?
 
 In this post I want to give an overview of how the PyPy project does and thinks
 about testing. PyPy takes testing quite seriously and has done some from the
-start of the project. In the post I want to present the different styles of
+start of the project. Here I want to present the different styles of
 tests that PyPy has, when we use them and how I think about them.
 
 
@@ -116,7 +116,7 @@ just completely regular Python 2 classes that behave in the regular way when
 run on top of a Python interpreter.
 
 In CPython, these tests don't really have an equivalent. They would correspond
-to tests that are written in C and that can access test the logic of all the C
+to tests that are written in C and that can test the logic of all the C
 functions of CPython that execute certain functionality, accessing the internals
 of C structs in the process. `¹`_
 
@@ -181,17 +181,20 @@ The CPython Test Suite
 We also use the CPython Test suite as a final check to see whether our
 interpreter correctly implements all the features of the Python language. In
 that sense it acts as some kind of compliance test suite that checks whether we
-implement the language correctly. The test suite is not perfect for this
-purpose. Since it is written for CPython's purposes during its development, a
+implement the language correctly. The test suite is not perfect for this.
+Since it is written for CPython's purposes during its development, a
 lot of the tests check really specific CPython implementation details. Examples
 for these are tests that check that ``__del__`` is called immediately after
 objects go out of scope (which only happens if you use reference counting as a
-garbage collection strategy, which PyPy doesn't do). Other examples are checking
+garbage collection strategy, PyPy uses a `different approach to garbage
+collection`_). Other examples are checking
 for exception error messages very explicitly. However, the CPython test suite
 has gotten a lot better in these regards over time, by adding
 ``support.gc_collect()`` calls to fix the former problem, and by marking some
 very specific tests with the ``@impl_detail`` decorator. Thanks to all the
 CPython developers who have worked on this!
+
+.. _`different approach to garbage collection`: https://www.pypy.org/posts/2013/10/incremental-garbage-collector-in-pypy-8956893523842234676.html
 
 In the process of re-implementing CPython's functionality and running CPython's
 tests suite, PyPy can often also be a good way to find bugs in CPython. While we
@@ -200,8 +203,8 @@ situations where CPython didn't get everything completely correct either, which
 we then report back.
 
 
-Testing Performance
-=====================
+Testing for Performance Regressions
+====================================
 
 All the tests we described so far are checking *behaviour*. But one of PyPy's
 important goals is to be a *fast* implementation not "just" a correct one. Some
@@ -221,7 +224,7 @@ representation`_ that the JIT uses to produce machine code from.
 .. _`intermediate representation`: https://www.pypy.org/posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html
 
 As an example, here is a small test that loading the attribute of a constant
-global instance can be completely constant folded away
+global instance can be completely constant folded away:
 
 .. code:: python
 
@@ -290,7 +293,7 @@ Footnotes
 
 .. _`¹`:
 
-CPython has the `_testcapimodule.c` and related modules, that are used to
+¹ CPython has the `_testcapimodule.c` and related modules, that are used to
 unit-test the C-API. However, these are still driven from Python tests using
 the ``unittest`` framework and wouldn't run without the Python interpreter
 already working.
@@ -304,8 +307,8 @@ then having a test class with the pattern ``class AppTest*``. We haven't
 converted all of them to the new style yet, even though the old style is
 quite weird: since the ``test_*.py`` files are themselves parsed by
 Python 2, the tests methods in ``AppTest*`` classes need to be written in the
-subset of Python 3 that is also valid Python 2 syntax, leading to a lot of
-confusion.
+subset of Python 3 syntax that is also valid Python 2 syntax, leading to a lot
+of confusion.
 
 .. _`³`:
 
