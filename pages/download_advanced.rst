@@ -76,8 +76,7 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - compatible with CentOS7 and later. Note there are two aarch64 downloads,
-       the link points to the portable one.
+     - compatible with CentOS7 and later.
 
 .. __: https://downloads.python.org/pypy/pypy3.9-v7.3.9-linux64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.8-v7.3.9-linux64.tar.bz2
@@ -123,7 +122,7 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - compatible with CentOS6 and later
+     - compatible with CentOS7 and later
 
    * - **PowerPC PPC64**
 
