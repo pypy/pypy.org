@@ -53,7 +53,7 @@ A `fast`_, `compliant`_ alternative implementation of `Python`_
 
 .. class:: small
 
-On average, PyPy is **4.2 times faster** than CPython
+On average, PyPy is **4.5 times faster** than CPython
 
 .. figure:: images/pypy_speed_graph.png
     :alt: PyPy vs. Python speed comparison graph"
@@ -65,9 +65,14 @@ On average, PyPy is **4.2 times faster** than CPython
 
 ::
 
-    "If you want your code to run faster,
-    you should probably just use PyPy."
-    -- Guido van Rossum (creator of Python)
+    "... we are avid fans of PyPy and
+    commensurately thankful for the great work by the PyPy team over the
+    years. PyPy has enabled us to use Python for a larger part of our
+    toolset than CPython alone would have supported, and its smooth
+    integration with C/C++ through CFFI has helped us attain a better
+    tradeoff between performance and programmer productivity in our
+    projects"
+    -- Vilhjálmur Þorsteinsson, founder and CEO of Miðeind, Feb 2022
 
 **Advantages and distinct Features**
 
