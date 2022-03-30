@@ -6,7 +6,7 @@ def main(fname):
         for line in fid:
             if line.startswith('   '):
                 parts = line.strip().split(' ')
-                if len(parts[0]) != 3:
+                if len(parts[0]) != 64:
                     raise ValueError(f'bad checksum in {line}')
 
 if __name__ == "__main__":
