@@ -32,7 +32,7 @@ pypy3.8-v3.7.9 sha256::
 
 pypy3.7-v3.7.9 sha256::
 
-    fc62f2c453fb851d10a1879c6e75c31ffebbf2a44d181bb06fcac4750d023fc  pypy3.7-v7.3.9-aarch64.tar.bz2
+    dfc62f2c453fb851d10a1879c6e75c31ffebbf2a44d181bb06fcac4750d023fc  pypy3.7-v7.3.9-aarch64.tar.bz2
     3398cece0167b81baa219c9cd54a549443d8c0a6b553ec8ec13236281e0d86cd  pypy3.7-v7.3.9-linux32.tar.bz2
     c58195124d807ecc527499ee19bc511ed753f4f2e418203ca51bc7e3b124d5d1  pypy3.7-v7.3.9-linux64.tar.bz2
     12d92f578a200d50959e55074b20f29f93c538943e9a6e6522df1a1cc9cef542  pypy3.7-v7.3.9-osx64.tar.bz2
