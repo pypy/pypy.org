@@ -235,7 +235,7 @@ are better solutions:
 .. _`portable-pypy`: https://github.com/squeaky-pl/portable-pypy#portable-pypy-distribution-for-linux
 .. _`recompile the CFFI-based`: https://doc.pypy.org/en/latest/build.html#build-cffi-import-libraries-for-the-stdlib
 .. _`certifi`: https://pypi.org/project/certifi/
-.. _conda: https://conda-forge.org/blog/posts/2020-03-10-pypy/
+.. _conda: https://conda-forge.org/docs/user/tipsandtricks.html#using-pypy-as-an-interpreter
 
 ..
   notes_and_links finish
