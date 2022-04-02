@@ -1,6 +1,6 @@
 .. title: How is PyPy Tested?
 .. slug: how-is-pypy-tested
-.. date: 2022-03-09 12:00:00 UTC
+.. date: 2022-04-02 15:00:00 UTC
 .. tags:
 .. category: 
 .. link: 
