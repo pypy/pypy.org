@@ -61,7 +61,7 @@ PyPy Testing History
 
 A few historical notes on the PyPy project and its relationship to testing: The
 PyPy project `was started in 2004`_. At the time when the project was started,
-Extreme Programming and Agile Software Development where up and coming. On the
+Extreme Programming and Agile Software Development were up and coming. On the
 methodology side, PyPy was heavily influenced by these, and started using
 Test-Driven Development and pair programming right from the start.
 
