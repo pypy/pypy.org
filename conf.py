@@ -965,12 +965,12 @@ LICENSE = ""
 # (translatable)
 CONTENT_FOOTER = """
 <div class="myfooter">
-  <div>
-    <img src="/images/pypy-logo-nav-grey.png" alt="PyPy Logo" />
-  </div>
   <div class=logotext>
-    &nbsp;Contents &copy; {date} <a href="mailto:{email}">{author}</a>
-    Powered by <a href="https://getnikola.com" rel="nofollow">Nikola</a> {license}
+    &copy; {date} <a href="mailto:{email}">{author}</a>
+    &nbsp;
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+    &nbsp;
+    Last built {isotime}
   </div>
   <div style="margin-left: auto">
   <a href=/rss.xml>RSS feed</a>
@@ -997,7 +997,8 @@ CONTENT_FOOTER_FORMATS = {
             "email": BLOG_EMAIL,
             "author": BLOG_AUTHOR,
             "date": time.gmtime().tm_year,
-            "license": LICENSE
+            "license": LICENSE,
+            "isotime": time.strftime("%Y-%m-%dT%H:%M"),
         }
     )
 }
