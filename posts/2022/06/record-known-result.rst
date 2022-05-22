@@ -93,14 +93,12 @@ Limitations of ``@elidable``
 
 This is all very useful! But it's still only a limited amount of things that
 the interpreter author can express to the JIT with this one function decorator.
-Recently I merged a branch that adds two new hints at the interpreter author
+Recently I merged a branch that adds two new hints that the interpreter author
 can use to communicate possible optimizations to the meta-JIT! The work has
-been happening on and off in the last three years, the scope was a bit too big
-and some parts were not done and I didn't seem to converge either. So I
-recently decided that this was going on for too long already and to merge a
-minimal version of the branch, which contains only the support for the two new
-hints, but not really many interesting *applications* for the hints to the PyPy
-interpreter. Those can be added in a much more localized fashion over time.
+been an ongoing project since a while. So far, only the meta-JIT support has
+been merged, in future enhancements we plan to apply them to the PyPy Python
+interpreter where appropriate.
+
 
 ``record_known_result``
 =======================
@@ -112,7 +110,9 @@ see how it can be used. It was implemented by Lin Cheng from Cornell, and it is
 described (together with a possible optimization to PyPy that uses the hint) in
 another paper__.
 
-What is ``record_exact_value`` used for? One of the limitations of ``elidable``
+.. __: https://dl.acm.org/doi/10.1145/3368826.3377907
+
+What is ``record_known_result`` used for? One of the limitations of ``elidable``
 is that often there are properties that connect *several* function calls that
 are connected in some way. Sometimes there are functions that are inverses of
 each other, so that ``f(g(x)) == x``  for all ``x`` (example: negation on
