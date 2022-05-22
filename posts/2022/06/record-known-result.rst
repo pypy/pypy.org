@@ -33,8 +33,7 @@ built-in functions and data-types that are written in the implementation
 language (RPython, in our case, C in the case of CPython). We want the JIT
 optimizer to be able to reason about these functions and datatypes.
 
-One way to do this would be to extend the meta-JIT to able to do
-language-specific rewrites on these functions, effectively adding a new
+One way to do this would be to extend the meta-JIT by adding a new language-specific
 optimization pass that knows how to deal with these functions. This approach
 however goes against the idea of a meta-JIT, since we want the JIT to be
 language independent. So we developed various tools in the past that make it
