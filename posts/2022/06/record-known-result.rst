@@ -28,7 +28,7 @@ Introduction and Background
 
 RPython has a meta-JIT, that can be applied to a variety of languages, one of
 them being PyPy, a Python implementation (that's really two implementations,
-one PyPy2, one PyPy3). Most modern languages have large runtimes, meaning many
+one PyPy2, one PyPy3). Most modern languages have many
 built-in functions and data-types that are written in the implementation
 language (RPython, in our case, C in the case of CPython). We want the JIT
 optimizer to be able to reason about functions that are part of the runtime
