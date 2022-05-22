@@ -117,7 +117,7 @@ is that often there are properties that connect *several* function calls that
 are connected in some way. Sometimes there are functions that are inverses of
 each other, so that ``f(g(x)) == x``  for all ``x`` (example: negation on
 numbers is its own inverse, ``--x == x``). Sometimes functions are
-*idempotent__*, which means that if you call the function several times you can
+idempotent__, which means that if you call the function several times you can
 remove all but the first call. An example would be ``abs`` on numbers, after
 the first call to ``abs`` the result is positive, so calling the function again
 on the result has no effect, i.e. ``abs(abs(x)) == abs(x)``. These properties
@@ -455,9 +455,9 @@ assert on the result if you run the program untranslated while executing tests.
 In combination with for example property-based testing this can find a lot of
 the bugs, but is of course no guarantee.
 
-Many things aren't expressible! The new hint is much less powerful than
-some of the recent
-pattern based optimization systems that allow the non-compiler authors to
+Many things aren't expressible! The new hint is much less powerful than some of
+the recent pattern based optimization systems (e.g. `metatheory.jl`__) that
+allow library authors to
 express rewrites. Instead, we designed the hint to minimally fit into the
 existing optimizers at the cost of power and (partly) ease of use. The most
 obvious limitation compared to pattern based approaches is that the
@@ -465,6 +465,8 @@ obvious limitation compared to pattern based approaches is that the
 that are available in the program. As an example, it's not really possible to
 express that ``bigint_sub(x, x) == bigint(0)`` *for arbitrary big integers
 ``x``*.
+
+.. __: https://arxiv.org/abs/2112.14714
 
 Another limitation of the hint is that currently it is only applicable to
 pure/elidable functions. This makes it not really applicable to any kind of
@@ -479,4 +481,8 @@ user-provided information about function behaviour.
 Conclusion
 ==============
 
-A new hint! Such power, much brainbendyness!
+We added two new hints to RPython's meta-JIT that allow the interpreter author
+to express language-specific optimizations. We are still only getting used to
+these new hints and their possible applications and will need to collect more
+experience about how big the performance implications are in practice for real
+programs.
