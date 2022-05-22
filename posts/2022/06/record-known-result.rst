@@ -31,8 +31,7 @@ them being PyPy, a Python implementation (that's really two implementations,
 one PyPy2, one PyPy3). Most modern languages have many
 built-in functions and data-types that are written in the implementation
 language (RPython, in our case, C in the case of CPython). We want the JIT
-optimizer to be able to reason about functions that are part of the runtime
-support that is defined in the interpreter.
+optimizer to be able to reason about these functions and datatypes.
 
 One way to do this would be to extend the meta-JIT to able to do
 language-specific rewrites on these functions, effectively adding a new
