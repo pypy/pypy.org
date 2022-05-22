@@ -503,7 +503,7 @@ Footnotes
 
 .. _`¹`:
 
-In fact, there is not really a concept of "variable" at all, instead all
+¹ In fact, there is not really a concept of "variable" at all, instead all
 variables are identical with the operations that produce them.
 
 .. _`²`:
