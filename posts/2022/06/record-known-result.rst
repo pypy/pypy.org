@@ -1,4 +1,4 @@
-.. title: How is PyPy Tested?
+.. title: A Hint for Language-Specific Runtime Function Optimization in RPython's Meta-JIT
 .. slug: record-known-result
 .. date: 2022-06-01 15:00:00 UTC
 .. tags: jit
