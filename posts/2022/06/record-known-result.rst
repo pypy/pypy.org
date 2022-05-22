@@ -48,6 +48,13 @@ interpreter, or decorators that can be applied to the RPython functions that
 make up the interpreter. Both the special functions as well as the decorators
 are part of the `rpython.rlib.jit` library.
 
+One thing I want to stress here at the beginning is that all these hints, and
+everything I talk about in the rest of the blog post, is needed by the people
+that are working on the RPython code that makes up the PyPy Python interpreter
+(or other languages implemented in RPython). "Regular" Python code that just
+runs on PyPy does not need these hints, and in fact cannot use them.
+
+
 The ``@elidable`` Decorator
 ---------------------------
 
@@ -315,15 +322,7 @@ the meta-JIT works. In pseudocode it could look something like this:
 
 There is quite a bit of hand-waving here, particularly around how
 ``replace_result_with`` can work. But this is conceptually what the real
-optimization does (Some details on the hand-waving: replacing ops with other ops
-is implemented using a union-find__ data-structure to efficiently allow doing
-arbitrary replacements. These replacements need to influence the lookup in the
-``seen_calls`` dict, so in practice it's not even a dictionary at all. Another
-way that the pseudocode is simplified is that we don't in practice have tiny
-passes like this that go over the trace again and again. Instead, we have a
-single optimization pass that goes over the trace in forward direction once).
-
-.. __: https://en.wikipedia.org/wiki/Disjoint-set_data_structure
+optimization does. `¹`_
 
 Making use of the information provided by ``record_known_result`` is done by
 changing the CSE pass in particular. Let's say you trace something like this:
@@ -486,3 +485,20 @@ to express language-specific optimizations. We are still only getting used to
 these new hints and their possible applications and will need to collect more
 experience about how big the performance implications are in practice for real
 programs.
+
+Footnotes
+------------
+
+.. _`¹`:
+
+¹ Some details on the hand-waving: replacing ops with other ops is implemented
+using a union-find__ data-structure to efficiently allow doing arbitrary
+replacements. These replacements need to influence the lookup in the
+``seen_calls`` dict, so in practice it's not even a dictionary at all. Another
+way that the pseudocode is simplified is that we don't in practice have tiny
+passes like this that go over the trace again and again. Instead, we have a
+single optimization pass that goes over the trace in forward direction once.
+
+.. __: https://en.wikipedia.org/wiki/Disjoint-set_data_structure
+
+ 
