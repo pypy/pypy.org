@@ -163,8 +163,9 @@ significantly so):
     def rbigint_neg(self):
         return rbigint(digits=self.digits, sign=-self.sign)
 
-If we want to use the new hint to express that ``rbigint_neg(rbigint_neg(x)) ==
-x``, we need to rewrite the function somewhat, by introducing a pure helper
+If we want to use the new hint to express that
+``rbigint_neg(rbigint_neg(x)) == x``,
+we need to rewrite the function somewhat, by introducing a pure helper
 function that does the actual computation, and turning the original function
 into a wrapper that calls the helper:
 
@@ -189,7 +190,7 @@ we can replace that call directly with ``self``, which is exactly the property
 that ``_rbigint_neg_helper`` is its own inverse. As another example, let's
 express the idempotence of ``bytes.lower``. We can imagine the implementation
 looking something like this (`the "real" implementation`__ is actually quite
-different in practice, we don't want the extra copy of ``bytes.join``):
+different, we don't want the extra copy of ``bytes.join``):
 
 .. __: https://foss.heptapod.net/pypy/pypy/-/blob/ab597702f7d9a267d3ae7c3fc91a5f25cd36a12e/rpython/rtyper/lltypesystem/rstr.py#L526
 
@@ -197,7 +198,8 @@ different in practice, we don't want the extra copy of ``bytes.join``):
 
     @elidable
     def bytes_lower(b):
-        # implementation looks very different in practice, just an illustration!
+        # implementation looks very different in practice
+        # just an illustration!
         res = ['\x00'] * len(b)
         for i, c in enumerate(b):
             if 'A' <= c <= 'Z':
@@ -237,7 +239,8 @@ decorator could be implemented like this:
 .. code:: python
 
     def idempotent(func):
-        func = elidable(func) # idempotent implies elidable
+        # idempotent implies elidable
+        func = elidable(func)
         def wrapper(arg):
             res = func(arg)
             record_known_result(res, func, res)
@@ -277,9 +280,9 @@ elimination`__. Let's look at those work on ``elidable`` functions:
 
 So if there is a trace like this:
 
-.. code:: 
+.. code:: python
 
-    r1 = call_elidable((f), (1)) # constant-folded to, say, 17
+    r1 = call_elidable((f), (1)) # constant-folded to 17
     r2 = call_elidable((g), a, b)
     r3 = call_elidable((g), a, b) # replaced by r2
     r4 = call_elidable((h), c, d) # removed, result unused
@@ -287,15 +290,14 @@ So if there is a trace like this:
 
 It will be optimized to:
 
-.. code::
+.. code:: python
 
     r2 = call_elidable((g), a, b)
     print((17), r2, r2)
 
 Some general notes about these traces: They are all in `single-static-assignment
-form`__ (SSA), meaning that every variable is assigned to only once. In fact,
-there is not really a concept of "variable" at all, instead all variables are
-identical with the operations that produce them.
+form`__ (SSA), meaning that every variable is assigned to only once. `¹`_
+They are also slightly simplified compared to "real" traces.
 
 .. __: https://en.wikipedia.org/wiki/Static_single_assignment_form
 
@@ -309,7 +311,9 @@ the meta-JIT works. In pseudocode it could look something like this:
         output_trace = []
         for op in trace:
             if is_call_elidable(op):
-                key = op.args # the function, followed by the argument variables/consts
+                # op.args are the function,
+                # followed by the argument variables/constants
+                key = op.args
                 previous_op = seen_calls.get(key)
                 if previous_op is not None:
                     replace_result_with(op, previous_op)
@@ -322,7 +326,7 @@ the meta-JIT works. In pseudocode it could look something like this:
 
 There is quite a bit of hand-waving here, particularly around how
 ``replace_result_with`` can work. But this is conceptually what the real
-optimization does. `¹`_
+optimization does. `²`_
 
 Making use of the information provided by ``record_known_result`` is done by
 changing the CSE pass in particular. Let's say you trace something like this:
@@ -338,14 +342,15 @@ changing the CSE pass in particular. Let's say you trace something like this:
 This should  trigger the idempotence optimization. The resulting trace could
 look like this:
 
-.. code::
+.. code:: python
 
     # bytes_lower itself is inlined into the trace:
     r1 = call_elidable((_bytes_lower_helper), s1)
     record_known_result(r1, (_bytes_lower_helper), r1)
     ... intermediate operations ...
+
     # second call to bytes_lower inlined into the trace:
-    r2 = call_elidable((_bytes_lower_helper), r1) # replace r2 with r1
+    r2 = call_elidable((_bytes_lower_helper), r1)
     record_known_result(r2, (_bytes_lower_helper), r2)
     print(r1, r2)
 
@@ -357,11 +362,11 @@ but instead makes use of the information conveyed by the first
 a call like the second ``_bytes_lower_helper`` you can replace it with ``r1``.
 The resulting optimized trace therefore looks like this:
 
-.. code:: 
+.. code:: python
 
     r1 = call_elidable((_bytes_lower_helper), s1)
     ... intermediate optimizations, optimized ...
-    # call removed, r2 replaced with r1 in the rest of the trace
+    # call removed, r2 replaced with r1
     print(r1, r1)
 
 The ``record_known_result`` operations are also removed, because further
@@ -377,12 +382,19 @@ have to change the pseudocode above to teach the CSE pass about
         for op in trace:
             # <---- start new code
             if is_record_known_result(op):
-                key = op.args[1:] # remove the first argument, which is the result
+                # remove the first argument,
+                # which is the result
+                key = op.args[1:]
+                # the remaining key is function called,
+                # followed by arguments, like below
                 seen_calls[key] = op.args[0]
-                continue # don't emit the record_known_result op
-            # <---- end new code
+                # don't emit the record_known_result op
+                continue
+            # end new code ---->
             if is_call_elidable(op):
-                key = (op.call_target, op.args)
+                # op.args are the function,
+                # followed by the argument variables/constants
+                key = op.args
                 previous_op = seen_calls.get(key)
                 if previous_op is not None:
                     replace_result_with(op, previous_op)
@@ -397,22 +409,22 @@ That's all! So from the point of view of the implementation of CSE of elidable
 functions, the new hint is actually very natural.
 
 In the case of function inverses, dead code elimination also plays an important
-role. Let's look at the trace of a double negation, maybe like this: ``x = -y;
-...; print(-x)``:
+role. Let's look at the trace of a double negation, maybe like this:
+``x = -y; ...; print(-x)``:
 
-.. code:: 
+.. code:: python
 
     r1 = call_elidable((_rbigint_neg_helper), a1)
     record_known_result(a1, (_rbigint_neg_helper), r1)
     ... intermediate stuff
-    r2 = call_elidable((_rbigint_neg_helper), r1) # replace r2 with a1
+    r2 = call_elidable((_rbigint_neg_helper), r1)
     record_known_result(r1, (_rbigint_neg_helper), r2)
     print(r2)
 
 After CSE, the second call is removed and the trace looks like this, because
 ``r2`` was found to be the same as ``a1``:
 
-.. code:: 
+.. code:: python
 
     r1 = call_elidable((_rbigint_neg_helper), a1) # dead
     ... intermediate stuff, CSEd
@@ -458,12 +470,12 @@ Many things aren't expressible! The new hint is much less powerful than some of
 the recent pattern based optimization systems (e.g. `metatheory.jl`__) that
 allow library authors to
 express rewrites. Instead, we designed the hint to minimally fit into the
-existing optimizers at the cost of power and (partly) ease of use. The most
+existing optimizers at the cost of power and ease of use. The most
 obvious limitation compared to pattern based approaches is that the
 ``record_known_result`` hint cannot quantify over unknown values, only use once
 that are available in the program. As an example, it's not really possible to
-express that ``bigint_sub(x, x) == bigint(0)`` *for arbitrary big integers
-``x``*.
+express that ``bigint_sub(x, x) == bigint(0)`` for *arbitrary* big integers
+``x``.
 
 .. __: https://arxiv.org/abs/2112.14714
 
@@ -491,7 +503,12 @@ Footnotes
 
 .. _`¹`:
 
-¹ Some details on the hand-waving: replacing ops with other ops is implemented
+In fact, there is not really a concept of "variable" at all, instead all
+variables are identical with the operations that produce them.
+
+.. _`²`:
+
+² Some details on the hand-waving: replacing ops with other ops is implemented
 using a union-find__ data-structure to efficiently allow doing arbitrary
 replacements. These replacements need to influence the lookup in the
 ``seen_calls`` dict, so in practice it's not even a dictionary at all. Another
