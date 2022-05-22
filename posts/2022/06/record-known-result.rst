@@ -98,7 +98,7 @@ interpreter. Those can be added in a much more localized fashion over time.
 =======================
 
 So, what are the hints? One of them is called ``record_known_result``, and that
-hint is what this blog post is about. The one one of them is called
+hint is what this blog post is about. The other is called
 ``record_exact_value``, it's conceptually quite simple, but it's much harder to
 see how it can be used. It was implemented by Lin Cheng from Cornell, and it is
 described (together with a possible optimization) in another paper__ – I will
@@ -125,8 +125,8 @@ properties? At first I was experimenting with some declarative decorators
 like ``@idempotent`` and ``@is_inverse_of(func)`` but I felt like it wouldn't
 scale to add lots of these decorators and support for all of them in the
 meta-JIT. In the end I found a not fully obvious hint that is not a
-decorator, that is powerful enough to implement at least these last two and a
-whole bunch of other patterns. This hint piggy-backs on the existing CSE
+decorator, that is powerful enough to implement at least these last two and
+many similar patterns. This hint piggy-backs on the existing CSE
 implementation of pure functions in the meta-JIT.
 
 The hint works as follows: It is a new function called
@@ -167,7 +167,7 @@ into a wrapper that calls the helper:
 ``record_known_result`` is a new function in the ``rpython.rlib.jit`` library that
 has the signature ``record_known_result(result, function, *args)``. What does
 this function do? Outside of the JIT, a call to that function is simply
-ignored. But when we trace the ``rbigint_neg`` function the hint tells the JIT
+ignored. But when we trace the ``rbigint_neg`` function, the hint tells the JIT
 the following information: if at any point in the future (meaning further down the
 trace) we see another call to ``_rbigint_neg_helper`` with ``res`` as the argument,
 we can replace that call directly with ``self``, which is exactly the property
@@ -243,7 +243,7 @@ Implementing ``record_known_result``
 ========================================
 
 How is ``record_known_result`` implemented? As I wrote above, the implementation
-of that hint is piggy-backing on the existing support for ``elidable`` functions
+of that hint builds on the existing support for ``elidable`` functions
 in the optimizer of the meta-JIT. There are several optimizations that do
 something with elidable function calls: `constant folding`__, CSE__, `dead code
 elimination`__. Let's look at those work on ``elidable`` functions:
@@ -447,7 +447,8 @@ assert on the result if you run the program untranslated while executing tests.
 In combination with for example property-based testing this can find a lot of
 the bugs, but is of course no guarantee.
 
-Many things aren't expressible! A lot less powerful than some of the recent
+Many things aren't expressible! The new hint is much less powerful than
+some of the recent
 pattern based optimization systems that allow the non-compiler authors to
 express rewrites. Instead, we designed the hint to minimally fit into the
 existing optimizers at the cost of power and (partly) ease of use. The most
