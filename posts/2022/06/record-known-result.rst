@@ -36,10 +36,20 @@ optimizer to be able to reason about these functions and datatypes.
 One way to do this would be to extend the meta-JIT by adding a new language-specific
 optimization pass that knows how to deal with these functions. This approach
 however goes against the idea of a meta-JIT, since we want the JIT to be
-language independent. So we developed various tools in the past that make it
+language independent.
+
+So we developed various tools in the past that make it
 possible for the author of RPython interpreters to express various
-optimizations. One of the very important ones that has been there forever is
-the ``@elidable`` decorator, which makes it possible to mark an RPython
+optimizations. These tools take the forms of *hints*. Hints are small
+changes in the RPython source of the interpreter that communicate with the
+meta-JIT. Hints can take one of two major forms, either they are special
+functions that will be called at runtime from the RPython code of the
+interpreter, or decorators that can be applied to the RPython functions that
+make up the interpreter. Both the special functions as well as the decorators
+are part of the `rpython.rlib.jit` library.
+
+One very important decorator is called ``@elidable``, which makes it possible
+to mark an RPython
 function as pure (actually a small generalization, but for the purpose of this
 post thinking of them as pure is fine). This decorator was described `in a blog
 post in 2011`__, it was still called ``@purefunction`` then. The post later
@@ -58,7 +68,7 @@ by the previous result.
 
 There are lots of examples of ``@elidable`` functions, both in RPython in
 general and in the PyPy interpreter. In the post linked above they are used for
-optimizing object operations in a tiny interpreter.
+optimizing object operations in a tiny example interpreter.
 
 But also a lot of functionality that is more directly exposed to the Python
 programmer is elidable. Most string methods are elidable for example:
