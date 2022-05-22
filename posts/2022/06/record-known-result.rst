@@ -312,7 +312,8 @@ the meta-JIT works. In pseudocode it could look something like this:
         for op in trace:
             if is_call_elidable(op):
                 # op.args are the function,
-                # followed by the argument variables/constants
+                # followed by the arguments
+                # which are variables or constants
                 key = op.args
                 previous_op = seen_calls.get(key)
                 if previous_op is not None:
@@ -393,7 +394,8 @@ have to change the pseudocode above to teach the CSE pass about
             # end new code ---->
             if is_call_elidable(op):
                 # op.args are the function,
-                # followed by the argument variables/constants
+                # followed by the arguments
+                # which are variables or constants
                 key = op.args
                 previous_op = seen_calls.get(key)
                 if previous_op is not None:
