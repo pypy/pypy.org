@@ -48,6 +48,9 @@ interpreter, or decorators that can be applied to the RPython functions that
 make up the interpreter. Both the special functions as well as the decorators
 are part of the `rpython.rlib.jit` library.
 
+The ``@elidable`` Decorator
+---------------------------
+
 One very important decorator is called ``@elidable``, which makes it possible
 to mark an RPython
 function as pure (actually a small generalization, but for the purpose of this
@@ -74,14 +77,19 @@ But also a lot of functionality that is more directly exposed to the Python
 programmer is elidable. Most string methods are elidable for example:
 ``str.lower`` will always return the same result for some argument, and if you
 call it twice on the same string, it will also return the same result. So
-adding the ``@elidable`` decorator to the implementation of the string method
-allows the JIT to constant-fold it if it's applied to a constant string, and to
-remove a second identical call. Another big class of examples are all the
+adding the ``@elidable`` decorator to the implementation of these string methods
+allows the JIT to constant-fold them if they are applied to a constant string, and to
+remove a second identical call.
+
+Another big class of examples are all the
 implementation functions for our big integer operations, which underlie the
 Python ``int`` type once the values don't fit into a machine word anymore. On
 the implementation level we implement those in an ``rbigint`` class, and most
 methods of that are also elidable. This enables the JIT to constant-fold big
 integer addition, and do CSE on big integer arithmetic.
+
+Limitations of ``@elidable``
+-------------------------------
 
 This is all very useful! But it's still only a limited amount of things that
 the interpreter author can express to the JIT with this one function decorator.
@@ -101,8 +109,8 @@ So, what are the hints? One of them is called ``record_known_result``, and that
 hint is what this blog post is about. The other is called
 ``record_exact_value``, it's conceptually quite simple, but it's much harder to
 see how it can be used. It was implemented by Lin Cheng from Cornell, and it is
-described (together with a possible optimization) in another paper__ – I will
-talk about that one in a later post, if I get to it.
+described (together with a possible optimization to PyPy that uses the hint) in
+another paper__.
 
 What is ``record_exact_value`` used for? One of the limitations of ``elidable``
 is that often there are properties that connect *several* function calls that
