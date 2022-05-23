@@ -8,10 +8,6 @@
 .. type: rest
 .. author: Carl Friedrich Bolz-Tereick
 
-==================================================================================
-A Hint for Language-Specific Runtime Function Optimization in RPython's Meta-JIT
-==================================================================================
-
 RPython's meta-JIT cannot reason about the properties of many RPython
 implementation-level functions, because those are often specific to the
 different interpreters written in RPython. Expressing language-specific
@@ -21,6 +17,7 @@ into the runtime support code. In this blog post I will describe a new hint
 that makes it possible to express invariants about the functions of the data
 structures used in a specific language interpreter. These hints make it
 possible for the meta-JIT optimizer to do more language-specific optimizations
+across function calls
 without having to change the meta-JIT itself.
 
 Introduction and Background
@@ -110,7 +107,7 @@ interpreter where appropriate.
 ``record_known_result``
 =======================
 
-So, what are the hints? One of them is called ``record_known_result``, and that
+So, what are the new hints? One of them is called ``record_known_result``, and that
 hint is what this blog post is about. The other is called
 ``record_exact_value``, it's conceptually quite simple, but it's much harder to
 see how it can be used. It was implemented by Lin Cheng from Cornell, and it is
@@ -444,7 +441,7 @@ the new hints are basically directly usable by CSE which we already do anyway.
 Performance effects
 ====================
 
-So far, we haven't actually used this new hint in PyPy much! At this point, the
+So far, we haven't actually used this new hint in PyPy much. At this point, the
 hint is only a new tool in the interpreter author toolbox, and we still need to
 find the best places to use this tool. The only use of the hint so far is an
 annotation that tells the JIT that encoding and decoding to and from utf8 are
@@ -468,13 +465,13 @@ assert on the result if you run the program untranslated while executing tests.
 In combination with for example property-based testing this can find a lot of
 the bugs, but is of course no guarantee.
 
-Many things aren't expressible! The new hint is much less powerful than some of
+Many things aren't expressible. The new hint is much less powerful than some of
 the recent pattern based optimization systems (e.g. `metatheory.jl`__) that
 allow library authors to
 express rewrites. Instead, we designed the hint to minimally fit into the
 existing optimizers at the cost of power and ease of use. The most
 obvious limitation compared to pattern based approaches is that the
-``record_known_result`` hint cannot quantify over unknown values, only use once
+``record_known_result`` hint cannot quantify over unknown values. It can only use values
 that are available in the program. As an example, it's not really possible to
 express that ``bigint_sub(x, x) == bigint(0)`` for *arbitrary* big integers
 ``x``.
