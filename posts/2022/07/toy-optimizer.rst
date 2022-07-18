@@ -143,20 +143,12 @@ code in ``test_construct_example`` is a bit annoying.
 .. code:: python
 
     class Block(list):
-        def __getattr__(self, opname):
-            # this looks a bit complicated! You can
-            # ignore the implementation and just look
-            # at the test below to see an example of
-            # how to use it. the main idea is that we
-            # can just call any operation name on the
-            # Block as a method and pass arguments to
-            # it and it will get automatically get
-            # added to the basic block
+        def opbuilder(opname):
             def wraparg(arg):
                 if not isinstance(arg, Value):
                     arg = Constant(arg)
                 return arg
-            def make_op(*args):
+            def build(self, *args):
                 # construct an Operation, wrap the
                 # arguments in Constants if necessary
                 op = Operation(opname,
@@ -164,7 +156,14 @@ code in ``test_construct_example`` is a bit annoying.
                 # add it to self, the basic block
                 self.append(op)
                 return op
-            return make_op
+            return build
+
+        # a bunch of operations we support
+        add = opbuilder("add")
+        mul = opbuilder("mul")
+        getarg = opbuilder("getarg")
+        dummy = opbuilder("dummy")
+        lshift = opbuilder("lshift")
 
     def test_convencience_block_construction():
         bb = Block()
