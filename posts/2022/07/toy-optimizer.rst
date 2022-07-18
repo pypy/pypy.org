@@ -59,7 +59,6 @@ Let's start modelling the intermediate representation with Python classes.
 First we define a base class of all values that can be used as arguments in
 operations, and let's also add a class that represents constants:
 
-https://en.wikipedia.org/wiki/Control-flow_graph
 
 
 .. code:: python
@@ -122,12 +121,13 @@ operations above:
         # nothing to test really, it shouldn't crash
 
 
-Usually, complicated programs are represented as a control flow graph in a
+Usually, complicated programs are represented as a `control flow graph`_ in a
 compiler, which represents all the possible paths that control can take while
 executing the program. Every node in the control flow graph is a `basic
 block`_. A basic block is a linear sequence of operations with no control flow
 inside of it.
 
+.. _`control flow graph`: https://en.wikipedia.org/wiki/Control-flow_graph
 .. _`basic block`: https://en.wikipedia.org/wiki/Basic_block
 
 When optimizing a program, a compiler usually looks at the whole control flow
