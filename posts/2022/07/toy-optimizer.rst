@@ -840,8 +840,8 @@ once for all the different passes.
     optvar0 = getarg(0)
     optvar1 = lshift(optvar0, 1)"""
 
-Summary
-========
+Conclusion
+==========
 
 That's it for now. Why is this architecture cool? From a software engineering
 point of view, sticking everything into a single function like in `optimize`
