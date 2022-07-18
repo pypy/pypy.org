@@ -205,7 +205,6 @@ Version 2: Re-Materialize Allocations
 ======================================
 
 .. code:: python
-    :emphasize-lines: 14-21,36-41
 
     def test_rematerialize():
         # put allocations that escape back into the
@@ -219,6 +218,14 @@ Version 2: Re-Materialize Allocations
     optvar0 = getarg(0)
     optvar1 = alloc()
     optvar2 = store(optvar0, 0, optvar1)"""
+        # so far, fails like this:
+        # the line:
+        # info.store(field, op.arg(2))
+        # produces an AttributeError because info
+        # is None
+
+.. code:: python
+    :emphasize-lines: 1-8,23-28
 
     def materialize(opt_bb, value: Operation) -> None:
         assert not isinstance(value, Constant)
@@ -257,7 +264,6 @@ Version 3: Don't Materialize Twice
 
 
 .. code:: python
-    :emphasize-lines: 19-20,24-25
 
     def test_dont_materialize_twice():
         # don't materialize allocations twice
@@ -272,6 +278,17 @@ Version 3: Don't Materialize Twice
     optvar1 = alloc()
     optvar2 = store(optvar0, 0, optvar1)
     optvar3 = store(optvar0, 0, optvar1)"""
+        # fails so far! the operations that we get
+        # at the moment are:
+        # optvar0 = getarg(0)
+        # optvar1 = alloc()
+        # optvar2 = store(optvar0, 0, optvar1)
+        # optvar3 = alloc()
+        # optvar4 = store(optvar0, 0, optvar3)
+
+
+.. code:: python
+    :emphasize-lines: 5-6,8,10-11
 
     def materialize(opt_bb, value: Operation) -> None:
         assert not isinstance(value, Constant)
@@ -308,10 +325,15 @@ Version 4: Materialization of Constants
         bb = Block()
         var0 = bb.getarg(0)
         sto = bb.store(var0, 0, 17)
-        opt_bb = optimize(bb)
+        opt_bb = optimize_alloc_removal(bb)
+        # the previous line fails so far, triggering
+        # the assert:
+        # assert not isinstance(value, Constant)
+        # in materialize
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
     optvar1 = store(optvar0, 0, 17)"""
+
 
 .. code:: python
     :emphasize-lines: 2-3
@@ -344,13 +366,19 @@ Version 5
         contents0 = bb.store(ls, 1, 8)
         contents1 = bb.store(ls, 0, 7)
         sto = bb.store(var0, 0, ls)
-        opt_bb = optimize(bb)
+        opt_bb = optimize_alloc_removal(bb)
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
     optvar1 = alloc()
     optvar2 = store(optvar1, 0, 7)
     optvar3 = store(optvar1, 1, 8)
     optvar4 = store(optvar0, 0, optvar1)"""
+        # fails so far! the operations we get atm
+        # are:
+        # optvar0 = getarg(0)
+        # optvar1 = alloc()
+        # optvar2 = store(optvar0, 0, optvar1)
+
 
 .. code:: python
     :emphasize-lines: 11-13
@@ -387,7 +415,7 @@ Version 6 Recursive Materialization
         contents = bb.store(ls0, 1, ls1)
         const = bb.store(ls1, 2, 1337)
         sto = bb.store(var0, 0, ls0)
-        opt_bb = optimize(bb)
+        opt_bb = optimize_alloc_removal(bb)
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
     optvar1 = alloc()
@@ -395,6 +423,10 @@ Version 6 Recursive Materialization
     optvar3 = store(optvar2, 2, 1337)
     optvar4 = store(optvar1, 1, optvar2)
     optvar5 = store(optvar0, 0, optvar1)"""
+        # fails in an annoying way! the resulting
+        # basic block is not in proper SSA form
+        # so printing doesn't work
+
 
 .. code:: python
     :emphasize-lines: 13-14
@@ -430,12 +462,17 @@ Version 7 Fix Infinite Recursion
         var1 = bb.alloc()
         var2 = bb.store(var1, 0, var1)
         var3 = bb.store(var0, 1, var1)
-        opt_bb = optimize(bb)
+        opt_bb = optimize_alloc_removal(bb)
+        # the previous line fails with an
+        # InfiniteRecursionError
+        # materialize calls itself, from the line
+        # materialize(opt_bb, val), infinitely
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
     optvar1 = alloc()
     optvar2 = store(optvar1, 0, optvar1)
     optvar3 = store(optvar0, 1, optvar1)"""
+
 
 
 
@@ -472,11 +509,13 @@ Version 8, Final: Materialize on Other Operations
         var0 = bb.getarg(0)
         var1 = bb.alloc()
         var2 = bb.escape(var1)
-        opt_bb = optimize(bb)
+        opt_bb = optimize_alloc_removal(bb)
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
     optvar1 = alloc()
     optvar2 = escape(optvar1)"""
+        # again, the resulting basic block is not in
+        # valid SSA form
 
 
 .. code:: python
@@ -521,8 +560,7 @@ Version 8, Final: Materialize on Other Operations
             opt_bb.append(op)
         return opt_bb
 
-    def test_alloc_removal_final():
-        # sink allocations
+    def test_sink_allocations():
         bb = Block()
         var0 = bb.getarg(0)
         var1 = bb.alloc()
