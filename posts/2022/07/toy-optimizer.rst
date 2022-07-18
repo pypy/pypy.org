@@ -9,10 +9,6 @@
 .. author: Carl Friedrich Bolz-Tereick
 
 
-============================
-Implementing a Toy Optimizer
-============================
-
 In this blog post I want to show the complete code (in Python3) of how a very
 simple optimizer for sequences of operations can work. These algorithms could
 be part of a (really simple) compiler, or a JIT.
@@ -202,32 +198,54 @@ looks like this:
 
 .. code:: python
 
-    [Operation(name='getarg', args=[Constant(value=0)]),
-     Operation(name='getarg', args=[Constant(value=1)]),
+    [Operation(name='getarg',
+               args=[Constant(value=0)],
+               forwarded=None),
+     Operation(name='getarg',
+               args=[Constant(value=1)],
+               forwarded=None),
      Operation(name='add',
-               args=[Operation(name='getarg', args=[Constant(value=1)]),
-                     Constant(value=17)]),
+               args=[Operation(name='getarg',
+                               args=[Constant(value=1)],
+                               forwarded=None),
+                     Constant(value=17)],
+               forwarded=None),
      Operation(name='mul',
-               args=[Operation(name='getarg', args=[Constant(value=0)]),
+               args=[Operation(name='getarg',
+                               args=[Constant(value=0)],
+                               forwarded=None),
                      Operation(name='add',
                                args=[Operation(name='getarg',
-                                               args=[Constant(value=1)]),
-                                     Constant(value=17)])]),
+                                               args=[Constant(value=1)],
+                                               forwarded=None),
+                                     Constant(value=17)],
+                               forwarded=None)],
+               forwarded=None),
      Operation(name='add',
-               args=[Operation(name='getarg', args=[Constant(value=1)]),
-                     Constant(value=17)]),
+               args=[Operation(name='getarg',
+                               args=[Constant(value=1)],
+                               forwarded=None),
+                     Constant(value=17)],
+               forwarded=None),
      Operation(name='add',
                args=[Operation(name='mul',
                                args=[Operation(name='getarg',
-                                               args=[Constant(value=0)]),
+                                               args=[Constant(value=0)],
+                                               forwarded=None),
                                      Operation(name='add',
                                                args=[Operation(name='getarg',
-                                                               args=[Constant(value=1)]),
-                                                     Constant(value=17)])]),
+                                                               args=[Constant(value=1)],
+                                                               forwarded=None),
+                                                     Constant(value=17)],
+                                               forwarded=None)],
+                               forwarded=None),
                      Operation(name='add',
                                args=[Operation(name='getarg',
-                                               args=[Constant(value=1)]),
-                                     Constant(value=17)])])]
+                                               args=[Constant(value=1)],
+                                               forwarded=None),
+                                     Constant(value=17)],
+                               forwarded=None)],
+               forwarded=None)]
 
 It's impossible to see what is going on here, because the `Operations` in the
 basic block appear several times, once as elements of the list but then also as
