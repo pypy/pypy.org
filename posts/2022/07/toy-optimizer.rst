@@ -871,9 +871,9 @@ important optimization`_.
 Some Further Pointers
 ======================
 
-This is a blog post, not a paper, but I still want to give some pointers to
-literature that can be read to understand the concepts that are introduced here
-in much bigger generality.
+This post is only a short introduction and is taking some shortcuts, I wanted to
+also give some (non-exhaustive) pointers to more general literature about the
+touched topics.
 
 The approach to CSE described here is usually can be seen as `value
 numbering`_, it's normally really implemented with a hashmap though. Here's a
