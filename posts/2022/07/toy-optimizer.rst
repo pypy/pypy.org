@@ -80,7 +80,7 @@ One consequence of the fact that every variable is assigned to only once is
 that variables are in a one-to-one correspondence with the right-hand-side of
 their unique assignments. That means that we don't need a class that represents
 variables at all. Instead, it's sufficient to have a class that represents an
-operation, and that is the same as the variable that it defines:
+operation (the right-hand side), and that by definition is the same as the variable (left-hand side) that it defines:
 
 .. code:: python
 
