@@ -69,16 +69,17 @@ operations, and let's also add a class that represents constants:
 .. code:: python
 
     import pytest
-    from dataclasses import dataclass
     from typing import Optional, Any
 
     class Value:
         pass
 
-
-    @dataclass(eq=False)
     class Constant(Value):
-        value : Any
+        def __init__(self, value : Any):
+            self.value = value
+
+        def __repr__(self):
+            return f"Constant({self.value})"
 
 
 One consequence of the fact that every variable is assigned to only once is
@@ -89,12 +90,15 @@ operation (the right-hand side), and that by definition is the same as the varia
 
 .. code:: python
 
-    @dataclass(eq=False)
     class Operation(Value):
-        name : str
-        args : list
+        def __init__(self, name : str, args : list[Value]):
+            self.name = name
+            self.args = args
 
-        def arg(self, index):
+        def __repr__(self):
+            return f"Operation({self.name}, {self.args})"
+
+        def arg(self, index : int):
             return self.args[index]
 
 Now we can instantiate these two classes to represent the example sequence of
@@ -202,35 +206,35 @@ looks like this:
 
 .. code:: python
 
-    [Operation(name='getarg', args=[Constant(value=0)]),
-     Operation(name='getarg', args=[Constant(value=1)]),
-     Operation(name='add',
-               args=[Operation(name='getarg',
-                               args=[Constant(value=1)]),
-                     Constant(value=17)]),
-     Operation(name='mul',
-               args=[Operation(name='getarg',
-                               args=[Constant(value=0)]),
-                     Operation(name='add',
-                               args=[Operation(name='getarg',
-                                               args=[Constant(value=1)]),
-                                     Constant(value=17)])]),
-     Operation(name='add',
-               args=[Operation(name='getarg',
-                               args=[Constant(value=1)]),
-                     Constant(value=17)]),
-     Operation(name='add',
-               args=[Operation(name='mul',
-                               args=[Operation(name='getarg',
-                                               args=[Constant(value=0)]),
-                                     Operation(name='add',
-                                               args=[Operation(name='getarg',
-                                                               args=[Constant(value=1)]),
-                                                     Constant(value=17)])]),
-                     Operation(name='add',
-                               args=[Operation(name='getarg',
-                                               args=[Constant(value=1)]),
-                                     Constant(value=17)])])]
+    [Operation('getarg', [Constant(0)]),
+     Operation('getarg', [Constant(1)]),
+     Operation('add',
+               [Operation('getarg',
+                          [Constant(1)]),
+                     Constant(17)]),
+     Operation('mul',
+               [Operation('getarg',
+                          [Constant(0)]),
+                     Operation('add',
+                               [Operation('getarg',
+                                          [Constant(1)]),
+                                Constant(17)])]),
+     Operation('add',
+               [Operation('getarg',
+                          [Constant(1)]),
+                Constant(17)]),
+     Operation('add',
+               [Operation('mul',
+                           [Operation('getarg',
+                                      [Constant(0)]),
+                                 Operation('add',
+                                           [Operation('getarg',
+                                                      [Constant(1)]),
+                                            Constant(17)])]),
+                     Operation('add',
+                               [Operation('getarg',
+                                               [Constant(1)]),
+                                     Constant(17)])])]
 
 It's impossible to see what is going on here, because the `Operations` in the
 basic block appear several times, once as elements of the list but then also as
@@ -379,12 +383,16 @@ implementation. We will add the data structure right into our ``Value``,
             raise NotImplementedError("abstract")
 
 
-    @dataclass(eq=False)
     class Operation(Value):
-        name : str
-        args : list
+        def __init__(self, name : str,
+                     args : list[Value],
+                     forwarded : Optional[Value] = None):
+            self.name = name
+            self.args = args
+            self.forwarded = None
 
-        forwarded : Optional[Value] = None
+        def __repr__(self):
+            return f"Operation({self.name}, {self.args}, {self.forwarded})"
 
         def find(self) -> Value:
             # returns the "representative" value of
@@ -418,9 +426,12 @@ implementation. We will add the data structure right into our ``Value``,
             self.forwarded = value
 
 
-    @dataclass(eq=False)
     class Constant(Value):
-        value : object
+        def __init__(self, value : Any):
+            self.value = value
+
+        def __repr__(self):
+            return f"Constant({self.value})"
 
         def find(self):
             return self
