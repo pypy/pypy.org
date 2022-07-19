@@ -75,7 +75,7 @@ operations, and let's also add a class that represents constants:
         pass
 
     class Constant(Value):
-        def __init__(self, value : Any):
+        def __init__(self, value: Any):
             self.value = value
 
         def __repr__(self):
@@ -91,14 +91,14 @@ operation (the right-hand side), and that by definition is the same as the varia
 .. code:: python
 
     class Operation(Value):
-        def __init__(self, name : str, args : list[Value]):
+        def __init__(self, name: str, args: list[Value]):
             self.name = name
             self.args = args
 
         def __repr__(self):
             return f"Operation({self.name}, {self.args})"
 
-        def arg(self, index : int):
+        def arg(self, index: int):
             return self.args[index]
 
 Now we can instantiate these two classes to represent the example sequence of
@@ -200,7 +200,7 @@ code in ``test_construct_example`` is a bit annoying.
 
 That's a good bit of infrastructure to make the tests easy to write. One
 thing we are lacking though is a way to print the basic blocks into a nicely
-readable textual representation. Because in the current form, the `repr` of a
+readable textual representation. Because in the current form, the ``repr`` of a
 Block is very annoying, the output of pretty-printing ``bb`` in the test above
 looks like this:
 
@@ -236,7 +236,7 @@ looks like this:
                                                [Constant(1)]),
                                      Constant(17)])])]
 
-It's impossible to see what is going on here, because the `Operations` in the
+It's impossible to see what is going on here, because the ``Operations`` in the
 basic block appear several times, once as elements of the list but then also as
 arguments to operations further down in the list. So we need some code that
 turns things back into a readable textual representation, so we have a chance
@@ -244,12 +244,12 @@ to debug.
 
 .. code:: python
 
-    def bb_to_str(bb : Block, varprefix : str = "var"):
+    def bb_to_str(bb: Block, varprefix: str = "var"):
         # the implementation is not too important,
         # look at the test below to see what the
         # result looks like
 
-        def arg_to_str(arg : Value):
+        def arg_to_str(arg: Value):
             if isinstance(arg, Constant):
                 return str(arg.value)
             else:
@@ -264,7 +264,7 @@ to debug.
         for index, op in enumerate(bb):
             # give the operation a name used while
             # printing:
-            var =  f"{varprefix}{index}"
+            var = f"{varprefix}{index}"
             varnames[op] = var
             arguments = ", ".join(
                 arg_to_str(op.arg(i))
@@ -325,7 +325,7 @@ Storing Equivalences between Operations Using a Union-Find Data Structure
 When optimizing a sequence of operations, we want to make it less costly to
 execute. For that we typically want to remove operations (and sometimes
 replace operations with less expensive ones). We can remove operations if
-they do redundant computation, like case of the duplicate `add(v1, 17)` in
+they do redundant computation, like case of the duplicate ``add(v1, 17)`` in
 the example. So what we want to do is to turn the running input sequence::
 
     v0 = getarg(0)
@@ -360,10 +360,10 @@ operations that compute the same result.
 When we start out, every operation is in its own singleton set, with no other
 member. As we discover more equivalences, we will unify sets into larger sets
 of operations that all compute the same result. So one operation the data
-structure supports is `union`, to unify two sets, we'll call that
-`make_equal_to` in the code below.
+structure supports is ``union``, to unify two sets, we'll call that
+``make_equal_to`` in the code below.
 
-The other operation the data structure supports is `find`, which takes an
+The other operation the data structure supports is ``find``, which takes an
 operation and returns a "representative" of the set of all equivalent
 operations. Two operations are in the same set, if the representative that
 find returns for them is the same.
@@ -379,20 +379,21 @@ implementation. We will add the data structure right into our ``Value``,
     class Value:
         def find(self):
             raise NotImplementedError("abstract")
-        def _set_forwarded(self, value : Value):
+        def _set_forwarded(self, value: Value):
             raise NotImplementedError("abstract")
 
 
     class Operation(Value):
-        def __init__(self, name : str,
-                     args : list[Value],
-                     forwarded : Optional[Value] = None):
+        def __init__(self, name: str, args: list[Value]):
             self.name = name
             self.args = args
             self.forwarded = None
 
         def __repr__(self):
-            return f"Operation({self.name}, {self.args}, {self.forwarded})"
+            return (
+                f"Operation({self.name},"
+                f"{self.args}, {self.forwarded})"
+            )
 
         def find(self) -> Value:
             # returns the "representative" value of
@@ -412,7 +413,7 @@ implementation. We will add the data structure right into our ``Value``,
             # representative of argument 'index'
             return self.args[index].find()
 
-        def make_equal_to(self, value : Value):
+        def make_equal_to(self, value: Value):
             # this is "union" in the union-find sense,
             # but the direction is important! The
             # representative of the union of Operations
@@ -422,12 +423,12 @@ implementation. We will add the data structure right into our ``Value``,
 
             self.find()._set_forwarded(value)
 
-        def _set_forwarded(self, value : Value):
+        def _set_forwarded(self, value: Value):
             self.forwarded = value
 
 
     class Constant(Value):
-        def __init__(self, value : Any):
+        def __init__(self, value: Any):
             self.value = value
 
         def __repr__(self):
@@ -436,7 +437,7 @@ implementation. We will add the data structure right into our ``Value``,
         def find(self):
             return self
 
-        def _set_forwarded(self, value : Value):
+        def _set_forwarded(self, value: Value):
             # if we found out that an Operation is
             # equal to a constant, it's a compiler bug
             # to find out that it's equal to another
@@ -502,7 +503,7 @@ with the constant result.
 Every pass has the same structure: we go over all operations in the basic
 block in order and decide for each operation whether it can be removed. For the
 constant folding pass, we can remove all the operations with constant
-arguments (but we'll implement only the `add` case here).
+arguments (but we'll implement only the ``add`` case here).
 
 I will show a buggy version of the `constant folding`_ pass first. It has a
 problem that is related to why we need the union-find data structure. We will
@@ -644,7 +645,7 @@ introductory example code that we had above.
 
 .. code:: python
 
-    def cse(bb : Block) -> Block:
+    def cse(bb: Block) -> Block:
         # structure is the same, loop over the input,
         # add some but not all operations to the
         # output
@@ -682,8 +683,8 @@ introductory example code that we had above.
         return val0 is val1
 
 
-    def find_prev_add_op(arg0 : Value, arg1 : Value,
-            opt_bb : Block) -> Optional[Operation]:
+    def find_prev_add_op(arg0: Value, arg1: Value,
+            opt_bb: Block) -> Optional[Operation]:
         # Really naive and quadratic implementation.
         # What we do is walk over the already emitted
         # operations and see whether we emitted an add
@@ -725,9 +726,9 @@ introductory example code that we had above.
 Strength Reduction
 ===================
 
-Now we have one pass that replaces `Operations` with `Constants` and one that
-replaces `Operations` with previously existing `Operations`. Let's now do one
-final pass that replaces `Operations` by newly invented `Operations`, a simple
+Now we have one pass that replaces ``Operations`` with ``Constants`` and one that
+replaces ``Operations`` with previously existing ``Operations``. Let's now do one
+final pass that replaces ``Operations`` by newly invented ``Operations``, a simple
 `strength reduction`_. This one will be simple.
 
 .. _`strength reduction`: https://en.wikipedia.org/wiki/Strength_reduction
@@ -859,7 +860,7 @@ Conclusion
 ==========
 
 That's it for now. Why is this architecture cool? From a software engineering
-point of view, sticking everything into a single function like in `optimize`
+point of view, sticking everything into a single function like in ``optimize``
 above is obviously not great, and if you wanted to do this for real you would
 try to split the cases into different functions that are individually
 digestible, or even use a DSL that makes the pattern matching much more
