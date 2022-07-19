@@ -240,7 +240,7 @@ to debug.
 
 .. code:: python
 
-    def bb_to_str(l : Block, varprefix : str = "var"):
+    def bb_to_str(bb : Block, varprefix : str = "var"):
         # the implementation is not too important,
         # look at the test below to see what the
         # result looks like
@@ -257,7 +257,7 @@ to debug.
 
         varnames = {}
         res = []
-        for index, op in enumerate(l):
+        for index, op in enumerate(bb):
             # give the operation a name used while
             # printing:
             var =  f"{varprefix}{index}"
