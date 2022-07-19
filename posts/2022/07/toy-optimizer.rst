@@ -858,8 +858,7 @@ over a basic block.
 
 Of course this works even better if you are in a tracing context, where
 everything is put into a trace, which is basically one incredibly long basic
-block. And indeed, what I describe in this post is very similar to the one
-PyPy's JIT optimizer uses. In a JIT context it's also quite important that the
+block. In a JIT context it's also quite important that the
 optimizer itself runs quickly.
 
 Various other optimizations are possible in this model. I plan to write a
