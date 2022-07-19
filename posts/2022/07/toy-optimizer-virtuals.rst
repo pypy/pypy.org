@@ -225,6 +225,11 @@ motivation short lived objects. first naive version
         return opt_bb
 
     def test_remove_unused_allocation():
+        # the virtual object looks like this:
+        #  ls
+        # ┌──────────┐
+        # │ 0: var0  │
+        # └──────────┘
         bb = Block()
         var0 = bb.getarg(0)
         ls = bb.alloc()
@@ -242,8 +247,14 @@ Version 2: Re-Materialize Allocations
 .. code:: python
 
     def test_rematerialize():
-        # put allocations that escape back into the
-        # trace
+        #  ls virtual
+        # ┌───────┐
+        # │ empty │
+        # └───────┘
+        # and then we store into field 0 of var0 a
+        # reference to ls. since var0 is not virtual,
+        # ls must escape, so we have to put it back
+        # into the optimized basic block
         bb = Block()
         var0 = bb.getarg(0)
         ls = bb.alloc()
@@ -301,7 +312,9 @@ Version 3: Don't Materialize Twice
 .. code:: python
 
     def test_dont_materialize_twice():
-        # don't materialize allocations twice
+        # ls is again an empty virtual object, and we
+        # store it into var0 *twice*. this should
+        # only materialize it once, though!
         bb = Block()
         var0 = bb.getarg(0)
         ls = bb.alloc()
@@ -340,6 +353,10 @@ Version 3: Don't Materialize Twice
     # optimize_alloc_removal unchanged
 
     def test_materialize_non_virtuals():
+        # in this example we store a non-virtual var1
+        # into another non-virtual var0
+        # this should just lead to no optmization at
+        # all
         bb = Block()
         var0 = bb.getarg(0)
         var1 = bb.getarg(1)
@@ -357,6 +374,10 @@ Version 4: Materialization of Constants
 .. code:: python
 
     def test_materialization_constants():
+        # in this example we store the constant 17
+        # into the non-virtual var0
+        # this should just lead to no optmization at
+        # all
         bb = Block()
         var0 = bb.getarg(0)
         sto = bb.store(var0, 0, 17)
@@ -389,12 +410,21 @@ Version 4: Materialization of Constants
     # optimize_alloc_removal unchanged
 
 
-Version 5
+Version 5 Materialize Fields
 ===============================================
 
 .. code:: python
 
     def test_materialize_fields():
+        # the virtual ls looks like this
+        #  ls
+        # ┌──────┬──────┐
+        # │ 0: 7 │ 1: 8 │
+        # └──────┴──────┘
+        # then it needs to be materialized
+        # this is the first example where virtual
+        # object that we want to materialize has any
+        # content and is not just an empty object
         bb = Block()
         var0 = bb.getarg(0)
         ls = bb.alloc()
@@ -443,20 +473,31 @@ Version 6 Recursive Materialization
 .. code:: python
 
     def test_materialize_chained_objects():
+        #  ls0
+        # ┌──────┐
+        # │ 0: ╷ │
+        # └────┼─┘
+        #      │
+        #      ▼
+        #     ls1
+        #   ┌─────────┐
+        #   │ 0: 1337 │
+        #   └─────────┘
+        # now ls0 escapes
         bb = Block()
         var0 = bb.getarg(0)
         ls0 = bb.alloc()
         ls1 = bb.alloc()
-        contents = bb.store(ls0, 1, ls1)
-        const = bb.store(ls1, 2, 1337)
+        contents = bb.store(ls0, 0, ls1)
+        const = bb.store(ls1, 0, 1337)
         sto = bb.store(var0, 0, ls0)
         opt_bb = optimize_alloc_removal(bb)
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
     optvar1 = alloc()
     optvar2 = alloc()
-    optvar3 = store(optvar2, 2, 1337)
-    optvar4 = store(optvar1, 1, optvar2)
+    optvar3 = store(optvar2, 0, 1337)
+    optvar4 = store(optvar1, 0, optvar2)
     optvar5 = store(optvar0, 0, optvar1)"""
         # fails in an annoying way! the resulting
         # basic block is not in proper SSA form
@@ -486,12 +527,22 @@ Version 6 Recursive Materialization
 
     # optimize_alloc_removal unchanged
 
-Version 7 Fix Infinite Recursion
-==================================
+Version 7 Dealing with Object Cycles
+====================================
 
 .. code:: python
 
-    def test_recursive_object_graph():
+    def test_object_graph_cycles():
+        #   ┌────────┐
+        #   ▼        │
+        #  ls0       │
+        # ┌──────┐   │
+        # │ 0: ╷ │   │
+        # └────┼─┘   │
+        #      │     │
+        #      └─────┘
+        # ls0 points to itself, and then it is
+        # escaped
         bb = Block()
         var0 = bb.getarg(0)
         var1 = bb.alloc()
