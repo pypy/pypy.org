@@ -341,7 +341,7 @@ Into the following optimized output sequence::
     optvar4 = add(optvar3, optvar2)
 
 We left out the second ``add`` (which defines ``v4``), and then replaced the
-usage of ``v4`` with ``v2`` in the final operation.
+usage of ``v4`` with ``v2`` in the final operation that defines ``v5``.
 
 What we effectively did was discover that ``v2`` and ``v4`` are equivalent and then
 replaced ``v4`` with ``v2``. In general, we might discover more such equivalences,
