@@ -11,9 +11,14 @@
 
 In this blog post I want to show the complete code (in Python3) of how a very
 simple optimizer for sequences of operations can work. These algorithms could
-be part of a (really simple) compiler, or a JIT.
+be part of a (really simple) compiler, or a JIT. The architecture of the code in
+this blog post is very similar to that of the trace optimizer of the PyPy JIT:
+After a trace is produced, is is optimized before being sent to the machine code
+backend that produces binary instructions for the CPU architecture that PyPy is
+running on.
 
-The first thing we need to do is define how our operations are stored. The
+To get started, the first thing we need to do is define how our operations are
+stored. The
 format that a compiler uses to store the program while it is being optimized
 is usually called its `intermediate representation`_ (IR). Many production
 compilers use IRs that are in the `Static Single-Assignment Form`_ (SSA), and
