@@ -1,6 +1,6 @@
 .. title: Implementing a Toy Optimizer
 .. slug: toy-optimizer
-.. date: 2022-07-22 15:00:00 UTC
+.. date: 2022-07-19 12:00:00 UTC
 .. tags:
 .. category:
 .. link:
