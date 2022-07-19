@@ -901,14 +901,11 @@ the current post, but will become important in the next one.
 .. _`Partial Evaluation`: https://en.wikipedia.org/wiki/Partial_evaluation
 
 
-**Acknowledgements:** Thanks to `Thorsten Ball`_
-for `getting me`__ to write this and for his
-enthusiastic feedback. I also got great feedback
-from `Max Bernstein`__, Matti Picus and Per
-Vogensen. A conversation with `Peng Wu`__ that we had
-many many years ago and that stuck with me made
-me keep thinking about various ways to view
-compiler optimizations.
+**Acknowledgements:** Thanks to `Thorsten Ball`_ for `getting me`__ to write
+this and for his enthusiastic feedback. I also got great feedback from `Max
+Bernstein`__, Matti Picus and Per Vogensen. A conversation with `Peng Wu`__ that
+we had many many years ago and that stuck with me made me keep thinking about
+various ways to view compiler optimizations.
 
 .. _`Thorsten Ball`: https://thorstenball.com/
 .. __: https://twitter.com/cfbolz/status/1547231548017106944
