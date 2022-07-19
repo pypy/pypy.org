@@ -14,7 +14,6 @@ Previous code:
 
     import pytest
     import re
-    from dataclasses import dataclass
     from typing import Optional, Any
 
 
@@ -22,14 +21,25 @@ Previous code:
         def find(self):
             raise NotImplementedError("abstract")
 
-    @dataclass(eq=False)
+        def _set_forwarded(self, value):
+            raise NotImplementedError("abstract")
+
+
     class Operation(Value):
-        name : str
-        args : list
+        def __init__(
+            self, name: str, args: list[Value]
+        ):
+            self.name = name
+            self.args = args
+            self.forwarded = None
+            self.info = None
 
-        forwarded : Optional[Value] = None
-
-        info : Any = None
+        def __repr__(self):
+            return (
+                f"Operation({self.name}, "
+                f"{self.args}, {self.forwarded}, "
+                f"{self.info})"
+            )
 
         def find(self) -> Value:
             op = self
@@ -43,32 +53,59 @@ Previous code:
         def arg(self, index):
             return self.args[index].find()
 
-        def make_equal_to(self, value : Value):
-            self.find().forwarded = value
+        def make_equal_to(self, value: Value):
+            self.find()._set_forwarded(value)
+
+        def _set_forwarded(self, value: Value):
+            self.forwarded = value
 
 
-    @dataclass(eq=False)
     class Constant(Value):
-        value : object
+        def __init__(self, value: Any):
+            self.value = value
+
+        def __repr__(self):
+            return f"Constant({self.value})"
 
         def find(self):
             return self
 
+        def _set_forwarded(self, value: Value):
+            assert (
+                isinstance(value, Constant)
+                and value.value == self.value
+            )
+
     class Block(list):
-        def __getattr__(self, opname):
+        def opbuilder(opname):
             def wraparg(arg):
                 if not isinstance(arg, Value):
                     arg = Constant(arg)
                 return arg
-            def make_op(*args):
+            def build(self, *args):
+                # construct an Operation, wrap the
+                # arguments in Constants if necessary
                 op = Operation(opname,
                     [wraparg(arg) for arg in args])
+                # add it to self, the basic block
                 self.append(op)
                 return op
-            return make_op
+            return build
 
-    def bb_to_str(l : Block, varprefix : str = "var"):
-        def arg_to_str(arg : Value):
+        # a bunch of operations we support
+        add = opbuilder("add")
+        mul = opbuilder("mul")
+        getarg = opbuilder("getarg")
+        dummy = opbuilder("dummy")
+        lshift = opbuilder("lshift")
+        # some new one for this post
+        alloc = opbuilder("alloc")
+        load = opbuilder("load")
+        store = opbuilder("store")
+        escape = opbuilder("escape")
+
+    def bb_to_str(bb: Block, varprefix: str = "var"):
+        def arg_to_str(arg: Value):
             if isinstance(arg, Constant):
                 return str(arg.value)
             else:
@@ -76,10 +113,8 @@ Previous code:
 
         varnames = {}
         res = []
-        for index, op in enumerate(l):
-            # give the operation a name used while
-            # printing:
-            var =  f"{varprefix}{index}"
+        for index, op in enumerate(bb):
+            var = f"{varprefix}{index}"
             varnames[op] = var
             arguments = ", ".join(
                 arg_to_str(op.arg(i))
