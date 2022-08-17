@@ -8,17 +8,29 @@
 .. type: rest
 .. author: Carl Friedrich Bolz-Tereick
 
-In the previous_ blog post of this serious I showed the complete code for
+One of the workhorse optimization of RPython's tracing JIT is `allocation
+removal`_, which removes short-lived object allocation from traces. Many Python
+programs create a lot of objects that only live for a short time, and whose
+lifespan is fully predictable (common examples are integer and float boxes, but
+also tuples, frames, intermediate string results, etc). Allocation removal will
+try (and very often succed) to remove these allocations from traces. In
+this blog post I want to show a toy version of how allocation removal is
+implemented.
+
+In the previous_ blog post of this series I showed the complete code for
 writing a toy one-pass optimizer that does constant folding, common
 subexpression elimination and strength reduction. All those optimizations are in
 some way relatively straightforward in this really minimal form. So in this
-second post, I want to show a more interesting optimization pass which removes
-allocations that never escape. The basic optimization framework is the same, we
-will use the same datastructures for intermediate representation and also keep
-using the same union find data structure to store equivalences between IR
-operations. Here's the code:
+second post, I want to use allocation removal as a more interesting optimization
+pass. The basic optimization framework is the same, we will use the same
+datastructures for intermediate representation and also keep using the same
+union find data structure to store equivalences between IR operations. Here's
+the infrastructure code from the last post:
+
+.. _previous: https://www.pypy.org/posts/2022/07/toy-optimizer.html
 
 .. code:: python
+    :emphasize-lines: 21,90-94
 
     import pytest
     import re
@@ -155,16 +167,17 @@ Here's a simple program that uses these operations::
     var1 = load(obj0, 0)
     escape(var1)
 
-The code allocates a new object, stores ``var0`` into field ``0`` of the object,
-the loads the same field and escapes the result of the load.
+The code allocates a new object ``obj0``, stores ``var0`` into field ``0`` of
+the object, the loads the same field and escapes the result of the load.
 
-We are leaving a lot of details of a "real" system here, usually an ``alloc``
-operation would get some extra information, for example the type of the freshly
-allocated object or at least its size.
+We are leaving out a lot of details of a "real" system here, usually an
+``alloc`` operation would get some extra information, for example the type of
+the freshly allocated object or at least its size.
 
-To understand the semantics of the new allocations a bit better, let's actually
-write an interpreter for basic blocks, supporting only ``getarg``, ``alloc``,
-``store``, ``load``, ``escape``:
+Before we get started in writing the optimizer for these operations, let's try
+to understand the semantics of the new operations a bit better. To do this, we
+can sketch a small interpreter for basic blocks, supporting only ``getarg``,
+``alloc``, ``store``, ``load``, ``escape``:
 
 .. code:: python
 
@@ -217,7 +230,7 @@ write an interpreter for basic blocks, supporting only ``getarg``, ``alloc``,
                 return argval(op, 0)
             op.info = res
 
-The interpreter  walks the operations of a block, executes each one in turn. It
+The interpreter  walks the operations of a block, executing each one in turn. It
 uses the ``info`` field to store the result of each already executed
 ``Operation``. In this interpreter sketch we stop at the first ``escape`` that
 we execute and return its argument.
@@ -225,7 +238,7 @@ we execute and return its argument.
 Objects in the interpreter are represented using a class ``Object``, which
 stores the object's field into a Python dictionary.
 
-Motivation: Removing Allocations
+Version 1: Naive Attempt
 =================================
 
 In many programs, some allocated objects don't live for very long and have a
@@ -254,9 +267,6 @@ completely trivial. Therefore we will develop the optimization step by step, in
 a test driven fashion: I will start each section with a new test that shows a
 bug in the version of the optimization that we have so far.
 
-Version 1: Naive Attempt
-========================
-
 Let's start in a really naive way. Here's the first test we would like to
 pass, using the example program above:
 
@@ -281,8 +291,8 @@ pass, using the example program above:
 
 
 We will define a class ``VirtualObject`` that is basically identical to
-``Object`` above. But it will not be used during the interpreter, instead we
-will use it during optimization.
+``Object`` above. But it will not be used by the interpreter, instead we will
+use it during optimization.
 
 .. code:: python
 
@@ -302,26 +312,26 @@ emits others.
 
 This first version of the allocation removal optimizer is going to be extremely
 optimistic. It simply assumes that *all* the allocations in the program can be
-optimized away. That is obviously not realistic in practice, we will have to
-refine this approach later, but it's a good way to start. So whenever the
-optimizer sees an ``alloc`` operation, it removes it and creates a
+optimized away. That is obviously not realistic in practice. We will have to
+refine this approach later, but it's a good way to start. That means whenever
+the optimizer sees an ``alloc`` operation, it removes it and creates a
 ``VirtualObject`` object which stores the information that is known during
 optimization about the result of the ``alloc``. Like in the interpreter, the
 ``VirtualObject`` is stored in the ``.info`` field of the ``Operation`` instance
 that represents the ``alloc``.
 
 When the optimizer sees a ``store`` operation, it will also remove it and
-instead put execute the store by calling the ``VirtualObject.store`` method.
+instead execute the store by calling the ``VirtualObject.store`` method.
 Here is one important difference between the interpreter and the optimizer: In
 the interpreter, the values that were stored into an ``Object`` (and thus
-put into the object's ``.contents`` dictionary) where runtime values, for
+put into the object's ``.contents`` dictionary) were runtime values, for
 example integers or other objects. In the optimizer however, the
 fields of the ``VirtualObject`` store ``Value`` instances, either ``Constant``
 instances or ``Operation`` instances.
 
 When the optimizer sees a ``load`` operation, it *also* removes it, and replaces
 the ``load`` with the ``Operation`` (or ``Constant``) that is stored in the
-``VirtualObject`` at that point.
+``VirtualObject`` at that point:
 
 .. code:: python
 
@@ -344,11 +354,11 @@ the ``load`` with the ``Operation`` (or ``Constant``) that is stored in the
             opt_bb.append(op)
         return opt_bb
 
-So this is the first version of the optimization! It doesn't handle all kinds of
-difficult cases, and we'll have to do something about its optimism first.
-However, we can write a slightly more complicated test with two allocations, and
-object pointing to the other. It works correctly too, both allocations are
-removed.
+This is the first version of the optimization. It doesn't handle all kinds of
+difficult cases, and we'll have to do something about its optimism.
+But already in this minimalistic form we can write a slightly more complicated
+test with two allocations, and object pointing to the other. It works correctly
+too, both allocations are removed:
 
 .. code:: python
 
@@ -383,14 +393,8 @@ removed.
 
 
 
-Version 2: Re-Materialize Allocations
-======================================
-
-The most obvious problem that we need to fix first is the assumption that every
-allocation can be removed. So far we only looked at small programs that allocate
-some objects, stores into and loads from them, and then forgets the objects. In
-this simple case removing the allocations is fine. Storing one object whose
-allocation we remove into another such object is fine too.
+Version 2: Re-Materializing Allocations
+=========================================
 
 To make it easier to talk about how the optimizer operates, let's introduce
 some terminology (this is how PyPy uses the terminology, not really used
@@ -400,6 +404,15 @@ optimizer has optimized away the ``alloc`` operation that creates the object.
 Other objects are equivalently **not virtual**, for example those that have
 existed before we enter the current code block.
 
+The most obvious problem that we need to fix now is the assumption that every
+allocation can be removed. So far we only looked at small programs where every
+allocation could be removed, or equivalently, where every object is virtual.
+A program that creates virtual objects, stores into and loads from them, and
+then forgets the objects. In this simple case removing the allocations is fine.
+As we saw in the previous section, it's also fine to have a virtual object
+reference another virtual, both allocations can be removed.
+
+What are the cases were we *can't* remove an allocation?
 To remove the assumption of the first version of the optimizer that every
 allocation can be removed, we will use a simple heuristic. The heuristic is as
 follows: if a reference to a virtual object ``a`` is stored into an object ``b``
@@ -420,9 +433,9 @@ The simplest test case for this happening looks like this:
         # ┌───────┐
         # │ empty │
         # └───────┘
-        # and then we store into field 0 of var0 a
-        # reference to obj. since var0 is not virtual,
-        # obj must escape, so we have to put it back
+        # then we store a reference to obj into
+        # field 0 of var0 a. since var0 is not virtual,
+        # obj escapes, so we have to put it back
         # into the optimized basic block
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
@@ -435,12 +448,12 @@ The simplest test case for this happening looks like this:
         # is None
 
 If the optimizer reaches a point where a virtual object escapes (like the
-``store`` operation in the test, the optimizer has already removed the ``alloc``
+``store`` operation in the test), the optimizer has already removed the ``alloc``
 operation that created the virtual object. If the object escapes, we don't want
-to go back in the operations list and re-insert the alloc operation, we would
-have to do a lot of work. Instead, we re-insert the ``alloc`` operation that will
-recreate the virtual object at the point of escape using a helper function
-``materialize``.
+to go back in the operations list and re-insert the ``alloc`` operation, that
+sounds potentially very complicated. Instead, we re-insert the ``alloc``
+operation that will recreate the virtual object at the point of escape using a
+helper function ``materialize``.
 
 .. code:: python
     :emphasize-lines: 1-8,23-28
@@ -496,7 +509,7 @@ materialize the virtual object, and then emit the store.
         return opt_bb
 
 This is the general idea, and it is enough to pass ``test_materialize``. But of
-course there are still a lot of problems that we now need to solve.
+course there are still a number of further problems that we now need to solve.
 
 
 Version 3: Don't Materialize Twice
@@ -510,9 +523,9 @@ materialized a second time. A test for that case could simply repeat the
 .. code:: python
 
     def test_dont_materialize_twice():
-        # obj is again an empty virtual object, and we
-        # store it into var0 *twice*. this should
-        # only materialize it once, though!
+        # obj is again an empty virtual object,
+        # and we store it into var0 *twice*.
+        # this should only materialize it once
         bb = Block()
         var0 = bb.getarg(0)
         obj = bb.alloc()
@@ -524,18 +537,18 @@ materialized a second time. A test for that case could simply repeat the
     optvar1 = alloc()
     optvar2 = store(optvar0, 0, optvar1)
     optvar3 = store(optvar0, 0, optvar1)"""
-        # fails so far! the operations that we get
+        # fails so far: the operations that we get
         # at the moment are:
         # optvar0 = getarg(0)
         # optvar1 = alloc()
         # optvar2 = store(optvar0, 0, optvar1)
         # optvar3 = alloc()
         # optvar4 = store(optvar0, 0, optvar3)
-        # ie the object is materialized twice
+        # ie the object is materialized twice,
         # which is incorrect
 
 We solve the problem by setting the ``.info`` field of an object that we
-materialize to ``None``. After all, a materialized object is no longer virtual.
+materialize to ``None`` to mark it as no longer being virtual.
 
 
 .. code:: python
@@ -564,7 +577,7 @@ non-virtual, code which we cannot optimize at all:
     def test_materialize_non_virtuals():
         # in this example we store a non-virtual var1
         # into another non-virtual var0
-        # this should just lead to no optmization at
+        # this should just lead to no optimization at
         # all
         bb = Block()
         var0 = bb.getarg(0)
@@ -588,8 +601,7 @@ constant is never virtual, so materializing it should do nothing.
     def test_materialization_constants():
         # in this example we store the constant 17
         # into the non-virtual var0
-        # this should just lead to no optmization at
-        # all
+        # again, this will not be optimized
         bb = Block()
         var0 = bb.getarg(0)
         sto = bb.store(var0, 0, 17)
@@ -624,7 +636,7 @@ early:
     # optimize_alloc_removal unchanged
 
 
-Version 5 Materialize Fields
+Version 5 Materializing Fields
 ===============================================
 
 Now we need to solve a more difficult problem. So far, the virtual objects that
@@ -659,8 +671,8 @@ written to at the point of materialization. Let's write a test for this:
     optvar3 = store(optvar2, 0, 8)
     optvar4 = store(optvar2, 1, optvar1)
     optvar5 = store(optvar0, 0, optvar2)"""
-        # fails so far! the operations we get atm
-        # are:
+        # fails so far! the operations we get
+        # at the moment are:
         # optvar0 = getarg(0)
         # optvar1 = getarg(1)
         # optvar2 = alloc()
@@ -669,7 +681,7 @@ written to at the point of materialization. Let's write a test for this:
         # into optvar1 got lost
 
 To fix this problem, we need to re-create a ``store`` operation for every
-element of the the ``.contents`` dictionary of the virtual object we are
+element of the ``.contents`` dictionary of the virtual object we are
 materializing. Let's do that in order of the field numbers by sorting the
 dictionary's items:
 
@@ -702,11 +714,11 @@ This is enough to pass the test.
 Version 6 Recursive Materialization
 ======================================
 
-Next problem: In the above example, the fields of the virtual objects contained
+In the above example, the fields of the virtual objects contained
 only constants or non-virtual objects. However, we could have a situation where
 a whole tree of virtual objects is built, and then the root of the tree escapes.
-This makes it necessary to escape the whole tree. Let's write a test for the
-case of only two virtual objects though:
+This makes it necessary to escape the whole tree. Let's write a test for a small
+tree of two virtual objects:
 
 
 .. code:: python
@@ -740,7 +752,7 @@ case of only two virtual objects though:
     optvar5 = store(optvar0, 0, optvar1)"""
         # fails in an annoying way! the resulting
         # basic block is not in proper SSA form
-        # so printing doesn't work. The optimized
+        # so printing it fails. The optimized
         # block would look like this:
         # optvar0 = getarg(0)
         # optvar1 = alloc()
@@ -775,14 +787,16 @@ values of the virtual object:
 
     # optimize_alloc_removal unchanged
 
-This is pretty great, the materialization logic is getting pretty good. We need
-to fix a subtle problem next though.
+Getting there, the materialization logic is almost done. We need to fix a
+subtle remaining problem though.
+
 
 Version 7 Dealing with Object Cycles
 ====================================
 
-The bug in this section is a bit tricky, and does not immediately occur. In
-fact, in PyPy a variant of it was hiding out in our optimizer for quite a while
+The bug we need to fix in this section is a bit tricky, and does not immediately
+occur in a lot of programs. In
+fact, in PyPy a variant of it was hiding out in our optimizer
 until we found it much later (despite us being aware of the general problem and
 correctly dealing with it in other cases).
 
@@ -811,8 +825,7 @@ itself, and we must carefully deal with that case to avoid infinite recursion in
         opt_bb = optimize_alloc_removal(bb)
         # the previous line fails with an
         # InfiniteRecursionError
-        # materialize calls itself, from the line
-        # materialize(opt_bb, val), infinitely
+        # materialize calls itself, infinitely
 
         # what we want is instead this output:
         assert bb_to_str(opt_bb, "optvar") == """\
@@ -821,10 +834,13 @@ itself, and we must carefully deal with that case to avoid infinite recursion in
     optvar2 = store(optvar1, 0, optvar1)
     optvar3 = store(optvar0, 1, optvar1)"""
 
-The fix is not a big change, but a little bit subtle nevertheless. We change the
+The fix is not a big change, but a little bit subtle nevertheless.
+We have to change the
 order in which things are done in ``materialize``. Right after emitting the
 ``alloc``, we set the ``.info`` to ``None``, to mark the object as not virtual.
-Only afterwards do we re-create the stores and call ``materialize`` recursively.
+Only *afterwards* do we re-create the stores and call ``materialize`` recursively.
+If a recursive call reaches the same object, it's already marked as non-virtual,
+so ``materialize`` won't recurse further:
 
 
 .. code:: python
@@ -852,7 +868,7 @@ Version 8 Loading from non-virtual objects
 ===========================================
 
 Now materialize is done. We need to go back to ``optimize_alloc_removal`` and
-improve it a bit. The last time we changed it, we added a case analysis to the
+improve it further. The last time we changed it, we added a case analysis to the
 code dealing with ``store``, distinguishing between storing to a virtual and to
 a non-virtual object. We need to add an equivalent distinction to the ``load``
 case, because right now loading from a non-virtual crashes.
@@ -988,7 +1004,12 @@ loop:
         return opt_bb
 
 That's it, we're done. It's not a lot of code, but actually quite a powerful
-optimization.
+optimization. In addition to removing allocations for objects that are only used
+briefly and in predictable ways, it also has another effect. If an object is
+allocated, used in a number of operations and then escapes further down in the
+block, the operations in between can often be optimized away. This is
+demonstrated by the next test (which already passes):
+
 
 .. code:: python
 
@@ -1011,3 +1032,12 @@ optimization.
     optvar3 = store(optvar2, 0, optvar1)
     optvar4 = store(optvar2, 1, 456)
     optvar5 = store(optvar0, 1, optvar2)"""
+
+Note that the addition is not optimized away, because the code from this blog
+post does not contain constant folding and the other optimizations from
+the last one. Combining them would not be too hard though.
+
+Conlusion
+=============
+
+...
