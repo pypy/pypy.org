@@ -13,9 +13,11 @@ removal`_, which removes short-lived object allocation from traces. Many Python
 programs create a lot of objects that only live for a short time, and whose
 lifespan is fully predictable (common examples are integer and float boxes, but
 also tuples, frames, intermediate string results, etc). Allocation removal will
-try (and very often succed) to remove these allocations from traces. In
+try (and very often succeed) to remove these allocations from traces. In
 this blog post I want to show a toy version of how allocation removal is
 implemented.
+
+.. _`allocation removal`: https://dl.acm.org/doi/10.1145/1929501.1929508
 
 In the previous_ blog post of this series I showed the complete code for
 writing a toy one-pass optimizer that does constant folding, common
@@ -30,7 +32,7 @@ the infrastructure code from the last post:
 .. _previous: https://www.pypy.org/posts/2022/07/toy-optimizer.html
 
 .. code:: python
-    :emphasize-lines: 21,90-94
+    :emphasize-lines: 21,88-92
 
     import pytest
     import re
@@ -456,7 +458,7 @@ operation that will recreate the virtual object at the point of escape using a
 helper function ``materialize``.
 
 .. code:: python
-    :emphasize-lines: 1-8,23-28
+    :emphasize-lines: 1-8
 
     def materialize(opt_bb, value: Operation) -> None:
         assert not isinstance(value, Constant)
