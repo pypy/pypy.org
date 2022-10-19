@@ -9,9 +9,6 @@
 
 * irc: **#pypy** on **irc.libera.chat**
 
-    - **NOTE**: the official #pypy channel used to be on Freenode, `but it is no
-      longer the case`_
-
 * mailing list: `pypy-dev at python.org`__
 
 * for security related issues, non-public funding enquiries etc. please contact pypy-z@python.org
@@ -22,7 +19,9 @@
 
 * code on https://foss.heptapod.net/pypy/pypy
 
+* Reach out to our consultants_ for specific projects
+
 .. __: https://mail.python.org/mailman/listinfo/pypy-dev
 .. _`issue tracker`: https://foss.heptapod.net/pypy/pypy/-/issues
 .. _`dev site`: https://doc.pypy.org
-.. _`but it is no longer the case`: /posts/2021/05/pypy-irc-moves-to-libera-chat.html
+.. _consultants: pypy-sponsors.html
