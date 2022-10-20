@@ -3,10 +3,10 @@ layout: page
 title: How to help?
 ---
 
-How to help PyPy development?
-=====================================
+How to help PyPy?
+=================
 
-Here are some ideas to help PyPy development:
+Here are some ideas to help PyPy move forward:
 
 * use pypy for your projects and provide detailed feedback_
 
@@ -20,6 +20,9 @@ Here are some ideas to help PyPy development:
 
 * donate_ some money to enable others to help
 
+* take on our consultants_ and make PyPy work better for your
+
 .. _contact: contact.html
 .. _feedback: contact.html
 .. _`donate`: https://opencollective.com/pypy
+.. _consultants: pypy-sponsors.html
