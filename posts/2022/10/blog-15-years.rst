@@ -10,7 +10,7 @@
 
 Exactly 15 years ago today we wrote the `first blog post on the PyPy blog`_!
 Over the years, we have written 423 posts, from the `shortest`_ to the
-`longest`_. In 2021 we moved_ from blogger_ to our own do domain.
+`longest`_. In 2021 we moved_ from blogger_ to our own domain.
 
 .. _`first blog post on the PyPy blog`: /posts/2007/10/first-post-8150793557471983289.html
 .. _`shortest`: /posts/2007/12/faster-than-c-8057790636822502084.html
