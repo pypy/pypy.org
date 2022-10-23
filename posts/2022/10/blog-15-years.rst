@@ -22,7 +22,7 @@ The topics over the years varied widely, we published release_ announcements_;
 roadmaps_; JIT_, GC_ and STM_ updates_; benchmarks_; sprint_, trip_ and
 conference_ reports_; technical_ deep_ dives_; `case studies`_; april_ `fool's
 jokes`_; research_ projects; other_ languages_ using_ RPython; finished PhD_
-Bachelor_ and Master_, theses_; pictures:
+Bachelor_ and Master_, theses; pictures:
 
 .. image:: /images/2022-pypy-pictures-collage-small.jpg
    :alt: a collage of photos taken at PyPy sprints
@@ -57,7 +57,6 @@ and diagrams:
 .. _PhD: /posts/2010/10/phd-thesis-about-pypys-cli-jit-backend-969267841095296323.html
 .. _Bachelor: /posts/2019/04/an-rpython-jit-for-lpegs-4779548053359386284.html
 .. _Master: /posts/2008/10/prolog-jit-masters-thesis-finished-5462132148241449867.html
-.. _theses: /posts/2019/04/an-rpython-jit-for-lpegs-4779548053359386284.html
 .. _other: /posts/2013/02/announcing-topaz-rpython-powered-ruby-6662407703061538341.html
 .. _languages: /posts/2012/07/hello-everyone-6869934374873967346.html
 .. _using: /posts/2014/08/a-field-test-of-software-transactional-5659022209916605798.html
