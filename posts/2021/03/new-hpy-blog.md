@@ -7,7 +7,7 @@
 .. link: 
 .. description: 
 .. type: text
-.. author: antocuni
+.. author: Antonio Cuni
 -->
 
 Regular readers of this blog

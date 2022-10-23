@@ -2,7 +2,7 @@
 .. title: #pypy IRC moves to Libera.Chat
 .. slug: pypy-irc-moves-to-libera-chat
 .. date: 2021-05-31 10:00:00 UTC
-.. author: antocuni
+.. author: Antonio Cuni
 .. tags:
 .. category:
 .. link:
