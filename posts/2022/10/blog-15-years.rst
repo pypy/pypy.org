@@ -21,7 +21,7 @@ Over the years, we have written 423 posts, from the `shortest`_ to the
 The topics over the years varied widely, we published release_ announcements_;
 roadmaps_; JIT_, GC_ and STM_ updates_; benchmarks_; sprint_, trip_ and
 conference_ reports_; technical_ deep_ dives_; `case studies`_; april_ `fool's
-jokes`_ ; research_ projects; other_ languages_ using_ RPython; finished PhD_
+jokes`_; research_ projects; other_ languages_ using_ RPython; finished PhD_
 Bachelor_ and Master_, theses_; pictures:
 
 .. image:: /images/2022-pypy-pictures-collage-small.jpg
@@ -156,7 +156,7 @@ way, so here's a subjective list of ones that I had fun looking at again:
 .. __: /posts/2020/02/pypy-and-cffi-have-moved-to-heptapod-5791595152472747032.html
 .. __: /posts/2021/04/ways-pypy-graphviz.html
 
-We'd like to thank our authors, guest authors, commenters users and readers who
+We'd like to thank our authors, guest authors, commenters, users and readers who
 have stuck with us through one and a half decades! If there's any particular
 topics you would like to read something about, or any guest posts you'd like to
 write, let us know!
