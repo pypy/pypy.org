@@ -22,7 +22,18 @@ The topics over the years varied widely, we published release_ announcements_;
 roadmaps_; JIT_, GC_ and STM_ updates_; benchmarks_; sprint_, trip_ and
 conference_ reports_; technical_ deep_ dives_; `case studies`_; april_ `fool's
 jokes`_ ; research_ projects; other_ languages_ using_ RPython; finished PhD_
-Bachelor_ and Master_, theses_, ...
+Bachelor_ and Master_, theses_; pictures:
+
+.. image:: /images/2022-pypy-pictures-collage-small.jpg
+   :alt: a collage of photos taken at PyPy sprints
+   :target: /images/2022-pypy-pictures-collage.jpg
+
+and diagrams:
+
+.. image:: /images/2022-pypy-diagrams-collage-small.png
+   :alt: a collage of diagrams from previous blog posts
+   :target: /images/2022-pypy-diagrams-collage.png
+
 
 .. _release: /posts/2013/05/pypy-20-einstein-sandwich-635158782365435530.html
 .. _announcements: /posts/2017/06/pypy-v58-released-739876359584854017.html
