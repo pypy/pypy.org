@@ -129,8 +129,10 @@ def main():
     ## print()
 
     # print links, sorted by rank in the front page of the day in which they were posted
+    print('Rank Points       Date')
+    print('---- ------ ----------')
     for link in pypy_links:
-        print(f'{link.rank:2d}  {link.points} points   {link.date}    {link.title}    {link.link}')
+        print(f'{link.rank:4d} {link.points:6d} {link.date}    {link.title}    {link.link}')
 
 
 if __name__ == '__main__':
