@@ -1074,7 +1074,9 @@ operations for objects that are *not* virtual. I'll probably not write that
 down as another post, but `Max Bernstein`__ and I developed that together on a
 `PyPy Twitch channel`__ channel a few weeks ago, here's the recording:
 
-TODO
+.. html::
+
+    <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/w-UHg0yOPSE" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 .. __: https://bernsteinbear.com/
 .. __: twitch.tv/pypyproject
