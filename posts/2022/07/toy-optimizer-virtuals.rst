@@ -718,7 +718,7 @@ dictionary's items:
         # put the alloc operation back into the trace
         opt_bb.append(value)
         # put the content back
-        for idx, val in sorted(info.contents.items()):
+        for idx, val in info.contents.items():
             # re-create store operation
             opt_bb.store(value, idx, val)
         # only materialize once
