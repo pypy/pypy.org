@@ -272,10 +272,8 @@ version of this program would look like this::
 
 The ``alloc``, ``store`` and ``load`` operations have been completely removed.
 This is a pretty important optimizations for PyPy's JIT: Allocations, memory
-reads and writes are quite costly and occur *a lot* in a dynamic language like
-Python where everything from integers to function frames are stored in freshly
-allocated heap objects. So getting rid of the allocation of temporary objects
-is instrumental in speeding up Python.
+reads and writes are quite costly and occur *a lot* in Python, so getting rid
+of as many of them as possible is instrumental for performance.
 
 Implementing the optimization is not a lot of code! However, understanding all
 the corner cases of the
