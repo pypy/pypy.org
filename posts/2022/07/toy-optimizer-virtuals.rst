@@ -429,9 +429,11 @@ As we saw in the previous section, it's also fine to have a virtual object
 reference another virtual, both allocations can be removed.
 
 What are the cases were we *can't* remove an allocation?
-To remove the assumption of the first version of the optimizer that every
-allocation can be removed, we will use a simple heuristic. The heuristic is as
-follows: if a reference to a virtual object ``a`` is stored into an object ``b``
+The first version of the optimizer simply assumed that every allocation can be
+removed. This can't work. We will replace this assumption with the following
+simple heuristic:
+
+If a reference to a virtual object ``a`` is stored into an object ``b``
 that is not virtual, then ``a`` will also stop being virtual. If an object ``a``
 that was virtual stops being virtual, we say that it **escapes**.
 
