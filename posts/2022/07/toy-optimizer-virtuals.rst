@@ -358,8 +358,8 @@ the ``load`` with the ``Operation`` (or ``Constant``) that is stored in the
 
 This is the first version of the optimization. It doesn't handle all kinds of
 difficult cases, and we'll have to do something about its optimism.
-But already in this minimalistic form we can write a slightly more complicated
-test with two allocations, and object pointing to the other. It works correctly
+But, already in this minimalistic form, we can write a slightly more complicated
+test with two allocations, one object pointing to the other. It works correctly
 too, both allocations are removed:
 
 .. code:: python
@@ -1039,7 +1039,7 @@ Note that the addition is not optimized away, because the code from this blog
 post does not contain constant folding and the other optimizations from
 the last one. Combining them would not be too hard though.
 
-Conlusion
+Conclusion
 =============
 
 ...
