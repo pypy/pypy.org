@@ -158,8 +158,14 @@ Interpreter
 In this post we will mainly concern ourselves with optimizing
 programs that allocate memory. We assume that our language is garbage collected
 and memory safe. The new operations that we will optimize are ``alloc``
-(allocates a new object), ``store`` (stores a value into a fixed field of an
+(allocates some new object), ``store`` (stores a value into a fixed field of an
 object), ``load`` (loads the value from a field in the object).
+
+We are leaving out a lot of details of a "real" system here, usually an
+``alloc`` operation would get some extra information, for example the type of
+the freshly allocated object or at least its size. ``load`` and ``store`` would
+typically have some kind of field offset and maybe some information about the
+field's type
 
 Here's a simple program that uses these operations::
 
@@ -171,10 +177,6 @@ Here's a simple program that uses these operations::
 
 The code allocates a new object ``obj0``, stores ``var0`` into field ``0`` of
 the object, the loads the same field and prints the result of the load.
-
-We are leaving out a lot of details of a "real" system here, usually an
-``alloc`` operation would get some extra information, for example the type of
-the freshly allocated object or at least its size.
 
 Before we get started in writing the optimizer for these operations, let's try
 to understand the semantics of the new operations a bit better. To do this, we
@@ -242,12 +244,12 @@ uses the ``info`` field to store the result of each already executed
 we execute and return its argument.
 
 Objects in the interpreter are represented using a class ``Object``, which
-stores the object's field into a Python dictionary. This is a simplification,
-in a real system the `alloc` operation might for example take some kind of type
-as an argument, that describes which kinds of fields an object has and how they
-are layed out in memory, which would allow more efficient storage of the
-content. But we don't want to care about this level of detail in the post, so
-using a dict in the interpreter is good enough.
+stores the object's field into a Python dictionary. As written above, this is a
+simplification, in a real system the `alloc` operation might for example take
+some kind of type as an argument, that describes which kinds of fields an
+object has and how they are layed out in memory, which would allow more
+efficient storage of the content. But we don't want to care about this level of
+detail in the post, so using a dict in the interpreter is good enough.
 
 Version 1: Naive Attempt
 =================================
