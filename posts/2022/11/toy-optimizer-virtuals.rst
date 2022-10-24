@@ -656,7 +656,7 @@ early:
     # optimize_alloc_removal unchanged
 
 
-Version 5 Materializing Fields
+Version 5: Materializing Fields
 ===============================================
 
 Now we need to solve a more difficult problem. So far, the virtual objects that
@@ -730,7 +730,7 @@ materializing. `²`_
 This is enough to pass the test.
 
 
-Version 6 Recursive Materialization
+Version 6: Recursive Materialization
 ======================================
 
 In the above example, the fields of the virtual objects contained
@@ -810,8 +810,8 @@ Getting there, the materialization logic is almost done. We need to fix a
 subtle remaining problem though.
 
 
-Version 7 Dealing with Object Cycles
-====================================
+Version 7: Dealing with Object Cycles
+===========================================
 
 The bug we need to fix in this section is a bit tricky, and does not immediately
 occur in a lot of programs. In
@@ -883,8 +883,8 @@ so ``materialize`` won't recurse further:
             materialize(opt_bb, val)
             opt_bb.store(value, idx, val)
 
-Version 8 Loading from non-virtual objects
-===========================================
+Version 8: Loading from non-virtual objects
+==================================================
 
 Now materialize is done. We need to go back to ``optimize_alloc_removal`` and
 improve it further. The last time we changed it, we added a case analysis to the
@@ -946,8 +946,8 @@ general code at the end of the function.
 
 
 
-Version 9 Final: Materialize on Other Operations
-==================================================
+Version 9 (Final): Materialize on Other Operations
+====================================================
 
 We're almost at the end now. There's one final generalization left to do. We
 started with the heuristic that storing a virtual into a non-virtual would
