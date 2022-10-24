@@ -702,8 +702,7 @@ written to at the point of materialization. Let's write a test for this:
 
 To fix this problem, we need to re-create a ``store`` operation for every
 element of the ``.contents`` dictionary of the virtual object we are
-materializing. Let's do that in order of the field numbers by sorting the
-dictionary's items:
+materializing. `²`_
 
 
 .. code:: python
@@ -1091,6 +1090,12 @@ analysis`__ literature. The term "virtual" was used originally in `Armin Rigo's
 Psyco`__ but is e.g. also used by the paper `Partial Escape Analysis and Scalar
 Replacement for Java`__.
 
+.. _`²`:
+
+² The order in which we put the `store` operations back is relying on
+dictionary iteration order, which is insertion order. That's not a bad
+ordering, we could also be explicit and sort the fields in some order (ideally
+the order in which the object lays them out in memory).
 
 
 .. __: https://en.wikipedia.org/wiki/Escape_analysis
