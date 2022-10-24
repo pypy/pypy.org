@@ -242,7 +242,12 @@ uses the ``info`` field to store the result of each already executed
 we execute and return its argument.
 
 Objects in the interpreter are represented using a class ``Object``, which
-stores the object's field into a Python dictionary.
+stores the object's field into a Python dictionary. This is a simplification,
+in a real system the `alloc` operation might for example take some kind of type
+as an argument, that describes which kinds of fields an object has and how they
+are layed out in memory, which would allow more efficient storage of the
+content. But we don't want to care about this level of detail in the post, so
+using a dict in the interpreter is good enough.
 
 Version 1: Naive Attempt
 =================================
