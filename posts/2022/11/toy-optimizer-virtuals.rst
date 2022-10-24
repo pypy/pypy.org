@@ -29,7 +29,7 @@ datastructures for intermediate representation and also keep using the same
 union find data structure to store equivalences between IR operations. Here's
 the infrastructure code from the last post:
 
-.. _previous: https://www.pypy.org/posts/2022/07/toy-optimizer.html
+.. _previous: /posts/2022/07/toy-optimizer.html
 
 .. code:: python
     :emphasize-lines: 21,88-92
