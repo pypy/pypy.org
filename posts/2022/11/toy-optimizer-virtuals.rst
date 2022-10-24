@@ -242,7 +242,8 @@ can sketch a small interpreter for basic blocks, supporting only ``getarg``,
 The interpreter  walks the operations of a block, executing each one in turn. It
 uses the ``info`` field to store the result of each already executed
 ``Operation``. In this interpreter sketch we stop at the first ``print`` that
-we execute and return its argument.
+we execute and return its argument for the simple but bad reason that it makes
+``test_interpret`` easier to write.
 
 Objects in the interpreter are represented using a class ``Object``, which
 stores the object's field into a Python dictionary. As written above, this is a
