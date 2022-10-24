@@ -233,7 +233,7 @@ can sketch a small interpreter for basic blocks, supporting only ``getarg``,
             elif op.name == "print":
                 res = argval(op, 0)
                 print(res)
-                return(res)
+                return res
             else:
                 raise NotImplementedError(f"operation {op.name} not supported")
             op.info = res
