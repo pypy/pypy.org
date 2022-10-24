@@ -223,11 +223,13 @@ can sketch a small interpreter for basic blocks, supporting only ``getarg``,
             elif op.name == "alloc":
                 res = Object()
             elif op.name == "load":
-                res = argval(op, 0).load(
-                    get_num(op))
+                fieldnum = get_num(op)
+                res = argval(op, 0).load(fieldnum)
             elif op.name == "store":
-                argval(op, 0).store(
-                    get_num(op), argval(op, 2))
+                obj = argval(op, 0)
+                fieldnum = get_num(op)
+                fieldvalue = argval(op, 2)
+                obj.store(fieldnum, fieldvalue)
                 # no result, only side effect
                 continue
             elif op.name == "print":
