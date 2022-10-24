@@ -99,6 +99,8 @@ published later, here are a few that I can remember:
 .. _`Storage strategies for collections in dynamically typed languages`: https://dl.acm.org/doi/10.1145/2509136.2509531
 
 
+Greatest Hits
+---------------
 
 In terms of visitors, the top five posts on the old blog were – on the new blog
 we simply don't have stats (yet?):
@@ -119,6 +121,37 @@ we simply don't have stats (yet?):
 The number of posts per year developed like this:
 
 .. image:: /images/2022-pypy-posts-per-year.svg
+
+The most prolific authors are:
+
+1. `Maciej Fijałkowski`__
+2. `Carl Friedrich Bolz-Tereick`__
+3. `Armin Rigo`__
+4. `Antonio Cuni`__
+5. `Matti Picus`__
+
+.. __: /authors/maciej-fijalkowski.html
+.. __: /authors/carl-friedrich-bolz-tereick.html
+.. __: /authors/armin-rigo.html
+.. __: /authors/antonio-cuni.html
+.. __: /authors/mattip.html
+
+Several blog posts have made it to the Hacker News front page, three of them to
+number 1:
+
+- `PyPy-STM: first “interesting” release`__ (discussion__)
+- `Let's Remove the Global Interpreter Lock`__ (discussion__)
+- `Inside cpyext: Why emulating CPython C API is so Hard`__ (discussion__)
+
+.. __: /posts/2014/07/pypy-stm-first-interesting-release-8684276541915333814.html
+.. __: https://news.ycombinator.com/item?id=7991404
+.. __: /posts/2017/08/lets-remove-global-interpreter-lock-748023554216649595.html
+.. __: https://news.ycombinator.com/item?id=15008636
+.. __: /posts/2018/09/inside-cpyext-why-emulating-cpython-c-8083064623681286567.html
+.. __: https://news.ycombinator.com/item?id=18040664
+
+Personal Favourites
+--------------------
 
 While looking through the posts, there were a few that stood out to me in some
 way, so here's a subjective list of ones that I had fun looking at again:
