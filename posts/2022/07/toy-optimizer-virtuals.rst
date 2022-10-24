@@ -401,8 +401,7 @@ Version 2: Re-Materializing Allocations
 =========================================
 
 To make it easier to talk about how the optimizer operates, let's introduce
-some terminology (this is how PyPy uses the terminology, not really used
-consistently by other projects as far as I know). As already seen by the choice
+some terminology. `¹`_  As already seen by the choice
 of the class name ``VirtualObject``, we will call an object **virtual** if the
 optimizer has optimized away the ``alloc`` operation that creates the object.
 Other objects are equivalently **not virtual**, for example those that have
@@ -1045,3 +1044,22 @@ Conclusion
 =============
 
 ...
+
+
+
+Footnotes
+===========
+
+.. _`¹`:
+
+¹ This is how PyPy uses the terminology, not really used consistently by other
+projects. The term "escape" is fairly standard throughout the `escape
+analysis`__ literature. The term "virtual" was used originally in `Armin Rigo's
+Psyco`__ but is e.g. also used by the paper `Partial Escape Analysis and Scalar
+Replacement for Java`__.
+
+
+
+.. __: https://en.wikipedia.org/wiki/Escape_analysis
+.. __: https://dl.acm.org/doi/abs/10.1145/1014007.1014010
+.. __: https://www.ssw.uni-linz.ac.at/Research/Papers/Stadler14/Stadler2014-CGO-PEA.pdf
