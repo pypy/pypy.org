@@ -232,6 +232,8 @@ can sketch a small interpreter for basic blocks, supporting only ``getarg``,
                 res = argval(op, 0)
                 print(res)
                 return(res)
+            else:
+                raise NotImplementedError(f"operation {op.name} not supported")
             op.info = res
 
 The interpreter  walks the operations of a block, executing each one in turn. It
