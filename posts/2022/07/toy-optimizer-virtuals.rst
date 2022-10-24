@@ -124,7 +124,7 @@ the infrastructure code from the last post:
         alloc = opbuilder("alloc")
         load = opbuilder("load")
         store = opbuilder("store")
-        escape = opbuilder("escape")
+        print = opbuilder("print")
 
     def bb_to_str(bb: Block, varprefix: str = "var"):
         def arg_to_str(arg: Value):
@@ -167,10 +167,10 @@ Here's a simple program that uses these operations::
     obj0 = alloc()
     store(obj0, 0, var0)
     var1 = load(obj0, 0)
-    escape(var1)
+    print(var1)
 
 The code allocates a new object ``obj0``, stores ``var0`` into field ``0`` of
-the object, the loads the same field and escapes the result of the load.
+the object, the loads the same field and prints the result of the load.
 
 We are leaving out a lot of details of a "real" system here, usually an
 ``alloc`` operation would get some extra information, for example the type of
@@ -179,7 +179,7 @@ the freshly allocated object or at least its size.
 Before we get started in writing the optimizer for these operations, let's try
 to understand the semantics of the new operations a bit better. To do this, we
 can sketch a small interpreter for basic blocks, supporting only ``getarg``,
-``alloc``, ``store``, ``load``, ``escape``:
+``alloc``, ``store``, ``load``, ``print``:
 
 .. code:: python
 
@@ -189,7 +189,7 @@ can sketch a small interpreter for basic blocks, supporting only ``getarg``,
         obj = bb.alloc()
         sto = bb.store(obj, 0, var0)
         var1 = bb.load(obj, 0)
-        bb.escape(var1)
+        bb.print(var1)
         assert interpret(bb, 17) == 17
 
     class Object:
@@ -228,13 +228,15 @@ can sketch a small interpreter for basic blocks, supporting only ``getarg``,
                     get_num(op), argval(op, 2))
                 # no result, only side effect
                 continue
-            elif op.name == "escape":
-                return argval(op, 0)
+            elif op.name == "print":
+                res = argval(op, 0)
+                print(res)
+                return(res)
             op.info = res
 
 The interpreter  walks the operations of a block, executing each one in turn. It
 uses the ``info`` field to store the result of each already executed
-``Operation``. In this interpreter sketch we stop at the first ``escape`` that
+``Operation``. In this interpreter sketch we stop at the first ``print`` that
 we execute and return its argument.
 
 Objects in the interpreter are represented using a class ``Object``, which
@@ -252,14 +254,14 @@ reclaim them. The very first example block had such an allocation::
     obj0 = alloc()
     store(obj0, 0, var0)
     var1 = load(obj0, 0)
-    escape(var1)
+    print(var1)
 
 Here ``obj0`` is written to, then read from, and then it's no longer used. We
 want to optimize such programs to remove this ``alloc`` operation. The optimized
 version of this program would look like this::
 
     var0 = getarg(0)
-    escape(var0)
+    print(var0)
 
 The ``alloc``, ``store`` and ``load`` operations have been completely removed.
 This is a pretty important optimizations for PyPy's JIT, and it is not a lot of
@@ -280,7 +282,7 @@ pass, using the example program above:
         obj = bb.alloc()
         sto = bb.store(obj, 0, var0)
         var1 = bb.load(obj, 0)
-        bb.escape(var1)
+        bb.print(var1)
         opt_bb = optimize_alloc_removal(bb)
         # the virtual object looks like this:
         #  obj
@@ -289,7 +291,7 @@ pass, using the example program above:
         # └──────────┘
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
-    optvar1 = escape(optvar0)"""
+    optvar1 = print(optvar0)"""
 
 
 We will define a class ``VirtualObject`` that is basically identical to
@@ -373,7 +375,7 @@ too, both allocations are removed:
         sto2 = bb.store(obj1, 0, obj0)
         var1 = bb.load(obj1, 0)
         var2 = bb.load(var1, 0)
-        bb.escape(var2)
+        bb.print(var2)
         # the virtual objects look like this:
         #  obj0
         # ┌──────┐
@@ -391,7 +393,7 @@ too, both allocations are removed:
         opt_bb = optimize_alloc_removal(bb)
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
-    optvar1 = escape(optvar0)"""
+    optvar1 = print(optvar0)"""
 
 
 
@@ -881,7 +883,7 @@ case, because right now loading from a non-virtual crashes.
         bb = Block()
         var0 = bb.getarg(0)
         var1 = bb.load(var0, 0)
-        bb.escape(var1)
+        bb.print(var1)
         # the next line fails in the line
         # op.make_equal_to(info.load(field))
         # because info is None
@@ -889,7 +891,7 @@ case, because right now loading from a non-virtual crashes.
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
     optvar1 = load(optvar0, 0)
-    optvar2 = escape(optvar1)"""
+    optvar2 = print(optvar1)"""
 
 To fix it, we split the ``load`` code into two cases, leaving the virtual path
 as before, and letting the ``load`` from a non-virtual fall through to the
@@ -936,8 +938,8 @@ We're almost at the end now. There's one final generalization left to do. We
 started with the heuristic that storing a virtual into a non-virtual would
 escape it. This should be generalized. Every time we pass a virtual into any
 operation where it is not the first argument of a ``load`` and a ``store``
-should also escape it (imagine passing the virtual to ``print`` or something
-like that). Let's test this as usual with our general ``escape`` operation:
+should also escape it (imagine passing the virtual to some function call).
+Let's test this as usual with our ``print`` operation:
 
 
 .. code:: python
@@ -947,12 +949,12 @@ like that). Let's test this as usual with our general ``escape`` operation:
         bb = Block()
         var0 = bb.getarg(0)
         var1 = bb.alloc()
-        var2 = bb.escape(var1)
+        var2 = bb.print(var1)
         opt_bb = optimize_alloc_removal(bb)
         assert bb_to_str(opt_bb, "optvar") == """\
     optvar0 = getarg(0)
     optvar1 = alloc()
-    optvar2 = escape(optvar1)"""
+    optvar2 = print(optvar1)"""
         # again, the resulting basic block is not in
         # valid SSA form
 
