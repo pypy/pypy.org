@@ -314,7 +314,7 @@ emits others.
 
 This first version of the allocation removal optimizer is going to be extremely
 optimistic. It simply assumes that *all* the allocations in the program can be
-optimized away. That is obviously not realistic in practice. We will have to
+optimized away. That is not realistic in practice. We will have to
 refine this approach later, but it's a good way to start. That means whenever
 the optimizer sees an ``alloc`` operation, it removes it and creates a
 ``VirtualObject`` object which stores the information that is known during
@@ -406,7 +406,7 @@ optimizer has optimized away the ``alloc`` operation that creates the object.
 Other objects are equivalently **not virtual**, for example those that have
 existed before we enter the current code block.
 
-The most obvious problem that we need to fix now is the assumption that every
+The first problem that we need to fix is the assumption that every
 allocation can be removed. So far we only looked at small programs where every
 allocation could be removed, or equivalently, where every object is virtual.
 A program that creates virtual objects, stores into and loads from them, and
