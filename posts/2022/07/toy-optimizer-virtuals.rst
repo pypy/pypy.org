@@ -271,8 +271,14 @@ version of this program would look like this::
     print(var0)
 
 The ``alloc``, ``store`` and ``load`` operations have been completely removed.
-This is a pretty important optimizations for PyPy's JIT, and it is not a lot of
-code to implement it! However, understanding all the corner cases of the
+This is a pretty important optimizations for PyPy's JIT: Allocations, memory
+reads and writes are quite costly and occur *a lot* in a dynamic language like
+Python where everything from integers to function frames are stored in freshly
+allocated heap objects. So getting rid of the allocation of temporary objects
+is instrumental in speeding up Python.
+
+Implementing the optimization is not a lot of code! However, understanding all
+the corner cases of the
 optimization and making sure that the resulting program behave correctly is not
 completely trivial. Therefore we will develop the optimization step by step, in
 a test driven fashion: I will start each section with a new test that shows a
