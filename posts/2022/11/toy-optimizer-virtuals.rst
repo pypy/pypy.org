@@ -1062,7 +1062,7 @@ Conclusion
 =============
 
 That's it! The core idea of PyPy's allocation removal optimization in one or
-two screenfull of code. The real implementation has a number of refinements,
+two screens of code. The real implementation has a number of refinements,
 but the core ideas are all here.
 
 I'm not going to show any benchmark numbers or anything like that here, if you
@@ -1071,7 +1071,7 @@ are interested in numbers you could look at the evaluation Section 6.
 
 .. __: https://www3.hhu.de/stups/downloads/pdf/BoCuFiLePeRi2011.pdf
 
-There's a complementary optimization that improves `load` and `store`
+There's a complementary optimization that improves ``load`` and ``store``
 operations for objects that are *not* virtual. I'll probably not write that
 down as another post, but `Max Bernstein`__ and I developed that together on a
 `PyPy Twitch channel`__ channel a few weeks ago, here's the recording:
