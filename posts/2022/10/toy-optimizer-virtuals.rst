@@ -34,7 +34,6 @@ the infrastructure code from the last post:
     :emphasize-lines: 21,88-92
 
     import pytest
-    import re
     from typing import Optional, Any
 
 
