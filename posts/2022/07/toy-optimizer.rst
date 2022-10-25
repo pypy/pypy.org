@@ -873,10 +873,11 @@ everything is put into a trace, which is basically one incredibly long basic
 block. In a JIT context it's also quite important that the
 optimizer itself runs quickly.
 
-Various other optimizations are possible in this model. I plan to write a
-follow-up post that show how to implement what is arguably PyPy's `most
+Various other optimizations are possible in this model. There is a
+`follow-up post`_ that show how to implement what is arguably PyPy's `most
 important optimization`_.
 
+.. _`follow-up post`: /posts/2022/10/toy-optimizer-allocation-removal.html
 .. _`most important optimization`: https://www.pypy.org/posts/2010/09/escape-analysis-in-pypys-jit-1780048403046080197.html
 
 
