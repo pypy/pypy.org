@@ -873,10 +873,11 @@ everything is put into a trace, which is basically one incredibly long basic
 block. In a JIT context it's also quite important that the
 optimizer itself runs quickly.
 
-Various other optimizations are possible in this model. I plan to write a
-follow-up post that show how to implement what is arguably PyPy's `most
+Various other optimizations are possible in this model. There is a
+`follow-up post`_ that show how to implement what is arguably PyPy's `most
 important optimization`_.
 
+.. _`follow-up post`: /posts/2022/10/toy-optimizer-allocation-removal.html
 .. _`most important optimization`: https://www.pypy.org/posts/2010/09/escape-analysis-in-pypys-jit-1780048403046080197.html
 
 
@@ -915,7 +916,7 @@ the current post, but will become important in the next one.
 
 **Acknowledgements:** Thanks to `Thorsten Ball`_ for `getting me`__ to write
 this and for his enthusiastic feedback. I also got great feedback from `Max
-Bernstein`__, Matti Picus and Per Vogensen. A conversation with `Peng Wu`__ that
+Bernstein`__, Matti Picus and Per Vognsen. A conversation with `Peng Wu`__ that
 we had many many years ago and that stuck with me made me keep thinking about
 various ways to view compiler optimizations.
 
