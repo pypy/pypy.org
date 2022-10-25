@@ -379,7 +379,7 @@ implementation. We will add the data structure right into our ``Value``,
     class Value:
         def find(self):
             raise NotImplementedError("abstract")
-        def _set_forwarded(self, value: Value):
+        def _set_forwarded(self, value):
             raise NotImplementedError("abstract")
 
 
