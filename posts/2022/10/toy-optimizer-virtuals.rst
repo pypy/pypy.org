@@ -1,6 +1,6 @@
 .. title: Allocation Removal in the Toy Optimizer
 .. slug: toy-optimizer-allocation-removal
-.. date: 2022-11-11 15:00:00 UTC
+.. date: 2022-10-25 7:55:00 UTC
 .. tags:
 .. category:
 .. link:
@@ -21,9 +21,8 @@ implemented.
 
 In the previous_ blog post of this series I showed the complete code for
 writing a toy one-pass optimizer that does constant folding, common
-subexpression elimination and strength reduction. All those optimizations are in
-some way relatively straightforward in this really minimal form. So in this
-second post, I want to use allocation removal as a more interesting optimization
+subexpression elimination and strength reduction. In this
+second post, I want to use allocation removal as a more advanced optimization
 pass. The basic optimization framework is the same, we will use the same
 datastructures for intermediate representation and also keep using the same
 union find data structure to store equivalences between IR operations. Here's
@@ -251,7 +250,7 @@ Objects in the interpreter are represented using a class ``Object``, which
 stores the object's field into a Python dictionary. As written above, this is a
 simplification, in a real system the `alloc` operation might for example take
 some kind of type as an argument, that describes which kinds of fields an
-object has and how they are layed out in memory, which would allow more
+object has and how they are laid out in memory, which would allow more
 efficient storage of the content. But we don't want to care about this level of
 detail in the post, so using a dict in the interpreter is good enough.
 
@@ -418,7 +417,7 @@ Version 2: Re-Materializing Allocations
 =========================================
 
 To make it easier to talk about how the optimizer operates, let's introduce
-some terminology. `¹`_  As already seen by the choice
+some terminology. As already seen by the choice
 of the class name ``VirtualObject``, we will call an object **virtual** if the
 optimizer has optimized away the ``alloc`` operation that creates the object.
 Other objects are equivalently **not virtual**, for example those that have
@@ -439,7 +438,7 @@ simple heuristic:
 
 If a reference to a virtual object ``a`` is stored into an object ``b``
 that is not virtual, then ``a`` will also stop being virtual. If an object ``a``
-that was virtual stops being virtual, we say that it **escapes**.
+that was virtual stops being virtual, we say that it **escapes**. `¹`_
 
 The simplest test case for this happening looks like this:
 
@@ -456,7 +455,7 @@ The simplest test case for this happening looks like this:
         # │ empty │
         # └───────┘
         # then we store a reference to obj into
-        # field 0 of var0 a. since var0 is not virtual,
+        # field 0 of var0. Since var0 is not virtual,
         # obj escapes, so we have to put it back
         # into the optimized basic block
         assert bb_to_str(opt_bb, "optvar") == """\
