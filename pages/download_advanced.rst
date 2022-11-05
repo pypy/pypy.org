@@ -235,7 +235,7 @@ are better solutions:
 .. _`portable-pypy`: https://github.com/squeaky-pl/portable-pypy#portable-pypy-distribution-for-linux
 .. _`recompile the CFFI-based`: https://doc.pypy.org/en/latest/build.html#build-cffi-import-libraries-for-the-stdlib
 .. _`certifi`: https://pypi.org/project/certifi/
-.. _conda: https://conda-forge.org/docs/user/tipsandtricks.html#using-pypy-as-an-interpreter
+.. _conda: /posts/2022/11/pypy-and-conda-forge.html
 
 ..
   notes_and_links finish
@@ -314,11 +314,11 @@ a symlink to it, otherwise it will not find its libraries.
 Installing more modules
 -----------------------
 
-There are as yet few distribution-ready packages. `conda`_ is one easy
-way to get packages with a minimum of compilation.
-We recommend installing ``pip``, which is the standard package
-manager of Python.  It works like it does on CPython as explained in the
-`installation documentation`_.
+Using `conda`_ is the easiest way to get binary packages  with a minimum of
+compilation. The tpyical ``pip`` workflow for packages with binary extensions
+requires that the package maintainers provide a wheel for PyPy, which is
+sometimes too much work for the overburdened maintainers. For more information
+see the `installation documentation_`
 
 If you use your distribution's PyPy package we recommend you install packages
 into a virtualenv. If you try to build a module and the build process complains
@@ -326,7 +326,7 @@ about "missing Python.h", you may need to install the pypy-dev package.
 
 .. _installation documentation: https://doc.pypy.org/en/latest/install.html
 
-.. _translate:
+.. _translate: https://doc.pypy.org/en/latest/build.html
 
 Building from source
 --------------------
