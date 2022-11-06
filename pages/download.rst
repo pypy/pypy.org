@@ -10,8 +10,8 @@
 We provide pre-compiled binaries for many platforms and OSes. There are also
 pre-compiled binaries available on `conda-forge`_. We have found conda-forge
 a convenient and cooperative community for distributing not only the
-interpreter, but many binary packages like SciPy which may not be available
-on PyPI.
+interpreter, but many packages like SciPy that are difficult to build and 
+which do not yet have binary PyPy builds available on PyPI.
 
 .. note::
   Our `nightly binary builds`_ have the most recent bugfixes and performance
