@@ -526,7 +526,7 @@ This was optimized to:
     [a, b]
     finish(a)
 
-Which is incorrect, because the guard can obviously fail given the wrong inputs.
+Which is incorrect, because the guard can obviously fail given the right inputs.
 But the optimizer concluded that the subtraction is safe, because its the
 inverse of an earlier addition, not taking into account that this earlier
 addition can have overflowed.
