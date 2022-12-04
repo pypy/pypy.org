@@ -429,7 +429,7 @@ Which was wrongly optimized into:
             return 0
         return 2
 
-This is wrong precisely for `x == MININT`.
+This is wrong precisely for ``x == MININT``.
 
 Generating Random Traces
 =========================
