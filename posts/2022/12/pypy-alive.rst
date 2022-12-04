@@ -10,20 +10,20 @@
 
 In this blog post I want to describe a recent bug finding technique that I've
 added to the PyPy JIT testing infrastructure using the Z3 theorem prover. It's
-based on things I have learned from `John Regehr's`_ blog__, Twitter__, and on
+based on things I have learned from `John Regehr's`_ blog_, Twitter_, and on
 his (et al) paper `Alive2: Bounded Translation Validation for LLVM`__. The work
 was triggered by a recent miscompilation bug my current bachelor student Nico
 Rittinghaus found.
 
 .. _`John Regehr's`: https://www.cs.utah.edu/~regehr/
-.. __: https://blog.regehr.org/archives/1122
-.. __: https://twitter.com/johnregehr/
+.. _blog: https://blog.regehr.org/archives/1122
+.. _Twitter: https://twitter.com/johnregehr/
 .. __: https://www.cs.utah.edu/~regehr/alive2-pldi21.pdf
 
 Background: Bounds Analysis in the JIT
 ======================================
 
-The optimizer of PyPy's JIT has an analysis based on `abstract interpretation`__
+The optimizer of PyPy's JIT has an analysis based on `abstract interpretation`_
 that tries to find out, whether the integer values stored in a variable are
 actually not using the full 64 bit (or 32 bit) range, but instead fit into some
 smaller range. This means that for every integer variable ``x`` in a trace, the JIT
@@ -45,7 +45,7 @@ subtle and easy to get wrong in corner cases. We already use a number of testing
 techniques to try to make sure that it is correct. A simple one is
 `property-based testing`_ using Hypothesis_ on the operations on bounds.
 
-.. __: https://en.wikipedia.org/wiki/Abstract_interpretation
+.. _`abstract interpretation`: https://en.wikipedia.org/wiki/Abstract_interpretation
 .. _`property-based testing`: https://hypothesis.works/articles/what-is-property-based-testing/
 .. _Hypothesis: https://github.com/HypothesisWorks/hypothesis
 
@@ -283,10 +283,10 @@ Z3 variable).
         return self.box_to_z3[box]
 
 ``box_to_z3`` is a dictionary mapping boxes (=variables) to Z3 variables. Due to
-the SSA__ property that traces have, a variable must be defined before its first
+the SSA_ property that traces have, a variable must be defined before its first
 use.
 
-.. __SSA: https://en.wikipedia.org/wiki/Static_single-assignment_form
+.. _SSA: https://en.wikipedia.org/wiki/Static_single-assignment_form
 
 Comparisons return the bit vector 0 or bit vector 1, we use a helper function
 ``cond`` to turn the Z3 truth value of the comparison into a bit vector:
