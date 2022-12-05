@@ -231,7 +231,7 @@ following:
 
 - We repeat this, guard for guard, until we reach the end of the trace. There,
   we ask Z3 to prove that the output variables in the unoptimized trace and the
-  optimized trace are identical.
+  optimized trace are identical (every trace can return one or many values).
 
 I implemented this, it's `not a lot of code`__, basically a couple of hundred lines
 of (not particularly great) Python code. So far I only support integer
@@ -246,7 +246,10 @@ This is the code that translates operations into Z3 formulas:
 
     def add_to_solver(self, ops, state):
         for op in ops:
-
+            if op.type != 'v': # is it an operation with a result
+                res = self.newvar(op)
+            else: # or does it return void
+                res = None
            ...
             # convert arguments
             if op.numargs() == 1:
@@ -268,12 +271,32 @@ This is the code that translates operations into Z3 formulas:
                 expr = arg0 | arg1
             elif opname == "int_xor":
                 expr = arg0 ^ arg1
-            ...
+            ... # more operations, some shown below
 
+            self.solver.add(res == expr)
+
+
+New Z3 variables are defined by the helper function ``newvar``, which adds the
+operation to a dictionary ``box_to_z3`` mapping boxes (=variables) to Z3
+variables. Due to the SSA_ property that traces have, a variable must be defined
+before its first use.
+
+Here's what ``newvar`` looks like:
+
+.. code:: python
+
+    def newvar(self, box, repr=None):
+        # ... some logic around making the string representation
+        # somewhat nicer omitted
+        result = z3.BitVec(repr, LONG_BIT)
+        self.box_to_z3[box] = result
+        return result
 
 The ``convert`` method turns an operation argument (either a constant or a
 variable) into a Z3 formula (either a constant bit vector or an already defined
-Z3 variable).
+Z3 variable). ``convertarg`` is a helper function that takes an operation, reads
+its nth argument and converts it. ``LONG_BIT`` is a constant that is either
+``64`` or ``32``, depending on the target architecture.
 
 .. code:: python
 
@@ -282,9 +305,12 @@ Z3 variable).
             return z3.BitVecVal(box.getint(), LONG_BIT)
         return self.box_to_z3[box]
 
-``box_to_z3`` is a dictionary mapping boxes (=variables) to Z3 variables. Due to
-the SSA_ property that traces have, a variable must be defined before its first
-use.
+    def convertarg(self, box, arg):
+        return self.convert(box.getarg(arg))
+
+The lookup of variables in ``box_to_z3`` that ``convert`` does cannot fail,
+because the variable must have been defined before use.
+
 
 .. _SSA: https://en.wikipedia.org/wiki/Static_single-assignment_form
 
@@ -391,18 +417,114 @@ and ``guard_overflow``.
             return z3.Not(state.no_ovf)
         ...
 
+Let's actually make all of this more concrete by applying it to the trace of our
+original bug. The trace for that looks like this:
+
+.. code::
+
+    [i0]
+    i1 = int_add(i0, 10)
+    i2 = int_lt(i1, 15)
+    guard_true(i2)
+    i3 = int_lt(i0, 6)
+    guard_true(i3)
+    jump(i0)
+
+Which gets optimized to:
+
+.. code::
+
+    [i0]
+    i1 = int_add(i0, 10)
+    i2 = int_lt(i1, 15)
+    guard_true(i2)
+    jump(i0)
+
+The first guards in both these traces correspond to each other, so the first
+chunks to check are the operations:
+
+.. code::
+
+    [i0]
+    i1 = int_add(i0, 10)
+    i2 = int_lt(i1, 15)
+    guard_true(i2)
+
+The prefix of the optimized trace is the same. These two identical traces get
+translated to the following Z3 formulas:
+
+.. code::
+
+    i1unoptimized == input_i0 + 10
+    i2unoptimized == If(i1unoptimized < 15, 1, 0)
+    i1optimized == input_i0 + 10
+    i2optimized == If(i1optimized < 15, 1, 0)
+
+To check that the two corresponding guards are the same, the solver is asked to
+prove that ``(i2unoptimized == 1) == (i2optimized == 1)``. This is of course
+correct, because the formulas for ``i2unoptimized`` and ``i2optimized`` are
+completely identical.
+
+After checking that the guards behave the same, we add the knowledge to the
+solver that the guards passed. So the Z3 formulas become:
+
+.. code::
+
+    i1unoptimized == input_i0 + 10
+    i2unoptimized == If(i1unoptimized < 15, 1, 0)
+    i1optimized == input_i0 + 10
+    i2optimized == If(i1optimized < 15, 1, 0)
+    i1optimized == 1
+    i2optimized == 1
+
+Now we continue with the remaining operations of the two traces. In the
+unoptimized trace those are:
+
+.. code::
+
+    i3 = int_lt(i0, 6)
+    guard_true(i3)
+    jump(i0)
+
+In the optimized trace it's just:
+
+.. code::
+
+    jump(i0)
+
+We start by adding the ``int_lt`` operation to the Z3 formulas:
+
+.. code::
+
+    ...
+    i3unoptimized == If(input_i0 < 6, 1, 0)
+
+Now because the guard was optimized away, we need to ask Z3 to prove that it's
+always True, which fails and gives the following counterexample:
+
+.. code::
+
+    input_i0 = 9223372036854775800
+    i1unoptimized = 9223372036854775810
+    i2unoptimized = 0
+    i1optimized = 9223372036854775810
+    i2optimized = 1
+    i3unoptimized = 1
+
+The fact that the Z3-based equivalence check also managed to find the original
+motivating bug without manually translating it is a good confirmation that the
+approach works.
 
 Second bug
 ===========
 
 So with this code I applied the Z3-based equivalence check to all our optimizer
-unit tests. A good confirmation that I was doing something sensible was that it
-found the buggy original unit test from above. However, it also found another
-buggy test! I had found it too by hand by staring at all the tests in the
-process of writing all the Z3 code, but it was still a good confirmation that
-the process worked. This bug was in the range analysis for ``int_neg``, integer
-negation. It failed to account that ``-MININT == MININT`` and therefore did a
-mis-optimization along the following lines:
+unit tests. In addition to the bug we've been discussing the whole post, it also
+found another buggy test! I had found it too by hand by staring at all the tests
+in the process of writing all the Z3 code, but it was still a good confirmation
+that the process worked. This bug was in the range analysis for ``int_neg``,
+integer negation. It failed to account that ``-MININT == MININT`` and therefore
+did a mis-optimization along the following lines:
 
 .. code:: python
 
@@ -458,7 +580,7 @@ is possible with at least one set of values.
 Here's an example random trace that is generated, together with the random
 example inputs and the results of every operation at the end of every line::
 
-    label(i0, i1, i2, i3, i4, i5) # example values: 9, 11, -8, -95, 46, 57
+    [i0, i1, i2, i3, i4, i5] # example values: 9, 11, -8, -95, 46, 57
     i6 = int_add_ovf(i3, i0) # -86
     guard_no_overflow()
     i7 = int_sub(i2, -35/ci) # 27
@@ -580,3 +702,8 @@ to integrate it into our testing infrastructure after the next PyPy release is
 out.
 
 .. __: https://foss.heptapod.net/pypy/pypy/-/tree/branch/fix-intutils-ovf-bug
+
+Acknowledgements
+=================
+
+Thanks to Saam Barati for great feedback on drafts of this post!
