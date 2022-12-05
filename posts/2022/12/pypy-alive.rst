@@ -28,7 +28,7 @@ that tries to find out, whether the integer values stored in a variable are
 actually not using the full 64 bit (or 32 bit) range, but instead fit into some
 smaller range. This means that for every integer variable ``x`` in a trace, the JIT
 compile tracks a range ``[a, b]`` with concrete integers ``a <= b`` in such a
-way, that the for every concrete runtime execution of the trace with a concrete
+way, that for every concrete runtime execution of the trace with a concrete
 value stored in ``x``, ``a <= x <= b`` must be true. ``a`` and ``b`` start out
 as the most general ``MININT`` and ``MAXINT``, but sometimes there is extra
 information that makes it possible to improve these known bounds, and that is
@@ -724,4 +724,4 @@ out.
 Acknowledgements
 =================
 
-Thanks to Saam Barati for great feedback on drafts of this post!
+Thanks to Saam Barati and Joshua Schmidt for great feedback on drafts of this post!
