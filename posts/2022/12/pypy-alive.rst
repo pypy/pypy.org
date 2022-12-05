@@ -430,6 +430,9 @@ and ``guard_overflow``.
             return z3.Not(state.no_ovf)
         ...
 
+Finding the Bug, Again
+=======================
+
 Let's actually make all of this more concrete by applying it to the trace of our
 original bug. The trace for that looks like this:
 
@@ -536,10 +539,10 @@ Second bug
 So with this code I applied the Z3-based equivalence check to all our optimizer
 unit tests. In addition to the bug we've been discussing the whole post, it also
 found another buggy test! I had found it too by hand by staring at all the tests
-in the process of writing all the Z3 code, but it was still a good confirmation
-that the process worked. This bug was in the range analysis for ``int_neg``,
-integer negation. It failed to account that ``-MININT == MININT`` and therefore
-did a mis-optimization along the following lines:
+in the process of writing all the Z3 infrastructure, but it was still a good
+confirmation that the process worked. This bug was in the range analysis for
+``int_neg``, integer negation. It failed to account that ``-MININT == MININT``
+and therefore did a mis-optimization along the following lines:
 
 .. code:: python
 
