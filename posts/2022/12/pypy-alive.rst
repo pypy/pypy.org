@@ -398,7 +398,20 @@ or not.
 
 The boolean is computed by comparing the result of the bit vector operation with
 the result of converting the input bit vectors into an abstract (arbitrary
-precision) integer and the result back to bit vectors.
+precision) integer and the result back to bit vectors. Let's go through the
+addition case step by step, the other cases work analogously.
+
+The addition of the ``elif`` that computes ``expr`` is an addition on bit
+vectors, therefore it is performing wraparound arithmetic.
+``z3.SignExt(LONG_BIT, arg0)`` sign-extends ``arg0`` from a bit vector of
+``LONG_BIT`` bits to an abstract, arbitrary precision integer. The addition in
+the second line is therefore an addition between abstract integers, so it will
+never overflow and just compute the correct result as an integer.
+
+The condition to check for overflow is now: Overflow did
+not occur if the results of the two different ways to do the addition are the
+same. So in the third line the code converts the result of the bit vector
+wraparound addition to an integer, and then compares that to the integer result.
 
 This boolean can then be checked by the guard operations ``guard_no_overflow``
 and ``guard_overflow``.
