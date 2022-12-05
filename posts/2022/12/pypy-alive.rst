@@ -428,9 +428,11 @@ original bug. The trace for that looks like this:
     guard_true(i2)
     i3 = int_lt(i0, 6)
     guard_true(i3)
-    jump(i0)
+    jump(0)
 
-Which gets optimized to:
+Note that it's just one of the paths through the control flow graph of the
+original function, because PyPy is using a tracing JIT (the other paths could
+incrementally get added later). This trace gets wrongly optimized to:
 
 .. code::
 
@@ -438,10 +440,10 @@ Which gets optimized to:
     i1 = int_add(i0, 10)
     i2 = int_lt(i1, 15)
     guard_true(i2)
-    jump(i0)
+    jump(0)
 
 The first guards in both these traces correspond to each other, so the first
-chunks to check are the operations:
+chunks to check are the first three operations:
 
 .. code::
 
@@ -484,13 +486,13 @@ unoptimized trace those are:
 
     i3 = int_lt(i0, 6)
     guard_true(i3)
-    jump(i0)
+    jump(0)
 
 In the optimized trace it's just:
 
 .. code::
 
-    jump(i0)
+    jump(0)
 
 We start by adding the ``int_lt`` operation to the Z3 formulas:
 
@@ -511,9 +513,9 @@ always True, which fails and gives the following counterexample:
     i2optimized = 1
     i3unoptimized = 1
 
-The fact that the Z3-based equivalence check also managed to find the original
-motivating bug without manually translating it is a good confirmation that the
-approach works.
+Thus demonstrating the bug. The fact that the Z3-based equivalence check also
+managed to find the original motivating bug without manually translating it is a
+good confirmation that the approach works.
 
 Second bug
 ===========
