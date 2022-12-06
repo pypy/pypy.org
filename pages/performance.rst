@@ -364,8 +364,8 @@ working on it):
   is JITted), and to all usages of the ``operator`` module we can think
   of.
 
-* **Ctypes**: Ctypes is slower than on CPython.  Consider CFFI_ instead,
-  which has special paths inside the JIT.
+* **Ctypes**: Ctypes is slower than on CPython.  Consider CFFI_ or HPy_
+  instead which have special paths inside the JIT.
 
 We generally consider things that are slower on PyPy than CPython to be bugs
 of PyPy.  If you find some issue that is not documented here,
@@ -374,3 +374,4 @@ please report it to our `bug tracker`_ for investigation.
 .. _`bug tracker`: https://foss.heptapod.net/pypy/pypy/-/issues
 .. _`speed website`: http://speed.pypy.org
 .. _CFFI: http://cffi.readthedocs.org/
+.. _HPy: https://hpyproject.org/

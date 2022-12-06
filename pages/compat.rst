@@ -15,7 +15,7 @@ TL;DR
 Pure python code works, but there are a few differences with object lifetime
 management. Modules that use the `CPython C API`_ will probably work, but will
 not achieve a speedup via the JIT. We encourage library authors to use `CFFI`_
-instead.
+and HPy_ instead.
 
 If you are looking for how to use PyPy with the scientific python ecosystem,
 we encourage you to use `conda`_, since they repackage common libraries like
@@ -102,6 +102,7 @@ A more complete list of known differences is available at `our dev site`_.
 
 .. _`CPython C API`: http://docs.python.org/c-api/
 .. _`CFFI`: http://cffi.readthedocs.org/
+.. _HPy: https://hpyproject.org/
 .. _`conda`: https://conda-forge.org/blog/posts/2020-03-10-pypy/
 .. _`our dev site`: http://pypy.readthedocs.org/en/latest/cpython_differences.html
 .. _`more details here`: http://pypy.readthedocs.org/en/latest/cpython_differences.html#differences-related-to-garbage-collection-strategies
