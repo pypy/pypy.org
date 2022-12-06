@@ -708,6 +708,10 @@ OUTPUT_FOLDER = 'public'
 #    ".js": [filters.closure_compiler],
 #    ".jpg": ["jpegoptim --strip-all -m75 -v %s"],
 # }
+from nikola import filters
+FILTERS = {
+    ".html": [filters.add_header_permalinks],
+}
 
 # Executable for the "yui_compressor" filter (defaults to 'yui-compressor').
 # YUI_COMPRESSOR_EXECUTABLE = 'yui-compressor'
