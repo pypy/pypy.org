@@ -9,9 +9,9 @@
 .. author: Carl Friedrich Bolz-Tereick
 
 In this blog post I want to describe a recent bug finding technique that I've
-added to the PyPy JIT testing infrastructure using the Z3 theorem prover to find
-bugs in the optimizer of PyPy's JIT, in particular its integer operation
-optimizations. The technique is
+added to the PyPy JIT testing infrastructure using. This technique uses the Z3
+theorem prover to find bugs in the optimizer of PyPy's JIT, in particular its
+integer operation optimizations. The technique is
 based on things I have learned from `John Regehr's`_ blog_ (`this post`_ is a
 good first one to read), Twitter_, and on
 his (et al) paper `Alive2: Bounded Translation Validation for LLVM`__. The work
@@ -24,17 +24,18 @@ Rittinghaus found.
 .. _Twitter: https://twitter.com/johnregehr/
 .. __: https://www.cs.utah.edu/~regehr/alive2-pldi21.pdf
 
-Background: Python Integers in the JIT
-===========================================
+Background: Python Integers in the PyPy JIT
+=============================================
 
 The optimizer of PyPy's JITs operates on traces, which are linear sequences of
 instructions with guards. The instructions in the traces operate on different
-data types, machine integers, doubles, pointers, bools, etc. In this post we'll
-be mostly concerned with machine integers.
+machine-level data types, machine integers, doubles, pointers, bools, etc. In
+this post we'll be mostly concerned with machine integers.
 
 To given some wider context I'll explain a bit how Python ints in the user code
-relate to the types that are used in traces.
-When turning a regular Python 3 function into a trace, there is a lot of work
+relate to the types that are used in traces when the PyPy Python implementation
+is used.
+When PyPy turns a regular Python 3 function into a trace, there is a lot of work
 happening in the JIT frontend to try to observe and infer the types that the
 Python function concretely uses at runtime. The traces are generated under these
 typing assumptions. Therefore, code that uses ``ints`` in the Python code can
