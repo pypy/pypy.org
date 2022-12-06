@@ -489,7 +489,7 @@ original bug. The input trace and the incorrectly optimized trace for that look
 like this (differences highlighted):
 
 .. code:: python
-   :emphasize-lines: 6-8
+    :emphasize-lines: 6-8
 
     # input                       # optimized
     [i0]                          [i0]
