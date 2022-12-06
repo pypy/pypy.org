@@ -46,7 +46,7 @@ situation for most programs), the trace is left via a guard, execution falls
 back to the interpreter, and there a big integer representation is chosen for
 the too big value (and then those values would be represented by pointers).
 
-All of this machinery is not going to be very important for the rest of the
+All of this machinery is not going to be too relevant for the rest of the
 post. For the post it's important to know that trace instructions operate on
 machine integers, and some of the operations can optionally check whether the
 results still fit into a machine integer. These trace operations are improved by
@@ -74,12 +74,12 @@ non-negative, so for this kind of code: ``x = len(s)`` where ``s`` is a string,
 ``x`` gets a range ``[0, MAXINT]`` assigned. With this information we could for
 example remove a check ``x + 10 < 0`` completely, because it can never be true.
 
-The bounds information is very useful for optimization, but the analysis of the
+The bounds information is useful for optimization, but the analysis of the
 bounds is also a source of bugs in the JIT, because the reasoning is often
 subtle and easy to get wrong in corner cases. We already use a number of testing
 techniques to try to make sure that it is correct. A simple one is
 `property-based testing`_ using Hypothesis_ on the operations on bounds. Even
-though Hypothesis is totally fantastic, it unfortunately does not catch
+though Hypothesis is fantastic, it unfortunately does not catch
 absolutely all the bugs even if we'd like it too, as we'll see in the next
 section.
 
@@ -101,7 +101,7 @@ operation", i.e. one where overflowing results just wrap around to negative
 values. All the additions and other arithmetic operations that the Python frontend generates actually have
 overflow checks (to be able to switch to a big integer representation if
 needed).
-However, it's still possible to trigger the problem with the special
+However, it's still possible to trigger the problem with the
 ``__pypy__.intop.int_add`` API which is a function that exposes wraparound
 arithmetic on Python ints.
 
@@ -154,24 +154,24 @@ bug could have been avoided. I think this is particularly important in the JIT,
 where bugs are potentially really annoying to find and can cause very strange
 behaviour in basically arbitrary Python code.
 
-As usual for this bug the answer would have been "try to think more carefully
-when working", but that often fails in complicated situations, because humans
-don't concentrate perfectly for long stretches of time.
+It's easy to always answer this question with "try to think more carefully
+when working", but that approach cannot be relied on in complicated situations,
+because humans don't concentrate perfectly for long stretches of time.
 
-Another problem that I identified was that the API that the range analysis uses
-is bad. A range is not just represented by two numbers, instead it's two numbers
+A situation-specific problem I identified was the bad design of the range analysis API.
+A range is not just represented by two numbers, instead it's two numbers
 and two bools that are supposed to represent that some operation did or did not
 underflow/overflow. The meaning of these bools was quite hard to grasp and easy
 to get wrong, so probably they should never have been introduced in the first
-place (and my eventual bugfix will indeed remove them).
+place (and my bugfix will indeed remove them, once it gets merged).
 
-But in the rest of this blog post I want to talk about a very systematic
+But in the rest of this blog post I want to talk about a systematic
 approach that can be applied to the problem of mis-optimizations of integer
 operations, and that is done by applying an SMT solver to the problem.
 
 An SMT solver (`Satisfyability Modulo Theories`_) is a tool that can be used to
-find out whether a certain mathematical formula is "satisfiable", i.e. whether
-some chosen set of input will make the formula evaluate to true. SMT solvers are
+find out whether mathematical formulas is "satisfiable", i.e. whether
+some chosen set of input will make the formulas evaluate to true. SMT solvers are
 commonly used in a wide range of CS applications including program correctness
 proofs, program synthesis, etc. The most widely known one is probably Z3_ by
 Microsoft Research which has the nice advantage of coming with an easy-to-use
@@ -399,7 +399,7 @@ Comparisons return the bit vector 0 or bit vector 1, we use a helper function
             # ... rest as above
 
 So basically for every trace operation that operates on integers I had to give a
-translation into Z3 formulas, which is mostly very straightforward.
+translation into Z3 formulas, which is mostly straightforward.
 
 Guard operations get converted into a Z3 boolean by their own helper function,
 which looks like this:
@@ -609,7 +609,7 @@ also in the register allocator. So far we haven't used it with our optimizer,
 but my experiments show that we should have!
 
 I'm going to describe a little bit how the random trace generator works. It's
-actually not very complicated in many ways, but there's one neat trick to it.
+actually not that complicated, but there's one neat trick to it.
 
 The basic idea is straightforward, it starts out with an empty trace with a
 random number of input variables. Then it adds some number of operations to the
@@ -648,8 +648,8 @@ Note how every guard generated is true for the example values.
 
 I have been running this combination of random trace generation and Z3 checking
 for many nights and it has found some bugs, which I'll describe in the next
-section. It should probably could still be run for a lot longer, but still a
-very useful exercise already.
+section. It should probably be run for a lot longer, but still a useful
+exercise already.
 
 In this mode, I'm giving every Z3 call a time limit to make sure that the random
 tests don't just take arbitrarily long. This means that asking Z3 to prove
@@ -760,9 +760,10 @@ out.
 Acknowledgements
 =================
 
-Thanks to `Saam Barati`_, `Max Bernstein`_ and `Joshua Schmidt`_ for great
-feedback on drafts of this post!
+Thanks to `Saam Barati`_, `Max Bernstein`_, `Joshua Schmidt`_ and `Martin
+Berger`_, for great feedback on drafts of this post!
 
 .. _`Saam Barati`: http://saambarati.org/
 .. _`Max Bernstein`: https://bernsteinbear.com
+.. _`Martin Berger`: https://martinfriedrichberger.net/
 .. _`Joshua Schmidt`: https://www.cs.hhu.de/lehrstuehle-und-arbeitsgruppen/softwaretechnik-und-programmiersprachen/unser-team/team/schmidt
