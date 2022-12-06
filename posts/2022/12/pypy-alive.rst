@@ -98,7 +98,8 @@ bounds analysis was actually incorrect, and the example code in that unit test
 was optimized incorrectly. This case of incorrect optimization is not a big deal
 for regular Python code, because it involved a "wrapping integer addition
 operation", i.e. one where overflowing results just wrap around to negative
-values. All the additions and other arithmetic operations that the Python frontend generates actually have
+values. All the additions and other arithmetic operations that the PyPy Python
+frontend generates actually have
 overflow checks (to be able to switch to a big integer representation if
 needed).
 However, it's still possible to trigger the problem with the
