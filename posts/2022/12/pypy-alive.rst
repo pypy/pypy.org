@@ -9,14 +9,18 @@
 .. author: Carl Friedrich Bolz-Tereick
 
 In this blog post I want to describe a recent bug finding technique that I've
-added to the PyPy JIT testing infrastructure using the Z3 theorem prover. It's
-based on things I have learned from `John Regehr's`_ blog_, Twitter_, and on
+added to the PyPy JIT testing infrastructure using the Z3 theorem prover to find
+bugs in the optimizer of PyPy's JIT, in particular its integer operation
+optimizations. The technique is
+based on things I have learned from `John Regehr's`_ blog_ (`this post`_ is a
+good first one to read), Twitter_, and on
 his (et al) paper `Alive2: Bounded Translation Validation for LLVM`__. The work
 was triggered by a recent miscompilation bug my current bachelor student Nico
 Rittinghaus found.
 
 .. _`John Regehr's`: https://www.cs.utah.edu/~regehr/
-.. _blog: https://blog.regehr.org/archives/1122
+.. _blog: https://blog.regehr.org/
+.. _`this post`: https://blog.regehr.org/archives/1122
 .. _Twitter: https://twitter.com/johnregehr/
 .. __: https://www.cs.utah.edu/~regehr/alive2-pldi21.pdf
 
@@ -24,12 +28,13 @@ Background: Bounds Analysis in the JIT
 ======================================
 
 The optimizer of PyPy's JIT has an analysis based on `abstract interpretation`_
-that tries to find out, whether the integer values stored in a variable are
+that tries to find out whether the integer values stored in a variable are
 actually not using the full 64 bit (or 32 bit) range, but instead fit into some
-smaller range. This means that for every integer variable ``x`` in a trace, the JIT
-compile tracks a range ``[a, b]`` with concrete integers ``a <= b`` in such a
-way, that for every concrete runtime execution of the trace with a concrete
-value stored in ``x``, ``a <= x <= b`` must be true. ``a`` and ``b`` start out
+smaller range. This means that for every integer variable ``x`` in a trace, the
+JIT compiler tracks upper and lower bounds of the runtime value of that
+variable: a range ``[a, b]`` such that for every concrete runtime value ``v``
+that gets stored in variable ``x``, ``a <= v <= b`` must be true.
+``a`` and ``b`` start out
 as the most general ``MININT`` and ``MAXINT``, but sometimes there is extra
 information that makes it possible to improve these known bounds, and that is
 often useful to optimize the code.
@@ -37,13 +42,16 @@ often useful to optimize the code.
 A typical example is that the JIT knows that the length of a string is
 non-negative, so for this kind of code: ``x = len(s)`` where ``s`` is a string,
 ``x`` gets a range ``[0, MAXINT]`` assigned. With this information we could for
-example remove a check ``x + 10 < 0`` completely, because it can never be True.
+example remove a check ``x + 10 < 0`` completely, because it can never be true.
 
 The bounds information is very useful for optimization, but the analysis of the
 bounds is also a source of bugs in the JIT, because the reasoning is often
 subtle and easy to get wrong in corner cases. We already use a number of testing
 techniques to try to make sure that it is correct. A simple one is
-`property-based testing`_ using Hypothesis_ on the operations on bounds.
+`property-based testing`_ using Hypothesis_ on the operations on bounds. Even
+though Hypothesis is totally fantastic, it unfortunately does not catch
+absolutely all the bugs even if we'd like it too, as we'll see in the next
+section.
 
 .. _`abstract interpretation`: https://en.wikipedia.org/wiki/Abstract_interpretation
 .. _`property-based testing`: https://hypothesis.works/articles/what-is-property-based-testing/
@@ -66,9 +74,9 @@ However, it's still possible to trigger the problem with the special
 ``__pypy__.intop.int_add`` API which is a function that exposes wraparound
 arithmetic on ints.
 
-Here's the miscompilation. The JIT optimizes the following function:
+`Here's the miscompilation`_. The JIT optimizes the following function:
 
-https://foss.heptapod.net/pypy/pypy/-/issues/3832
+.. _`Here's the miscompilation`: https://foss.heptapod.net/pypy/pypy/-/issues/3832
 
 
 .. code:: python
@@ -97,14 +105,14 @@ Into the following code:
 
 Basically the faulty reasoning of the JIT looks like this: if ``int_add(x, 10) < 15``
 then it must follow that ``x < 5``, which is stronger than ``x < 6``, so the
-second ``if`` is always True. This sounds good, but is of course actually wrong
+second ``if`` is always true. This sounds good, but is actually wrong
 if the addition ``+ 10`` wrapped around. So if ``x == MAXINT``, then
-``int_add(x, 10) == MININT + 9 < 15``. But ``MAXINT < 5`` is of course not
+``int_add(x, 10) == MININT + 9 < 15``. But ``MAXINT < 5`` is not
 correct.
 
 Note how the same reasoning with overflow-checking addition is correct! If ``x +
 10 < 15`` and the ``+`` didn't overflow, then indeed ``x < 6``. And if your
-brain bends starting to think about all this, you understand some of the
+mind bends starting to think about all this, you understand some of the
 difficulty of getting the JIT correct in this area.
 
 How could we have avoided this bug?
@@ -112,7 +120,8 @@ How could we have avoided this bug?
 
 One `exercise I try to do after finding bugs`_ is to reflect on ways that the
 bug could have been avoided. I think this is particularly important in the JIT,
-where bugs are potentially really annoying to find.
+where bugs are potentially really annoying to find and can cause very strange
+behaviour in basically arbitrary Python code.
 
 As usual for this bug the answer would have been "try to think more carefully
 when working", but that often fails in complicated situations, because humans
@@ -131,7 +140,7 @@ operations, and that is done by applying an SMT solver to the problem.
 
 An SMT solver (`Satisfyability Modulo Theories`_) is a tool that can be used to
 find out whether a certain mathematical formula is "satisfiable", i.e. whether
-some chosen set of input will make the formula evaluate to True. SMT solvers are
+some chosen set of input will make the formula evaluate to true. SMT solvers are
 commonly used in a wide range of CS applications including program correctness
 proofs, program synthesis, etc. The most widely known one is probably Z3_ by
 Microsoft Research which has the nice advantage of coming with an easy-to-use
@@ -175,8 +184,8 @@ Here, ``x`` is defined to be a bit vector variable of width 64, which is a
 datatype that can be used to represent a bounded machine integers. Addition on
 bit vectors performs wraparound arithmetic, like the ``__pypy__.intop.int_add``
 call in the original code. The JIT optimized the second condition away, so
-essentially it was convinced that the first condition implies the second one. So
-the above snippet tries to get Z3 to confirm this.
+essentially it was convinced that the first condition implies the second one.
+The above snippet tries to get Z3 to confirm this.
 
 When run, the above program prints::
 
@@ -186,10 +195,10 @@ When run, the above program prints::
 Which shows the bug. As a small side-note, I thought it was cool that the
 process of "proving" something in Z3 basically means trying to find an example
 for the negation of the formula. If no counterexample can be found for the
-negation, the original formula is True. If the original formula turns out to be
-False (like here) we get a nice example that shows the problem to go with it.
+negation, the original formula is true. If the original formula turns out to be
+false (like here) we get a nice example that shows the problem to go with it.
 
-Now of course it's not realistic to hand-translate all the hundreds of
+It's not realistic to hand-translate all the hundreds of
 unit-tests into Z3 formulas and then ask Z3 to prove the optimizations. Instead,
 we want to have a program that does this for us.
 
@@ -227,14 +236,14 @@ following:
   always true.
 
 - After a guard, we tell Z3 that from now on it can assume that the guard
-  condition is True.
+  condition is true.
 
 - We repeat this, guard for guard, until we reach the end of the trace. There,
   we ask Z3 to prove that the output variables in the unoptimized trace and the
   optimized trace are identical (every trace can return one or many values).
 
 I implemented this, it's `not a lot of code`__, basically a couple of hundred lines
-of (not particularly great) Python code. So far I only support integer
+of (somewhat hacky) Python code. So far I only support integer
 operations. Here are some parts of the code to give you a flavor of what this
 looks like.
 
@@ -250,7 +259,9 @@ This is the code that translates operations into Z3 formulas:
                 res = self.newvar(op)
             else: # or does it return void
                 res = None
-           ...
+
+           # ...
+
             # convert arguments
             if op.numargs() == 1:
                 arg0 = self.convertarg(op, 0)
@@ -271,7 +282,8 @@ This is the code that translates operations into Z3 formulas:
                 expr = arg0 | arg1
             elif opname == "int_xor":
                 expr = arg0 ^ arg1
-            ... # more operations, some shown below
+
+            # ...  more operations, some shown below
 
             self.solver.add(res == expr)
 
@@ -325,7 +337,7 @@ Comparisons return the bit vector 0 or bit vector 1, we use a helper function
 
 
     def add_to_solver(self, ops, state):
-            ...
+            # ... start as above
 
             # more cases
             elif opname == "int_eq":
@@ -352,7 +364,8 @@ Comparisons return the bit vector 0 or bit vector 1, we use a helper function
                 expr = self.cond(z3.UGE(arg0, arg1))
             elif opname == "int_is_zero":
                 expr = self.cond(arg0 == FALSEBV)
-           ...
+
+            # ... rest as above
 
 So basically for every trace operation that operates on integers I had to give a
 translation into Z3 formulas, which is mostly very straightforward.
@@ -370,7 +383,8 @@ which looks like this:
             return self.convertarg(guard, 0) == FALSEBV
         elif opname == "guard_value":
             return self.convertarg(guard, 0) == self.convertarg(guard, 1)
-        ...
+
+        # ... some more exist, shown below
 
 Some things are a little bit trickier. An important example in the context of
 this blog post are integer operations that check for overflow. The overflow
@@ -380,9 +394,9 @@ or not.
 .. code:: python
 
     def add_to_solver(self, ops, state):
-            ...
 
-            # more cases
+            # ... more cases
+
             elif opname == "int_add_ovf":
                 expr = arg0 + arg1
                 m = z3.SignExt(LONG_BIT, arg0) + z3.SignExt(LONG_BIT, arg1)
@@ -396,6 +410,8 @@ or not.
                 m = z3.SignExt(LONG_BIT, arg0) * z3.SignExt(LONG_BIT, arg1)
                 state.no_ovf = m == z3.SignExt(LONG_BIT, expr)
 
+            # ...
+
 The boolean is computed by comparing the result of the bit vector operation with
 the result of converting the input bit vectors into an abstract (arbitrary
 precision) integer and the result back to bit vectors. Let's go through the
@@ -408,10 +424,10 @@ vectors, therefore it is performing wraparound arithmetic.
 the second line is therefore an addition between abstract integers, so it will
 never overflow and just compute the correct result as an integer.
 
-The condition to check for overflow is now: Overflow did
-not occur if the results of the two different ways to do the addition are the
-same. So in the third line the code converts the result of the bit vector
-wraparound addition to an integer, and then compares that to the integer result.
+The condition to check for overflow is now: if the results of the two different
+ways to do the addition are the same, then overflow did not occur. So in the
+third line the code converts the result of the bit vector wraparound addition to
+an integer, and then compares that to the integer result.
 
 This boolean can then be checked by the guard operations ``guard_no_overflow``
 and ``guard_overflow``.
@@ -419,8 +435,8 @@ and ``guard_overflow``.
 .. code:: python
 
     def guard_to_condition(self, guard, state):
-        ...
-        # more cases
+
+        # ... more cases
 
         elif opname == "guard_no_overflow":
             assert state.no_ovf is not None
@@ -428,7 +444,9 @@ and ``guard_overflow``.
         elif opname == "guard_overflow":
             assert state.no_ovf is not None
             return z3.Not(state.no_ovf)
-        ...
+
+        # ... more cases
+
 
 Finding the Bug, Again
 =======================
@@ -479,7 +497,7 @@ translated to the following Z3 formulas:
     i2optimized == If(i1optimized < 15, 1, 0)
 
 To check that the two corresponding guards are the same, the solver is asked to
-prove that ``(i2unoptimized == 1) == (i2optimized == 1)``. This is of course
+prove that ``(i2unoptimized == 1) == (i2optimized == 1)``. This is
 correct, because the formulas for ``i2unoptimized`` and ``i2optimized`` are
 completely identical.
 
@@ -518,7 +536,7 @@ We start by adding the ``int_lt`` operation to the Z3 formulas:
     i3unoptimized == If(input_i0 < 6, 1, 0)
 
 Now because the guard was optimized away, we need to ask Z3 to prove that it's
-always True, which fails and gives the following counterexample:
+always true, which fails and gives the following counterexample:
 
 .. code::
 
@@ -620,17 +638,27 @@ example inputs and the results of every operation at the end of every line::
 Note how every guard generated is true for the example values.
 
 I have been running this combination of random trace generation and Z3 checking
-for many nights and it has found some bugs! It should probably could still be
-run for a lot longer, but still a very useful exercise already.
+for many nights and it has found some bugs, which I'll describe in the next
+section. It should probably could still be run for a lot longer, but still a
+very useful exercise already.
+
+In this mode, I'm giving every Z3 call a time limit to make sure that the random
+tests don't just take arbitrarily long. This means that asking Z3 to prove
+something can have three outcomes, either it's proved, or Z3 finds a
+counterexample, or Z3 times out.
 
 Bugs Found
 ============
 
-In addition to the two bugs I've already described, here are the further bugs
-that were found, all not really by Z3, but because asserts were triggered:
+In addition to the two bugs I've already described, I'll briefly list the
+additional bugs that were found by optimizing random traces and then trying to
+prove the equivalence with Z3.
+
+Most of the bugs were actually identified by optimizing random traces alone, not
+by the Z3 component. They manifested as assert failures in the JIT compiler.
 
 - The JIT concluded after ``12 == int_mul(x, 12)`` that ``x == 1``, which is
-  incorrect if overflow occurred.
+  incorrect if overflow occurred (a counterexample is ``0x8000000000000001``).
 
 - An amusing bug, where from ``0 == int_lshift(0x1000000000000000, x)`` with
   ``x <= 0 <= 15``, the JIT concluded that ``0x1000000000000000 == 0``,
@@ -641,8 +669,8 @@ that were found, all not really by Z3, but because asserts were triggered:
   constant, where in complex enough expressions, the wrong IR API was used
   (which works correctly in simple cases). Again, this triggered an assert.
 
-All of these were found simply by fuzzing the optimizer, which we clearly should
-have done long ago.
+This shows that we should have been fuzzing our JIT optimizer already (not a
+surprising  observation in hindsight, fuzz all the things!).
 
 Thankfully, there was also one further bug that really failed in the Z3
 verifier. It's a bug in common subexpression elimination / arithmetic
@@ -661,12 +689,12 @@ this bug in Python code).
 
 This was optimized to:
 
-.. code:: python
+.. code::
 
     [a, b]
     finish(a)
 
-Which is incorrect, because the guard can obviously fail given the right inputs.
+Which is incorrect, because the guard can fail given the right inputs.
 But the optimizer concluded that the subtraction is safe, because its the
 inverse of an earlier addition, not taking into account that this earlier
 addition can have overflowed.
@@ -689,7 +717,6 @@ It can be optimized to:
     c = int_add_ovf(a, b)
     guard_no_ovf()
     finish(a)
-
 
 
 Future Work and Conclusion
@@ -724,4 +751,9 @@ out.
 Acknowledgements
 =================
 
-Thanks to Saam Barati and Joshua Schmidt for great feedback on drafts of this post!
+Thanks to `Saam Barati`_, `Max Bernstein`_ and `Joshua Schmidt`_ for great
+feedback on drafts of this post!
+
+.. _`Saam Barati`: http://saambarati.org/
+.. _`Max Bernstein`: https://bernsteinbear.com
+.. _`Joshua Schmidt`: https://www.cs.hhu.de/lehrstuehle-und-arbeitsgruppen/softwaretechnik-und-programmiersprachen/unser-team/team/schmidt
