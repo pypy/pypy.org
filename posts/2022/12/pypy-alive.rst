@@ -24,8 +24,38 @@ Rittinghaus found.
 .. _Twitter: https://twitter.com/johnregehr/
 .. __: https://www.cs.utah.edu/~regehr/alive2-pldi21.pdf
 
-Background: Bounds Analysis in the JIT
-======================================
+Background: Python Integers in the JIT
+===========================================
+
+The optimizer of PyPy's JITs operates on traces, which are linear sequences of
+instructions with guards. The instructions in the traces operate on different
+data types, machine integers, doubles, pointers, bools, etc. In this post we'll
+be mostly concerned with machine integers.
+
+To given some wider context I'll explain a bit how Python ints in the user code
+relate to the types that are used in traces.
+When turning a regular Python 3 function into a trace, there is a lot of work
+happening in the JIT frontend to try to observe and infer the types that the
+Python function concretely uses at runtime. The traces are generated under these
+typing assumptions. Therefore, code that uses ``ints`` in the Python code can
+typically be translated into traces that operate on machine integers. In order
+to make sure that the Python integer semantics are upheld, many of the
+operations in the traces need to check that the integer results of some
+operations still fit into a machine integer. If that is not the case (a rare
+situation for most programs), the trace is left via a guard, execution falls
+back to the interpreter, and there a big integer representation is chosen for
+the too big value (and then those values would be represented by pointers).
+
+All of this machinery is not going to be very important for the rest of the
+post. For the post it's important to know that trace instructions operate on
+machine integers, and some of the operations can optionally check whether the
+results still fit into a machine integer. These trace operations are improved by
+the optimizer, which tries to transform the trace into one that behaves the
+same, but is less costly to execute.
+
+
+Background: Bounds Analysis in PyPy's JIT
+==========================================
 
 The optimizer of PyPy's JIT has an analysis based on `abstract interpretation`_
 that tries to find out whether the integer values stored in a variable are
