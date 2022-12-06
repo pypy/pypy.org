@@ -544,7 +544,7 @@ We start by adding the ``int_lt`` operation to the Z3 formulas:
     ...
     i3unoptimized == If(input_i0 < 6, 1, 0)
 
-Now because the guard was optimized away, we need to ask Z3 to prove that it's
+Now because the second guard was optimized away, we need to ask Z3 to prove that it's
 always true, which fails and gives the following counterexample:
 
 .. code::
