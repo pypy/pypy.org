@@ -11,23 +11,22 @@
 language that was co-developed with it.  The main reason to use it
 instead of CPython is speed: it runs generally faster (see next section).
 
-**PyPy** implements **Python 2.7.18, and 3.7.10**.
-It supports all of the core language, passing the Python 2.7 test suite
-and almost all of the 3.7 test suite (with minor modifications) It supports most of
+**PyPy** implements **Python 2.7.18, 3.9.15, and 3.8.15**.
+It supports all of the core language. It supports most of
 the commonly used Python standard library modules. For known differences with
 CPython, see our `compatibility`_ page.
 
 The following CPU architectures are supported and maintained:
 
 * `x86 (IA-32)`_ and `x86_64`_ 
-* `ARM`_ platforms (ARMv6 or ARMv7, with VFPv3)
+* `ARM`_ platforms (ARMv6 or ARMv7, with VFPv3, and Apple Silicon arm64)
 * `AArch64`_
 * `PowerPC`_ 64bit both little and big endian
 * `System Z (s390x)`_
 
 PyPy's x86 version runs on several operating systems, such as Linux
-(32/64 bits), Mac OS X (64 bits), Windows (32 bits), OpenBSD, FreeBSD.
-All non-x86 versions are only supported on Linux.
+(32/64 bits), MacOS (64 bits), Windows (32 bits), OpenBSD, FreeBSD.
+Non-x86 versions are supported on Linux, and ARM64 is supported on MacOS.
 
 If you are interested in helping, see our `howtohelp`_ page.
 

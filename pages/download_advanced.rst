@@ -11,13 +11,11 @@
 
 We provide pre-compiled binaries for many platforms and OSes:
 
-* the Python2.7 compatible release — **PyPy2.7 v7.3.9**
+* the Python2.7 compatible release — **PyPy2.7 v7.3.10**
 
-* the Python3.7 compatible release — **PyPy3.7 v7.3.9**
+* the Python3.8 compatible release — **PyPy3.8 v7.3.10**
 
-* the Python3.8 compatible release — **PyPy3.8 v7.3.9**
-
-* the Python3.9 compatible release — **PyPy3.9 v7.3.9**
+* the Python3.9 compatible release — **PyPy3.9 v7.3.10**
 
 .. note::
 
@@ -32,16 +30,15 @@ We provide pre-compiled binaries for many platforms and OSes:
   table start
 
 ..
-  Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.7>``
+  Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.9>``
 
 .. list-table:: `PyPy latest`_
-   :widths: 20 15 15 15 15 35
+   :widths: 20 15 15 15 35
    :header-rows: 1
 
    * - OS
      - PyPy3.9
      - PyPy3.8
-     - PyPy3.7
      - PyPy2.7
      - Notes
 
@@ -49,11 +46,9 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - Download__
      - compatible with CentOS7 and later.
 
    * - **Windows 64 bit**
-     - Download__
      - Download__
      - Download__
      - Download__
@@ -66,7 +61,6 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - Download__
      - MacOS >= 10.14, not for High-Sierra and below. Not signed, for signed
        packages use Homebrew_ or conda_.
 
@@ -75,30 +69,25 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - Download__
      - compatible with CentOS7 and later.
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.9-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.9-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.9-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.9-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-linux64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.9-win64.zip
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.9-win64.zip
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.9-win64.zip
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.9-win64.zip
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-win64.zip
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-win64.zip
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-win64.zip
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.9-osx64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.9-osx64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.9-osx64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.9-osx64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-osx64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-osx64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-osx64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.9-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.9-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.9-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.9-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-aarch64.tar.bz2
 
-.. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.9.html
+.. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.10.html
 .. _`vcredist.x64.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
 
 ..
@@ -106,19 +95,17 @@ We provide pre-compiled binaries for many platforms and OSes:
 
 
 .. list-table:: Other Platfoms
-   :widths: 20 15 15 15 15 35
+   :widths: 20 15 15 15 35
    :header-rows: 1
 
    * - OS
      - PyPy3.9
      - PyPy3.8
-     - PyPy3.7
      - PyPy2.7
      - Notes
 
    * - **Linux x86 32 bit**
 
-     - Download__
      - Download__
      - Download__
      - Download__
@@ -145,23 +132,20 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - Download__
      - built on Redhat Linux 7.2 [1]_
 
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.9-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.9-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.9-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.9-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-linux32.tar.bz2
 
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64.tar.bz2
 
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64le.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.9-s390x.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.9-s390x.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.7-v7.3.9-s390x.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.9-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-s390x.tar.bz2
 
 .. [1]
   Linux binaries are provided for the
@@ -352,15 +336,13 @@ Building from source
    Alternatively, get one of the following smaller packages for the source at
    the same revision as the above binaries:
 
-   * `pypy2.7-v7.3.9-src.tar.bz2`__ (sources, PyPy 2.7 only)
-   * `pypy3.7-v7.3.9-src.tar.bz2`__ (sources, PyPy 3.7 only)
-   * `pypy3.8-v7.3.9-src.tar.bz2`__ (sources, PyPy 3.8 only)
-   * `pypy3.9-v7.3.9-src.tar.bz2`__ (sources, PyPy 3.9 only)
+   * `pypy2.7-v7.3.10-src.tar.bz2`__ (sources, PyPy 2.7 only)
+   * `pypy3.8-v7.3.10-src.tar.bz2`__ (sources, PyPy 3.8 only)
+   * `pypy3.9-v7.3.10-src.tar.bz2`__ (sources, PyPy 3.9 only)
 
-   .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.9-src.tar.bz2
-   .. __: https://downloads.python.org/pypy/pypy3.7-v7.3.9-src.tar.bz2
-   .. __: https://downloads.python.org/pypy/pypy3.8-v7.3.9-src.tar.bz2
-   .. __: https://downloads.python.org/pypy/pypy3.9-v7.3.9-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-src.tar.bz2
 
 
 2. Make sure you **installed the dependencies.**  See the list here__.
@@ -493,7 +475,7 @@ pre-compiling them, normal users will get errors:
   normally found: e.g. in your project's main directory, or in a
   directory that you add to the env var ``PYTHONPATH``.
 
-.. _`package.py`: https://foss.heptapod.net/pypy/pypy/-/blob/release-pypy3.8-v7.3.9/pypy/tool/release/package.py
+.. _`package.py`: https://foss.heptapod.net/pypy/pypy/-/blob/release-pypy3.8-v7.3.10/pypy/tool/release/package.py
 
 Checksums
 ---------
