@@ -98,11 +98,12 @@ bounds analysis was actually incorrect, and the example code in that unit test
 was optimized incorrectly. This case of incorrect optimization is not a big deal
 for regular Python code, because it involved a "wrapping integer addition
 operation", i.e. one where overflowing results just wrap around to negative
-values. In Python, all additions actually have overflow checks and convert to
-a big integer representation if the results don't fit into a machine word.
+values. All the additions and other arithmetic operations that the Python frontend generates actually have
+overflow checks (to be able to switch to a big integer representation if
+needed).
 However, it's still possible to trigger the problem with the special
 ``__pypy__.intop.int_add`` API which is a function that exposes wraparound
-arithmetic on ints.
+arithmetic on Python ints.
 
 `Here's the miscompilation`_. The JIT optimizes the following function:
 
@@ -455,9 +456,11 @@ the second line is therefore an addition between abstract integers, so it will
 never overflow and just compute the correct result as an integer.
 
 The condition to check for overflow is now: if the results of the two different
-ways to do the addition are the same, then overflow did not occur. So in the
-third line the code converts the result of the bit vector wraparound addition to
-an integer, and then compares that to the integer result.
+ways to do the addition are the same, then overflow did not occur. So in order
+to compute ``state.no_ovf`` in the addition case the
+code converts the result of the bit vector wraparound addition to
+an integer (using ``SignExt`` again), and then compares that to the integer
+result.
 
 This boolean can then be checked by the guard operations ``guard_no_overflow``
 and ``guard_overflow``.
