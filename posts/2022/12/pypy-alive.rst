@@ -485,42 +485,30 @@ Finding the Bug, Again
 =======================
 
 Let's actually make all of this more concrete by applying it to the trace of our
-original bug. The trace for that looks like this:
+original bug. The input trace and the incorrectly optimized trace for that look
+like this (differences highlighted):
 
-.. code::
+.. code:: python
+   :emphasize-lines: 6-8
 
-    [i0]
-    i1 = int_add(i0, 10)
-    i2 = int_lt(i1, 15)
-    guard_true(i2)
-    i3 = int_lt(i0, 6)
+    # input                       # optimized
+    [i0]                          [i0]
+    i1 = int_add(i0, 10)          i1 = int_add(i0, 10)
+    i2 = int_lt(i1, 15)           i2 = int_lt(i1, 15)
+    guard_true(i2)                guard_true(i2)
+    i3 = int_lt(i0, 6)            jump(0)
     guard_true(i3)
     jump(0)
 
-Note that it's just one of the paths through the control flow graph of the
-original function, because PyPy is using a tracing JIT (the other paths could
-incrementally get added later). This trace gets wrongly optimized to:
-
-.. code::
-
-    [i0]
-    i1 = int_add(i0, 10)
-    i2 = int_lt(i1, 15)
-    guard_true(i2)
-    jump(0)
+Note that the trace represents just one of the paths through the control flow
+graph of the original function, which is typical for tracing JITs (the other
+paths could incrementally get added later).
 
 The first guards in both these traces correspond to each other, so the first
-chunks to check are the first three operations:
+chunks to check are the first three operations (lines 1-4). Those operations
+don't get changed by the optimizer at all.
 
-.. code::
-
-    [i0]
-    i1 = int_add(i0, 10)
-    i2 = int_lt(i1, 15)
-    guard_true(i2)
-
-The prefix of the optimized trace is the same. These two identical traces get
-translated to the following Z3 formulas:
+These two identical traces get translated to the following Z3 formulas:
 
 .. code::
 
@@ -546,20 +534,8 @@ solver that the guards passed. So the Z3 formulas become:
     i1optimized == 1
     i2optimized == 1
 
-Now we continue with the remaining operations of the two traces. In the
+Now we continue with the remaining operations of the two traces (lines 6-8). In the
 unoptimized trace those are:
-
-.. code::
-
-    i3 = int_lt(i0, 6)
-    guard_true(i3)
-    jump(0)
-
-In the optimized trace it's just:
-
-.. code::
-
-    jump(0)
 
 We start by adding the ``int_lt`` operation to the Z3 formulas:
 
@@ -578,7 +554,7 @@ always true, which fails and gives the following counterexample:
     i2unoptimized = 0
     i1optimized = 9223372036854775810
     i2optimized = 1
-    i3unoptimized = 1
+    i3unoptimized = 0
 
 Thus demonstrating the bug. The fact that the Z3-based equivalence check also
 managed to find the original motivating bug without manually translating it is a
