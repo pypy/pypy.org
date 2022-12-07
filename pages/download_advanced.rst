@@ -53,10 +53,16 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - compatible with any windows 64-bit
-
        you might need the VC runtime library installer `vcredist.x64.exe`_
 
-   * - **MacOS**
+   * - **MacOS arm64**
+
+     - Download__
+     - Download__
+     - Download__
+     - MacOS >= 11. Not signed, for signed packages use Homebrew_ or conda_.
+
+   * - **MacOS x86_64**
 
      - Download__
      - Download__
@@ -79,9 +85,13 @@ We provide pre-compiled binaries for many platforms and OSes:
 .. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-win64.zip
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-win64.zip
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-osx64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-osx64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-osx64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-macos_arm64.tar.bz2
+
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.10-macos_x86_64.tar.bz2
 
 .. __: https://downloads.python.org/pypy/pypy3.9-v7.3.10-aarch64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy3.8-v7.3.10-aarch64.tar.bz2
@@ -115,13 +125,11 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - n/a
      - n/a
-     - n/a
      - 7.3.1__
      - 64bit big-endian, Fedora 20 [1]_
 
    * - **PowerPC PPC64le**
 
-     - n/a
      - n/a
      - n/a
      - 7.3.1__

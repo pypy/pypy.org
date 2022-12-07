@@ -103,8 +103,8 @@ NAVIGATION_LINKS = {
         ('http://doc.pypy.org', 'Dev Docs'),
         (
           (
-            ('/blog', 'Index'),
-            ('/categories', 'Tags'),
+            ('/blog/', 'Index'),
+            ('/categories/', 'Tags'),
             ('/archive.html', 'Archive by year'),
             ('/rss.xml', 'RSS feed'),
             ('https://morepypy.blogspot.com/', 'Old site'),
