@@ -1,7 +1,7 @@
 .. title: Finding JIT Optimizer Bugs using SMT Solvers and Fuzzing
 .. slug: jit-bug-finding-smt-fuzzing
 .. date: 2022-12-11 18:00:00 UTC
-.. tags: JIT, testing
+.. tags: jit, testing
 .. category:
 .. link:
 .. description:
@@ -759,8 +759,6 @@ particularly useful when we do further work on the integer reasoning of the JIT
 (like Nico is doing, for example). As of time of writing of this post, all the
 bugs mentioned have been fixed and the Z3 code has landed on the default branch
 and runs as part of PyPy's CI infrastructure.
-
-.. __: https://foss.heptapod.net/pypy/pypy/-/tree/branch/fix-intutils-ovf-bug
 
 Acknowledgements
 =================
