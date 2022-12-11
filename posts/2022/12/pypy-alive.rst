@@ -549,7 +549,7 @@ formulas:
     i3unoptimized == If(input_i0 < 6, 1, 0)
 
 Because the second guard was optimized away, we need to ask Z3 to prove that
-``i3unoptimized == `` is always true, which fails and gives the following
+``i3unoptimized ==`` is always true, which fails and gives the following
 counterexample:
 
 .. code::
