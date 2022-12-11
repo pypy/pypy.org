@@ -1,7 +1,7 @@
 .. title: Finding JIT Optimizer Bugs using SMT Solvers and Fuzzing
 .. slug: jit-bug-finding-smt-fuzzing
-.. date: 2022-12-30 15:00:00 UTC
-.. tags:
+.. date: 2022-12-11 18:00:00 UTC
+.. tags: JIT, testing
 .. category:
 .. link:
 .. description:
@@ -9,9 +9,9 @@
 .. author: Carl Friedrich Bolz-Tereick
 
 In this blog post I want to describe a recent bug finding technique that I've
-added to the PyPy JIT testing infrastructure using. This technique uses the Z3
+added to the PyPy JIT testing infrastructure. This technique uses the Z3
 theorem prover to find bugs in the optimizer of PyPy's JIT, in particular its
-integer operation optimizations. The technique is
+integer operation optimizations. The approach is
 based on things I have learned from `John Regehr's`_ blog_ (`this post`_ is a
 good first one to read), Twitter_, and on
 his (et al) paper `Alive2: Bounded Translation Validation for LLVM`__. The work
@@ -45,11 +45,13 @@ operations in the traces need to check that the integer results of some
 operations still fit into a machine integer. If that is not the case (a rare
 situation for most programs), the trace is left via a guard, execution falls
 back to the interpreter, and there a big integer representation is chosen for
-the too big value (and then those values would be represented by pointers).
+the too big value (the big integer representation is done via a pointer and
+some storage on the heap).
 
 All of this machinery is not going to be too relevant for the rest of the
 post. For the post it's important to know that trace instructions operate on
-machine integers, and some of the operations can optionally check whether the
+machine integers and other low-level types, and some of the operations can
+optionally check whether the
 results still fit into a machine integer. These trace operations are improved by
 the optimizer, which tries to transform the trace into one that behaves the
 same, but is less costly to execute.
@@ -93,7 +95,7 @@ Motivation: A JIT Miscompilation
 
 I am currently supervising a Bachelor thesis by Nico Rittinghaus, who is
 extending the integer analysis in the JIT. He'll probably write a separate blog
-post about it soon. In the process of doing that, the current bounds analysis
+post about that soon. In the process of his work, the current bounds analysis
 code got a lot of scrutiny, and we found out that one of the unit tests of the
 bounds analysis was actually incorrect, and the example code in that unit test
 was optimized incorrectly. This case of incorrect optimization is not a big deal
@@ -165,15 +167,15 @@ A range is not just represented by two numbers, instead it's two numbers
 and two bools that are supposed to represent that some operation did or did not
 underflow/overflow. The meaning of these bools was quite hard to grasp and easy
 to get wrong, so probably they should never have been introduced in the first
-place (and my bugfix will indeed remove them, once it gets merged).
+place (and my bugfix indeed removed them).
 
-But in the rest of this blog post I want to talk about a systematic
+But in the rest of this blog post I want to talk about another, systematic
 approach that can be applied to the problem of mis-optimizations of integer
 operations, and that is done by applying an SMT solver to the problem.
 
 An SMT solver (`Satisfyability Modulo Theories`_) is a tool that can be used to
-find out whether mathematical formulas is "satisfiable", i.e. whether
-some chosen set of input will make the formulas evaluate to true. SMT solvers are
+find out whether mathematical formulas are "satisfiable", i.e. whether
+some chosen set of inputs exists that will make the formulas evaluate to true. SMT solvers are
 commonly used in a wide range of CS applications including program correctness
 proofs, program synthesis, etc. The most widely known one is probably Z3_ by
 Microsoft Research which has the nice advantage of coming with an easy-to-use
@@ -200,7 +202,7 @@ Z3 Proof of Concept
 =======================
 
 The first thing I did was to try to get Z3 find the above bug, by encoding the
-input program into an SMT formula and trying to get Z3 to prove the condition
+input program into an SMT formula by hand and trying to get Z3 to prove the condition
 that the JIT thinks is always true. The Z3 code for this looks as follows:
 
 .. code:: python
@@ -214,7 +216,7 @@ that the JIT thinks is always true. The Z3 code for this looks as follows:
 
 
 Here, ``x`` is defined to be a bit vector variable of width 64, which is a
-datatype that can be used to represent a bounded machine integers. Addition on
+datatype that can be used to represent bounded machine integers. Addition on
 bit vectors performs wraparound arithmetic, like the ``__pypy__.intop.int_add``
 call in the original code. The JIT optimized the second condition away, so
 essentially it was convinced that the first condition implies the second one.
@@ -280,7 +282,7 @@ of (somewhat hacky) Python code. So far I only support integer
 operations. Here are some parts of the code to give you a flavor of what this
 looks like.
 
-.. __: https://foss.heptapod.net/pypy/pypy/-/blob/branch/fix-intutils-ovf-bug/rpython/jit/metainterp/optimizeopt/test/test_z3checktests.py
+.. __: https://foss.heptapod.net/pypy/pypy/-/blob/branch/default/rpython/jit/metainterp/optimizeopt/test/test_z3checktests.py
 
 This is the code that translates operations into Z3 formulas:
 
@@ -326,7 +328,8 @@ operation to a dictionary ``box_to_z3`` mapping boxes (=variables) to Z3
 variables. Due to the SSA_ property that traces have, a variable must be defined
 before its first use.
 
-Here's what ``newvar`` looks like:
+Here's what ``newvar`` looks like (``LONG_BIT`` is a constant that is either
+``64`` or ``32``, depending on the target architecture):
 
 .. code:: python
 
@@ -340,8 +343,7 @@ Here's what ``newvar`` looks like:
 The ``convert`` method turns an operation argument (either a constant or a
 variable) into a Z3 formula (either a constant bit vector or an already defined
 Z3 variable). ``convertarg`` is a helper function that takes an operation, reads
-its nth argument and converts it. ``LONG_BIT`` is a constant that is either
-``64`` or ``32``, depending on the target architecture.
+its nth argument and converts it.
 
 .. code:: python
 
@@ -419,7 +421,7 @@ which looks like this:
 
         # ... some more exist, shown below
 
-Some things are a little bit trickier. An important example in the context of
+Some operations are a bit trickier. An important example in the context of
 this blog post are integer operations that check for overflow. The overflow
 operations return a result, but also a boolean whether the operation overflowed
 or not.
@@ -450,7 +452,7 @@ the result of converting the input bit vectors into an abstract (arbitrary
 precision) integer and the result back to bit vectors. Let's go through the
 addition case step by step, the other cases work analogously.
 
-The addition of the ``elif`` that computes ``expr`` is an addition on bit
+The addition in the first ``elif`` that computes ``expr`` is an addition on bit
 vectors, therefore it is performing wraparound arithmetic.
 ``z3.SignExt(LONG_BIT, arg0)`` sign-extends ``arg0`` from a bit vector of
 ``LONG_BIT`` bits to an abstract, arbitrary precision integer. The addition in
@@ -461,7 +463,7 @@ The condition to check for overflow is now: if the results of the two different
 ways to do the addition are the same, then overflow did not occur. So in order
 to compute ``state.no_ovf`` in the addition case the
 code converts the result of the bit vector wraparound addition to
-an integer (using ``SignExt`` again), and then compares that to the integer
+an abstract integer (using ``SignExt`` again), and then compares that to the integer
 result.
 
 This boolean can then be checked by the guard operations ``guard_no_overflow``
@@ -536,18 +538,19 @@ solver that the guards passed. So the Z3 formulas become:
     i1optimized == 1
     i2optimized == 1
 
-Now we continue with the remaining operations of the two traces (lines 6-8). In the
-unoptimized trace those are:
+Now we continue with the remaining operations of the two traces (lines 6-8).
 
-We start by adding the ``int_lt`` operation to the Z3 formulas:
+We start by adding the ``int_lt`` operation in the unoptimized trace to the Z3
+formulas:
 
 .. code::
 
     ...
     i3unoptimized == If(input_i0 < 6, 1, 0)
 
-Now because the second guard was optimized away, we need to ask Z3 to prove that it's
-always true, which fails and gives the following counterexample:
+Because the second guard was optimized away, we need to ask Z3 to prove that
+``i3unoptimized == `` is always true, which fails and gives the following
+counterexample:
 
 .. code::
 
@@ -559,8 +562,8 @@ always true, which fails and gives the following counterexample:
     i3unoptimized = 0
 
 Thus demonstrating the bug. The fact that the Z3-based equivalence check also
-managed to find the original motivating bug without manually translating it is a
-good confirmation that the approach works.
+managed to find the original motivating bug without manually translating it to
+a formula is a good confirmation that the approach works.
 
 Second bug
 ===========
@@ -722,7 +725,7 @@ Note that a related optimization is actually correct. Given this code:
 
 It can be optimized to:
 
-.. code:: python
+.. code::
 
     [a, b]
     c = int_add_ovf(a, b)
@@ -751,11 +754,11 @@ checkers than Z3, eg CVC4__.
 
 But all in all this was a fun and not too hard way to find a bunch of bugs in
 our optimizer! And the infrastructure is now in place, which means that we run
-some random test cases every time we execute our tests. This is particularly
-useful when we do further work on the integer reasoning of the JIT (like Nico is
-doing, for example). As of now, the code is on a not-yet-merged branch__, I plan
-to integrate it into our testing infrastructure after the next PyPy release is
-out.
+some random test cases every time we execute our tests. This is going to be
+particularly useful when we do further work on the integer reasoning of the JIT
+(like Nico is doing, for example). As of time of writing of this post, all the
+bugs mentioned have been fixed and the Z3 code has landed on the default branch
+and runs as part of PyPy's CI infrastructure.
 
 .. __: https://foss.heptapod.net/pypy/pypy/-/tree/branch/fix-intutils-ovf-bug
 
