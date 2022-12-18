@@ -21,7 +21,8 @@ results and describe the motivation and architecture of the project.
 
 
 
-## What are Sail and the Sail RISC-V model?
+What are Sail and the Sail RISC-V model?
+========================================
 
 The `Sail language`__ is a domain-specific language developed at the University
 of Cambridge. The goal of the language is to be able to specify the semantics of
@@ -44,7 +45,8 @@ Let's look at some example code from the RISC-V Sail model.
 ...
 
 
-## Turning the Sail RISC-V ISA model into an emulator
+Turning the Sail RISC-V ISA model into an emulator
+===========================================================
 
 One of the features of the Sail DSL is that it can take an ISA specification and
 turn it into an emulator for that ISA. To do this, it compiles the Sail code
@@ -64,7 +66,8 @@ This slow emulation speed can be a problem when trying to test somewhat complex
 software in emulation, e.g. booting the Linux kernel takes over an hour on the
 Sail-RISC-V emulator.
 
-## Performance problems of the Sail RISC-V model
+Performance problems of the Sail RISC-V model
+===========================================================
 
 When I started this project I was trying to understand why the Sail-RISC-V
 generator was so slow. The Sail compiler tries to infer the bitwidth all the
@@ -80,7 +83,8 @@ Some profiling bit revealed that the Sail-RISC-V emulator spends most of its
 time calling ``malloc`` and ``free`` on this GMP integers.
 
 
-## Pydrofoil's Architecture
+Pydrofoil's Architecture
+===========================================================
 
 The idea of Pydrofoil is to generate emulators from a Sail model in a different
 way than the existing. Instead of generating C code, Pydrofoil takes a Sail
@@ -117,20 +121,24 @@ The idea for why this could give better speedups is the following:
   describe this in the next section.
 
 
-## Integer and bitvector representation in Pydrofoil
+Integer and bitvector representation in Pydrofoil
+===========================================================
 
 - integers and bitvectors
   - dynamic typing
 
-## Downloading Pydrofoil and booting Linux on it
+Downloading Pydrofoil and booting Linux on it
+===========================================================
 
 - how to use it
   - download release or build yourself
   - booting linux
 
-## Some early benchmark results
+Some early benchmark results
+===========================================================
 
 
-## conclusion
+Conclusion
+===========================================================
 
 - risc-v international support
