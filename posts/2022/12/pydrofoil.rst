@@ -9,7 +9,8 @@
 .. author: Carl Friedrich Bolz-Tereick
 
 Since June or so, I have been working on a new prototype project that uses the
-RPython meta-tracing JIT infrastructure. This project is called "Pydrofoil",
+RPython meta-tracing JIT infrastructure to simulate a CPU instruction set. This
+project is called Pydrofoil_,
 and it aims at automatically generating a fast emulator for the RISC-V
 architecture from a formal specification of the behaviour of that architecture.
 The project is joint work with John Witulski, Martin Berger, Matti Picus. We
@@ -20,29 +21,74 @@ In this post I'll describe how to use Pydrofoil, show some early benchmark
 results and describe the motivation and architecture of the project.
 
 
-
 What are Sail and the Sail RISC-V model?
 ========================================
 
-The `Sail language`__ is a domain-specific language developed at the University
+The `Sail language`_ is a domain-specific language developed at the University
 of Cambridge. The goal of the language is to be able to specify the semantics of
-instruction set architectures in a very precise way, to be able to formally
+instruction set architectures (ISAs) in a very precise way, to be able to formally
 reason about the behaviour of machine code programs. 
 
 The language is a statically typed functional language with pattern matching and
 some support for liquid types. It contains a number of datatypes that are
-particularly suited for the task of describing the behaviour ISAs, such as
+particularly suited for the task of describing the behaviour of ISAs, such as
 bitvectors, arbitrary-width integers, real numbers.
 
 A number of ISAs have been specified in this language, but we'll only talk about
-the one for RISC-V in this post. The Sail ISA specification for RISC-V is
-interesting because it is supposed to be considered the "Golden Model" for
-RISC-V, meaning it is the ground truth of how the architecture is supposed to
-behave.
+the one for RISC-V (Sail-RISCV_) in this post. The Sail ISA specification for
+RISC-V is interesting because it is supposed to be considered the "Golden
+Model" for RISC-V, meaning it is the ground truth of how the architecture is
+supposed to behave.
 
-Let's look at some example code from the RISC-V Sail model.
+Here is one example of the ITYPE `RISCV instruction`_ written in Sail::
 
-...
+    /* the assembly abstract syntax tree (AST) clause for the ITYPE instructions */
+
+    union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
+
+    /* the encode/decode mapping between AST elements and 32-bit words */
+
+    mapping encdec_iop : iop <-> bits(3) = {
+      RISCV_ADDI  <-> 0b000,
+      RISCV_SLTI  <-> 0b010,
+      RISCV_SLTIU <-> 0b011,
+      RISCV_ANDI  <-> 0b111,
+      RISCV_ORI   <-> 0b110,
+      RISCV_XORI  <-> 0b100
+    }
+
+    mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm @ rs1 @ encdec_iop(op) @ rd @ 0b0010011
+
+    /* the execution semantics for the ITYPE instructions */
+
+    function clause execute (ITYPE (imm, rs1, rd, op)) = {
+      let rs1_val = X(rs1);
+      let immext : xlenbits = EXTS(imm);
+      let result : xlenbits = match op {
+        RISCV_ADDI  => rs1_val + immext,
+        RISCV_SLTI  => EXTZ(rs1_val <_s immext),
+        RISCV_SLTIU => EXTZ(rs1_val <_u immext),
+        RISCV_ANDI  => rs1_val & immext,
+        RISCV_ORI   => rs1_val | immext,
+        RISCV_XORI  => rs1_val ^ immext
+      };
+      X(rd) = result;
+      true
+    }
+
+    /* the assembly/disassembly mapping between AST elements and strings */
+
+    mapping itype_mnemonic : iop <-> string = {
+      RISCV_ADDI  <-> "addi",
+      RISCV_SLTI  <-> "slti",
+      RISCV_SLTIU <-> "sltiu",
+      RISCV_XORI  <-> "xori",
+      RISCV_ORI   <-> "ori",
+      RISCV_ANDI  <-> "andi"
+    }
+
+    mapping clause assembly = ITYPE(imm, rs1, rd, op)
+                          <-> itype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
 
 
 Turning the Sail RISC-V ISA model into an emulator
@@ -58,13 +104,19 @@ which checks that the instructions are implemented correctly. It is also
 complete enough to boot Linux up to a login prompt.
 
 However, one downside of the emulator generated this way is that it is
-relatively slow and only emulates between about 1000-10000 instructions per
+relatively slow and only emulates between about 1000-10,000 instructions per
 second, which is really not too great considering that hand-written emulators
 like Spike or QEMU can sometimes run up to 100 Million instructions per second.
 
 This slow emulation speed can be a problem when trying to test somewhat complex
 software in emulation, e.g. booting the Linux kernel takes over an hour on the
 Sail-RISC-V emulator.
+
+.. comment_::
+  The Sail-RISCV website claims "This enables one to boot Linux in about 4
+  minutes, and FreeBSD in about 2 minutes. Memory usage for the C emulator when
+  booting Linux is approximately 140MB. That is very different from "over an
+  hour"
 
 Performance problems of the Sail RISC-V model
 ===========================================================
@@ -87,7 +139,7 @@ Pydrofoil's Architecture
 ===========================================================
 
 The idea of Pydrofoil is to generate emulators from a Sail model in a different
-way than the existing. Instead of generating C code, Pydrofoil takes a Sail
+way. Instead of generating C code, Pydrofoil takes a Sail
 model and produces RPython code. In many ways, the ideas of the RPython project
 and the Sail projects overlap. Sail is a language to describe the semantics of
 an ISA in a high-level way. Sail provides a lot of common infrastructure, such
@@ -97,9 +149,9 @@ languages in a high-level way. RPython provides common infrastructure, such as a
 reasonably good garbage collector and a reusable just-in-time compiler.
 Therefore combining the two projects in many ways felt natural.
 
-Pydrofoil generates RPython code by parsing Sail's JIB representation, which are
+Pydrofoil generates RPython code by parsing Sail's JIB representation:
 an intermediate language that the Sail compiler uses to represent the input
-programs. At this stage, the Sail programs have already been parsed,
+programs. When producing JIB, the Sail programs have already been parsed,
 type-checked and optimized by the Sail compiler, therefore Pydrofoil doesn't
 have to do these tasks. Pydrofoil parses the JIB files, does some minor
 transformations and then produces RPython code from them.
@@ -108,11 +160,9 @@ This RPython code is then combined with some support code that is hand-written
 in RPython. Most of that support code can be shared between different ISAs, some
 needed to be hand-written for RISC-V.
 
+The speedups come from the following:
 
-
-The idea for why this could give better speedups is the following:
-
-- The first reason is RPython's tracing JIT. The hope would be that it can be
+- The first reason is RPython's tracing JIT. It can be
   used to perform dynamic binary translation from the guest RISC-V instructions
   that are running on top of the generated emulator, to host machine code, at
   runtime.
@@ -130,9 +180,25 @@ Integer and bitvector representation in Pydrofoil
 Downloading Pydrofoil and booting Linux on it
 ===========================================================
 
-- how to use it
-  - download release or build yourself
-  - booting linux
+We offer pre-built ``pydrofoil-riscv`` emulators at ``link``. These are built
+according to the `build documentation`_ and are available for ``x86_64`` linux
+and macOS. These can be use as follows to boot linux from the `Sail-RISCV`_
+repo::
+
+    dtc < os-boot/rv64-64mb.dts > os-boot/rv64-64mb.dtb
+    ./pydrofoil-riscv -b os-boot/rv64-64mb.dtb os-boot/rv64-linux-4.15.0-gcc-7.2.0-64mb.bbl -l 230000000
+
+This command will run the Linux image that is part of the sail-riscv repo until
+the login prompt. The ``dtb`` file is a device tree blob that describes the
+emulated hardware to the operating system, it gets generated from a
+human-readable input file with the ``dtc`` command.
+
+Booting Linux takes a bit less than 4 minutes on Pydrofoil. You can try the
+equivalent command on the standard Sail emulator::
+
+    ./c_emulator/riscv_sim_RV64 -b os-boot/rv64-64mb.dtb os-boot/rv64-linux-4.15.0-gcc-7.2.0-64mb.bbl -l 230000000 -V
+
+which takes roughly 75 minutes.
 
 Some early benchmark results
 ===========================================================
@@ -142,3 +208,9 @@ Conclusion
 ===========================================================
 
 - risc-v international support
+
+.. _Pydrofoil: https://docs.pydrofoil.org
+.. _`Sail language`: https://github.com/riscv/sail-riscv#what-is-sail
+.. _`Sail-RISCV`: https://github.com/riscv/sail-riscv#riscv-sail-model
+.. _`RISCV instruction`: https://github.com/riscv/sail-riscv#example-risc-v-instruction-specifications
+.. _`build documentation`: https://docs.pydrofoil.org/en/latest/building_pydrofoil.html
