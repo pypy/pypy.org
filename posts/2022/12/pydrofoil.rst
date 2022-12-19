@@ -137,23 +137,6 @@ Sail-RISC-V emulator.
   booting Linux is approximately 140MB. That is very different from "over an
   hour"
 
-Performance problems of the Sail RISC-V model
-===========================================================
-
-When I started this project I was trying to understand why the Sail-RISC-V
-generator was so slow. The Sail compiler tries to infer the bitwidth all the
-bitvectors and integers that the model operates on. For those bitvectors and
-integers that have a proven-to-be-finite width that is below 64bits, the
-generated C code represents them as a C integer type. However, for the remaining
-bitvectors and integers the Sail compiler represents them using the
-arbitrarily-sized integer implementation of the GMP library. In particular, this
-means that all operations on such integers/bitvectors has to allocate the result
-on the heap, and deallocate them if they aren't being used any more.
-
-Some profiling bit revealed that the Sail-RISC-V emulator spends most of its
-time calling ``malloc`` and ``free`` on this GMP integers.
-
-
 Pydrofoil's Architecture
 ===========================================================
 
@@ -186,22 +169,15 @@ The speedups come from the following:
   that are running on top of the generated emulator, to host machine code, at
   runtime.
 
-- The second reason has to do with bitvector and integer representation. I'll
-  describe this in the next section.
-
-
-Integer and bitvector representation in Pydrofoil
-===========================================================
-
-- integers and bitvectors
-  - dynamic typing
+- A more efficient dynamically typed bitvector/integer representation (I'll
+  write about these in a later post).
 
 Downloading Pydrofoil and booting Linux on it
 ===========================================================
 
 We offer pre-built ``pydrofoil-riscv`` emulators at ``link``. These are built
-according to the `build documentation`_ and are available for ``x86_64`` linux
-and macOS. These can be use as follows to boot linux from the `Sail-RISCV`_
+according to the `build documentation`_ and are available for ``x86_64`` Linux
+and macOS. These can be use as follows to boot Linux from the `Sail-RISCV`_
 repo::
 
     dtc < os-boot/rv64-64mb.dts > os-boot/rv64-64mb.dtb
@@ -218,9 +194,6 @@ equivalent command on the standard Sail emulator::
     ./c_emulator/riscv_sim_RV64 -b os-boot/rv64-64mb.dtb os-boot/rv64-linux-4.15.0-gcc-7.2.0-64mb.bbl -l 230000000 -V
 
 which takes roughly 75 minutes.
-
-Some early benchmark results
-===========================================================
 
 
 Conclusion
