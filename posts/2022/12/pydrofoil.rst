@@ -40,11 +40,29 @@ RISC-V is interesting because it is supposed to be considered the "Golden
 Model" for RISC-V, meaning it is the ground truth of how the architecture is
 supposed to behave.
 
-Here is one example of the ITYPE `RISCV instruction`_ written in Sail::
+We'll now go through an example of the Sail code for the ITYPE `RISCV
+instruction`_. ITYPE instructions are arithmetic integer instructions with an
+immediate value.
+
+The first part of the Sail model is an "AST" declaration, which shows the
+information that is encoded in such an instruction::
 
     /* the assembly abstract syntax tree (AST) clause for the ITYPE instructions */
 
     union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
+
+The ``bits(12)`` type is a bitvector of 12 bits, storing the immediate.
+``regbits`` is declared elsewhere to be ``bits(5)``, the two ``regbits``
+components are for the source and the destination register. ``iop`` is an
+enumeration that lists the various ``ITYPE`` instruction cases::
+
+    enum iop = {RISCV_ADDI, RISCV_SLTI, RISCV_SLTIU,
+                RISCV_XORI, RISCV_ORI, RISCV_ANDI}    /* immediate ops */
+
+The following function describes a mapping between that ``iop`` enum and the
+bits used in the instruction encoding. This is a bidirectional function (it uses
+``<->``), it can be used to both turn the instruction bits into the enum (when
+decoding an instruction), but also the other way around::
 
     /* the encode/decode mapping between AST elements and 32-bit words */
 
@@ -57,7 +75,17 @@ Here is one example of the ITYPE `RISCV instruction`_ written in Sail::
       RISCV_XORI  <-> 0b100
     }
 
+And here comes the actual decoding of ``ITYPE`` instructions. It describes how
+the instruction bits are combined to form an ``ITYPE``, and how those parts
+relate to the information in the ``ITYPE`` AST::
+
     mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm @ rs1 @ encdec_iop(op) @ rd @ 0b0010011
+
+Here the ``@`` operator is bitvector concatenation. ``encdec`` is again a
+bidirectional function, so it can be used to decode an instruction, but also to
+take an AST and turn it into one.
+
+The next function defines the actual execution semantics of the instructions::
 
     /* the execution semantics for the ITYPE instructions */
 
@@ -76,19 +104,10 @@ Here is one example of the ITYPE `RISCV instruction`_ written in Sail::
       true
     }
 
-    /* the assembly/disassembly mapping between AST elements and strings */
-
-    mapping itype_mnemonic : iop <-> string = {
-      RISCV_ADDI  <-> "addi",
-      RISCV_SLTI  <-> "slti",
-      RISCV_SLTIU <-> "sltiu",
-      RISCV_XORI  <-> "xori",
-      RISCV_ORI   <-> "ori",
-      RISCV_ANDI  <-> "andi"
-    }
-
-    mapping clause assembly = ITYPE(imm, rs1, rd, op)
-                          <-> itype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_12(imm)
+The code reads the value of source register ``rs1``, then sign-extends the
+immediate to ``xlenbits`` (which could be 32, 64 or 128 bits) using the ``EXTS``
+function. Then it pattern-matches on the ``op`` to compute ``result``. That
+resulting value is then stored into the destination register ``rd``.
 
 
 Turning the Sail RISC-V ISA model into an emulator
@@ -106,7 +125,7 @@ complete enough to boot Linux up to a login prompt.
 However, one downside of the emulator generated this way is that it is
 relatively slow and only emulates between about 1000-10,000 instructions per
 second, which is really not too great considering that hand-written emulators
-like Spike or QEMU can sometimes run up to 100 Million instructions per second.
+like Spike or QEMU can sometimes run hundreds of millions instructions per second.
 
 This slow emulation speed can be a problem when trying to test somewhat complex
 software in emulation, e.g. booting the Linux kernel takes over an hour on the
