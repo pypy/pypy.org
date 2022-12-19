@@ -9,10 +9,11 @@
 
 PyPy has an extensive benchmark suite. On most of the microbenchmarks we do
 quite well. One of the more complete benchmarks is one that builds a sphinx
-document website. The benchmark takes ~175 seconds on PyPy3 without the JIT and
-~80 seconds with the JIT on the benchmarking machine, CPython finishes the
-benchmark in about 45 seconds. This is a good opportunity to explore how to
-analyze PyPy’ performance and suggest paths forward to speed it up.
+document website based on the CPython2 documentation. The benchmark takes ~175
+seconds on PyPy3 without the JIT and ~80 seconds with the JIT on the
+benchmarking machine, CPython finishes the benchmark in about 45 seconds. This
+is a good opportunity to explore how to analyze PyPy’ performance and suggest
+paths forward to speed it up.
 
 .. TEASER_END
 
@@ -31,15 +32,18 @@ Here is how to run the benchmark in a posix shell:
 
     hg clone https://foss.heptapod.net/pypy/benchmarks
     cd benchmarks
+    rm -rf lib/cpython-doc/build
     PYTHONPATH=lib:lib/jinja2/ <python> \
-        benchmarks/lib/cpython-doc/tools/sphinx-build.py -b html
+    lib/cpython-doc/tools/sphinx-build.py -b html \
+    -d lib/cpython-doc/build/doctrees lib/cpython-doc/ \
+    lib/cpython-doc/build/html
 
 Since we want the benchmark to run consistently over many versions of
 python, all the third-party packages are part of the benchmark repo:
 ``docutils``, ``sphinx``, and of course the source documentation itself.
 So we use ``PYTHONPATH`` to run the benchmark. Replace ``<python>`` with
 the version of python you wish to benchmark. To run PyPy without the
-JIT, use ``<pypy> --jit off``
+JIT, use ``<pypy> --jit off``. This post targets PyPy3.8-v7.3.10.
 
 Getting started: ``cprofile``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -50,7 +54,7 @@ PyPy could do better. One way to profile is to use the built-in
 deterministic profiler will slow down the program being profiled
 considerably, so this is best used for a rought measure of performance.
 We can run the command above, but instead of ``<python>``, use
-``<python> -m cprofile``.
+``<python> -m cprofile -o <outfile>``.
 
 Pickle
 ^^^^^^
@@ -113,7 +117,7 @@ tracing and in the backend. That is about 15% in our case.
 
 One other hack is to sort the ``debug_merge_points`` by function name:
 
-``grep debug_merge_point out-sphinx | cut -d ' ' -f 5,6,7,9 | sort | uniq -c | sort --numeric-sort``
+``grep debug_merge_point out-sphinx | cut -d ' ' -f 3-9 | sort | uniq -c | sort --numeric-sort``
 
 We made way too many versions of ``_fast_traverse``, and it is
 recursive. This is because it makes bridges (failed guard calling out to
