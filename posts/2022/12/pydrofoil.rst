@@ -13,9 +13,7 @@ RPython meta-tracing JIT infrastructure to simulate a CPU instruction set. This
 project is called Pydrofoil_,
 and it aims at automatically generating a fast emulator for the RISC-V
 architecture from a formal specification of the behaviour of that architecture.
-The project is joint work with John Witulski, Martin Berger, Matti Picus. We
-have received some sponsorship from RISC-V International, for which we are
-immensely grateful!
+The project is joint work with John Witulski, Martin Berger, Matti Picus.
 
 In this post I'll describe how to use Pydrofoil, show some early benchmark
 results and describe the motivation and architecture of the project.
@@ -199,7 +197,7 @@ which takes roughly 75 minutes.
 Conclusion
 ===========================================================
 
-- risc-v international support
+
 
 .. _Pydrofoil: https://docs.pydrofoil.org
 .. _`Sail language`: https://github.com/riscv/sail-riscv#what-is-sail
