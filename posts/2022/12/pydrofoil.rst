@@ -160,7 +160,7 @@ This RPython code is then combined with some support code that is hand-written
 in RPython. Most of that support code can be shared between different ISAs, some
 needed to be hand-written for RISC-V.
 
-The speedups come from the following:
+The speedups come from the following sources:
 
 - The first reason is RPython's tracing JIT. It can be
   used to perform dynamic binary translation from the guest RISC-V instructions
@@ -186,12 +186,12 @@ the login prompt. The ``dtb`` file is a device tree blob that describes the
 emulated hardware to the operating system, it gets generated from a
 human-readable input file with the ``dtc`` command.
 
-Booting Linux takes a bit less than 4 minutes on Pydrofoil. You can try the
-equivalent command on the standard Sail emulator::
+Booting Linux takes a bit less than 2 minutes on Pydrofoil on a Ryzen 9 3900X.
+You can try the equivalent command on the standard Sail emulator::
 
     ./c_emulator/riscv_sim_RV64 -b os-boot/rv64-64mb.dtb os-boot/rv64-linux-4.15.0-gcc-7.2.0-64mb.bbl -l 230000000 -V
 
-which takes roughly 75 minutes.
+which takes roughly 35 minutes.
 
 
 Conclusion
