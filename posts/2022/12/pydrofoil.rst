@@ -197,10 +197,26 @@ which takes roughly 35 minutes.
 Conclusion
 ===========================================================
 
+I really enjoyed applying the RPython meta-JIT for quite a different area of
+application than a dynamically typed language, and seeing it work quite well in
+this other area as well (Pydgin_ and PyMTL3_ are previous work in the same
+general area). The work on Pydrofoil also was part of the motivation for the
+recent `Z3 JIT bug-finding work`_, because Pydrofoil is pushing RPython's JIT in
+less commonly used directions.
 
+There's a bunch of features that we hope to implement soon. Currently, floating
+point instructions aren't supported in Pydrofoil. Also, we have a lot of ideas
+for further optimizations, both RISC-V specific ones in Pydrofoil but also a
+number of generally useful ones for the JIT, which would benefit Python
+performance as well.
 
 .. _Pydrofoil: https://docs.pydrofoil.org
 .. _`Sail language`: https://github.com/riscv/sail-riscv#what-is-sail
 .. _`Sail-RISCV`: https://github.com/riscv/sail-riscv#riscv-sail-model
 .. _`RISCV instruction`: https://github.com/riscv/sail-riscv#example-risc-v-instruction-specifications
 .. _`build documentation`: https://docs.pydrofoil.org/en/latest/building_pydrofoil.html
+
+.. _Pydgin: /posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html
+.. _PyMTL3: https://pymtl.github.io/
+
+.. _`Z3 JIT bug-finding work`: /posts/2022/12/jit-bug-finding-smt-fuzzing.html
