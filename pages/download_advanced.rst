@@ -60,15 +60,17 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - MacOS >= 11. Not signed, for signed packages use Homebrew_ or conda_.
+     - MacOS >= 11. Not signed, for signed packages use conda_. Homebrew_ does
+       not yet provide PyPy3.8+.
 
    * - **MacOS x86_64**
 
      - Download__
      - Download__
      - Download__
-     - MacOS >= 10.14, not for High-Sierra and below. Not signed, for signed
-       packages use Homebrew_ or conda_.
+     - MacOS >= 10.15, not for Mojave and below. Not signed, for signed
+       packages or older versions use conda_. Homebrew_ does not yet provide
+       PyPy3.8+.
 
    * - **Linux ARM64**
 
