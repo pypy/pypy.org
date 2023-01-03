@@ -42,14 +42,14 @@ Advent of Code `Day 16`_ and looks like this:
     initstate = initstate[:size]
     print(iterdiff(initstate))
 
-The submitter pointed out, that the program is fast (~8s on my laptop) on
-CPython and slow (didn't finish) on PyPy.
+The submitter pointed out, that the program is fast on CPython (~8s on my
+laptop) and slow (didn't finish) on PyPy.
 
 The reason for the performance difference is that ``+=`` on strings in a loop
 has quadratic complexity in PyPy, which is what ``diffstr`` does. To see the
 quadraticness, consider that to add a character at the end of the string, the
 beginning of the string needs to be copied into a new chunk of memory. If the
-loop runs ``n`` times, that means there are ``1 + 2 + 3 + ... + n = n * (n - 1)
+loop runs ``n`` times, that means there are ``1 + 2 + 3 + ... + n = n * (n + 1)
 // 2`` character copies.
 
 Repeated string concatenations are in principle also quadratic in CPython, but
@@ -103,5 +103,5 @@ makes the strings implementation quite a bit more complex.
 
 So, in summary, don't use repeated concatenations in a loop!
 
-.. _issue: 
+.. _issue: https://foss.heptapod.net/pypy/pypy/-/issues/3885
 .. _`Day 16`: https://adventofcode.com/2016/day/16
