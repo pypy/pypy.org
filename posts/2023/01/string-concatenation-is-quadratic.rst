@@ -49,8 +49,11 @@ The reason for the performance difference is that ``+=`` on strings in a loop
 has quadratic complexity in PyPy, which is what ``diffstr`` does. To see the
 quadraticness, consider that to add a character at the end of the string, the
 beginning of the string needs to be copied into a new chunk of memory. If the
-loop runs ``n`` times, that means there are ``1 + 2 + 3 + ... + n = n * (n + 1)
-// 2`` character copies.
+loop runs ``n`` times, that means there are
+
+``1 + 2 + 3 + ... + n = n * (n + 1) // 2``
+
+character copies.
 
 Repeated string concatenations are in principle also quadratic in CPython, but
 CPython has an optimization_ that makes them sometimes not quadratic, which is
