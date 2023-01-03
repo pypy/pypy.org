@@ -20,25 +20,25 @@ Advent of Code `Day 16`_ and looks like this:
 .. code:: python
 
     def dragon(a):
-       b = a[::-1].replace('0','r').replace('1','0').replace('r','1')
-       return a+'0'+b
+        b = a[::-1].replace('0','r').replace('1','0').replace('r','1')
+        return a+'0'+b
 
     def diffstr(a):
-       b = ""
-       for i in range(0,len(a),2):
-          b += ['0','1'][a[i] == a[i+1]]
-       return b
+        b = ""
+        for i in range(0,len(a),2):
+            b += ['0','1'][a[i] == a[i+1]]
+        return b
 
     def iterdiff(a):
-       b = a
-       while(len(b) % 2 == 0):
-          b = diffstr(b)
-       return b
+        b = a
+        while(len(b) % 2 == 0):
+            b = diffstr(b)
+        return b
 
     size = 35651584
     initstate = '10010000000110000'
     while(len(initstate) < size):
-       initstate = dragon(initstate)
+        initstate = dragon(initstate)
     initstate = initstate[:size]
     print(iterdiff(initstate))
 
@@ -65,10 +65,10 @@ then use ``str.join`` after the loop:
 .. code:: python
 
     def diffstr(a):
-       b = []
-       for i in range(0,len(a),2):
-          b.append(['0','1'][a[i] == a[i+1]])
-       return "".join(b)
+        b = []
+        for i in range(0,len(a),2):
+            b.append(['0','1'][a[i] == a[i+1]])
+        return "".join(b)
 
 With this change the program becomes a little bit faster on CPython for me, and
 on PyPy it stops being quadratic and runs in ~3.5s.
@@ -81,11 +81,11 @@ optimization. E.g. this useless change makes CPython also take ages:
 .. code:: python
 
     def diffstr(a):
-       b = ""
-       for i in range(0,len(a),2):
-          b += ['0','1'][a[i] == a[i+1]]
-          c = b
-       return b
+        b = ""
+        for i in range(0,len(a),2):
+            b += ['0','1'][a[i] == a[i+1]]
+            c = b
+        return b
 
 The reason why this change breaks the optimization in CPython is that it only
 triggers if the reference count of ``b`` is 1, in which case it uses ``realloc``
