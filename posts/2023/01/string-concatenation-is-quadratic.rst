@@ -1,6 +1,6 @@
 .. title: Repeated string concatenation is quadratic in PyPy (and CPython)
 .. slug: string-concatenation-quadratic
-.. date: 2023-01-05 18:00:00 UTC
+.. date: 2023-01-04 9:00:00 UTC
 .. tags: performance
 .. category:
 .. link:
