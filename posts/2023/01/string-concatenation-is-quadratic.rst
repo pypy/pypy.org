@@ -11,10 +11,13 @@
 This is a super brief blog post responding to an issue_ that we got on the PyPy
 issue tracker. I am moving my response to the blog (with permission of the
 submitter) to have a post to point to, since it's a problem that comes up with
-some regularity.
+some regularity. It's also documented on our page of `differences between PyPy
+and CPython`_ but I thought an additional blog post might be good.
+
+.. _`differences between PyPy and CPython`: https://doc.pypy.org/en/latest/cpython_differences.html?highlight=join#performance-differences
 
 The issue pointed out that a small program that operates on strings is much
-slower on PyPy compared to CPython. The program is a solution for this year's
+slower on PyPy compared to CPython. The program is a solution for 2016's
 Advent of Code `Day 16`_ and looks like this:
 
 .. code:: python
@@ -62,7 +65,7 @@ what makes this program not too slow in CPython.
 .. _optimization: https://docs.python.org/2/whatsnew/2.4.html#optimizations
 
 In order to fix the problem on PyPy it's best to use a list for the string
-parts, which as the right amortized O(1) complexity for ``.append`` calls, and
+parts, which has the right amortized O(1) complexity for ``.append`` calls, and
 then use ``str.join`` after the loop:
 
 .. code:: python
