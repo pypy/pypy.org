@@ -35,8 +35,8 @@ If you are interested in helping, see our `howtohelp`_ page.
 .. _`x86_64`: http://en.wikipedia.org/wiki/X86_64
 .. _`ARM`: http://en.wikipedia.org/wiki/ARM
 .. _`AArch64`: http://en.wikipedia.org/wiki/AArch64
-.. _`PowerPC`: https://de.wikipedia.org/wiki/PowerPC
-.. _`System Z (s390x)`: https://de.wikipedia.org/wiki/System/390
+.. _`PowerPC`: https://en.wikipedia.org/wiki/PowerPC
+.. _`System Z (s390x)`: https://en.wikipedia.org/wiki/IBM_System/390
 .. _`howtohelp`: howtohelp.html
 
 .. |---| unicode:: U+2014  .. em dash, trimming surrounding whitespace
