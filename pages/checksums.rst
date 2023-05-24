@@ -8,7 +8,44 @@
 
 Here are the checksums
 
-pypy3.9-v7.3.11 sha256::
+pypy3.10-v7.3.12rc2 sha256::
+
+    a6dc89b8100f423d5f8f5f579db3691e0ec5f14c2d92d529d70054263e202810  pypy3.10-v7.3.12rc2-aarch64.tar.bz2
+    5607812d1fc9ec62956555a88b75f9178fadba090759f7c0941341b9d761e6ef  pypy3.10-v7.3.12rc2-linux32.tar.bz2
+    6be46911c20152de7d317cf8b2b7c83933a18a9d4193c41e0b70810381fc8d09  pypy3.10-v7.3.12rc2-linux64.tar.bz2
+    7c353cce25d76482e6b03e298891e7a5433b1c825391bc9f14b93abdd365276b  pypy3.10-v7.3.12rc2-macos_arm64.tar.bz2
+    098e408004813c126f09989588d586428982278c2a79a5f216f55b29db2f05de  pypy3.10-v7.3.12rc2-macos_x86_64.tar.bz2
+    2a842af10a5b1f3be97866af21a7108951c45af7b0ffb757a8e1e1ffd2c76718  pypy3.10-v7.3.12rc2-s390x.tar.bz2
+    d8c51b7bb88dd1343195d088c95b4b53c704ae2c7a517ba8d8f8c728bf150683  pypy3.10-v7.3.12rc2-src.tar.bz2
+    cc695d4e48bc29867e171071524d97cd4cd903ec965ee0748c3dde2b012ae36a  pypy3.10-v7.3.12rc2-src.zip
+    cd3b1b409d41ea694a2d22f15afcab12305c058b8fa2a197c49e96b1c5fb776c  pypy3.10-v7.3.12rc2-win64.zip
+
+
+pypy3.9-v7.3.12rc2 sha256::
+
+    37335affc962acd79fcd1f08cce19c3d2a3d2d2f6e9ba73d6c804160fd42b471  pypy3.9-v7.3.12rc2-linux32.tar.bz2
+    79a3d32a21534d784f2ac4934d157354aba4871b72c39ac7908e9d853c16c3ad  pypy3.9-v7.3.12rc2-linux64.tar.bz2
+    4b4adfb435c3677bf7c518413c2c53282789ceadd747bec19ed42ce0eb7192ed  pypy3.9-v7.3.12rc2-macos_arm64.tar.bz2
+    3b29d34919f53136a2272363d819eb4e678368a01d5a182feae04a78a505d15d  pypy3.9-v7.3.12rc2-macos_x86_64.tar.bz2
+    9d760b96db54f8d51c47c78397d70dbf61e1144de5afe6840deb3b9a7c265381  pypy3.9-v7.3.12rc2-s390x.tar.bz2
+    4835d2f3814c92851f7930398f397cd0e938de165329c019d86561d9482c9daf  pypy3.9-v7.3.12rc2-src.tar.bz2
+    453d84e4104216c23a466fc58f58231c051eafabf258c1c907b41ffe9955219b  pypy3.9-v7.3.12rc2-src.zip
+    559fa00f89eab23c87ac2132ef30fb456631f4ff4bb8009d60900be57594dbea  pypy3.9-v7.3.12rc2-win64.zip
+
+pypy2.7-v7.3.12rc2 sha256::
+
+    561c6496251fbdf36ecfeaa08bc2dc89f24ef3044dde6d9f297efc798726e49d  pypy2.7-v7.3.12rc2-aarch64.tar.bz2
+    a66cfb8fd8a88a60bcefca14364c7e87f2932f978b81187572064e1df16c0285  pypy2.7-v7.3.12rc2-linux32.tar.bz2
+    03d68b7d43751807cc4e7743a3977f2359cc4b6f0acaad00057b1b4158efe51a  pypy2.7-v7.3.12rc2-linux64.tar.bz2
+    0cd0fc59894325ab30585fc2bee1d244b2b788d04e3aec46dafb0e2b3b232657  pypy2.7-v7.3.12rc2-macos_arm64.tar.bz2
+    75587e171ea77ccbdcc9e0f062c9bd55bc374083ac106eeb788321dc5f031aa6  pypy2.7-v7.3.12rc2-macos_x86_64.tar.bz2
+    5968a009c19bf723eda722e9ff1b95986a1b5c79247269532f99e0b25819089a  pypy2.7-v7.3.12rc2-s390x.tar.bz2
+    6c69d4260554ef677d9dfb3b81a1dbd6f4d7302ef0170d1c66616865a711317f  pypy2.7-v7.3.12rc2-src.tar.bz2
+    a4cbe00a2bef9181929b4577c535f327021ee6af596ac0ad8d577e2a67b44a5f  pypy2.7-v7.3.12rc2-src.zip
+    2bcab9251209b44eb0f7059f91c070d1de19abcfc42397e437ebe3be2faaaf5d  pypy2.7-v7.3.12rc2-win64.zip
+
+
+pypy3.10-v7.3.12rc1 sha256::
 
     3e92ba4977c1937913c5a4cb04ee31fa809cb44d12eefcfcd5b7ef64fa2d1a45  pypy3.10-v7.3.12rc1-aarch64.tar.bz2
     889f887eada150cdbf3bfce5bb209fae90a64ad99590047c1123452431d43659  pypy3.10-v7.3.12rc1-linux32.tar.bz2
@@ -20,7 +57,7 @@ pypy3.9-v7.3.11 sha256::
     c11b44ab9396bc6ce2a1ff5be514c27b1b327f79da6ba2cad635ea90e590ab5c  pypy3.10-v7.3.12rc1-src.zip
     2a2c285909f67984691f7861637a633c06cb30e59374744de08c0dbfbd89a151  pypy3.10-v7.3.12rc1-win64.zip
 
-pypy3.9-v7.3.11 sha256::
+pypy3.9-v7.3.12rc1 sha256::
 
     4be87ceb5d522e8f0619a06660a7b68252add41b60ab4957d8f899d4893f6a15  pypy3.9-v7.3.12rc1-aarch64.tar.bz2
     0219d3353eda1526828d4b48e773d045469c0b0dafd95b0bfae72b4ef258bd02  pypy3.9-v7.3.12rc1-linux32.tar.bz2
@@ -47,7 +84,7 @@ pypy2.7-v7.3.12rc1 sha256::
 
 pypy3.9-v7.3.11 sha256::
 
-    09175dc652ed895d98e9ad63d216812bf3ee7e398d900a9bf9eb2906ba8302b9  pypy3.9-v7.3.11-aarch64.tar.bz2                                                                 
+    09175dc652ed895d98e9ad63d216812bf3ee7e398d900a9bf9eb2906ba8302b9  pypy3.9-v7.3.11-aarch64.tar.bz2
     0099d72c2897b229057bff7e2c343624aeabdc60d6fb43ca882bff082f1ffa48  pypy3.9-v7.3.11-linux32.tar.bz2
     d506172ca11071274175d74e9c581c3166432d0179b036470e3b9e8d20eae581  pypy3.9-v7.3.11-linux64.tar.bz2
     91ad7500f1a39531dbefa0b345a3dcff927ff9971654e8d2e9ef7c5ae311f57e  pypy3.9-v7.3.11-macos_arm64.tar.bz2
@@ -60,7 +97,7 @@ pypy3.9-v7.3.11 sha256::
 
 pypy3.8-v7.3.11 sha256::
 
-    9a2fa0b8d92b7830aa31774a9a76129b0ff81afbd22cd5c41fbdd9119e859f55  pypy3.8-v7.3.11-aarch64.tar.bz2                                                                 
+    9a2fa0b8d92b7830aa31774a9a76129b0ff81afbd22cd5c41fbdd9119e859f55  pypy3.8-v7.3.11-aarch64.tar.bz2
     a79b31fce8f5bc1f9940b6777134189a1d3d18bda4b1c830384cda90077c9176  pypy3.8-v7.3.11-linux32.tar.bz2
     470330e58ac105c094041aa07bb05676b06292bc61409e26f5c5593ebb2292d9  pypy3.8-v7.3.11-linux64.tar.bz2
     78cdc79ff964c4bfd13eb45a7d43a011cbe8d8b513323d204891f703fdc4fa1a  pypy3.8-v7.3.11-macos_arm64.tar.bz2
@@ -72,7 +109,7 @@ pypy3.8-v7.3.11 sha256::
 
 pypy2.7-v7.3.11 sha256::
 
-    ea924da1defe9325ef760e288b04f984614e405580f5321eb6a5c8f539bd415a  pypy2.7-v7.3.11-aarch64.tar.bz2                                                                 
+    ea924da1defe9325ef760e288b04f984614e405580f5321eb6a5c8f539bd415a  pypy2.7-v7.3.11-aarch64.tar.bz2
     30fd245fab7068c96a75b9ff1323ac55174c64fc8c4751cceb4b7a9bedc1851e  pypy2.7-v7.3.11-linux32.tar.bz2
     ba8ed958a905c0735a4cfff2875c25089954dc020e087d982b0ffa5b9da316cd  pypy2.7-v7.3.11-linux64.tar.bz2
     cc5696ab4f93cd3481c1e4990b5dedd7ba60ac0602fa1890d368889a6c5bf771  pypy2.7-v7.3.11-macos_arm64.tar.bz2
@@ -84,7 +121,7 @@ pypy2.7-v7.3.11 sha256::
 
 pypy3.9-v7.3.10 sha256::
 
-    657a04fd9a5a992a2f116a9e7e9132ea0c578721f59139c9fb2083775f71e514  pypy3.9-v7.3.10-aarch64.tar.bz2                                  
+    657a04fd9a5a992a2f116a9e7e9132ea0c578721f59139c9fb2083775f71e514  pypy3.9-v7.3.10-aarch64.tar.bz2
     b6db59613b9a1c0c1ab87bc103f52ee95193423882dc8a848b68850b8ba59cc5  pypy3.9-v7.3.10-linux32.tar.bz2
     95cf99406179460d63ddbfe1ec870f889d05f7767ce81cef14b88a3a9e127266  pypy3.9-v7.3.10-linux64.tar.bz2
     e2a6bec7408e6497c7de8165aa4a1b15e2416aec4a72f2578f793fb06859ccba  pypy3.9-v7.3.10-macos_arm64.tar.bz2
@@ -94,7 +131,7 @@ pypy3.9-v7.3.10 sha256::
     e3e2c41db0a5590d31233fd2909feeb83b1e7f997a473d74a11ad87ba4bbdc30  pypy3.9-v7.3.10-src.zip
     07e18b7b24c74af9730dfaab16e24b22ef94ea9a4b64cbb2c0d80610a381192a  pypy3.9-v7.3.10-win64.zip
 
-    2775f1eca62dd1eab0af09f8e4b1640b5c86f18a766ed46ff9aa7dc8aa916c13  pypy3.9-v7.3.10rc3-aarch64.tar.bz2                                              
+    2775f1eca62dd1eab0af09f8e4b1640b5c86f18a766ed46ff9aa7dc8aa916c13  pypy3.9-v7.3.10rc3-aarch64.tar.bz2
     68b2f1b986217475fc98bc0e5a98b4bb0c602ec1d603abbeef9ada89c9ff7048  pypy3.9-v7.3.10rc3-linux32.tar.bz2
     1cf9db691cadbf870c9af4a6af7ab89cbf24fef0469d63fd0d857656ee4adee6  pypy3.9-v7.3.10rc3-linux64.tar.bz2
     b585ab42f95aa7f0e713c6c22aba030e5d49d78ba79e8d005e754384d33cfaa4  pypy3.9-v7.3.10rc3-macos_arm64.tar.bz2
@@ -106,7 +143,7 @@ pypy3.9-v7.3.10 sha256::
 
 pypy3.8-v7.3.10 sha256::
 
-    e4caa1a545f22cfee87d5b9aa6f8852347f223643ad7d2562e0b2a2f4663ad98  pypy3.8-v7.3.10-aarch64.tar.bz2                
+    e4caa1a545f22cfee87d5b9aa6f8852347f223643ad7d2562e0b2a2f4663ad98  pypy3.8-v7.3.10-aarch64.tar.bz2
     b70ed7fdc73a74ebdc04f07439f7bad1a849aaca95e26b4a74049d0e483f071c  pypy3.8-v7.3.10-linux32.tar.bz2
     ceef6496fd4ab1c99e3ec22ce657b8f10f8bb77a32427fadfb5e1dd943806011  pypy3.8-v7.3.10-linux64.tar.bz2
     6cb1429371e4854b718148a509d80143f801e3abfc72fef58d88aeeee1e98f9e  pypy3.8-v7.3.10-macos_arm64.tar.bz2
@@ -116,7 +153,7 @@ pypy3.8-v7.3.10 sha256::
     0e4dd55729a2bf8c9bf963c769004b287ef57576ddb402e71e387847a7c31c0a  pypy3.8-v7.3.10-src.zip
     362dd624d95bd64743190ea2539b97452ecb3d53ea92ceb2fbe9f48dc60e6b8f  pypy3.8-v7.3.10-win64.zip
 
-    d7feab3fd0e670dc66277ad710d2a26dd5ec3def68cb4fdf2697e570b74ab62e  pypy3.8-v7.3.10rc3-aarch64.tar.bz2                                              
+    d7feab3fd0e670dc66277ad710d2a26dd5ec3def68cb4fdf2697e570b74ab62e  pypy3.8-v7.3.10rc3-aarch64.tar.bz2
     4a33b7e08033527e9f8c6dc2a3d6a8d0163c381b9e75813cfe1a7865caf335ae  pypy3.8-v7.3.10rc3-linux32.tar.bz2
     7ab218ab7f05a156ad3ea3b498e6da94dd7e7e77dfe03ee77e5827af755a6207  pypy3.8-v7.3.10rc3-linux64.tar.bz2
     d77a5f94690e8e74d3ae57d1f65ef657c670614559447a196da001de943e1fa5  pypy3.8-v7.3.10rc3-macos_arm64.tar.bz2
@@ -139,7 +176,7 @@ pypy2.7-v7.3.10 sha256::
     ece8975f49b192cc6e3169301a3c3ef71822cc7b52e70d7d8b506f54f917e14e  pypy2.7-v7.3.10-src.zip
     2915b5201a5f71546951bc41efd80f40b2ed709511bc526219a70f3ae37b918e  pypy2.7-v7.3.10-win64.zip
 
-    85f0b2f0bffe9a9a0fe17382c25f595be7c7ca9a4d070eaf98cb4258bdc8f703  pypy2.7-v7.3.10rc3-aarch64.tar.bz2                                              
+    85f0b2f0bffe9a9a0fe17382c25f595be7c7ca9a4d070eaf98cb4258bdc8f703  pypy2.7-v7.3.10rc3-aarch64.tar.bz2
     38f0fe020ac7880ae4e843d2cacdfcceecd0d7dca5fd2769f13b60a1e6bf8e86  pypy2.7-v7.3.10rc3-linux32.tar.bz2
     e6d7330c16f503e1c21dacb22c525974f1d81fea86ef32e0d21239d9d372b4d5  pypy2.7-v7.3.10rc3-linux64.tar.bz2
     5f62122884e87b263ce3f416513e1f380276fc327570cff07daac864907b1d1e  pypy2.7-v7.3.10rc3-macos_arm64.tar.bz2
