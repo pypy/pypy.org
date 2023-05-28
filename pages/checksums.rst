@@ -23,6 +23,7 @@ pypy3.10-v7.3.12rc2 sha256::
 
 pypy3.9-v7.3.12rc2 sha256::
 
+    0e50aafa4e92413573cff9d579613175e5cdc128bda91a47154c9909b47c2f4c  pypy3.9-v7.3.12rc2-aarch64.tar.bz2
     37335affc962acd79fcd1f08cce19c3d2a3d2d2f6e9ba73d6c804160fd42b471  pypy3.9-v7.3.12rc2-linux32.tar.bz2
     79a3d32a21534d784f2ac4934d157354aba4871b72c39ac7908e9d853c16c3ad  pypy3.9-v7.3.12rc2-linux64.tar.bz2
     4b4adfb435c3677bf7c518413c2c53282789ceadd747bec19ed42ce0eb7192ed  pypy3.9-v7.3.12rc2-macos_arm64.tar.bz2
