@@ -11,11 +11,11 @@
 
 We provide pre-compiled binaries for many platforms and OSes:
 
-* the Python2.7 compatible release — **PyPy2.7 v7.3.11**
+* the Python2.7 compatible release — **PyPy2.7 v7.3.12**
 
-* the Python3.8 compatible release — **PyPy3.8 v7.3.11**
+* the Python3.9 compatible release — **PyPy3.8 v7.3.12**
 
-* the Python3.9 compatible release — **PyPy3.9 v7.3.11**
+* the Python3.10 compatible release — **PyPy3.10 v7.3.12**
 
 .. note::
 
@@ -37,8 +37,8 @@ We provide pre-compiled binaries for many platforms and OSes:
    :header-rows: 1
 
    * - OS
+     - PyPy3.10
      - PyPy3.9
-     - PyPy3.8
      - PyPy2.7
      - Notes
 
@@ -61,7 +61,7 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - MacOS >= 11. Not signed, for signed packages use conda_. Homebrew_ does
-       not yet provide PyPy3.8+.
+       not yet provide PyPy3.9+.
 
    * - **MacOS x86_64**
 
@@ -70,7 +70,7 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - MacOS >= 10.15, not for Mojave and below. Not signed, for signed
        packages or older versions use conda_. Homebrew_ does not yet provide
-       PyPy3.8+.
+       PyPy3.9+.
 
    * - **Linux ARM64**
 
@@ -79,27 +79,27 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - compatible with CentOS7 and later.
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.11-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.11-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.11-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-linux64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.11-win64.zip
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.11-win64.zip
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.11-win64.zip
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-win64.zip
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-win64.zip
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-win64.zip
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.11-macos_arm64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.11-macos_arm64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.11-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-macos_arm64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.11-macos_x86_64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.11-macos_x86_64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.11-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-macos_x86_64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.11-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.11-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.11-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-aarch64.tar.bz2
 
-.. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.11.html
+.. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.12.html
 .. _`vcredist.x64.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
 
 ..
@@ -111,8 +111,8 @@ We provide pre-compiled binaries for many platforms and OSes:
    :header-rows: 1
 
    * - OS
+     - PyPy3.10
      - PyPy3.9
-     - PyPy3.8
      - PyPy2.7
      - Notes
 
@@ -123,20 +123,6 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - compatible with CentOS7 and later
 
-   * - **PowerPC PPC64**
-
-     - n/a
-     - n/a
-     - 7.3.1__
-     - 64bit big-endian, Fedora 20 [1]_
-
-   * - **PowerPC PPC64le**
-
-     - n/a
-     - n/a
-     - 7.3.1__
-     - 64bit little-endian, Fedora 21 [1]_
-
    * - **S390x**
 
      - Download__
@@ -145,17 +131,13 @@ We provide pre-compiled binaries for many platforms and OSes:
      - built on Redhat Linux 7.2 [1]_
 
 
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.11-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.11-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.11-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-linux32.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64.tar.bz2
-
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.1-ppc64le.tar.bz2
-
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.11-s390x.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.11-s390x.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.11-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-s390x.tar.bz2
 
 .. [1]
   Linux binaries are provided for the
@@ -485,9 +467,8 @@ pre-compiling them, normal users will get errors:
   normally found: e.g. in your project's main directory, or in a
   directory that you add to the env var ``PYTHONPATH``.
 
-.. _`package.py`: https://foss.heptapod.net/pypy/pypy/-/blob/release-pypy3.8-v7.3.11/pypy/tool/release/package.py
+.. _`package.py`: https://foss.heptapod.net/pypy/pypy/-/blob/release-pypy3.9-v7.3.12/pypy/tool/release/package.py
 
 Checksums
 ---------
 Checksums for the downloads are :doc:`here <checksums>`
-
