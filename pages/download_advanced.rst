@@ -13,7 +13,7 @@ We provide pre-compiled binaries for many platforms and OSes:
 
 * the Python2.7 compatible release — **PyPy2.7 v7.3.12**
 
-* the Python3.9 compatible release — **PyPy3.8 v7.3.12**
+* the Python3.9 compatible release — **PyPy3.9 v7.3.12**
 
 * the Python3.10 compatible release — **PyPy3.10 v7.3.12**
 
@@ -80,23 +80,23 @@ We provide pre-compiled binaries for many platforms and OSes:
      - compatible with CentOS7 and later.
 
 .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.12-linux64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-linux64.tar.bz2
 
 .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-win64.zip
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-win64.zip
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.12-win64.zip
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-win64.zip
 
 .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-macos_arm64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.12-macos_arm64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-macos_arm64.tar.bz2
 
 .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-macos_x86_64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.12-macos_x86_64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-macos_x86_64.tar.bz2
 
 .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.12-aarch64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-aarch64.tar.bz2
 
 .. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.12.html
@@ -132,11 +132,11 @@ We provide pre-compiled binaries for many platforms and OSes:
 
 
 .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.12-linux32.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-linux32.tar.bz2
 
 .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-s390x.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.8-v7.3.12-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.12-s390x.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-s390x.tar.bz2
 
 .. [1]
@@ -328,13 +328,13 @@ Building from source
    Alternatively, get one of the following smaller packages for the source at
    the same revision as the above binaries:
 
-   * `pypy2.7-v7.3.11-src.tar.bz2`__ (sources, PyPy 2.7 only)
-   * `pypy3.8-v7.3.11-src.tar.bz2`__ (sources, PyPy 3.8 only)
-   * `pypy3.9-v7.3.11-src.tar.bz2`__ (sources, PyPy 3.9 only)
+   * `pypy2.7-v7.3.12-src.tar.bz2`__ (sources, PyPy 2.7 only)
+   * `pypy3.9-v7.3.12-src.tar.bz2`__ (sources, PyPy 3.9 only)
+   * `pypy3.10-v7.3.12-src.tar.bz2`__ (sources, PyPy 3.10 only)
 
-   .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.11-src.tar.bz2
-   .. __: https://downloads.python.org/pypy/pypy3.8-v7.3.11-src.tar.bz2
-   .. __: https://downloads.python.org/pypy/pypy3.9-v7.3.11-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy3.9-v7.3.12-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-src.tar.bz2
 
 
 2. Make sure you **installed the dependencies.**  See the list here__.

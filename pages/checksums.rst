@@ -8,7 +8,7 @@
 
 Here are the checksums
 
-pypy3.10-v7.3.12rc2 sha256::
+pypy3.10-v7.3.12 sha256::
 
     26208b5a134d9860a08f74cce60960005758e82dc5f0e3566a48ed863a1f16a1  pypy3.10-v7.3.12-aarch64.tar.bz2
     811667825ae58ada4b7c3d8bc1b5055b9f9d6a377e51aedfbe0727966603f60e  pypy3.10-v7.3.12-linux32.tar.bz2
@@ -21,7 +21,7 @@ pypy3.10-v7.3.12rc2 sha256::
     8c3b1d34fb99100e230e94560410a38d450dc844effbee9ea183518e4aff595c  pypy3.10-v7.3.12-win64.zip
 
 
-pypy3.9-v7.3.12rc2 sha256::
+pypy3.9-v7.3.12 sha256::
 
     e9327fb9edaf2ad91935d5b8563ec5ff24193bddb175c1acaaf772c025af1824  pypy3.9-v7.3.12-aarch64.tar.bz2
     aa04370d38f451683ccc817d76c2b3e0f471dbb879e0bd618d9affbdc9cd37a4  pypy3.9-v7.3.12-linux32.tar.bz2
@@ -34,7 +34,7 @@ pypy3.9-v7.3.12rc2 sha256::
     0996054207b401aeacace1aa11bad82cfcb463838a1603c5f263626c47bbe0e6  pypy3.9-v7.3.12-win64.zip
 
 
-pypy2.7-v7.3.12rc2 sha256::
+pypy2.7-v7.3.12 sha256::
 
     e04dcb6286a7b4724ec3f0e50d3cc1ba8583301dd1658c06d7f37599e4201c59  pypy2.7-v7.3.12-aarch64.tar.bz2
     abf3ae477bd0e526ac6dcefe0bfa845e1535aa053342c0d641219bfcde4b9b56  pypy2.7-v7.3.12-linux32.tar.bz2
