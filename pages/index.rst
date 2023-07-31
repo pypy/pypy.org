@@ -53,7 +53,7 @@ A `fast`_, `compliant`_ alternative implementation of `Python`_
 
 .. class:: small
 
-On average, PyPy is **4.8 times faster** than CPython 3.7
+On average, PyPy is **4.8 times faster** than CPython 3.7. We currently support python 3.10, 3.9, and 2.7.
 
 .. figure:: images/pypy_speed_graph.png
     :alt: PyPy vs. Python speed comparison graph"
