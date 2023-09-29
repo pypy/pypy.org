@@ -40,12 +40,12 @@ Source
 * `3.9 Source (tar.bz2)`__; `3.9 Source (zip)`__.
 * `2.7 Source (tar.bz2)`__; `2.7 Source (zip)`__.
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.12-src.zip
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.12-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.12-src.zip
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.12-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.13-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.13-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.13-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.13-src.zip
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.13-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.13-src.zip
 
 
 More information
