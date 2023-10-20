@@ -22,17 +22,17 @@ pypy3.10-v7.3.13 sha256::
 
 pypy3.9-v7.3.13 sha256::
 
-Missing aarch64::
 
     317d7876c5825a086f854253648b967a432b993ce87695d2895d3ad6ed0d2716  pypy3.9-v7.3.13-aarch64.tar.bz2
     ac695238b4a3635ac6b482e74e04e2ea78b31acca0decd5de601dfd2f4ebf35a  pypy3.9-v7.3.13-linux32.tar.bz2
     323b05a9f607e932cda1995cbe77a96e4ea35994631aa6d734c8035e8479b74e  pypy3.9-v7.3.13-linux64.tar.bz2
-    333131d62c502aa5d5fb58a58cdf01de4bfb2c1db5a9bb4c04515258abe6bced  pypy3.9-v7.3.13-macos_arm64.tar.bz2
-    e6404fb743d193a7edea6b33f2f44125116f84eccc83b55846493e595b0f3653  pypy3.9-v7.3.13-macos_x86_64.tar.bz2
+    a07b17a790a1952b551e69d47d77a5546ad5e666ed1bd90b9ad60baaca6aa51e  pypy3.9-v7.3.13-macos_arm64.tar.bz2
+    180802aa0122d4a05ec480bf3130c78591ba88fdde25d8e65a92d4a798b318a3  pypy3.9-v7.3.13-macos_x86_64.tar.bz2
     213c88f652a99c4dc4e8e00b4b5b58f381c7f7e9ea1a9b65801fc0eb1e50df0a  pypy3.9-v7.3.13-s390x.tar.bz2
     bc6147268105e7cb3bd57b401e6d97f66aa4ede269104b2712a7cdd9f02f68cd  pypy3.9-v7.3.13-src.tar.bz2
     5036ba37fb07116754f3eab2df6d41f405f947ffbf8d99d62bf743dc1d2c195f  pypy3.9-v7.3.13-src.zip
-    55ab1c7ba3c3bf04d3acba15eeee3e2e6a185e7a6cb80dd4c0ee2d804a78b4a3  pypy3.9-v7.3.13-win64.zip
+    85745a2055c4a8cefac9b6d3f7f305b1edaaf62468c8f640b4511d9dd21d091c  pypy3.9-v7.3.13-win64.zip
+
 
 
 pypy2.7-v7.3.13 sha256::
