@@ -151,4 +151,4 @@ Many more people
 PyPy is and has always been an effort of many volunteers. Consult the `LICENSE`_
 file for details.
 
-.. _`LICENSE`: https://foss.heptapod.net/pypy/pypy/-/blob/branch/default/LICENSE
+.. _`LICENSE`: https://github.com/pypy/pypy/blob/branch/default/LICENSE

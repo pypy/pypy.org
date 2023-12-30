@@ -17,11 +17,11 @@
 
 * more on our `dev site`_.
 
-* code on https://foss.heptapod.net/pypy/pypy
+* code on https://github.com/pypy/pypy
 
 * Reach out to our consultants_ for specific projects
 
 .. __: https://mail.python.org/mailman/listinfo/pypy-dev
-.. _`issue tracker`: https://foss.heptapod.net/pypy/pypy/-/issues
+.. _`issue tracker`: https://github.com/pypy/pypy/issues
 .. _`dev site`: https://doc.pypy.org
 .. _consultants: pypy-sponsors.html
