@@ -11,13 +11,14 @@
 -->
 
 PyPy has moved its canonical repo and issue tracker from
-https://foss.heptapod.net/pypy/pypy to https://github.com/pypy/pypy. Obviously,
+<https://foss.heptapod.net/pypy/pypy> to <https://github.com/pypy/pypy>. Obviously,
 this means development will now be tracked in git rather than mercurial.
 
 ## Motivation
 
 We still feel mercurial is a better version control system. The named branch
 model and user interface are superior. But
+
 - foss.heptapod.net is not well tracked in google/bing/duckduckgo
   search, so people find it harder to search for issues in the project
 
@@ -38,23 +39,17 @@ model and user interface are superior. But
   out that __not__ moving to github is an impediment to contribution and issue
   reporting.
 
-- I cannot predict the future, but if there is a move away from github, I
-  believe tools will be available to migrate to the next best thing. And since
-  the repo at foss.heptapod.net will not be deleted, even if I am wrong I
-  expect the effort to port the issues and commits from github will be
-  manageable.
+- People who wish to continue to use mercurial can use the same method below to
+  push to github.
 
-- People who wish to continue to use mercurial can add a cron job github
-  action to pull the changes from foss.heptapod.net across to github
-
-- github is more resource rich than foss.heptapod.net. We can add CI
+- github is more resource rich than foss.heptapod.net. We could be able to add CI
   jobs to replace some of our aging [buildbot
   infrastructure](https://buildbot.pypy.org).
 
 ## Method
 
-The migration required two parts: migrating the code and migrating the issues
-and merge requests.
+The migration required two parts: migrating the code and then migrating the
+issues and merge requests.
 
 ### Code migration 1: code and notes
 
@@ -70,7 +65,7 @@ a git hash:
 $(cd pypy-git; git-hg-helper git-rev $(cd ../pypy-hg; hg log -r $i -T"{node}\n"))
 ```
 
-Then I used `hg log` again to print the mercurial branch:
+Then I used `hg log` again to print the mercurial branch for the index `i`:
 ```
 $(cd pypy-hg; hg log -r $i -T'{branch}\n')
 ```
@@ -150,9 +145,19 @@ do:
   migrate only those once they figure out the branch naming problems.
 
 Additionally, now is the time for all of you to prove the move is worthwhile:
+- Star the repo, let others know how to find it
 - Help fix some of the open issues or file new ones
 - Take advantage of the more familiar workflow to get involved in the project
 - Suggest ways to improve the migration: are there things I missed or could
   have done better?
 
+## How will development change?
+Heptapod did not allow personal forks, so we were generous with a commit bit to
+the main repo. Additionally, we (well, me) have been using a
+commit-directly-to-main workflow. We will now be adopting a more structured
+workflow. Please fork the repo and submit a pull request for changes. We can now
+add some pre-merge CI to check that the PR at least passes the first stage of
+translation.
+
+Thanks for helping to make PyPy better.
 Matti
