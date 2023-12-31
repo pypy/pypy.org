@@ -12,11 +12,11 @@
 
 PyPy has moved its canonical repo and issue tracker from
 <https://foss.heptapod.net/pypy/pypy> to <https://github.com/pypy/pypy>. Obviously,
-this means development will now be tracked in git rather than mercurial.
+this means development will now be tracked in git rather than Mercurial.
 
 ## Motivation
 
-We still feel mercurial is a better version control system. The named branch
+We still feel Mercurial is a better version control system. The named branch
 model and user interface are superior. But
 
 - foss.heptapod.net is not well tracked in google/bing/duckduckgo
@@ -39,7 +39,7 @@ model and user interface are superior. But
   out that __not__ moving to github is an impediment to contribution and issue
   reporting.
 
-- People who wish to continue to use mercurial can use the same method below to
+- People who wish to continue to use Mercurial can use the same method below to
   push to github.
 
 - github is more resource rich than foss.heptapod.net. We could be able to add CI
@@ -56,16 +56,16 @@ issues and merge requests.
 I used a [fork of git-remote-hg](https://github.com/mnauw/git-remote-hg) to
 create a local git repo with all the changesets. Then I wanted to add a git
 note to each commit with the branch it came from. So I prepared a file with two
-columns: the git commit hash, and the corresponding branch from mercurial.
+columns: the git commit hash, and the corresponding branch from Mercurial.
 Mercurial can describe each commit in two ways: either the commit hash or by a
-number index. I used `hg log` to convert an index `i` to the mercurial hash,
-and then `git-hg-helper` from `git-remote-hg` to convert the mercurial hash to
+number index. I used `hg log` to convert an index `i` to the Mercurial hash,
+and then `git-hg-helper` from `git-remote-hg` to convert the Mercurial hash to
 a git hash:
 ```
 $(cd pypy-git; git-hg-helper git-rev $(cd ../pypy-hg; hg log -r $i -T"{node}\n"))
 ```
 
-Then I used `hg log` again to print the mercurial branch for the index `i`:
+Then I used `hg log` again to print the Mercurial branch for the index `i`:
 ```
 $(cd pypy-hg; hg log -r $i -T'{branch}\n')
 ```
@@ -106,10 +106,10 @@ repo__ otherwise every mention of a sucessfully mapped user name notifies
 the user about the transfer. This can be quite annoying for a repo the size of
 PyPy with 600 merge requests and over 4000 issues. Issues transfered without a
 problem: the script properly retained the issue numbers. However the script
-does not convert the mercurial hashes to git hashes, so the bare hashes in
+does not convert the Mercurial hashes to git hashes, so the bare hashes in
 comments show up without a link to the commit. Merge requests are more of a problem:
 
-- the mercurial named branch "disappears" once it is merged, so a merge request
+- the Mercurial named branch "disappears" once it is merged, so a merge request
   to a merged branch does not find the target branch name in git. The
   conversion creates an issue instead with the label `gitlab merge request`
 - for some reason, the branches created by `git-remote-hg` are called
@@ -129,14 +129,16 @@ Heptapod" from this transition.
 We would like to express our gratitude to the [Octobus](https://octobus.net/)
 team who support heptapod. The transition from bitbucket was quite an effort,
 and they have generously hosted our developement since then. We wish them all
-the best, and still believe that mercurial should have "won".
+the best, and still believe that Mercurial should have "won".
 
 ## Next steps
 
 While the repo at github is live, there are still a few more things we need to
 do:
 
-- Documentation needs an update for the new repo.
+- Documentation needs an update for the new repo and the build automation from
+  readthedocs must be adjusted.
+- The wiki should be copied from heptapod.
 - buildbot.pypy.org should also look a the new repo. I hope the code is up to
   the task of interacting with a git repo.
 - speed.pypy.org tracks changes, it too needs to reference the new location
