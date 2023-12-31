@@ -164,6 +164,29 @@ workflow. Please fork the repo and submit a pull request for changes. We can now
 add some pre-merge CI to check that the PR at least passes the first stage of
 translation.
 
+### Working between the repos
+
+#### Finding commits
+
+If you want to figure out how a Mercurial commit relates to a git commit, you
+can use `git-hg-helper`. You run it in the git repo. It takes the full long
+hash from one repo and gives you the corresponding hash of the other repo:
+```
+$ git-hg-helper git-rev d64027c4c2b903403ceeef2c301f5132454491df
+4527e62ad94b0e940a5b0f9f20d29428672f93f7
+$ git-hg-helper hg-rev 4527e62ad94b0e940a5b0f9f20d29428672f93f7
+d64027c4c2b903403ceeef2c301f5132454491df
+```
+
+#### Finding branches
+
+Branches migrated from Mercurial will have a `branches` prefix, not `branch`.
+While GitLab uses `branch` for its prefix, the `git-remote-hg` script uses
+`branches`. Please ignore the `branch` prefix: it is a placeholder used for the
+GitLab merge request migration. In choosing the script over the forge mirror, I
+think it makes more sense to allow going back and forth between mercurial and
+git for a while.
+
 Thanks for helping to make PyPy better.
 
 Matti
