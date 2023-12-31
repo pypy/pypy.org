@@ -102,15 +102,16 @@ Note that the branches were named `branches/XXX` by the migration, not `branch/X
 I used the solution from
 [node-gitlab-2-github](https://github.com/piceaTech/node-gitlab-2-github) which
 worked almost perfectly. It is important to do the conversion on a __private
-repo__ otherwise every mention of a sucessfully mapped user name will notify
+repo__ otherwise every mention of a sucessfully mapped user name notifies
 the user about the transfer. This can be quite annoying for a repo the size of
 PyPy with 600 merge requests and over 4000 issues. Issues transfered without a
 problem: the script properly retained the issue numbers. However the script
 does not convert the mercurial hashes to git hashes, so the bare hashes in
 comments show up without a link to the commit. Merge requests are more of a problem:
+
 - the mercurial named branch "disappears" once it is merged, so a merge request
-  to a merged branch will not find the target branch name in git. The
-  conversion will create an issue instead with the label `gitlab merge request`
+  to a merged branch does not find the target branch name in git. The
+  conversion creates an issue instead with the label `gitlab merge request`
 - for some reason, the branches created by `git-remote-hg` are called
   `branches/XXX` and not `branch/XXX` as expected by gitlab. This messes up the
   merge request/PR conversion. For some of the branches (open PRs and main
@@ -134,17 +135,19 @@ the best, and still believe that mercurial should have "won".
 
 While the repo at github is live, there are still a few more things we need to
 do:
+
 - Documentation needs an update for the new repo.
 - buildbot.pypy.org should also look a the new repo. I hope the code is up to
   the task of interacting with a git repo.
 - speed.pypy.org tracks changes, it too needs to reference the new location
-- In order to keep tracking branches, we will activate a [github
-  action](https://github.com/Julian/named-branch-action) by Julian to add a git
-  branch note to each commit.
+- To keep tracking branches with git notes on new commits, we will activate a
+  [github action](https://github.com/Julian/named-branch-action) by Julian to
+  add a git branch note to each commit.
 - Some of the merge requests were not migrated. If someone wants to, they could
-  migrate only those once they figure out the branch naming problems.
+  migrate those once they figure out the branch naming problems.
 
 Additionally, now is the time for all of you to prove the move is worthwhile:
+
 - Star the repo, let others know how to find it
 - Help fix some of the open issues or file new ones
 - Take advantage of the more familiar workflow to get involved in the project
@@ -160,4 +163,5 @@ add some pre-merge CI to check that the PR at least passes the first stage of
 translation.
 
 Thanks for helping to make PyPy better.
+
 Matti
