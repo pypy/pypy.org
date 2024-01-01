@@ -1,5 +1,5 @@
 <!--
-.. title: PyPy moved to git, github
+.. title: PyPy moved to Git, GitHub
 .. slug: pypy-moved-to-git-github
 .. date: 2023-12-29 14:19:55 UTC
 .. tags: 
@@ -12,7 +12,7 @@
 
 PyPy has moved its canonical repo and issue tracker from
 <https://foss.heptapod.net/pypy/pypy> to <https://github.com/pypy/pypy>. Obviously,
-this means development will now be tracked in git rather than Mercurial.
+this means development will now be tracked in Git rather than Mercurial.
 
 ## Motivation
 
@@ -25,7 +25,7 @@ model and user interface are superior. But
 - since heptapod has tightened its spam control, we get reports that
   users create issues only to have them flagged as spam
 
-- open source has become synonymous with github, and we are too small to
+- open source has become synonymous with GitHub, and we are too small to
   change that
 
 - Much of the current development comes as a reaction to fixing issues.
@@ -36,13 +36,13 @@ model and user interface are superior. But
   presents two arguments against the move. [Github notes](https://git-scm.com/docs/git-notes)
   solves much of point (1): the difficulty of discovering provenance of
   commits, although not entirely. But the main problem is point (2), it turns
-  out that __not__ moving to github is an impediment to contribution and issue
+  out that __not__ moving to GitHub is an impediment to contribution and issue
   reporting.
 
 - People who wish to continue to use Mercurial can use the same method below to
-  push to github.
+  push to GitHub.
 
-- github is more resource rich than foss.heptapod.net. We could be able to add CI
+- GitHub is more resource rich than foss.heptapod.net. We could add CI
   jobs to replace some of our aging [buildbot
   infrastructure](https://buildbot.pypy.org).
 
@@ -54,13 +54,13 @@ issues and merge requests.
 ### Code migration 1: code and notes
 
 I used a [fork of git-remote-hg](https://github.com/mnauw/git-remote-hg) to
-create a local git repo with all the changesets. Then I wanted to add a git
+create a local Git repo with all the changesets. Then I wanted to add a Git
 note to each commit with the branch it came from. So I prepared a file with two
-columns: the git commit hash, and the corresponding branch from Mercurial.
+columns: the Git commit hash, and the corresponding branch from Mercurial.
 Mercurial can describe each commit in two ways: either the commit hash or by a
 number index. I used `hg log` to convert an index `i` to the Mercurial hash,
 and then `git-hg-helper` from `git-remote-hg` to convert the Mercurial hash to
-a git hash:
+a Git hash:
 ```
 $(cd pypy-git; git-hg-helper git-rev $(cd ../pypy-hg; hg log -r $i -T"{node}\n"))
 ```
@@ -72,13 +72,13 @@ $(cd pypy-hg; hg log -r $i -T'{branch}\n')
 
 Putting these two together, I could loop over all the commits by their
 numerical index to prepare the file. Then I iterated over each line in the
-file, and added the git note. Since the `git note add` command works on the
+file, and added the Git note. Since the `git note add` command works on the
 current HEAD, I needed to checkout each commit in turn and then add the note:
 ```
 git checkout -q <hash> && git notes --ref refs/notes/branch add -m branch:<branch>
 ```
 
-I could then use `git push --all` to push to github.
+I could then use `git push --all` to push to GitHub.
 
 ### Code migration 2: prepare the branches
 
@@ -89,7 +89,7 @@ push each one. So I created a file with all the branch names
 cd pypy-hg; hg branches | cut -f1 -d" " > branches.txt
 ```
 
-and then push each one to the github repo
+and then push each one to the GitHub repo
 
 ```
 while read branch; do git checkout branches/$branch && git push origin branches/$branch; done < branches.txt
@@ -106,14 +106,14 @@ repo__ otherwise every mention of a sucessfully mapped user name notifies
 the user about the transfer. This can be quite annoying for a repo the size of
 PyPy with 600 merge requests and over 4000 issues. Issues transfered without a
 problem: the script properly retained the issue numbers. However the script
-does not convert the Mercurial hashes to git hashes, so the bare hashes in
+does not convert the Mercurial hashes to Git hashes, so the bare hashes in
 comments show up without a link to the commit. Merge requests are more of a problem:
 
 - the Mercurial named branch "disappears" once it is merged, so a merge request
-  to a merged branch does not find the target branch name in git. The
+  to a merged branch does not find the target branch name in Git. The
   conversion creates an issue instead with the label `gitlab merge request`
 - for some reason, the branches created by `git-remote-hg` are called
-  `branches/XXX` and not `branch/XXX` as expected by gitlab. This messes up the
+  `branches/XXX` and not `branch/XXX` as expected by GitLab. This messes up the
   merge request/PR conversion. For some of the branches (open PRs and main
   target branches) I manually created additional branches without the `es`. The
   net result is that open merge requests became open PRs, merged merge requests
@@ -133,18 +133,19 @@ the best, and still believe that Mercurial should have "won".
 
 ## Next steps
 
-While the repo at github is live, there are still a few more things we need to
+While the repo at GitHub is live, there are still a few more things we need to
 do:
 
 - Documentation needs an update for the new repo and the build automation from
   readthedocs must be adjusted.
 - The wiki should be copied from heptapod.
 - buildbot.pypy.org should also look a the new repo. I hope the code is up to
-  the task of interacting with a git repo.
+  the task of interacting with a Git repo.
 - speed.pypy.org tracks changes, it too needs to reference the new location
-- To keep tracking branches with git notes on new commits, we will activate a
+- To keep tracking branches with Git notes on new commits, we will activate a
   [github action](https://github.com/Julian/named-branch-action) by Julian to
-  add a git branch note to each commit.
+  add a Git branch note to each commit. Please see the README there for
+  directions on using Git notes.
 - Some of the merge requests were not migrated. If someone wants to, they could
   migrate those once they figure out the branch naming problems.
 
@@ -162,14 +163,20 @@ the main repo. Additionally, we (well, me) have been using a
 commit-directly-to-main workflow. We will now be adopting a more structured
 workflow. Please fork the repo and submit a pull request for changes. We can now
 add some pre-merge CI to check that the PR at least passes the first stage of
-translation.
+translation. The live and active branches will be
+- `main`: what was "default" in Mercurial, it is the Python2.7 interpreter and
+  the base of the RPython interpreter.
+- `py3.9`: the Python3.9 interpreter, which also includes all RPython changes
+  from `main`. This is exactly like on Mercurial.
+- `py3.10`: the Python3.10 interpreter, which also includes all RPython changes
+  from `main` and all bugfixes from `py3.9`. This is exactly like on Mercurial.
 
 ### Working between the repos
 
 #### Finding commits
 
-If you want to figure out how a Mercurial commit relates to a git commit, you
-can use `git-hg-helper`. You run it in the git repo. It takes the full long
+If you want to figure out how a Mercurial commit relates to a Git commit, you
+can use `git-hg-helper`. You run it in the Git repo. It takes the full long
 hash from one repo and gives you the corresponding hash of the other repo:
 ```
 $ git-hg-helper git-rev d64027c4c2b903403ceeef2c301f5132454491df
@@ -182,10 +189,7 @@ d64027c4c2b903403ceeef2c301f5132454491df
 
 Branches migrated from Mercurial will have a `branches` prefix, not `branch`.
 While GitLab uses `branch` for its prefix, the `git-remote-hg` script uses
-`branches`. Please ignore the `branch` prefix: it is a placeholder used for the
-GitLab merge request migration. In choosing the script over the forge mirror, I
-think it makes more sense to allow going back and forth between mercurial and
-git for a while.
+`branches`. New work should be in a PR targeting `main`, `py3.9` or `py3.10`.
 
 Thanks for helping to make PyPy better.
 
