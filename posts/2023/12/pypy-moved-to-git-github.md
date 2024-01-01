@@ -1,5 +1,5 @@
 <!--
-.. title: PyPy moved to Git, GitHub
+.. title: PyPy has moved to Git, GitHub
 .. slug: pypy-moved-to-git-github
 .. date: 2023-12-29 14:19:55 UTC
 .. tags: 
