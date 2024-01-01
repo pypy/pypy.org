@@ -311,19 +311,19 @@ Building from source
 
 
 1. Get the source code.  The preferred way is to checkout the current
-   trunk using Mercurial_.  The trunk usually works and is of course
+   trunk using git.  The trunk usually works and is of course
    more up-to-date:
 
    .. code-block:: bash
 
-     hg clone https://foss.heptapod.net/pypy/pypy
+     git clone https://github.com/pypy/pypy
 
    The trunk contains PyPy 2.  For PyPy 3, switch to the correct branch:
 
    .. code-block:: bash
 
-     # switch to the branch that implements Python 3.8
-     hg update py3.8
+     # switch to the branch that implements Python 3.10
+     git checkout branches/py3.10
 
    Alternatively, get one of the following smaller packages for the source at
    the same revision as the above binaries:
@@ -429,7 +429,6 @@ Notes:
 .. _`greenlets`: https://pypy.readthedocs.org/en/latest/stackless.html#greenlets
 .. _`Windows build instructions`: https://doc.pypy.org/en/latest/windows.html#preparing-windows-for-the-large-build
 .. _`shadow stack`: https://pypy.readthedocs.org/en/latest/config/translation.gcrootfinder.html
-.. _Mercurial: https://www.mercurial-scm.org/
 
 Packaging
 ---------
@@ -467,7 +466,7 @@ pre-compiling them, normal users will get errors:
   normally found: e.g. in your project's main directory, or in a
   directory that you add to the env var ``PYTHONPATH``.
 
-.. _`package.py`: https://foss.heptapod.net/pypy/pypy/-/blob/release-pypy3.9-v7.3.14/pypy/tool/release/package.py
+.. _`package.py`: https://github.com/pypy/pypy/blob/release-pypy3.9-v7.3.14/pypy/tool/release/package.py
 
 Checksums
 ---------
