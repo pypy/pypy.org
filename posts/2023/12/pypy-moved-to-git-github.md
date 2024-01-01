@@ -164,6 +164,7 @@ commit-directly-to-main workflow. We will now be adopting a more structured
 workflow. Please fork the repo and submit a pull request for any changes. We
 can now add some pre-merge CI to check that the PR at least passes the first
 stage of translation. The live and active branches will be:
+
 - `main`: what was "default" in Mercurial, it is the Python2.7 interpreter and
   the base of the RPython interpreter,
 - `py3.9`: the Python3.9 interpreter, which also includes all RPython changes
