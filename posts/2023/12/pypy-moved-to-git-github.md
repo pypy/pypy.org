@@ -19,18 +19,18 @@ this means development will now be tracked in Git rather than Mercurial.
 We still feel Mercurial is a better version control system. The named branch
 model and user interface are superior. But
 
-- foss.heptapod.net is not well tracked in google/bing/duckduckgo
-  search, so people find it harder to search for issues in the project
+- foss.heptapod.net is not well indexed in google/bing/duckduckgo
+  search, so people find it harder to search for issues in the project.
 
-- since heptapod has tightened its spam control, we get reports that
-  users create issues only to have them flagged as spam
+- Since Heptapod has tightened its spam control, we get reports that
+  users create issues only to have them flagged as spam.
 
-- open source has become synonymous with GitHub, and we are too small to
-  change that
+- Open Source has become synonymous with GitHub, and we are too small to
+  change that.
 
 - Much of the current development comes as a reaction to fixing issues.
   Tracking interlocking issues is easier if all the code is on the same
-  platform
+  platform.
 
 - The [FAQ](https://doc.pypy.org/en/latest/faq.html#why-doesn-t-pypy-use-git-and-move-to-github)
   presents two arguments against the move. [Github notes](https://git-scm.com/docs/git-notes)
@@ -109,10 +109,10 @@ problem: the script properly retained the issue numbers. However the script
 does not convert the Mercurial hashes to Git hashes, so the bare hashes in
 comments show up without a link to the commit. Merge requests are more of a problem:
 
-- the Mercurial named branch "disappears" once it is merged, so a merge request
+- The Mercurial named branch "disappears" once it is merged, so a merge request
   to a merged branch does not find the target branch name in Git. The
-  conversion creates an issue instead with the label `gitlab merge request`
-- for some reason, the branches created by `git-remote-hg` are called
+  conversion creates an issue instead with the label `gitlab merge request`.
+- For some reason, the branches created by `git-remote-hg` are called
   `branches/XXX` and not `branch/XXX` as expected by GitLab. This messes up the
   merge request/PR conversion. For some of the branches (open PRs and main
   target branches) I manually created additional branches without the `es`. The
@@ -120,14 +120,14 @@ comments show up without a link to the commit. Merge requests are more of a prob
   became issues, and closed-not-merged merge requests were not migrated.
 
 ### Layered conversions
-PyPy already migrated once from bitbucket to heptapod. Many of the issues
+PyPy already migrated once from Bitbucket to Heptapod. Many of the issues
 reflect the multiple transitions: they have lines like "Created originally on
 Bitbucket by XXX" from the first transition, and an additional line "In
 Heptapod" from this transition.
 
 ## Credits
 We would like to express our gratitude to the [Octobus](https://octobus.net/)
-team who support heptapod. The transition from bitbucket was quite an effort,
+team who support Heptapod. The transition from Bitbucket was quite an effort,
 and they have generously hosted our developement since then. We wish them all
 the best, and still believe that Mercurial should have "won".
 
@@ -138,11 +138,11 @@ do:
 
 - Documentation needs an update for the new repo and the build automation from
   readthedocs must be adjusted.
-- The wiki should be copied from heptapod.
-- buildbot.pypy.org should also look a the new repo. I hope the code is up to
+- The wiki should be copied from Heptapod.
+- buildbot.pypy.org should also look at the new repo. I hope the code is up to
   the task of interacting with a Git repo.
 - speed.pypy.org tracks changes, it too needs to reference the new location
-- To keep tracking branches with Git notes on new commits, we will activate a
+- To keep tracking branches with Git notes on new commits, I activated a
   [github action](https://github.com/Julian/named-branch-action) by Julian to
   add a Git branch note to each commit. Please see the README there for
   directions on using Git notes.
@@ -151,9 +151,9 @@ do:
 
 Additionally, now is the time for all of you to prove the move is worthwhile:
 
-- Star the repo, let others know how to find it
-- Help fix some of the open issues or file new ones
-- Take advantage of the more familiar workflow to get involved in the project
+- Star the repo, let others know how to find it,
+- Help fix some of the open issues or file new ones,
+- Take advantage of the more familiar workflow to get involved in the project,
 - Suggest ways to improve the migration: are there things I missed or could
   have done better?
 
@@ -161,13 +161,13 @@ Additionally, now is the time for all of you to prove the move is worthwhile:
 Heptapod did not allow personal forks, so we were generous with a commit bit to
 the main repo. Additionally, we (well, me) have been using a
 commit-directly-to-main workflow. We will now be adopting a more structured
-workflow. Please fork the repo and submit a pull request for changes. We can now
-add some pre-merge CI to check that the PR at least passes the first stage of
-translation. The live and active branches will be
+workflow. Please fork the repo and submit a pull request for any changes. We
+can now add some pre-merge CI to check that the PR at least passes the first
+stage of translation. The live and active branches will be:
 - `main`: what was "default" in Mercurial, it is the Python2.7 interpreter and
-  the base of the RPython interpreter.
+  the base of the RPython interpreter,
 - `py3.9`: the Python3.9 interpreter, which also includes all RPython changes
-  from `main`. This is exactly like on Mercurial.
+  from `main`. This is exactly like on Mercurial, and
 - `py3.10`: the Python3.10 interpreter, which also includes all RPython changes
   from `main` and all bugfixes from `py3.9`. This is exactly like on Mercurial.
 
