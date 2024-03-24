@@ -119,7 +119,7 @@ purposes, but it also halts the execution of the command if that command exits
 with an error (and it sleeps a small random time between runs, which might help
 with randomizing the situation, maybe). Here's a demo:
 
-<script src="https://asciinema.org/a/Zyofd1nLFqZXLNs45UCxXZpcT.js" id="asciicast-648877" async="true"></script>
+<script src="https://asciinema.org/a/648877.js" id="asciicast-648877" async="true"></script>
 
 Thankfully, running the tests repeatedly eventually lead to a crash, solving my
 "only happens on CI" problem. I then tried various variants to exclude possible
@@ -150,8 +150,7 @@ for the corrupted memory location, then use the command `reverse-continue` to
 find the place in the code that mutated the memory location. Here's a little
 demo of this:
 
-<script src="https://asciinema.org/a/648814.js" id="asciicast-648814"
-async="true"></script>
+<script src="https://asciinema.org/a/648814.js" id="asciicast-648814" async="true"></script>
 
 Doing this for my bug revealed that the object that was being corrupted was
 erroneously collected by the garbage collector. For some reason the GC had
@@ -225,7 +224,7 @@ In the following recording I show a staged debugging session with some of the
 extra commands I wrote with the Python API. The details aren't important, I
 just wanted to give a bit of a flavor of what inspecting objects looks like:
 
-<script src="https://asciinema.org/a/Ur1mVpLW3BWjcnPMVlb2IPxi7.js" id="asciicast-648889" async="true"></script>
+<script src="https://asciinema.org/a/648889.js" id="asciicast-648889" async="true"></script>
 
 The next step was to understand why the array content wasn't being correctly
 traced by the GC, which I eventually managed with some [conditional
