@@ -2,10 +2,10 @@
 .. title: Fixing a Bug in PyPy's Incremental GC
 .. slug: fixing-bug-incremental-gc
 .. date: 2024-03-28 12:55:09 UTC
-.. tags: 
-.. category: 
-.. link: 
-.. description: 
+.. tags:
+.. category:
+.. link:
+.. description:
 .. type: text
 .. author: Carl Friedrich Bolz-Tereick
 -->
@@ -14,7 +14,7 @@
 
 Since last summer, I've been looking on and off into a weird and hard to
 reproduce [crash bug in PyPy](https://github.com/pypy/pypy/issues/3959). It was
-manifesting only on CI, and it seemed to always happening in the AST rewriting
+manifesting only on CI, and it seemed to always happen in the AST rewriting
 phase of [pytest](https://pytest.org), the symptoms being that PyPy would crash
 with a segfault. All my attempts to reproduce it locally failed, and my
 attempts to try to understand the problem by dumping the involved ASTs lead
@@ -27,7 +27,7 @@ generator, with the same symptoms: crash in AST rewriting, only on CI. I
 decided to make a more serious push to try to find the bug this time.
 Ultimately the problem turned out to be several bugs in PyPy's garbage
 collector (GC) that had been there since its inception in
-[2013](https://www.pypy.org/posts/2013/10/incremental-garbage-collector-in-pypy-8956893523842234676.html)
+[2013](https://www.pypy.org/posts/2013/10/incremental-garbage-collector-in-pypy-8956893523842234676.html).
 Understanding the
 situation turned out to be quite involved, additionally complicated by this
 being the first time that I was working on this particular aspect of PyPy's GC.
@@ -40,9 +40,9 @@ reflections on the bug (and then a bonus bug I also found in the process).
 
 # Finding the Bug
 
-I started from the failing [nanobind
-CI](https://github.com/wjakob/nanobind/actions/runs/8234561874/job/22516568891)
-runs that ended with a segfault of the PyPy interpreter. This was only an
+I started from the failing [nanobind CI
+runs](https://github.com/wjakob/nanobind/actions/runs/8234561874/job/22516568891)
+that ended with a segfault of the PyPy interpreter. This was only an
 intermittent problem, not every run was failing. When I tried to just run the
 test suite locally, I couldn't get it to fail. Therefore at first I tried to
 learn more about what was happening by looking on the CI runners.
@@ -55,7 +55,7 @@ to increase the probability of seeing the crash I added an otherwise unused
 [matrix](https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs)
 variable to the CI script that just contained 32 parameters. This means every
 build is done 32 times (sorry Github for wasting your CPUs 😕). With that
-amount of repetition, one of the builds was quite reliably crashing.
+amount of repetition, I got at least one job of every build that was crashing.
 
 Then I added the `-Xfaulthandler` option to the PyPy command which will use the
 [faulthandler](https://docs.python.org/3.11/library/faulthandler.html) module
@@ -85,7 +85,7 @@ Afterwards I tried the next best thing, which was configuring the CI runner to
 [dump a core file and upload it as a build
 artifact](https://github.com/itamarst/gha-upload-cores), which worked. Looking
 at the cores locally only sort of worked, because I am running a different
-version of Ubuntu than the the CI runners. So I used
+version of Ubuntu than the CI runners. So I used
 [tmate](https://mxschmitt.github.io/action-tmate/) to be able to log into the
 CI runner after a crash and interactively used gdb there. Unfortunately what I
 learned from that was that the bug was some kind of **memory corruption**,
@@ -100,7 +100,7 @@ instead it uses half a word in the header for the vtable, and the other half
 for flags that the GC needs to keep track of the state of the object.
 Corrupting all this is still bad.)
 
-## Reproducing Locally 
+## Reproducing Locally
 
 At that point it was clear that I had to push to reproduce the problem on my
 laptop, to allow me to work on the problem more directly and not to always have
@@ -123,8 +123,8 @@ Thankfully, running the tests repeatedly eventually lead to a crash, solving my
 "only happens on CI" problem. I then tried various variants to exclude possible
 sources of errors. The first source of errors to exclude in PyPy bugs is the
 just-in-time compiler, so I reran the tests with `--jit off` to see whether I
-could still get it to crash, and thankfully I could (JIT bugs are often very
-annoying).
+could still get it to crash, and thankfully I eventually could (JIT bugs are
+often very annoying).
 
 Next source of bugs to exclude where C-extensions. Since those were the tests
 of nanobind, a framework for creating C-extension modules I was a bit worried
@@ -145,7 +145,8 @@ Using rr well is quite hard, and I'm not very good at it. The main approach I
 use with rr to debug memory corruption is to replay the crash, then set a
 [watchpoint](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Set-Watchpoints.html)
 for the corrupted memory location, then use the command `reverse-continue` to
-find the place in the code that mutated the memory location.
+find the place in the code that mutated the memory location. Here's a little
+demo of this:
 
 <script src="https://asciinema.org/a/648814.js" id="asciicast-648814"
 async="true"></script>
@@ -168,12 +169,12 @@ logic. At first this made me very happy. I thought that this would help me fix
 the bug more quickly.
 
 Extremely frustratingly, after two days of work I concluded that the assertion
-logic itself was wrong. I have fixed that in the meantime too, the gory details
+logic itself was wrong. I have fixed that in the meantime too, the details
 of that are in the bonus section at the end of the post.
 
 ## Using GDB scripting to find the real bug
 
-After that disaster I went back to the earlier rr recording without assertions
+After that disaster I went back to the earlier rr recording without GSC assertions
 and tried to understand in more detail why the GC decided to free an object
 that was still being referenced. To be able to do that I used the [GDB Python
 scripting
@@ -224,20 +225,20 @@ def test_incrementality_bug_arraycopy(self):
 	self.stackroots.append(target)
 	node = self.malloc(S) # unrelated object, will be collected
 	node.x = 5
-	self.writearray(source, 0, node) # store reference into source array, calling the write barrier
-	val = self.gc.collect_step() #
-	source = self.stackroots[0] # reload arrays, they might have move
+    # store reference into source array, calling the write barrier
+	self.writearray(source, 0, node)
+	val = self.gc.collect_step()
+	source = self.stackroots[0] # reload arrays, they might have moved
 	target = self.stackroots[1]
 	# this GC step traces target
 	val = self.gc.collect_step()
 
 	# emulate what a memcopy of arrays does
-	addr_src = llmemory.cast_ptr_to_adr(source)
-	addr_dst = llmemory.cast_ptr_to_adr(target)
-	res = self.gc.writebarrier_before_copy(addr_src, addr_dst, 0, 0, 2)
+	res = self.gc.writebarrier_before_copy(source, target, 0, 0, 2)
 	assert res
 	target[0] = source[0] # copy two elements of the arrays
 	target[1] = source[1]
+    # now overwrite the reference to node in source
 	self.writearray(source, 0, lltype.nullptr(S))
 	# this GC step traces source
 	self.gc.collect_step()
@@ -250,7 +251,7 @@ def test_incrementality_bug_arraycopy(self):
 
 ```
 
-One of the fun properties of testing our GC that way is that all the memory is
+One of the good properties of testing our GC that way is that all the memory is
 emulated. The crash in the last line of the test isn't a segfault at all,
 instead you get a nice exception saying that you tried to access a freed chunk
 of memory and you can then debug this with a python2 debugger.
@@ -275,7 +276,7 @@ that I was doing something right.
 
 Finding bugs in the GC is always extremely disconcerting, particularly since
 this one manged to hide for so long (more than ten years!). Therefore I wanted
-to use these bugs as motivation to try to find more problems in PyP's GC. Given
+to use these bugs as motivation to try to find more problems in PyPy's GC. Given
 the ridiculous effectiveness of fuzzing, I used
 [hypothesis](https://hypothesis.readthedocs.io/en/latest/) to write a
 property-based test. Every test performs a sequence of randomly chosen steps
@@ -298,20 +299,21 @@ strategy](https://hypothesis.readthedocs.io/en/latest/data.html#drawing-interact
 
 Every one of those steps is always performed on both the tested GC, and on some
 regular Python objects. The Python objects provide the "ground truth" of what
-the heap should look like, so the we can compare the state of the GC objects
+the heap should look like, so we can compare the state of the GC objects
 with the state of the Python objects to find out whether the GC made a mistake.
 
 In order to check whether the test is actually useful, I reverted my bug fixes
-and made sure that the test re-finds both the spurious assertion error and the
+and made sure that the test re-finds both the spurious GC assertion error and the
 problems with memcopying an array.
 
 After running for a few hours, the test actually found an unrelated crash in
 the GC! So far I have not yet spent time on debugging that, it's what I'll work
 on next. I also plan on adding a bunch of other GC features as steps in the
-test to stress them too (for example weakrefs, pinning, maybe finalization).
+test to stress them too (for example weakrefs, identity hashes, pinning, maybe
+finalization).
 
 
-# The Bug
+# The technical details of the bug
 
 In order to understand the technical details of the bug, I need to give some
 background explanations about PyPy's GC.
@@ -322,7 +324,8 @@ PyPy uses an incremental generational mark-sweep GC. It's
 [generational](https://en.wikipedia.org/wiki/Tracing_garbage_collection#Generational_GC_(ephemeral_GC))
 and therefore has minor collections (where only young objects get collected)
 and major collections (collecting long-lived objects eventually, using a
-mark-sweep algorithm). Young objects are allocated in a nursery using a
+[mark-and-sweep](https://en.wikipedia.org/wiki/Tracing_garbage_collection#Na%C3%AFve_mark-and-sweep)
+algorithm). Young objects are allocated in a nursery using a
 bump-pointer allocator, which makes allocation quite efficient. They are moved
 out of the nursery by minor collections. In order to find references from old
 to young objects the GC uses a write barrier to detect writes into old objects.
@@ -338,18 +341,19 @@ thread).
 The incremental GC uses [tri-color
 marking](https://en.wikipedia.org/wiki/Tracing_garbage_collection#Tri-color_marking)
 to reason about the reachable part of the heap during the marking phase, where
-old objects can be:
+every old object can be:
 
 - black: already marked, reachable, definitely survives the collection
 - grey: will survive, but still needs to be marked
-- white: potentially dead 
+- white: potentially dead
 
 The color of every object is encoded by setting flags
-  in the object header.
+in the object header.
 
 The GC maintains the **invariant** that black objects must never point to white
 objects. At the start of a major collection cycle the stack roots are turned
-gray. During a major collection cycle, the GC will trace gray objects, until
+gray. During the mark phase of a major collection cycle, the GC will trace gray
+objects, until
 none are left. To trace a gray object, all the objects it references have to be
 marked grey if they are white so far. After a grey object is traced, it can be
 marked black (because all the referenced objects are now either black or gray).
@@ -371,7 +375,7 @@ later collection steps.
 
 Arrays use a different kind of write barrier than normal objects. Since they
 can be arbitrarily large, tracing them can take a long time. Therefore it's
-potentially wasteful to trace them fully at a minor collection. To fix this.
+potentially wasteful to trace them fully at a minor collection. To fix this,
 the array write barrier keeps more granular information about which parts of
 the array have been modified since the last collection step. Then only the
 modified parts of the array need to be traced, not the whole array.
@@ -379,13 +383,13 @@ modified parts of the array need to be traced, not the whole array.
 In addition, there is another optimization for arrays, which is that memcopy is
 treated specially by the GC. If memcopy is implemented by simply writing a loop
 that copies the content of one array to the other, that will invoke the write
-barrier every single loop iteration for the writes of every array element,
+barrier every single loop iteration for the write of every array element,
 costing a lot of overhead. Therefore the GC has a special memcopy-specific
 write barrier that will perform the GC logic once before the memcopy loop, and
 then use a regular (typically SIMD-optimized) memcopy implementation from
 `libc`.
 
-## The bug 
+## The bug
 
 The bugs turned out to be precisely in this memcopy write barrier. When we
 implemented the current GC, we adapted our previous GC, which was a
@@ -415,16 +419,19 @@ long. Memcopy happens in a lot of pretty core operations of e.g. lists in
 Python (`list.extend`, to name just one example). To speculate, I would suspect
 that all the other preconditions for the bug occurring made it pretty rare:
 - the content of an old list that is not yet marked needs to be copied into
-  another old list that is marked already 
+  another old list that is marked already
 - the source of the copy needs to also store an object that has no other
-  references 
-- the source of the copy then needs to be overwritten with other data 
+  references
+- the source of the copy then needs to be overwritten with other data
 - then the next collection steps need to be happening at the right points
 - ...
 
 Given the complexity of the GC logic I also wonder whether some lightweight
 formal methods would have been a good idea. Formalizing some of the core
-invariants in B or TLA+ and then model checking them up to some number of
+invariants in [B](https://en.wikipedia.org/wiki/B-Method) or
+[TLA+](https://en.wikipedia.org/wiki/TLA%2B) and then [model
+checking](https://en.wikipedia.org/wiki/Model_checking) them up to some number
+of
 objects would have found this problem pretty quickly. There are also correctness
 proofs for GC algorithms in some research papers, but I don't have a good
 overview of the literature to point to any that are particularly good or bad.
@@ -436,7 +443,7 @@ a bit more about how to use rr and the GDB scripting interface.
 
 # Bonus Section: The Wrong Assertion
 
-Some more technical information about the wrong assertion is here.
+Some more technical information about the wrong assertion is in this section.
 
 ## Background: pre-built objects
 
@@ -473,8 +480,8 @@ compared to "regular" old objects. Therefore, the invariant checking code
 wrongly reported a black->white pointer in this situation.
 
 To fix it I also wrote a unit test checking the problem, made sure that the GC
-fuzzer also found the bug, and then fixed the wrong assertion to take the color
-encoding of pre-built objects into account.
+hypothesis test also found the bug, and then fixed the wrong assertion to take
+the color encoding of pre-built objects into account.
 
 The bug managed to be invisible because we don't tend to turn on the GC
 assertions very often. We only do that when we find a GC bug, which is of
