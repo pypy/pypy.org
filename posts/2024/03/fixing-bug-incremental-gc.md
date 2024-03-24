@@ -192,6 +192,41 @@ object graph. The object tracer isn't complete, it doesn't deal with all the
 complexities of PyPy's GC. But it was good enough to help me with my problem, I
 found out that the corrupted object was stored in an array.
 
+As an example, here's a function that uses the GDB API to walk one of the
+helper data structures of the GC, a stack of pointers:
+
+```python
+def walk_addr_stack(obj):
+    """ walk an instance of the AddressStack class (which is a linked list of
+    arrays of 1019 pointers).
+
+    the first of the arrays is only partially filled with used_in_last_chunk
+    items, all the other chunks are full."""
+    if obj.type.code == gdb.TYPE_CODE_PTR:
+        obj = obj.dereference()
+    used_in_last_chunk = lookup(obj, "used_in_last_chunk")
+    chunk = lookup(obj, "inst_chunk").dereference()
+    while 1:
+        items = lookup(chunk, "items")
+        for i in range(used_in_last_chunk):
+            yield items[i]
+        chunk = lookup(chunk, "next")
+        if not chunk:
+            break
+        chunk = chunk.dereference()
+        used_in_last_chunk = 1019
+```
+
+The full file of supporting code I wrote can be found in [this
+gist](https://gist.github.com/cfbolz/13cadcbbef321d93fc9790dff6f60a6a). This is
+pretty rough throw-away code, however.
+
+In the following recording I show a staged debugging session with some of the
+extra commands I wrote with the Python API. The details aren't important, I
+just wanted to give a bit of a flavor of what inspecting objects looks like:
+
+<script src="https://asciinema.org/a/Ur1mVpLW3BWjcnPMVlb2IPxi7.js" id="asciicast-648889" async="true"></script>
+
 The next step was to understand why the array content wasn't being correctly
 traced by the GC, which I eventually managed with some [conditional
 breakpoints](https://www.fayewilliams.com/2011/07/13/gdb-conditional-breakpoints/),
