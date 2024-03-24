@@ -364,7 +364,7 @@ steps of the GC, the program can mutate that object and write a new reference
 into one of its fields. This could lead to an invariant violation, if the
 referenced object is white. Therefore, the GC uses the write barrier (which it
 needs anyway to find references from old to young objects) to mark all black
-objects that are written into gray, and then trace them again at one of the
+objects that are modified gray, and then trace them again at one of the
 later collection steps.
 
 ## The special write barrier of memcopy
@@ -460,15 +460,14 @@ from then on.
 
 The assertion that triggered when I turned on the GC debug mode was saying that
 the GC found a reference from a black to a white object, violating its
-invariant. pre-built objects count as always black, as long as they have never
-been mutated and aren't roots, because they can only ever reference other
-pre-built objects. However, after they have been mutated for the first time,
-they become part of the root set and will be marked gray at the beginning of a
-new collection cycle (which works fine).
+invariant. Unmodified pre-built objects count as black, and they aren't roots,
+because they can only ever reference other pre-built objects. However, when a
+pre-built object gets modified for the first time, it becomes part of the root
+set and will be marked gray. This logic works fine.
 
 The wrong assertion triggers if a pre-built object is mutated for the very
 first time in the middle of an incremental marking phase. While the pre-built
-object gets added to the root set just fine, and it will get traced before the
+object gets added to the root set just fine, and will get traced before the
 marking phase ends, this is encoded slightly differently for pre-built objects,
 compared to "regular" old objects. Therefore, the invariant checking code
 wrongly reported a black->white pointer in this situation.
@@ -478,5 +477,5 @@ fuzzer also found the bug, and then fixed the wrong assertion to take the color
 encoding of pre-built objects into account.
 
 The bug managed to be invisible because we don't tend to turn on the GC
-assertions very often only when we find a GC bug, which is of course also when
-we need it the most to be correct.
+assertions very often. We only do that when we find a GC bug, which is of
+course also when we need it the most to be correct.
