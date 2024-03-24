@@ -114,10 +114,12 @@ files](https://stackoverflow.com/questions/2998215/if-python-is-interpreted-what
 of the bytecode-compiled rewritten ASTs exist, I made sure to delete them
 before every test run. To repeat the test runs I used
 [multitime](https://tratt.net/laurie/src/multitime/), which is a simple program
-that runs a command repeatedly. It's meant for leightweight benchmarking
+that runs a command repeatedly. It's meant for lightweight benchmarking
 purposes, but it also halts the execution of the command if that command exits
 with an error (and it sleeps a small random time between runs, which might help
-with randomizing the situation, maybe).
+with randomizing the situation, maybe). Here's a demo:
+
+<script src="https://asciinema.org/a/Zyofd1nLFqZXLNs45UCxXZpcT.js" id="asciicast-648877" async="true"></script>
 
 Thankfully, running the tests repeatedly eventually lead to a crash, solving my
 "only happens on CI" problem. I then tried various variants to exclude possible
