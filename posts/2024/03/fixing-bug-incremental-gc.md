@@ -28,7 +28,7 @@ decided to make a more serious push to try to find the bug this time.
 Ultimately the problem turned out to be several bugs in PyPy's garbage
 collector (GC) that had been there since its inception in
 [2013](https://www.pypy.org/posts/2013/10/incremental-garbage-collector-in-pypy-8956893523842234676.html)
-(started by [Andrew Chambers](https://acha.ninja/)). Understanding the
+Understanding the
 situation turned out to be quite involved, additionally complicated by this
 being the first time that I was working on this particular aspect of PyPy's GC.
 Since the bug was so much work to find, I thought I'd write a blog post about
@@ -40,7 +40,7 @@ reflections on the bug (and then a bonus bug I also found in the process).
 
 # Finding the Bug
 
-I was starting from the failing [nanobind
+I started from the failing [nanobind
 CI](https://github.com/wjakob/nanobind/actions/runs/8234561874/job/22516568891)
 runs that ended with a segfault of the PyPy interpreter. This was only an
 intermittent problem, not every run was failing. When I tried to just run the
@@ -50,7 +50,7 @@ learn more about what was happening by looking on the CI runners.
 ## Running on CI
 
 I forked the nanobind repo and hacked the CI script in order to get it to use a
-PyPy build with full debug information and more assertions turned on. In order
+PyPy build with [full debug information and more assertions turned on](https://doc.pypy.org/en/latest/build.html#making-a-debug-build-of-pypy). In order
 to increase the probability of seeing the crash I added an otherwise unused
 [matrix](https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs)
 variable to the CI script that just contained 32 parameters. This means every
@@ -74,7 +74,9 @@ as if typed at the prompt with the `-ex` commandline option, I used something
 like this:
 
 ```
-gdb -ex "set confirm off" -ex "set pagination off" -ex "set debuginfod enabled off" -ex run -ex where -ex quit --args <command> <arguments>
+gdb -ex "set confirm off" -ex "set pagination off" -ex \
+    "set debuginfod enabled off" -ex run -ex where -ex quit \
+    --args <command> <arguments>
 ```
 
 But unfortunately the crash never occurred when running in gdb.
@@ -340,7 +342,9 @@ old objects can be:
 
 - black: already marked, reachable, definitely survives the collection
 - grey: will survive, but still needs to be marked
-- white: potentially dead The color of every object is encoded by setting flags
+- white: potentially dead 
+
+The color of every object is encoded by setting flags
   in the object header.
 
 The GC maintains the **invariant** that black objects must never point to white
@@ -354,10 +358,10 @@ object can be reached from a black one) all the white objects are known to be
 unreachable and can therefore be freed.
 
 The GC is incremental because every collection step will only trace a limited
-amount of gray object, before giving control back to the program. This leads to
-a problem: if an already traced (black) object is changed between to marking
+number of gray objects, before giving control back to the program. This leads to
+a problem: if an already traced (black) object is changed between two marking
 steps of the GC, the program can mutate that object and write a new reference
-into one of its field. This could lead to an invariant violation, if the
+into one of its fields. This could lead to an invariant violation, if the
 referenced object is white. Therefore, the GC uses the write barrier (which it
 needs anyway to find references from old to young objects) to mark all black
 objects that are written into gray, and then trace them again at one of the
@@ -369,7 +373,7 @@ Arrays use a different kind of write barrier than normal objects. Since they
 can be arbitrarily large, tracing them can take a long time. Therefore it's
 potentially wasteful to trace them fully at a minor collection. To fix this.
 the array write barrier keeps more granular information about which parts of
-the array have been written to since the last collection step. Then only the
+the array have been modified since the last collection step. Then only the
 modified parts of the array need to be traced, not the whole array.
 
 In addition, there is another optimization for arrays, which is that memcopy is
@@ -410,7 +414,7 @@ It's a bit of a mystery to me why this bug managed to be undetected for so
 long. Memcopy happens in a lot of pretty core operations of e.g. lists in
 Python (`list.extend`, to name just one example). To speculate, I would suspect
 that all the other preconditions for the bug occurring made it pretty rare:
-- the contend of an old list that is not yet marked needs to be copied into
+- the content of an old list that is not yet marked needs to be copied into
   another old list that is marked already 
 - the source of the copy needs to also store an object that has no other
   references 
@@ -421,7 +425,7 @@ that all the other preconditions for the bug occurring made it pretty rare:
 Given the complexity of the GC logic I also wonder whether some lightweight
 formal methods would have been a good idea. Formalizing some of the core
 invariants in B or TLA+ and then model checking them up to some number of
-objects would have found this problem pretty soon. There are also correctness
+objects would have found this problem pretty quickly. There are also correctness
 proofs for GC algorithms in some research papers, but I don't have a good
 overview of the literature to point to any that are particularly good or bad.
 Going such a more formal route might have fixed this and probably a whole bunch
