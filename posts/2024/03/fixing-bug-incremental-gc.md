@@ -311,14 +311,6 @@ Rigo](https://github.com/pypy/pypy/issues/4925#issuecomment-2014459454) who
 helped me find different case that was still wrong, in the same area of the
 code.
 
-I also got help by the developers at [PortaOne](https://portaone.com/)
-who are using PyPy on their servers and had seen some [mysterious PyPy
-crashes](https://github.com/pypy/pypy/issues/4900)
-recently. They did test deployments of my fixes in their various stages
-to their servers to try to see whether stability improved for them. The fact
-that their crashes seem to have gone away provided great extra confirmation for
-me that I was doing something right.
-
 ## Writing a GC fuzzer/property based test
 
 Finding bugs in the GC is always extremely disconcerting, particularly since
