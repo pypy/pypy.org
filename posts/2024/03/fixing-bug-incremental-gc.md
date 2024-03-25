@@ -553,4 +553,4 @@ course also when we need it the most to be correct.
 Thanks to Matti Picus, Max Bernstein for giving me feedback on drafts of the
 post. Thanks to Armin Rigo for reviewing the code and pointing out holes in my
 thinking. Thanks to the original reporters of the various forms of the bug,
-Lily Foote, David Hewitt, Wenzel Jakob.
+including Lily Foote, David Hewitt, Wenzel Jakob.
