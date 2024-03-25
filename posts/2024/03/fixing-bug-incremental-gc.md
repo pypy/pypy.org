@@ -154,8 +154,9 @@ Using rr well is quite hard, and I'm not very good at it. The main approach I
 use with rr to debug memory corruption is to replay the crash, then set a
 [watchpoint](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Set-Watchpoints.html)
 for the corrupted memory location, then use the command `reverse-continue` to
-find the place in the code that mutated the memory location. Here's a little
-demo of this:
+find the place in the code that mutated the memory location. `reverse-continue`
+is like `continue`, except that it will execute the program backwards from the
+current point. Here's a little demo of this:
 
 <script src="https://asciinema.org/a/648814.js" id="asciicast-648814" async="true"></script>
 
