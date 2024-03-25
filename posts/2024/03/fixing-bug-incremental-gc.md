@@ -112,7 +112,9 @@ crash happened in the AST rewriting phase of pytest, and that happens only if
 no [pyc
 files](https://stackoverflow.com/questions/2998215/if-python-is-interpreted-what-are-pyc-files)
 of the bytecode-compiled rewritten ASTs exist, I made sure to delete them
-before every test run. To repeat the test runs I used
+before every test run.
+
+To repeat the test runs I used
 [multitime](https://tratt.net/laurie/src/multitime/), which is a simple program
 that runs a command repeatedly. It's meant for lightweight benchmarking
 purposes, but it also halts the execution of the command if that command exits
@@ -120,6 +122,10 @@ with an error (and it sleeps a small random time between runs, which might help
 with randomizing the situation, maybe). Here's a demo:
 
 <script src="https://asciinema.org/a/648877.js" id="asciicast-648877" async="true"></script>
+
+([Max](https://bernsteinbear.com/) pointed out
+[autoclave](https://github.com/silentbicycle/autoclave) to me when reviewing
+this post, which is a more dedicated tool for this job.)
 
 Thankfully, running the tests repeatedly eventually lead to a crash, solving my
 "only happens on CI" problem. I then tried various variants to exclude possible
@@ -141,7 +147,8 @@ I still couldn't get the bug to happen in GDB, so the tool I tried next was
 later replay it arbitrarily often. This gives you a time-traveling debugger
 that allows you to execute the program backwards in addition to forwards.
 Eventually I managed to get the crash to happen when running the tests with `rr
-record --chaos`.
+record --chaos` (`--chaos` randomizes some decisions that rr takes, to try to
+increase the chance of reproducing bugs).
 
 Using rr well is quite hard, and I'm not very good at it. The main approach I
 use with rr to debug memory corruption is to replay the crash, then set a
@@ -175,7 +182,7 @@ of that are in the bonus section at the end of the post.
 
 ## Using GDB scripting to find the real bug
 
-After that disaster I went back to the earlier rr recording without GSC assertions
+After that disaster I went back to the earlier rr recording without GC assertions
 and tried to understand in more detail why the GC decided to free an object
 that was still being referenced. To be able to do that I used the [GDB Python
 scripting
@@ -295,7 +302,9 @@ of memory and you can then debug this with a python2 debugger.
 ## Fixing the Bug
 
 With the unit test in hand, fixing the test was relatively straightforward (the
-diff in its simplest form is anyway only a single line change). After my fix, I
+diff in its simplest form is anyway only a [single line
+change](https://github.com/pypy/pypy/commit/78bbeb93471b5f38438004e971f4b4f84ab17a84)).
+After my fix, I
 [talked to Armin
 Rigo](https://github.com/pypy/pypy/issues/4925#issuecomment-2014459454) who
 helped me find different case that was still wrong, in the same area of the
@@ -420,10 +429,31 @@ In addition, there is another optimization for arrays, which is that memcopy is
 treated specially by the GC. If memcopy is implemented by simply writing a loop
 that copies the content of one array to the other, that will invoke the write
 barrier every single loop iteration for the write of every array element,
-costing a lot of overhead. Therefore the GC has a special memcopy-specific
+costing a lot of overhead. Here's some pseudo-code:
+
+```python
+def arraycopy(source, dest, source_start, dest_start, length):
+    for i in range(length):
+        value = source[source_start + i]
+        dest[dest_start + i] = value # <- write barrier inserted here
+```
+
+Therefore the GC has a special memcopy-specific
 write barrier that will perform the GC logic once before the memcopy loop, and
 then use a regular (typically SIMD-optimized) memcopy implementation from
-`libc`.
+`libc`. Roughly like this:
+
+```python
+def arraycopy(source, dest, source_start, dest_start, length):
+    gc_writebarrier_before_array_copy(source, dest, source_start, dest_start, length)
+    raw_memcopy(cast_to_voidp(source) + source_start,
+                cast_to_voidp(dest) + dest_start,
+                sizeof(itemtype(source)) * length)
+```
+
+(this is really a rough sketch. The [real
+code](ttps://github.com/pypy/pypy/blob/789f964fff59c722b0872abcdc56d2b1373a9f3b/rpython/rlib/rgc.py#L365)
+is much more complicated.)
 
 ## The bug
 
@@ -454,6 +484,7 @@ It's a bit of a mystery to me why this bug managed to be undetected for so
 long. Memcopy happens in a lot of pretty core operations of e.g. lists in
 Python (`list.extend`, to name just one example). To speculate, I would suspect
 that all the other preconditions for the bug occurring made it pretty rare:
+
 - the content of an old list that is not yet marked needs to be copied into
   another old list that is marked already
 - the source of the copy needs to also store an object that has no other
@@ -522,3 +553,10 @@ the color encoding of pre-built objects into account.
 The bug managed to be invisible because we don't tend to turn on the GC
 assertions very often. We only do that when we find a GC bug, which is of
 course also when we need it the most to be correct.
+
+# Acknowledgements
+
+Thanks to Matti Picus, Max Bernstein for giving me feedback on drafts of the
+post. Thanks to Armin Rigo for reviewing the code and pointing out holes in my
+thinking. Thanks to the original reporters of the various forms of the bug,
+Lily Foote, David Hewitt, Wenzel Jakob.
