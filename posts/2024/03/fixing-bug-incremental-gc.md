@@ -27,7 +27,7 @@ generator, with the same symptoms: crash in AST rewriting, only on CI. I
 decided to make a more serious push to try to find the bug this time.
 Ultimately the problem turned out to be several bugs in PyPy's garbage
 collector (GC) that had been there since its inception in
-[2013](https://www.pypy.org/posts/2013/10/incremental-garbage-collector-in-pypy-8956893523842234676.html).
+[2013](/posts/2013/10/incremental-garbage-collector-in-pypy-8956893523842234676.html).
 Understanding the
 situation turned out to be quite involved, additionally complicated by this
 being the first time that I was working on this particular aspect of PyPy's GC.
@@ -95,7 +95,7 @@ that it's [vtable](https://en.wikipedia.org/wiki/Virtual_method_table) wasn't
 usable any more.
 
 (Sidenote: [PyPy doesn't really use a vtable
-pointer](https://www.pypy.org/posts/2009/10/gc-improvements-6174120095428192954.html#unifying-the-vtable-ptr-with-the-gc-header),
+pointer](/posts/2009/10/gc-improvements-6174120095428192954.html#unifying-the-vtable-ptr-with-the-gc-header),
 instead it uses half a word in the header for the vtable, and the other half
 for flags that the GC needs to keep track of the state of the object.
 Corrupting all this is still bad.)
@@ -249,7 +249,7 @@ unit test that shows the problem. Like most of PyPy, our GC is written in
 RPython, a (somewhat strange) subset/dialect of Python2, which can be compiled
 to C code. However, since it is also valid Python2 code, it can be [unit-tested
 on top of a Python2
-implementation](https://www.pypy.org/posts/2022/04/how-is-pypy-tested.html)
+implementation](/posts/2022/04/how-is-pypy-tested.html)
 (which is one of the reasons why we keep maintaining PyPy2).
 
 In the GC unit tests you have a lot of control about what order things happen
