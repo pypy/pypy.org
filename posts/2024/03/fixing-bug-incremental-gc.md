@@ -305,11 +305,21 @@ of memory and you can then debug this with a python2 debugger.
 With the unit test in hand, fixing the test was relatively straightforward (the
 diff in its simplest form is anyway only a [single line
 change](https://github.com/pypy/pypy/commit/78bbeb93471b5f38438004e971f4b4f84ab17a84)).
-After my fix, I
+After this first version of my fix, I
 [talked to Armin
 Rigo](https://github.com/pypy/pypy/issues/4925#issuecomment-2014459454) who
 helped me find different case that was still wrong, in the same area of the
 code.
+
+I also got help by the developers at [PortaOne](https://portaone.com/)
+who are using PyPy on their servers and had seen some [mysterious PyPy
+crashes](https://github.com/pypy/pypy/issues/4900)
+recently, that looked related to the GC. They did test deployments of my fixes
+in their various stages to their servers to try to see whether stability
+improved for them. Unfortunately in the end it turned out that their crashes
+are an unrelated GC bug related to object pinning, which we haven't resolved
+yet.
+
 
 ## Writing a GC fuzzer/property based test
 
@@ -345,11 +355,14 @@ In order to check whether the test is actually useful, I reverted my bug fixes
 and made sure that the test re-finds both the spurious GC assertion error and the
 problems with memcopying an array.
 
-After running for a few hours, the test actually found an unrelated crash in
-the GC! So far I have not yet spent time on debugging that, it's what I'll work
-on next. I also plan on adding a bunch of other GC features as steps in the
+In addition, the test also found corner cases in my fix. There was a situation
+that I hadn't accounted for, which the test found after eventually.
+I also plan on adding a bunch of other GC features as steps in the
 test to stress them too (for example weakrefs, identity hashes, pinning, maybe
 finalization).
+
+At the point of publishing this post, the fixes got merged to the 2.7/3.9/3.10
+branches of PyPy, and we'll have to do a release with the fixes at some point.
 
 
 # The technical details of the bug
