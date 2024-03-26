@@ -143,11 +143,11 @@ confirmed that at the point of crash no C-extension had been imported yet.
 ## Using `rr`
 
 I still couldn't get the bug to happen in GDB, so the tool I tried next was
-[rr](https://rr-project.org/). rr can record the execution of a program and
+[rr, the "reverse debugger"](https://rr-project.org/). rr can record the execution of a program and
 later replay it arbitrarily often. This gives you a time-traveling debugger
 that allows you to execute the program backwards in addition to forwards.
-Eventually I managed to get the crash to happen when running the tests with `rr
-record --chaos` (`--chaos` randomizes some decisions that rr takes, to try to
+Eventually I managed to get the crash to happen when running the tests with
+`rr record --chaos` (`--chaos` randomizes some decisions that rr takes, to try to
 increase the chance of reproducing bugs).
 
 Using rr well is quite hard, and I'm not very good at it. The main approach I
@@ -362,7 +362,7 @@ test to stress them too (for example weakrefs, identity hashes, pinning, maybe
 finalization).
 
 At the point of publishing this post, the fixes got merged to the 2.7/3.9/3.10
-branches of PyPy, and we'll have to do a release with the fixes at some point.
+branches of PyPy, and will be part of the next release (v7.3.16).
 
 
 # The technical details of the bug
@@ -459,7 +459,7 @@ def arraycopy(source, dest, source_start, dest_start, length):
 ```
 
 (this is really a rough sketch. The [real
-code](ttps://github.com/pypy/pypy/blob/789f964fff59c722b0872abcdc56d2b1373a9f3b/rpython/rlib/rgc.py#L365)
+code](https://github.com/pypy/pypy/blob/789f964fff59c722b0872abcdc56d2b1373a9f3b/rpython/rlib/rgc.py#L365)
 is much more complicated.)
 
 ## The bug
