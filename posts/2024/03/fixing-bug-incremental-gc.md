@@ -529,12 +529,12 @@ Those frozen pre-built objects are parts of the 'roots' of the garbage
 collector and need to be traced. However, tracing all the pre-built objects at
 every collection would be very expensive, because there are a lot of them
 (about 150,000 in a PyPy 3.10 binary). Tracing them all is also not necessary,
-because most of them are never modified. Therefore they only have references to
+because most of them are never modified. Unmodified pre-built objects can only reference
 other pre-built objects, which can never be deallocated anyway. Therefore we
 have an optimization that uses the write barrier (which we need anyway to find
 old-to-young pointers) to notice when a pre-built object gets modified for the
 very first time. If that happens, it gets added to the set of pre-built objects
-that gets counted as a root, and is therefore traced as a root at collections
+that gets counted as a root, and is traced as a root at collections
 from then on.
 
 ## The wrong assertion
@@ -563,7 +563,7 @@ course also when we need it the most to be correct.
 
 # Acknowledgements
 
-Thanks to Matti Picus, Max Bernstein for giving me feedback on drafts of the
+Thanks to Matti Picus, Max Bernstein, Wouter van Heyst for giving me feedback on drafts of the
 post. Thanks to Armin Rigo for reviewing the code and pointing out holes in my
 thinking. Thanks to the original reporters of the various forms of the bug,
 including Lily Foote, David Hewitt, Wenzel Jakob.
