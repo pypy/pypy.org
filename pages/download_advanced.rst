@@ -60,8 +60,7 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - Download__
-     - MacOS >= 11. Not signed, for signed packages use conda_. Homebrew_ does
-       not yet provide PyPy3.9+.
+     - MacOS >= 11. Not signed, for signed packages use conda_.
 
    * - **MacOS x86_64**
 
@@ -69,8 +68,7 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - Download__
      - MacOS >= 10.15, not for Mojave and below. Not signed, for signed
-       packages or older versions use conda_. Homebrew_ does not yet provide
-       PyPy3.9+.
+       packages or older versions use conda_.
 
    * - **Linux ARM64**
 
@@ -206,7 +204,7 @@ are better solutions:
 .. _`Debian`: https://packages.debian.org/sid/pypy
 .. _`Fedora`: https://fedoraproject.org/wiki/Features/PyPyStack
 .. _`Gentoo`: https://packages.gentoo.org/package/dev-python/pypy
-.. _`Homebrew`: https://github.com/Homebrew/homebrew-core/blob/master/Formula/pypy.rb
+.. _`Homebrew`: https://github.com/Homebrew/homebrew-core/blob/master/Formula/p/pypy.rb
 .. _`Arch`: https://wiki.archlinux.org/index.php/PyPy
 .. _`portable-pypy`: https://github.com/squeaky-pl/portable-pypy#portable-pypy-distribution-for-linux
 .. _`recompile the CFFI-based`: https://doc.pypy.org/en/latest/build.html#build-cffi-import-libraries-for-the-stdlib
