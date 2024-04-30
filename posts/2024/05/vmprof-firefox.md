@@ -1,7 +1,7 @@
 <!--
 .. title: vmprof-firefox-converter
 .. slug: 
-.. date: 2024-04-15 13:49:00 UTC
+.. date: 2024-04-26 14:38:00 UTC
 .. tags:
 .. category:
 .. link:
@@ -10,54 +10,110 @@
 .. author: Christoph Jung
 -->
 
-# Introduction
+## Introduction
 
-If you ever wanted to profile your Python code on PyPy, you probably came across VMProf.
+If you ever wanted to profile your Python code on PyPy, you probably came across VMProf — a statistical profiler for PyPy.
 
 VMProf's console output can already give some insights into where your code spends time, 
 but it is far from showing all the information captured while profiling.
 
-There have been some tools arround to visualize VMProf's output,
-but since the vmprof.com user interface is no longer available and vmprof-server is not as easy to use, you may want to take a look at a local viewer/tool/converter.
-Those so far could give you some general visualizations of your profile. Unfortunately, those tools cannot show any PyPy related context like PyPyLog or jitlog.
+There have been some tools around to visualize VMProf's output.
+Unfortunately the vmprof.com user interface is no longer available and vmprof-server is not as easy to use, you may want to take a look at a local viewer or converter.
+Those so far could give you some general visualizations of your profile. Those tools did not show any PyPy related context like PyPy's log output (PyPyLog).
 
-To bring all of those features together in one local tool, you may take a look at the vmprof-firefox-converter.
+To bring all of those features together in one tool, you may take a look at the vmprof-firefox-converter.
 
 Created in the context of my bachelor's thesis, the vmprof-firefox-converter is a tool for analyzing VMProf profiles with the Firefox profiler user interface. 
-The Firefox profiler offers a timeline where you can zoom into profiles and work with different visualizations like a flame graph or stack chart.
+The Firefox profiler offers a timeline where you can zoom into profiles and work with different visualizations like a flame graph or a stack chart.
 To understand why there is time spent inside a function, you can revisit the source code and even dive into the intermediate representation of functions executed by PyPy's just-in-time compiler.
-By having a look at the PyPyLog track, it is easy to see when PyPy was inside the interpreter, JIT or GC throughout the profiling time.
+Additionally, there is a visualization for PyPy's log output, to keep track whether PyPy spent time inside the interpreter, JIT or GC throughout the profiling time.
 
-# Profiling word count
+## Profiling word count
 
-TODO
+Based on Ben Hoyt's blog [Performance comparison: counting words in Python, Go, C++, C, AWK, Forth, and Rust](https://benhoyt.com/writings/count-words/) we will profile two python versions of a word counter running on PyPy. One being a bit more optimized. For this, VMProf will be used, but instead of just going with the console output, we will use the Firefox profiler user interface.
 
-# Usage
+At first, we are going to look at a simple way of counting words with ```Collections.Counter```.
+This will read one line from the standard input at a time and count the words with ```counter.update()```
 
-Profile your code with VMProf
+```
+counts = collections.Counter()
+for line in sys.stdin:
+    words = line.lower().split()
+    counts.update(words)
 
-`pypy -m vmprof -o profile.prof yourcode.py <args>`
+for word, count in counts.most_common():
+    print(word, count)
+```
 
-Then convert the output file 
+To start profiling, simply execute:
+```pypy -m vmprofconvert -run simple.py <kjvbible_x10.txt```
 
-`pypy -m vmprofconvert -convert profile.prof`
+This will run the above code with vmprof, automatically capture and convert the results and finally open the Firefox profiler. 
 
-Or let the converter take care of everything and run your code directly
+The input file is the king James version of the bible concatenated ten times.
 
-`pypy -m vmprofconvert -run yourcode.py <args>`
+To get started, we take a look at the call stack.
 
-Both `-convert` and `-run` will open the Firefox profiler in your browser
+<img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_call_stack_crp.png?raw=true">
+Here we see that most of the time is spent in native code (marked as blue) e.g., the ```counter.update()``` or ```split()``` C implementation.
 
-![firefox profiler](https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/firefox.png?raw=true)
+Now let's proceed with the more optimized version.
+This time we read 64 Kb of data from the standard input and count the words with ```counter.update()```.
 
-You may even create a sharable zip file that contains all the files necessary for investigating performance issues on another (person's) system. 
+```
+counts = collections.Counter()
+remaining = ''
+while True:
+    chunk = remaining + sys.stdin.read(64*1024)
+    if not chunk:
+        break
+    last_lf = chunk.rfind('\n')  # process to last LF character
+    if last_lf == -1:
+        remaining = ''
+    else:
+        remaining = chunk[last_lf+1:]
+        chunk = chunk[:last_lf]
+    counts.update(chunk.lower().split())
 
-(This includes jitlog, pypylog, all the source files and of course the profile itself)
+for word, count in counts.most_common():
+    print(word, count)
+```
+ 
+As we did before, we are going to take a peek at the call stack.
 
-`pypy -m vmprofconvert --zip -run yourcode.py <args>`
+<img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_call_stack_crp.png?raw=true"> 
 
-# Getting started
+Now there is more time spent in native code, caused by larger chunks of text passed to  ```counter.update()```.
 
-Even though VMProf and the converter were created for profiling PyPy, you can also use them with CPython. 
+This becomes even more clear by comparing the stack charts.
+
+<img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_stack_chart.png?raw=true">
+
+Here, in the unoptimized case, we only read in one line at each loop iteration.
+This results in small "spikes" in the stack chart. 
+
+But let's take an even closer look.
+
+<img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_stack_chart_zoom.png?raw=true">
+
+Zoomed in, we see the call stack alternating between ```_count_elements()``` and (unfortunately unsymbolized) native calls coming from reading and splitting the input text (e.g., ```decode()```).
+
+Let us now take a look at the optimized case.
+
+<img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_stack_chart.png?raw=true">
+
+And if we look closer at the same interval as before, we see some spikes, but slightly different.
+
+<img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_stack_chart_zoom.png?raw=true">
+
+Even though we do not want to compare the (amount of) milliseconds directly, we clearly see that the spikes are wider, i.e. the time spent in those function calls is longer.
+You may already know where this comes from.
+We read a 64 Kb chunk of data from std in and pass that to ```counter.update()```, so both these tasks do more work and take longer.
+Bigger chunks mean there is less alternating between reading and counting, so there is more time spent doing work than "doing" loop iterations.
+
+
+## Getting started
+
+Both VMProf and the vmprof-firefox-converter were created for profiling PyPy, but you can also use them with CPython. 
 
 You can get the converter from [GitHub](https://github.com/Cskorpion/vmprof-firefox-converter) 
