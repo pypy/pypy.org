@@ -21,9 +21,9 @@ There have been some tools around to visualize VMProf's output.
 Unfortunately the vmprof.com user interface is no longer available and vmprof-server is not as easy to use, you may want to take a look at a local viewer or converter.
 Those so far could give you some general visualizations of your profile. Those tools did not show any PyPy related context like PyPy's log output (PyPyLog).
 
-To bring all of those features together in one tool, you may take a look at the [vmprof-firefox-converter](https://github.com/Cskorpion/vmprof-firefox-converter).
+To bring all of those features together in one tool, you may take a look at the vmprof-firefox-converter.
 
-Created in the context of my bachelor's thesis, the vmprof-firefox-converter is a tool for analyzing VMProf profiles with the Firefox profiler user interface. 
+Created in the context of my bachelor's thesis, the vmprof-firefox-converter is a tool for analyzing VMProf profiles with the [Firefox profiler](https://profiler.firefox.com/) user interface. 
 Instead of building a new user interface from scratch, this allows us to re-use the user interface work Mozilla put into the Firefox profiler.
 The Firefox profiler offers a timeline where you can zoom into profiles and work with different visualizations like a flame graph or a stack chart.
 To understand why there is time spent inside a function, you can revisit the source code and even dive into the intermediate representation of functions executed by PyPy's just-in-time compiler.
