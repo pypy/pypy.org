@@ -12,7 +12,8 @@
 
 ## Introduction
 
-If you ever wanted to profile your Python code on PyPy, you probably came across VMProf — a statistical profiler for PyPy.
+If you ever wanted to profile your Python code on PyPy, you probably came across [VMProf](https://vmprof.readthedocs.io/en/latest/vmprof.html) — a statistical profiler for PyPy.
+
 
 VMProf's console output can already give some insights into where your code spends time, 
 but it is far from showing all the information captured while profiling.
