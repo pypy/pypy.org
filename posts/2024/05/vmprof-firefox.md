@@ -116,9 +116,9 @@ Bigger chunks mean there is less alternating between reading and counting, so th
 
 
 ## Getting started
+You can get the converter from [GitHub](https://github.com/Cskorpion/vmprof-firefox-converter).
 
 Both VMProf and the vmprof-firefox-converter were created for profiling PyPy, but you can also use them with CPython. 
 
 This project is still somewhat experimental, so if you want to try it out, please let us know whether it worked for you.
 
-You can get the converter from [GitHub](https://github.com/Cskorpion/vmprof-firefox-converter) 
