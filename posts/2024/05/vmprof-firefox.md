@@ -20,7 +20,7 @@ but it is far from showing all the information captured while profiling.
 
 There have been some tools around to visualize VMProf's output.
 Unfortunately the vmprof.com user interface is no longer available and vmprof-server is not as easy to use, you may want to take a look at a local viewer or converter.
-Those so far could give you some general visualizations of your profile, but do not show any PyPy related context like PyPy's log output (PyPyLog, which is output when using the PYPYLOG environment variable to log JIT actions).
+Those so far could give you some general visualizations of your profile, but do not show any PyPy related context like PyPy's log output ([PyPyLog](https://rpython.readthedocs.io/en/latest/logging.html), which is output when using the PYPYLOG environment variable to log JIT actions).
 
 
 To bring all of those features together in one tool, you may take a look at the vmprof-firefox-converter.
