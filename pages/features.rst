@@ -11,7 +11,7 @@
 language that was co-developed with it.  The main reason to use it
 instead of CPython is speed: it runs generally faster (see next section).
 
-**PyPy** implements **Python 2.7.18, 3.9.15, and 3.8.15**.
+**PyPy** implements **Python 2.7.18, 3.10.14, and 3.9.19**.
 It supports all of the core language. It supports most of
 the commonly used Python standard library modules. For known differences with
 CPython, see our `compatibility`_ page.
