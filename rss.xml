@@ -1,0 +1,1156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy</title><link>https://www.pypy.org/</link><description>A Faster Python</description><atom:link href="https://www.pypy.org/rss.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2024 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Fri, 21 Jun 2024 19:35:50 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>Profiling PyPy using the Firefox profiler user interface</title><link>https://www.pypy.org/posts/2024/05/vmprof-firefox-converter.html</link><dc:creator>Christoph Jung</dc:creator><description>&lt;h3&gt;Introduction&lt;/h3&gt;
+&lt;p&gt;If you ever wanted to profile your Python code on PyPy, you probably came across &lt;a href="https://vmprof.readthedocs.io/en/latest/vmprof.html"&gt;VMProf&lt;/a&gt; — a statistical profiler for PyPy.&lt;/p&gt;
+&lt;p&gt;VMProf's console output can already give some insights into where your code spends time, 
+but it is far from showing all the information captured while profiling.&lt;/p&gt;
+&lt;p&gt;There have been some tools around to visualize VMProf's output.
+Unfortunately the vmprof.com user interface is no longer available and vmprof-server is not as easy to use, you may want to take a look at a local viewer or converter.
+Those so far could give you some general visualizations of your profile, but do not show any PyPy related context like PyPy's log output (&lt;a href="https://rpython.readthedocs.io/en/latest/logging.html"&gt;PyPyLog&lt;/a&gt;, which is output when using the PYPYLOG environment variable to log JIT actions).&lt;/p&gt;
+&lt;p&gt;To bring all of those features together in one tool, you may take a look at the vmprof-firefox-converter.&lt;/p&gt;
+&lt;p&gt;Created in the context of my bachelor's thesis, the vmprof-firefox-converter is a tool for analyzing VMProf profiles with the &lt;a href="https://profiler.firefox.com/"&gt;Firefox profiler&lt;/a&gt; user interface. 
+Instead of building a new user interface from scratch, this allows us to re-use the user interface work Mozilla put into the Firefox profiler.
+The Firefox profiler offers a timeline where you can zoom into profiles and work with different visualizations like a flame graph or a stack chart.
+To understand why there is time spent inside a function, you can revisit the source code and even dive into the intermediate representation of functions executed by PyPy's just-in-time compiler.
+Additionally, there is a visualization for PyPy's log output, to keep track whether PyPy spent time inside the interpreter, JIT or GC throughout the profiling time.&lt;/p&gt;
+&lt;h3&gt;Profiling word count&lt;/h3&gt;
+&lt;p&gt;In this blog post, I want to show an example of how to use the vmprof-firefox-converter for a simple Python program.
+Based on Ben Hoyt's blog &lt;a href="https://benhoyt.com/writings/count-words/"&gt;Performance comparison: counting words in Python, Go, C++, C, AWK, Forth, and Rust&lt;/a&gt; we will profile two python versions of a word counter running on PyPy. One being a bit more optimized. For this, VMProf will be used, but instead of just going with the console output, we will use the Firefox profiler user interface.&lt;/p&gt;
+&lt;p&gt;At first, we are going to look at a simple way of counting words with &lt;code&gt;Collections.Counter&lt;/code&gt;.
+This will read one line from the standard input at a time and count the words with &lt;code&gt;counter.update()&lt;/code&gt;&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;counts = collections.Counter()
+for line in sys.stdin:
+    words = line.lower().split()
+    counts.update(words)
+
+for word, count in counts.most_common():
+    print(word, count)
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;To start profiling, simply execute:
+&lt;code&gt;pypy -m vmprofconvert -run simple.py &amp;lt;kjvbible_x10.txt&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;This will run the above code with vmprof, automatically capture and convert the results and finally open the Firefox profiler. &lt;/p&gt;
+&lt;p&gt;The input file is the king James version of the bible concatenated ten times.&lt;/p&gt;
+&lt;p&gt;To get started, we take a look at the call stack.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_call_stack_crp.png?raw=true"&gt;
+Here we see that most of the time is spent in native code (marked as blue) e.g., the &lt;code&gt;counter.update()&lt;/code&gt; or &lt;code&gt;split()&lt;/code&gt; C implementation.&lt;/p&gt;
+&lt;p&gt;Now let's proceed with the more optimized version.
+This time we read 64 Kb of data from the standard input and count the words with &lt;code&gt;counter.update()&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;counts = collections.Counter()
+remaining = ''
+while True:
+    chunk = remaining + sys.stdin.read(64*1024)
+    if not chunk:
+        break
+    last_lf = chunk.rfind('\n')  # process to last LF character
+    if last_lf == -1:
+        remaining = ''
+    else:
+        remaining = chunk[last_lf+1:]
+        chunk = chunk[:last_lf]
+    counts.update(chunk.lower().split())
+
+for word, count in counts.most_common():
+    print(word, count)
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;As we did before, we are going to take a peek at the call stack.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_call_stack_crp.png?raw=true"&gt; &lt;/p&gt;
+&lt;p&gt;Now there is more time spent in native code, caused by larger chunks of text passed to  &lt;code&gt;counter.update()&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;This becomes even more clear by comparing the stack charts.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_stack_chart.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;Here, in the unoptimized case, we only read in one line at each loop iteration.
+This results in small "spikes" in the stack chart. &lt;/p&gt;
+&lt;p&gt;But let's take an even closer look.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_stack_chart_zoom.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;Zoomed in, we see the call stack alternating between &lt;code&gt;_count_elements()&lt;/code&gt; and (unfortunately unsymbolized) native calls coming from reading and splitting the input text (e.g., &lt;code&gt;decode()&lt;/code&gt;).&lt;/p&gt;
+&lt;p&gt;Let us now take a look at the optimized case.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_stack_chart.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;And if we look closer at the same interval as before, we see some spikes, but slightly different.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_stack_chart_zoom.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;Even though we do not want to compare the (amount of) milliseconds directly, we clearly see that the spikes are wider, i.e. the time spent in those function calls is longer.
+You may already know where this comes from.
+We read a 64 Kb chunk of data from std in and pass that to &lt;code&gt;counter.update()&lt;/code&gt;, so both these tasks do more work and take longer.
+Bigger chunks mean there is less alternating between reading and counting, so there is more time spent doing work than "doing" loop iterations.&lt;/p&gt;
+&lt;h3&gt;Getting started&lt;/h3&gt;
+&lt;p&gt;You can get the converter from &lt;a href="https://github.com/Cskorpion/vmprof-firefox-converter"&gt;GitHub&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Both VMProf and the vmprof-firefox-converter were created for profiling PyPy, but you can also use them with CPython. &lt;/p&gt;
+&lt;p&gt;This project is still somewhat experimental, so if you want to try it out, please let us know whether it worked for you.&lt;/p&gt;</description><guid>https://www.pypy.org/posts/2024/05/vmprof-firefox-converter.html</guid><pubDate>Fri, 26 Apr 2024 14:38:00 GMT</pubDate></item><item><title>PyPy v7.3.16 release</title><link>https://www.pypy.org/posts/2024/04/pypy-v7316-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-16-release-of-python-2-7-3-9-and-3-10"&gt;
+&lt;h2&gt;PyPy v7.3.16: release of python 2.7, 3.9, and 3.10&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.16 of PyPy.&lt;/p&gt;
+&lt;p&gt;This release includes security fixes from upstream CPython, and bugfixes to the
+garbage collector, described in a &lt;a class="reference external" href="https://www.pypy.org/posts/2024/03/fixing-bug-incremental-gc.html"&gt;gc bug-hunt blog post&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;The release includes three different interpreters:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.9, which is an interpreter supporting the syntax and the features of
+Python 3.9, including the stdlib for CPython 3.9.19.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.10, which is an interpreter supporting the syntax and the features of
+Python 3.10, including the stdlib for CPython 3.10.14.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the multiple
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases. It follows after 7.3.15 release on Jan 15, 2024&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the v7.3.16 releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear
+about it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://www.pypy.org/posts/2024/04/index.html"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://www.pypy.org/posts/2024/04/project-ideas.html"&gt;help&lt;/a&gt; with
+making RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, both &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; and the &lt;a class="reference external" href="https://github.com/matthew-brett/multibuild"&gt;multibuild system&lt;/a&gt; support
+building wheels for PyPy.&lt;/p&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython 3.7.4&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;Apple &lt;strong&gt;M1 arm64&lt;/strong&gt; machines (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;s390x&lt;/strong&gt; running Linux&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;PyPy support Windows 32-bit, Linux PPC64 big- and little-endian, and Linux ARM
+32 bit, but does not release binaries. Please reach out to us if you wish to
+sponsor binary releases for those platforms. Downstream packagers provide
+binary builds for debian, Fedora, conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.16 release, see the &lt;a class="reference external" href="https://doc.pypy.org/en/latest/release-v7.3.16.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2024/04/pypy-v7316-release.html</guid><pubDate>Tue, 23 Apr 2024 12:22:08 GMT</pubDate></item><item><title>Fixing a Bug in PyPy's Incremental GC</title><link>https://www.pypy.org/posts/2024/03/fixing-bug-incremental-gc.html</link><dc:creator>Carl Friedrich Bolz-Tereick</dc:creator><description>&lt;h2&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;Since last summer, I've been looking on and off into a weird and hard to
+reproduce &lt;a href="https://github.com/pypy/pypy/issues/3959"&gt;crash bug in PyPy&lt;/a&gt;. It was
+manifesting only on CI, and it seemed to always happen in the AST rewriting
+phase of &lt;a href="https://pytest.org"&gt;pytest&lt;/a&gt;, the symptoms being that PyPy would crash
+with a segfault. All my attempts to reproduce it locally failed, and my
+attempts to try to understand the problem by dumping the involved ASTs lead
+nowhere.&lt;/p&gt;
+&lt;p&gt;A few weeks ago, we got &lt;a href="https://github.com/PyO3/pyo3/issues/3766"&gt;two more&lt;/a&gt;
+&lt;a href="https://github.com/orgs/pypy/discussions/4923"&gt;bug reports&lt;/a&gt;, the last one by
+the authors of the &lt;a href="https://nanobind.readthedocs.io/"&gt;nanobind&lt;/a&gt; binding
+generator, with the same symptoms: crash in AST rewriting, only on CI. I
+decided to make a more serious push to try to find the bug this time.
+Ultimately the problem turned out to be several bugs in PyPy's garbage
+collector (GC) that had been there since its inception in
+&lt;a href="https://www.pypy.org/posts/2013/10/incremental-garbage-collector-in-pypy-8956893523842234676.html"&gt;2013&lt;/a&gt;.
+Understanding the
+situation turned out to be quite involved, additionally complicated by this
+being the first time that I was working on this particular aspect of PyPy's GC.
+Since the bug was so much work to find, I thought I'd write a blog post about
+it.&lt;/p&gt;
+&lt;p&gt;The blog post consists of three parts: first a chronological description of
+what I did to find the bug, a technical explanation of what goes wrong, some
+reflections on the bug (and then a bonus bug I also found in the process).&lt;/p&gt;
+&lt;h2&gt;Finding the Bug&lt;/h2&gt;
+&lt;p&gt;I started from the failing &lt;a href="https://github.com/wjakob/nanobind/actions/runs/8234561874/job/22516568891"&gt;nanobind CI
+runs&lt;/a&gt;
+that ended with a segfault of the PyPy interpreter. This was only an
+intermittent problem, not every run was failing. When I tried to just run the
+test suite locally, I couldn't get it to fail. Therefore at first I tried to
+learn more about what was happening by looking on the CI runners.&lt;/p&gt;
+&lt;h3&gt;Running on CI&lt;/h3&gt;
+&lt;p&gt;I forked the nanobind repo and hacked the CI script in order to get it to use a
+PyPy build with &lt;a href="https://doc.pypy.org/en/latest/build.html#making-a-debug-build-of-pypy"&gt;full debug information and more assertions turned on&lt;/a&gt;. In order
+to increase the probability of seeing the crash I added an otherwise unused
+&lt;a href="https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs"&gt;matrix&lt;/a&gt;
+variable to the CI script that just contained 32 parameters. This means every
+build is done 32 times (sorry Github for wasting your CPUs 😕). With that
+amount of repetition, I got at least one job of every build that was crashing.&lt;/p&gt;
+&lt;p&gt;Then I added the &lt;code&gt;-Xfaulthandler&lt;/code&gt; option to the PyPy command which will use the
+&lt;a href="https://docs.python.org/3.11/library/faulthandler.html"&gt;faulthandler&lt;/a&gt; module
+try to print a Python stacktrace if the VM segfaults to confirm that PyPy was
+indeed crashing in the &lt;a href="https://docs.python.org/3/library/ast.html"&gt;AST&lt;/a&gt;
+&lt;a href="https://github.com/pytest-dev/pytest/blob/main/src/_pytest/assertion/rewrite.py"&gt;rewriting
+phase&lt;/a&gt;
+of pytest, which pytest uses for &lt;a href="https://docs.pytest.org/en/7.1.x/how-to/assert.html#asserting-with-the-assert-statement"&gt;nicer
+assertions&lt;/a&gt;.
+I experimented with hacking our faulthandler implementation to also give me a
+C-level callstack, but that didn't work as well as I hoped.&lt;/p&gt;
+&lt;p&gt;Then I tried to run &lt;a href="https://sourceware.org/gdb/"&gt;gdb&lt;/a&gt; on CI to try to get it
+to print a C callstack at the crash point. You can get gdb to execute commands
+as if typed at the prompt with the &lt;code&gt;-ex&lt;/code&gt; commandline option, I used something
+like this:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;gdb -ex "set confirm off" -ex "set pagination off" -ex \
+    "set debuginfod enabled off" -ex run -ex where -ex quit \
+    --args &amp;lt;command&amp;gt; &amp;lt;arguments&amp;gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;But unfortunately the crash never occurred when running in gdb.&lt;/p&gt;
+&lt;p&gt;Afterwards I tried the next best thing, which was configuring the CI runner to
+&lt;a href="https://github.com/itamarst/gha-upload-cores"&gt;dump a core file and upload it as a build
+artifact&lt;/a&gt;, which worked. Looking
+at the cores locally only sort of worked, because I am running a different
+version of Ubuntu than the CI runners. So I used
+&lt;a href="https://mxschmitt.github.io/action-tmate/"&gt;tmate&lt;/a&gt; to be able to log into the
+CI runner after a crash and interactively used gdb there. Unfortunately what I
+learned from that was that the bug was some kind of &lt;strong&gt;memory corruption&lt;/strong&gt;,
+which is always incredibly unpleasant to debug. Basically the header word of a
+Python object had been corrupted somehow at the point of the crash, which means
+that it's &lt;a href="https://en.wikipedia.org/wiki/Virtual_method_table"&gt;vtable&lt;/a&gt; wasn't
+usable any more.&lt;/p&gt;
+&lt;p&gt;(Sidenote: &lt;a href="https://www.pypy.org/posts/2009/10/gc-improvements-6174120095428192954.html#unifying-the-vtable-ptr-with-the-gc-header"&gt;PyPy doesn't really use a vtable
+pointer&lt;/a&gt;,
+instead it uses half a word in the header for the vtable, and the other half
+for flags that the GC needs to keep track of the state of the object.
+Corrupting all this is still bad.)&lt;/p&gt;
+&lt;h3&gt;Reproducing Locally&lt;/h3&gt;
+&lt;p&gt;At that point it was clear that I had to push to reproduce the problem on my
+laptop, to allow me to work on the problem more directly and not to always have
+to go via the CI runner. Memory corruption bugs often have a lot of randomness
+(depending on which part of memory gets modified, things might crash or more
+likely just happily keep running). Therefore I decided to try to brute-force
+reproducing the crash by simply running the tests many many times. Since the
+crash happened in the AST rewriting phase of pytest, and that happens only if
+no &lt;a href="https://stackoverflow.com/questions/2998215/if-python-is-interpreted-what-are-pyc-files"&gt;pyc
+files&lt;/a&gt;
+of the bytecode-compiled rewritten ASTs exist, I made sure to delete them
+before every test run.&lt;/p&gt;
+&lt;p&gt;To repeat the test runs I used
+&lt;a href="https://tratt.net/laurie/src/multitime/"&gt;multitime&lt;/a&gt;, which is a simple program
+that runs a command repeatedly. It's meant for lightweight benchmarking
+purposes, but it also halts the execution of the command if that command exits
+with an error (and it sleeps a small random time between runs, which might help
+with randomizing the situation, maybe). Here's a demo:&lt;/p&gt;
+&lt;script src="https://asciinema.org/a/648877.js" id="asciicast-648877" async="true"&gt;&lt;/script&gt;
+
+&lt;p&gt;(&lt;a href="https://bernsteinbear.com/"&gt;Max&lt;/a&gt; pointed out
+&lt;a href="https://github.com/silentbicycle/autoclave"&gt;autoclave&lt;/a&gt; to me when reviewing
+this post, which is a more dedicated tool for this job.)&lt;/p&gt;
+&lt;p&gt;Thankfully, running the tests repeatedly eventually lead to a crash, solving my
+"only happens on CI" problem. I then tried various variants to exclude possible
+sources of errors. The first source of errors to exclude in PyPy bugs is the
+just-in-time compiler, so I reran the tests with &lt;code&gt;--jit off&lt;/code&gt; to see whether I
+could still get it to crash, and thankfully I eventually could (JIT bugs are
+often very annoying).&lt;/p&gt;
+&lt;p&gt;Next source of bugs to exclude where C-extensions. Since those were the tests
+of nanobind, a framework for creating C-extension modules I was a bit worried
+that the bug might be in our emulation of CPython's C-API. But running PyPy
+with the &lt;code&gt;-v&lt;/code&gt; option (which will print all the imports as they happen)
+confirmed that at the point of crash no C-extension had been imported yet.&lt;/p&gt;
+&lt;h3&gt;Using &lt;code&gt;rr&lt;/code&gt;&lt;/h3&gt;
+&lt;p&gt;I still couldn't get the bug to happen in GDB, so the tool I tried next was
+&lt;a href="https://rr-project.org/"&gt;rr, the "reverse debugger"&lt;/a&gt;. rr can record the execution of a program and
+later replay it arbitrarily often. This gives you a time-traveling debugger
+that allows you to execute the program backwards in addition to forwards.
+Eventually I managed to get the crash to happen when running the tests with
+&lt;code&gt;rr record --chaos&lt;/code&gt; (&lt;code&gt;--chaos&lt;/code&gt; randomizes some decisions that rr takes, to try to
+increase the chance of reproducing bugs).&lt;/p&gt;
+&lt;p&gt;Using rr well is quite hard, and I'm not very good at it. The main approach I
+use with rr to debug memory corruption is to replay the crash, then set a
+&lt;a href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Set-Watchpoints.html"&gt;watchpoint&lt;/a&gt;
+for the corrupted memory location, then use the command &lt;code&gt;reverse-continue&lt;/code&gt; to
+find the place in the code that mutated the memory location. &lt;code&gt;reverse-continue&lt;/code&gt;
+is like &lt;code&gt;continue&lt;/code&gt;, except that it will execute the program backwards from the
+current point. Here's a little demo of this:&lt;/p&gt;
+&lt;script src="https://asciinema.org/a/648814.js" id="asciicast-648814" async="true"&gt;&lt;/script&gt;
+
+&lt;p&gt;Doing this for my bug revealed that the object that was being corrupted was
+erroneously collected by the garbage collector. For some reason the GC had
+wrongly decided that the object was no longer reachable and therefore put the
+object into a freelist by writing a pointer to the next entry in the freelist
+into the first word of the object, overwriting the object's header. The next
+time the object was used things crashed.&lt;/p&gt;
+&lt;h3&gt;Side-quest: wrong GC assertions&lt;/h3&gt;
+&lt;p&gt;At this point in the process, I got massively side-tracked. PyPy's GC has a
+number of debug modes that you can optionally turn on. Those slow down the
+program execution a lot, but they should in theory help to understand why the
+GC goes wrong. When I turned them on, I was getting a failing assertion really
+early in the test execution, complaining about an invariant violation in the GC
+logic. At first this made me very happy. I thought that this would help me fix
+the bug more quickly.&lt;/p&gt;
+&lt;p&gt;Extremely frustratingly, after two days of work I concluded that the assertion
+logic itself was wrong. I have fixed that in the meantime too, the details
+of that are in the bonus section at the end of the post.&lt;/p&gt;
+&lt;h3&gt;Using GDB scripting to find the real bug&lt;/h3&gt;
+&lt;p&gt;After that disaster I went back to the earlier rr recording without GC assertions
+and tried to understand in more detail why the GC decided to free an object
+that was still being referenced. To be able to do that I used the &lt;a href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Python-API.html"&gt;GDB Python
+scripting
+API&lt;/a&gt; to
+write some helper commands to understand the state of the GC heap (rr is an
+extension of GDB, so the GDB scripting API works in rr too).&lt;/p&gt;
+&lt;p&gt;The first (small) helper command I wrote with the GDB scripting API was a way
+to pretty-print the currently active GC flags of a random PyPy object, starting
+just from the pointer. The more complex command I wrote was an object tracer,
+which follows pointers to GC objects starting from a root object to explore the
+object graph. The object tracer isn't complete, it doesn't deal with all the
+complexities of PyPy's GC. But it was good enough to help me with my problem, I
+found out that the corrupted object was stored in an array.&lt;/p&gt;
+&lt;p&gt;As an example, here's a function that uses the GDB API to walk one of the
+helper data structures of the GC, a stack of pointers:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;walk_addr_stack&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;obj&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="sd"&gt;""" walk an instance of the AddressStack class (which is a linked list of&lt;/span&gt;
+&lt;span class="sd"&gt;    arrays of 1019 pointers).&lt;/span&gt;
+
+&lt;span class="sd"&gt;    the first of the arrays is only partially filled with used_in_last_chunk&lt;/span&gt;
+&lt;span class="sd"&gt;    items, all the other chunks are full."""&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;obj&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;type&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;code&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;gdb&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;TYPE_CODE_PTR&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;obj&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;obj&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;dereference&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="n"&gt;used_in_last_chunk&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;lookup&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;obj&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;"used_in_last_chunk"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;chunk&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;lookup&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;obj&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;"inst_chunk"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;dereference&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;items&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;lookup&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;chunk&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;"items"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;used_in_last_chunk&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+            &lt;span class="k"&gt;yield&lt;/span&gt; &lt;span class="n"&gt;items&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+        &lt;span class="n"&gt;chunk&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;lookup&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;chunk&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;"next"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="ow"&gt;not&lt;/span&gt; &lt;span class="n"&gt;chunk&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="k"&gt;break&lt;/span&gt;
+        &lt;span class="n"&gt;chunk&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;chunk&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;dereference&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="n"&gt;used_in_last_chunk&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;1019&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;The full file of supporting code I wrote can be found in &lt;a href="https://gist.github.com/cfbolz/13cadcbbef321d93fc9790dff6f60a6a"&gt;this
+gist&lt;/a&gt;. This is
+pretty rough throw-away code, however.&lt;/p&gt;
+&lt;p&gt;In the following recording I show a staged debugging session with some of the
+extra commands I wrote with the Python API. The details aren't important, I
+just wanted to give a bit of a flavor of what inspecting objects looks like:&lt;/p&gt;
+&lt;script src="https://asciinema.org/a/648889.js" id="asciicast-648889" async="true"&gt;&lt;/script&gt;
+
+&lt;p&gt;The next step was to understand why the array content wasn't being correctly
+traced by the GC, which I eventually managed with some &lt;a href="https://www.fayewilliams.com/2011/07/13/gdb-conditional-breakpoints/"&gt;conditional
+breakpoints&lt;/a&gt;,
+more watchpoints, and using &lt;code&gt;reverse-continue&lt;/code&gt;. It turned out to be a bug that
+occurs when the content of one array was memcopied into another array. The
+technical details of why the array wasn't traced correctly are described in
+detail in the next section.&lt;/p&gt;
+&lt;h3&gt;Writing a unit test&lt;/h3&gt;
+&lt;p&gt;To try to make sure I really understood the bug correctly I then wrote a GC
+unit test that shows the problem. Like most of PyPy, our GC is written in
+RPython, a (somewhat strange) subset/dialect of Python2, which can be compiled
+to C code. However, since it is also valid Python2 code, it can be &lt;a href="https://www.pypy.org/posts/2022/04/how-is-pypy-tested.html"&gt;unit-tested
+on top of a Python2
+implementation&lt;/a&gt;
+(which is one of the reasons why we keep maintaining PyPy2).&lt;/p&gt;
+&lt;p&gt;In the GC unit tests you have a lot of control about what order things happen
+in, e.g. how objects are allocated, when garbage collection phases happen, etc.
+After some trying I managed to write a test that crashes with the same kind of
+memory corruption that my original crash exhibited: an object that is still
+reachable via an array is collected by the GC. To give you a flavor of what
+this kind of test looks like, here's an (edited for clarity) version of the
+test I eventually managed to write&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;test_incrementality_bug_arraycopy&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;source&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;malloc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;VAR&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;8&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="c1"&gt;# first array&lt;/span&gt;
+    &lt;span class="c1"&gt;# the stackroots list emulates the C stack&lt;/span&gt;
+    &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;stackroots&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;append&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;target&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;malloc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;VAR&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;8&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="c1"&gt;# second array&lt;/span&gt;
+    &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;stackroots&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;append&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;target&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;node&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;malloc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;S&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="c1"&gt;# unrelated object, will be collected&lt;/span&gt;
+    &lt;span class="n"&gt;node&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;5&lt;/span&gt;
+    &lt;span class="c1"&gt;# store reference into source array, calling the write barrier&lt;/span&gt;
+    &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;writearray&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;node&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;collect_step&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="n"&gt;source&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;stackroots&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="c1"&gt;# reload arrays, they might have moved&lt;/span&gt;
+    &lt;span class="n"&gt;target&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;stackroots&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="c1"&gt;# this GC step traces target&lt;/span&gt;
+    &lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;collect_step&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# emulate what a memcopy of arrays does&lt;/span&gt;
+    &lt;span class="n"&gt;res&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;writebarrier_before_copy&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;target&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;assert&lt;/span&gt; &lt;span class="n"&gt;res&lt;/span&gt;
+    &lt;span class="n"&gt;target&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="c1"&gt;# copy two elements of the arrays&lt;/span&gt;
+    &lt;span class="n"&gt;target&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="c1"&gt;# now overwrite the reference to node in source&lt;/span&gt;
+    &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;writearray&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;lltype&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nullptr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;S&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="c1"&gt;# this GC step traces source&lt;/span&gt;
+    &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;collect_step&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="c1"&gt;# some more collection steps, crucially target isn't traced again&lt;/span&gt;
+    &lt;span class="c1"&gt;# but node is deleted&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;collect_step&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="c1"&gt;# used to crash, node got collected&lt;/span&gt;
+    &lt;span class="k"&gt;assert&lt;/span&gt; &lt;span class="n"&gt;target&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;5&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;One of the good properties of testing our GC that way is that all the memory is
+emulated. The crash in the last line of the test isn't a segfault at all,
+instead you get a nice exception saying that you tried to access a freed chunk
+of memory and you can then debug this with a python2 debugger.&lt;/p&gt;
+&lt;h3&gt;Fixing the Bug&lt;/h3&gt;
+&lt;p&gt;With the unit test in hand, fixing the test was relatively straightforward (the
+diff in its simplest form is anyway only a &lt;a href="https://github.com/pypy/pypy/commit/78bbeb93471b5f38438004e971f4b4f84ab17a84"&gt;single line
+change&lt;/a&gt;).
+After this first version of my fix, I
+&lt;a href="https://github.com/pypy/pypy/issues/4925#issuecomment-2014459454"&gt;talked to Armin
+Rigo&lt;/a&gt; who
+helped me find different case that was still wrong, in the same area of the
+code.&lt;/p&gt;
+&lt;p&gt;I also got help by the developers at &lt;a href="https://portaone.com/"&gt;PortaOne&lt;/a&gt;
+who are using PyPy on their servers and had seen some &lt;a href="https://github.com/pypy/pypy/issues/4900"&gt;mysterious PyPy
+crashes&lt;/a&gt;
+recently, that looked related to the GC. They did test deployments of my fixes
+in their various stages to their servers to try to see whether stability
+improved for them. Unfortunately in the end it turned out that their crashes
+are an unrelated GC bug related to object pinning, which we haven't resolved
+yet.&lt;/p&gt;
+&lt;h3&gt;Writing a GC fuzzer/property based test&lt;/h3&gt;
+&lt;p&gt;Finding bugs in the GC is always extremely disconcerting, particularly since
+this one manged to hide for so long (more than ten years!). Therefore I wanted
+to use these bugs as motivation to try to find more problems in PyPy's GC. Given
+the ridiculous effectiveness of fuzzing, I used
+&lt;a href="https://hypothesis.readthedocs.io/en/latest/"&gt;hypothesis&lt;/a&gt; to write a
+property-based test. Every test performs a sequence of randomly chosen steps
+from the following list:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;allocate an object&lt;/li&gt;
+&lt;li&gt;read a random field from a random object&lt;/li&gt;
+&lt;li&gt;write a random reference into a random object&lt;/li&gt;
+&lt;li&gt;drop a random stack reference&lt;/li&gt;
+&lt;li&gt;perform one GC step&lt;/li&gt;
+&lt;li&gt;allocate an array&lt;/li&gt;
+&lt;li&gt;read a random index from a random array&lt;/li&gt;
+&lt;li&gt;write to an array&lt;/li&gt;
+&lt;li&gt;memcopy between two arrays&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This approach of doing a sequence of steps is pretty close to the &lt;a href="https://hypothesis.readthedocs.io/en/latest/stateful.html"&gt;stateful
+testing&lt;/a&gt; approach of
+hypothesis, but I just implemented it manually with the &lt;a href="https://hypothesis.readthedocs.io/en/latest/data.html#drawing-interactively-in-tests"&gt;data
+strategy&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Every one of those steps is always performed on both the tested GC, and on some
+regular Python objects. The Python objects provide the "ground truth" of what
+the heap should look like, so we can compare the state of the GC objects
+with the state of the Python objects to find out whether the GC made a mistake.&lt;/p&gt;
+&lt;p&gt;In order to check whether the test is actually useful, I reverted my bug fixes
+and made sure that the test re-finds both the spurious GC assertion error and the
+problems with memcopying an array.&lt;/p&gt;
+&lt;p&gt;In addition, the test also found corner cases in my fix. There was a situation
+that I hadn't accounted for, which the test found after eventually.
+I also plan on adding a bunch of other GC features as steps in the
+test to stress them too (for example weakrefs, identity hashes, pinning, maybe
+finalization).&lt;/p&gt;
+&lt;p&gt;At the point of publishing this post, the fixes got merged to the 2.7/3.9/3.10
+branches of PyPy, and will be part of the next release (v7.3.16).&lt;/p&gt;
+&lt;h2&gt;The technical details of the bug&lt;/h2&gt;
+&lt;p&gt;In order to understand the technical details of the bug, I need to give some
+background explanations about PyPy's GC.&lt;/p&gt;
+&lt;h3&gt;PyPy's incremental GC&lt;/h3&gt;
+&lt;p&gt;PyPy uses an incremental generational mark-sweep GC. It's
+&lt;a href="https://en.wikipedia.org/wiki/Tracing_garbage_collection#Generational_GC_(ephemeral_GC)"&gt;generational&lt;/a&gt;
+and therefore has minor collections (where only young objects get collected)
+and major collections (collecting long-lived objects eventually, using a
+&lt;a href="https://en.wikipedia.org/wiki/Tracing_garbage_collection#Na%C3%AFve_mark-and-sweep"&gt;mark-and-sweep&lt;/a&gt;
+algorithm). Young objects are allocated in a nursery using a
+bump-pointer allocator, which makes allocation quite efficient. They are moved
+out of the nursery by minor collections. In order to find references from old
+to young objects the GC uses a write barrier to detect writes into old objects.&lt;/p&gt;
+&lt;p&gt;The GC is also
+&lt;a href="https://en.wikipedia.org/wiki/Tracing_garbage_collection#Stop-the-world_vs._incremental_vs._concurrent"&gt;incremental&lt;/a&gt;,
+which means that its major collections aren't done all at once (which would
+lead to long pauses). Instead, major collections are sliced up into small
+steps, which are done directly after a minor collection (the GC isn't
+&lt;em&gt;concurrent&lt;/em&gt; though, which would mean that the GC does work in a separate
+thread).&lt;/p&gt;
+&lt;p&gt;The incremental GC uses &lt;a href="https://en.wikipedia.org/wiki/Tracing_garbage_collection#Tri-color_marking"&gt;tri-color
+marking&lt;/a&gt;
+to reason about the reachable part of the heap during the marking phase, where
+every old object can be:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;black: already marked, reachable, definitely survives the collection&lt;/li&gt;
+&lt;li&gt;grey: will survive, but still needs to be marked&lt;/li&gt;
+&lt;li&gt;white: potentially dead&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The color of every object is encoded by setting flags
+in the object header.&lt;/p&gt;
+&lt;p&gt;The GC maintains the &lt;strong&gt;invariant&lt;/strong&gt; that black objects must never point to white
+objects. At the start of a major collection cycle the stack roots are turned
+gray. During the mark phase of a major collection cycle, the GC will trace gray
+objects, until
+none are left. To trace a gray object, all the objects it references have to be
+marked grey if they are white so far. After a grey object is traced, it can be
+marked black (because all the referenced objects are now either black or gray).
+Eventually, there are no gray objects left. At that point (because no white
+object can be reached from a black one) all the white objects are known to be
+unreachable and can therefore be freed.&lt;/p&gt;
+&lt;p&gt;The GC is incremental because every collection step will only trace a limited
+number of gray objects, before giving control back to the program. This leads to
+a problem: if an already traced (black) object is changed between two marking
+steps of the GC, the program can mutate that object and write a new reference
+into one of its fields. This could lead to an invariant violation, if the
+referenced object is white. Therefore, the GC uses the write barrier (which it
+needs anyway to find references from old to young objects) to mark all black
+objects that are modified gray, and then trace them again at one of the
+later collection steps.&lt;/p&gt;
+&lt;h3&gt;The special write barrier of memcopy&lt;/h3&gt;
+&lt;p&gt;Arrays use a different kind of write barrier than normal objects. Since they
+can be arbitrarily large, tracing them can take a long time. Therefore it's
+potentially wasteful to trace them fully at a minor collection. To fix this,
+the array write barrier keeps more granular information about which parts of
+the array have been modified since the last collection step. Then only the
+modified parts of the array need to be traced, not the whole array.&lt;/p&gt;
+&lt;p&gt;In addition, there is another optimization for arrays, which is that memcopy is
+treated specially by the GC. If memcopy is implemented by simply writing a loop
+that copies the content of one array to the other, that will invoke the write
+barrier every single loop iteration for the write of every array element,
+costing a lot of overhead. Here's some pseudo-code:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;arraycopy&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;dest&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;source_start&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;dest_start&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;length&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;length&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;value&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;source_start&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+        &lt;span class="n"&gt;dest&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;dest_start&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;value&lt;/span&gt; &lt;span class="c1"&gt;# &amp;lt;- write barrier inserted here&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Therefore the GC has a special memcopy-specific
+write barrier that will perform the GC logic once before the memcopy loop, and
+then use a regular (typically SIMD-optimized) memcopy implementation from
+&lt;code&gt;libc&lt;/code&gt;. Roughly like this:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;arraycopy&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;dest&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;source_start&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;dest_start&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;length&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;gc_writebarrier_before_array_copy&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;dest&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;source_start&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;dest_start&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;length&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;raw_memcopy&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;cast_to_voidp&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;source_start&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                &lt;span class="n"&gt;cast_to_voidp&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;dest&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;dest_start&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                &lt;span class="n"&gt;sizeof&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;itemtype&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;length&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;(this is really a rough sketch. The &lt;a href="https://github.com/pypy/pypy/blob/789f964fff59c722b0872abcdc56d2b1373a9f3b/rpython/rlib/rgc.py#L365"&gt;real
+code&lt;/a&gt;
+is much more complicated.)&lt;/p&gt;
+&lt;h3&gt;The bug&lt;/h3&gt;
+&lt;p&gt;The bugs turned out to be precisely in this memcopy write barrier. When we
+implemented the current GC, we adapted our previous GC, which was a
+generational mark-sweep GC but &lt;em&gt;not&lt;/em&gt; incremental. We started with most of the
+previous GC's code, including the write barriers. The regular write barriers
+were adapted to the new incremental assumptions, in particular the need for the
+write barrier to also turn black objects back to gray when they are modified
+during a marking phase. This was simply not done at all for the memcopy write
+barrier, at least in two of the code paths. Fixing this problem fixes the unit
+tests and stops the crashes.&lt;/p&gt;
+&lt;h2&gt;Reflections&lt;/h2&gt;
+&lt;p&gt;The way the bug was introduced is really typical. A piece of code (the memcopy
+write barrier) was written under a set of assumptions. Then those assumptions
+changed later. Not all the code pieces that relied on these assumptions to be
+correct were updated. It's pretty hard to prevent this in all situations.&lt;/p&gt;
+&lt;p&gt;I still think we could have done more to prevent the bug occurring. Writing a
+property-based test for the GC would have been a good idea given the complexity
+of the GC, and definitely something we did in other parts of our code at the
+time (just using the &lt;code&gt;random&lt;/code&gt; module mostly, we started using hypothesis
+later).&lt;/p&gt;
+&lt;p&gt;It's a bit of a mystery to me why this bug managed to be undetected for so
+long. Memcopy happens in a lot of pretty core operations of e.g. lists in
+Python (&lt;code&gt;list.extend&lt;/code&gt;, to name just one example). To speculate, I would suspect
+that all the other preconditions for the bug occurring made it pretty rare:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;the content of an old list that is not yet marked needs to be copied into
+  another old list that is marked already&lt;/li&gt;
+&lt;li&gt;the source of the copy needs to also store an object that has no other
+  references&lt;/li&gt;
+&lt;li&gt;the source of the copy then needs to be overwritten with other data&lt;/li&gt;
+&lt;li&gt;then the next collection steps need to be happening at the right points&lt;/li&gt;
+&lt;li&gt;...&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Given the complexity of the GC logic I also wonder whether some lightweight
+formal methods would have been a good idea. Formalizing some of the core
+invariants in &lt;a href="https://en.wikipedia.org/wiki/B-Method"&gt;B&lt;/a&gt; or
+&lt;a href="https://en.wikipedia.org/wiki/TLA%2B"&gt;TLA+&lt;/a&gt; and then &lt;a href="https://en.wikipedia.org/wiki/Model_checking"&gt;model
+checking&lt;/a&gt; them up to some number
+of
+objects would have found this problem pretty quickly. There are also correctness
+proofs for GC algorithms in some research papers, but I don't have a good
+overview of the literature to point to any that are particularly good or bad.
+Going such a more formal route might have fixed this and probably a whole bunch
+of other bugs, but of course it's a pretty expensive (and tedious) approach.&lt;/p&gt;
+&lt;p&gt;While it was super annoying to track this down, it was definitely good to learn
+a bit more about how to use rr and the GDB scripting interface.&lt;/p&gt;
+&lt;h2&gt;Bonus Section: The Wrong Assertion&lt;/h2&gt;
+&lt;p&gt;Some more technical information about the wrong assertion is in this section.&lt;/p&gt;
+&lt;h3&gt;Background: pre-built objects&lt;/h3&gt;
+&lt;p&gt;PyPy's VM-building bootstrapping process can "freeze" a bunch of heap objects
+into the final binary. This allows the VM to start up quickly, because those
+frozen objects are loaded by the OS as part of the binary.&lt;/p&gt;
+&lt;p&gt;Those frozen pre-built objects are parts of the 'roots' of the garbage
+collector and need to be traced. However, tracing all the pre-built objects at
+every collection would be very expensive, because there are a lot of them
+(about 150,000 in a PyPy 3.10 binary). Tracing them all is also not necessary,
+because most of them are never modified. Unmodified pre-built objects can only reference
+other pre-built objects, which can never be deallocated anyway. Therefore we
+have an optimization that uses the write barrier (which we need anyway to find
+old-to-young pointers) to notice when a pre-built object gets modified for the
+very first time. If that happens, it gets added to the set of pre-built objects
+that gets counted as a root, and is traced as a root at collections
+from then on.&lt;/p&gt;
+&lt;h3&gt;The wrong assertion&lt;/h3&gt;
+&lt;p&gt;The assertion that triggered when I turned on the GC debug mode was saying that
+the GC found a reference from a black to a white object, violating its
+invariant. Unmodified pre-built objects count as black, and they aren't roots,
+because they can only ever reference other pre-built objects. However, when a
+pre-built object gets modified for the first time, it becomes part of the root
+set and will be marked gray. This logic works fine.&lt;/p&gt;
+&lt;p&gt;The wrong assertion triggers if a pre-built object is mutated for the very
+first time in the middle of an incremental marking phase. While the pre-built
+object gets added to the root set just fine, and will get traced before the
+marking phase ends, this is encoded slightly differently for pre-built objects,
+compared to "regular" old objects. Therefore, the invariant checking code
+wrongly reported a black-&amp;gt;white pointer in this situation.&lt;/p&gt;
+&lt;p&gt;To fix it I also wrote a unit test checking the problem, made sure that the GC
+hypothesis test also found the bug, and then fixed the wrong assertion to take
+the color encoding of pre-built objects into account.&lt;/p&gt;
+&lt;p&gt;The bug managed to be invisible because we don't tend to turn on the GC
+assertions very often. We only do that when we find a GC bug, which is of
+course also when we need it the most to be correct.&lt;/p&gt;
+&lt;h2&gt;Acknowledgements&lt;/h2&gt;
+&lt;p&gt;Thanks to Matti Picus, Max Bernstein, Wouter van Heyst for giving me feedback on drafts of the
+post. Thanks to Armin Rigo for reviewing the code and pointing out holes in my
+thinking. Thanks to the original reporters of the various forms of the bug,
+including Lily Foote, David Hewitt, Wenzel Jakob.&lt;/p&gt;</description><guid>https://www.pypy.org/posts/2024/03/fixing-bug-incremental-gc.html</guid><pubDate>Tue, 26 Mar 2024 19:14:09 GMT</pubDate></item><item><title>PyPy v7.3.15 release</title><link>https://www.pypy.org/posts/2024/01/pypy-v7315-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-15-release-of-python-2-7-3-9-and-3-10"&gt;
+&lt;h2&gt;PyPy v7.3.15: release of python 2.7, 3.9, and 3.10&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.15 of PyPy.&lt;/p&gt;
+&lt;p&gt;This is primarily a bug-fix release, and includes work done to migrate PyPy to
+Git and Github.&lt;/p&gt;
+&lt;p&gt;The release includes three different interpreters:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.9, which is an interpreter supporting the syntax and the features of
+Python 3.9, including the stdlib for CPython 3.9.18.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.10, which is an interpreter supporting the syntax and the features of
+Python 3.10, including the stdlib for CPython 3.10.13.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the multiple
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases. It follows after 7.3.14 release on Dec 25, 2023&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the v7.3.15 releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear about
+it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://www.pypy.org/posts/2024/01/index.html"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://www.pypy.org/posts/2024/01/project-ideas.html"&gt;help&lt;/a&gt; with
+making RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, both &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; and the &lt;a class="reference external" href="https://github.com/matthew-brett/multibuild"&gt;multibuild system&lt;/a&gt; support
+building wheels for PyPy.&lt;/p&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython 3.7.4&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;Apple &lt;strong&gt;M1 arm64&lt;/strong&gt; machines (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;s390x&lt;/strong&gt; running Linux&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;PyPy support Windows 32-bit, Linux PPC64 big- and little-endian, and Linux ARM
+32 bit, but does not release binaries. Please reach out to us if you wish to
+sponsor binary releases for those platforms. Downstream packagers provide
+binary builds for debian, Fedora, conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.15 release, see the &lt;a class="reference external" href="https://doc.pypy.org/en/latest/release-v7.3.15.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2024/01/pypy-v7315-release.html</guid><pubDate>Mon, 15 Jan 2024 12:22:08 GMT</pubDate></item><item><title>PyPy has moved to Git, GitHub</title><link>https://www.pypy.org/posts/2023/12/pypy-moved-to-git-github.html</link><dc:creator>mattip</dc:creator><description>&lt;p&gt;PyPy has moved its canonical repo and issue tracker from
+&lt;a href="https://foss.heptapod.net/pypy/pypy"&gt;https://foss.heptapod.net/pypy/pypy&lt;/a&gt; to &lt;a href="https://github.com/pypy/pypy"&gt;https://github.com/pypy/pypy&lt;/a&gt;. Obviously,
+this means development will now be tracked in Git rather than Mercurial.&lt;/p&gt;
+&lt;h3&gt;Motivation&lt;/h3&gt;
+&lt;p&gt;We still feel Mercurial is a better version control system. The named branch
+model and user interface are superior. But&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;foss.heptapod.net is not well indexed in google/bing/duckduckgo
+  search, so people find it harder to search for issues in the project.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Since Heptapod has tightened its spam control, we get reports that
+  users create issues only to have them flagged as spam.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Open Source has become synonymous with GitHub, and we are too small to
+  change that.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Much of the current development comes as a reaction to fixing issues.
+  Tracking interlocking issues is easier if all the code is on the same
+  platform.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The &lt;a href="https://doc.pypy.org/en/latest/faq.html#why-doesn-t-pypy-use-git-and-move-to-github"&gt;FAQ&lt;/a&gt;
+  presents two arguments against the move. &lt;a href="https://git-scm.com/docs/git-notes"&gt;Github notes&lt;/a&gt;
+  solves much of point (1): the difficulty of discovering provenance of
+  commits, although not entirely. But the main problem is point (2), it turns
+  out that &lt;strong&gt;not&lt;/strong&gt; moving to GitHub is an impediment to contribution and issue
+  reporting.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;People who wish to continue to use Mercurial can use the same method below to
+  push to GitHub.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;GitHub is more resource rich than foss.heptapod.net. We could add CI
+  jobs to replace some of our aging &lt;a href="https://buildbot.pypy.org"&gt;buildbot
+  infrastructure&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Method&lt;/h3&gt;
+&lt;p&gt;The migration required two parts: migrating the code and then migrating the
+issues and merge requests.&lt;/p&gt;
+&lt;h4&gt;Code migration 1: code and notes&lt;/h4&gt;
+&lt;p&gt;I used a &lt;a href="https://github.com/mnauw/git-remote-hg"&gt;fork of git-remote-hg&lt;/a&gt; to
+create a local Git repo with all the changesets. Then I wanted to add a Git
+note to each commit with the branch it came from. So I prepared a file with two
+columns: the Git commit hash, and the corresponding branch from Mercurial.
+Mercurial can describe each commit in two ways: either the commit hash or by a
+number index. I used &lt;code&gt;hg log&lt;/code&gt; to convert an index &lt;code&gt;i&lt;/code&gt; to the Mercurial hash,
+and then &lt;code&gt;git-hg-helper&lt;/code&gt; from &lt;code&gt;git-remote-hg&lt;/code&gt; to convert the Mercurial hash to
+a Git hash:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;$(cd pypy-git; git-hg-helper git-rev $(cd ../pypy-hg; hg log -r $i -T"{node}\n"))
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Then I used &lt;code&gt;hg log&lt;/code&gt; again to print the Mercurial branch for the index &lt;code&gt;i&lt;/code&gt;:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;$(cd pypy-hg; hg log -r $i -T'{branch}\n')
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Putting these two together, I could loop over all the commits by their
+numerical index to prepare the file. Then I iterated over each line in the
+file, and added the Git note. Since the &lt;code&gt;git note add&lt;/code&gt; command works on the
+current HEAD, I needed to checkout each commit in turn and then add the note:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;git checkout -q &amp;lt;hash&amp;gt; &amp;amp;&amp;amp; git notes --ref refs/notes/branch add -m branch:&amp;lt;branch&amp;gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;I could then use &lt;code&gt;git push --all&lt;/code&gt; to push to GitHub.&lt;/p&gt;
+&lt;h4&gt;Code migration 2: prepare the branches&lt;/h4&gt;
+&lt;p&gt;PyPy has almost 500 open branches. The code migration created all the branch
+HEADs, but &lt;code&gt;git push --all&lt;/code&gt; did not push them. I needed to check them out and
+push each one. So I created a file with all the branch names&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;cd pypy-hg; hg branches | cut -f1 -d" " &amp;gt; branches.txt
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;and then push each one to the GitHub repo&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;while&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nv"&gt;read&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nv"&gt;branch&lt;/span&gt;&lt;span class="c1"&gt;; do git checkout branches/$branch &amp;amp;&amp;amp; git push origin branches/$branch; done &amp;lt; branches.txt&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Note that the branches were named &lt;code&gt;branches/XXX&lt;/code&gt; by the migration, not &lt;code&gt;branch/XXX&lt;/code&gt;. This confuses the merge request migration, more about that later.&lt;/p&gt;
+&lt;h4&gt;Issue and merge request migration&lt;/h4&gt;
+&lt;p&gt;I used the solution from
+&lt;a href="https://github.com/piceaTech/node-gitlab-2-github"&gt;node-gitlab-2-github&lt;/a&gt; which
+worked almost perfectly. It is important to do the conversion on a &lt;strong&gt;private
+repo&lt;/strong&gt; otherwise every mention of a sucessfully mapped user name notifies
+the user about the transfer. This can be quite annoying for a repo the size of
+PyPy with 600 merge requests and over 4000 issues. Issues transfered without a
+problem: the script properly retained the issue numbers. However the script
+does not convert the Mercurial hashes to Git hashes, so the bare hashes in
+comments show up without a link to the commit. Merge requests are more of a problem:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The Mercurial named branch "disappears" once it is merged, so a merge request
+  to a merged branch does not find the target branch name in Git. The
+  conversion creates an issue instead with the label &lt;code&gt;gitlab merge request&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;For some reason, the branches created by &lt;code&gt;git-remote-hg&lt;/code&gt; are called
+  &lt;code&gt;branches/XXX&lt;/code&gt; and not &lt;code&gt;branch/XXX&lt;/code&gt; as expected by GitLab. This messes up the
+  merge request/PR conversion. For some of the branches (open PRs and main
+  target branches) I manually created additional branches without the &lt;code&gt;es&lt;/code&gt;. The
+  net result is that open merge requests became open PRs, merged merge requests
+  became issues, and closed-not-merged merge requests were not migrated.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4&gt;Layered conversions&lt;/h4&gt;
+&lt;p&gt;PyPy already migrated once from Bitbucket to Heptapod. Many of the issues
+reflect the multiple transitions: they have lines like "Created originally on
+Bitbucket by XXX" from the first transition, and an additional line "In
+Heptapod" from this transition.&lt;/p&gt;
+&lt;h3&gt;Credits&lt;/h3&gt;
+&lt;p&gt;We would like to express our gratitude to the &lt;a href="https://octobus.net/"&gt;Octobus&lt;/a&gt;
+team who support Heptapod. The transition from Bitbucket was quite an effort,
+and they have generously hosted our developement since then. We wish them all
+the best, and still believe that Mercurial should have "won".&lt;/p&gt;
+&lt;h3&gt;Next steps&lt;/h3&gt;
+&lt;p&gt;While the repo at GitHub is live, there are still a few more things we need to
+do:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Documentation needs an update for the new repo and the build automation from
+  readthedocs must be adjusted.&lt;/li&gt;
+&lt;li&gt;The wiki should be copied from Heptapod.&lt;/li&gt;
+&lt;li&gt;buildbot.pypy.org should also look at the new repo. I hope the code is up to
+  the task of interacting with a Git repo.&lt;/li&gt;
+&lt;li&gt;speed.pypy.org tracks changes, it too needs to reference the new location&lt;/li&gt;
+&lt;li&gt;To keep tracking branches with Git notes on new commits, I activated a
+  &lt;a href="https://github.com/Julian/named-branch-action"&gt;github action&lt;/a&gt; by Julian to
+  add a Git branch note to each commit. Please see the README there for
+  directions on using Git notes.&lt;/li&gt;
+&lt;li&gt;Some of the merge requests were not migrated. If someone wants to, they could
+  migrate those once they figure out the branch naming problems.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Additionally, now is the time for all of you to prove the move is worthwhile:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Star the repo, let others know how to find it,&lt;/li&gt;
+&lt;li&gt;Help fix some of the open issues or file new ones,&lt;/li&gt;
+&lt;li&gt;Take advantage of the more familiar workflow to get involved in the project,&lt;/li&gt;
+&lt;li&gt;Suggest ways to improve the migration: are there things I missed or could
+  have done better?&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;How will development change?&lt;/h3&gt;
+&lt;p&gt;Heptapod did not allow personal forks, so we were generous with a commit bit to
+the main repo. Additionally, we (well, me) have been using a
+commit-directly-to-main workflow. We will now be adopting a more structured
+workflow. Please fork the repo and submit a pull request for any changes. We
+can now add some pre-merge CI to check that the PR at least passes the first
+stage of translation. The live and active branches will be:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;main&lt;/code&gt;: what was "default" in Mercurial, it is the Python2.7 interpreter and
+  the base of the RPython interpreter,&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;py3.9&lt;/code&gt;: the Python3.9 interpreter, which also includes all RPython changes
+  from &lt;code&gt;main&lt;/code&gt;. This is exactly like on Mercurial, and&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;py3.10&lt;/code&gt;: the Python3.10 interpreter, which also includes all RPython changes
+  from &lt;code&gt;main&lt;/code&gt; and all bugfixes from &lt;code&gt;py3.9&lt;/code&gt;. This is exactly like on Mercurial.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4&gt;Working between the repos&lt;/h4&gt;
+&lt;h5&gt;Finding commits&lt;/h5&gt;
+&lt;p&gt;If you want to figure out how a Mercurial commit relates to a Git commit, you
+can use &lt;code&gt;git-hg-helper&lt;/code&gt;. You run it in the Git repo. It takes the full long
+hash from one repo and gives you the corresponding hash of the other repo:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;$&lt;span class="w"&gt; &lt;/span&gt;git-hg-helper&lt;span class="w"&gt; &lt;/span&gt;git-rev&lt;span class="w"&gt; &lt;/span&gt;d64027c4c2b903403ceeef2c301f5132454491df
+4527e62ad94b0e940a5b0f9f20d29428672f93f7
+$&lt;span class="w"&gt; &lt;/span&gt;git-hg-helper&lt;span class="w"&gt; &lt;/span&gt;hg-rev&lt;span class="w"&gt; &lt;/span&gt;4527e62ad94b0e940a5b0f9f20d29428672f93f7
+d64027c4c2b903403ceeef2c301f5132454491df
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;h5&gt;Finding branches&lt;/h5&gt;
+&lt;p&gt;Branches migrated from Mercurial will have a &lt;code&gt;branches&lt;/code&gt; prefix, not &lt;code&gt;branch&lt;/code&gt;.
+While GitLab uses &lt;code&gt;branch&lt;/code&gt; for its prefix, the &lt;code&gt;git-remote-hg&lt;/code&gt; script uses
+&lt;code&gt;branches&lt;/code&gt;. New work should be in a PR targeting &lt;code&gt;main&lt;/code&gt;, &lt;code&gt;py3.9&lt;/code&gt; or &lt;code&gt;py3.10&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Thanks for helping to make PyPy better.&lt;/p&gt;
+&lt;p&gt;Matti&lt;/p&gt;
+&lt;h2&gt;Update&lt;/h2&gt;
+&lt;p&gt;In the meantime we found out that unfortunately something went wrong in the
+migration of the issues. The old &lt;a href="https://foss.heptapod.net/pypy/pypy/-/issues/3655"&gt;issue
+3655&lt;/a&gt; got lost in the
+migration. This means that after number 3655 the numbers are different between
+github and heptapod, with heptapod being one larger. E.g. &lt;a href="https://foss.heptapod.net/pypy/pypy/-/issues/3700"&gt;issue 3700 on
+heptapod&lt;/a&gt; is &lt;a href="https://github.com/pypy/pypy/issues/3699"&gt;issue 3699 on
+github&lt;/a&gt;. We are &lt;a href="https://github.com/pypy/pypy/issues/4979"&gt;investigating
+options&lt;/a&gt;. &lt;/p&gt;</description><guid>https://www.pypy.org/posts/2023/12/pypy-moved-to-git-github.html</guid><pubDate>Fri, 29 Dec 2023 14:19:55 GMT</pubDate></item><item><title>PyPy v7.3.14 release</title><link>https://www.pypy.org/posts/2023/12/pypy-v7314-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-14-release-of-python-2-7-3-9-and-3-10"&gt;
+&lt;h2&gt;PyPy v7.3.14: release of python 2.7, 3.9, and 3.10&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.14 of PyPy.&lt;/p&gt;
+&lt;p&gt;Hightlights of this release are compatibility with &lt;a class="reference external" href="https://hpyproject.org/blog/posts/2023/10/hpy-0.9.0-fourth-public-release/"&gt;HPy-0.9&lt;/a&gt;, cffi 1.16,
+additional C-API interfaces, and more python3.10 fixes.&lt;/p&gt;
+&lt;p&gt;The release includes three different interpreters:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.9, which is an interpreter supporting the syntax and the features of
+Python 3.9, including the stdlib for CPython 3.9.18.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.10, which is an interpreter supporting the syntax and the features of
+Python 3.10, including the stdlib for CPython 3.10.13.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the multiple
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases. It follows after 7.3.13 release on Sept 29, 2023.&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the v7.3.14 releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear about
+it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. Since the last release we have contributions from three new
+contributors.  PyPy has many layers and we need help with all of them: bug
+fixes, &lt;a class="reference external" href="https://www.pypy.org/posts/2023/12/index.html"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://www.pypy.org/posts/2023/12/project-ideas.html"&gt;help&lt;/a&gt;
+with making RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, both &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; and the &lt;a class="reference external" href="https://github.com/matthew-brett/multibuild"&gt;multibuild system&lt;/a&gt; support
+building wheels for PyPy.&lt;/p&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython 3.7.4&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;Apple &lt;strong&gt;M1 arm64&lt;/strong&gt; machines (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;s390x&lt;/strong&gt; running Linux&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;PyPy support Windows 32-bit, Linux PPC64 big- and little-endian, and Linux ARM
+32 bit, but does not release binaries. Please reach out to us if you wish to
+sponsor binary releases for those platforms. Downstream packagers provide
+binary builds for debian, Fedora, conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.14 release, see the &lt;a class="reference external" href="https://doc.pypy.org/en/latest/release-v7.3.14.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2023/12/pypy-v7314-release.html</guid><pubDate>Mon, 25 Dec 2023 04:22:08 GMT</pubDate></item><item><title>PyPy v7.3.13 release</title><link>https://www.pypy.org/posts/2023/09/pypy-v7313-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-13-release-of-python-2-7-3-9-and-3-10"&gt;
+&lt;h2&gt;PyPy v7.3.13: release of python 2.7, 3.9, and 3.10&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.13 of PyPy.
+This is primarily a security/bug-fix release. CPython released security
+patches, and this release also improves the ability to use type
+specifications via &lt;code class="docutils literal"&gt;PyType_FromSpec&lt;/code&gt; and friends. There are also some
+small speed-ups.&lt;/p&gt;
+&lt;p&gt;The release includes three different interpreters:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.9, which is an interpreter supporting the syntax and the features of
+Python 3.9, including the stdlib for CPython 3.9.18.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.10, which is an interpreter supporting the syntax and the features of
+Python 3.10, including the stdlib for CPython 3.10.13. Note it requires at
+least cython 0.29.35 or cython 3.0.0b3.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the multiple
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases. It follows after 7.3.12 release on June 16, 2023.&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the v7.3.13 releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear about
+it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://www.pypy.org/posts/2023/09/index.html"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://www.pypy.org/posts/2023/09/project-ideas.html"&gt;help&lt;/a&gt; with making
+RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, both &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; and the &lt;a class="reference external" href="https://github.com/matthew-brett/multibuild"&gt;multibuild system&lt;/a&gt; support
+building wheels for PyPy.&lt;/p&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython 3.7.4&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;Apple &lt;strong&gt;M1 arm64&lt;/strong&gt; machines (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;s390x&lt;/strong&gt; running Linux&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;PyPy support Windows 32-bit, Linux PPC64 big- and little-endian, and Linux ARM
+32 bit, but does not release binaries. Please reach out to us if you wish to
+sponsor binary releases for those platforms. Downstream packagers provide
+binary builds for debian, Fedora, conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.13 release, see the &lt;a class="reference external" href="https://doc.pypy.org/en/latest/release-v7.3.13.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2023/09/pypy-v7313-release.html</guid><pubDate>Fri, 29 Sep 2023 04:22:08 GMT</pubDate></item><item><title>PyPy v7.3.12 release</title><link>https://www.pypy.org/posts/2023/06/pypy-v7312-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-12-release-of-python-2-7-3-9-and-3-10"&gt;
+&lt;h2&gt;PyPy v7.3.12: release of python 2.7, 3.9, and 3.10.&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.12 of PyPy.
+This release includes a new string-to-int algorithm (also appearing in CPython
+3.12) that is faster than the older one; support for symlinks in Windows; and
+our first Python3.10 version.&lt;/p&gt;
+&lt;p&gt;The release includes three different interpreters:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.9, which is an interpreter supporting the syntax and the features of
+Python 3.9, including the stdlib for CPython 3.9.17.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.10, which is an interpreter supporting the syntax and the features of
+Python 3.10, including the stdlib for CPython 3.10.12. This is our first
+release of 3.10, but based on past experience we are quite confident in
+its compatibility with upstream. Of course, we recommend testing your code
+with this new version before putting it into production. Note it does
+require at least cython 0.29.35 or cython 3.0.0b3&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the multiple
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases. It follows after 7.3.11 release on Dec 29, 2022&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the v7.3.12 releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear about
+it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://www.pypy.org/posts/2023/06/index.html"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://www.pypy.org/posts/2023/06/project-ideas.html"&gt;help&lt;/a&gt; with making
+RPython's JIT even better. Since the previous release, we have accepted
+contributions from one new contributor, thanks for pitching in, and welcome
+to the project!&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, both &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; and the &lt;a class="reference external" href="https://github.com/matthew-brett/multibuild"&gt;multibuild system&lt;/a&gt; support
+building wheels for PyPy.&lt;/p&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython 2.7, 3.9 and
+3.10. It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython 3.7.4&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;Apple &lt;strong&gt;M1 arm64&lt;/strong&gt; machines (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;s390x&lt;/strong&gt; running Linux&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;PyPy support Windows 32-bit, Linux PPC64 big- and little-endian, and Linux ARM
+32 bit, but does not release binaries. Please reach out to us if you wish to
+sponsor binary releases for those platforms. Downstream packagers provide
+binary builds for debian, Fedora, conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.12 release, see the &lt;a class="reference external" href="https://doc.pypy.org/en/latest/release-v7.3.12.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2023/06/pypy-v7312-release.html</guid><pubDate>Fri, 16 Jun 2023 04:22:08 GMT</pubDate></item><item><title>RPython-based emulator speeds up RISC-V simulation over 15x</title><link>https://www.pypy.org/posts/2023/05/rpython-used-to-speed-up-risc-v-simulation-over-15x.html</link><dc:creator>Carl Friedrich Bolz-Tereick</dc:creator><description>&lt;p&gt;In cooperation with &lt;a class="reference external" href="https://riscv.org/"&gt;RISC-V International&lt;/a&gt;, who funded a part of this project,
+we recently created a workflow to
+use RPython to take a &lt;a class="reference external" href="https://github.com/riscv/sail-riscv#riscv-sail-model"&gt;Sail RISC-V&lt;/a&gt; model and automatically create a RISC-V ISA
+emulator from it, which we call &lt;a class="reference external" href="https://docs.pydrofoil.org"&gt;Pydrofoil&lt;/a&gt;. The simulator sped up booting a
+linux emulator from 35 minutes (using the standard Sail-generated emulator in
+C) to 2 minutes, a speedup of 17.5x. More details about the process are in the
+&lt;a class="reference external" href="https://riscv.org/blog/2023/05/how-to-speed-up-the-emulating-process-with-pydrofoil-carl-friedrich/"&gt;RISC-V blog post&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;A few take-aways from the project:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;While PyPy has shown it can speed up generic python code &lt;a class="reference external" href="https://speed.pypy.org"&gt;about 4x&lt;/a&gt;, the
+technology behind PyPy can really shine in other areas.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;RPython is malleable and can be molded to many tasks, the RPython meta-JIT is
+very flexible.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;A JIT is well-suited for the problem of emulation, because it can
+perform dynamic binary translation.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy can solve real world performance problems, even somewhat unusual ones.
+Please &lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;get in touch&lt;/a&gt; and let us know how we can help you solve yours!&lt;/p&gt;</description><category>casestudy</category><category>performance</category><guid>https://www.pypy.org/posts/2023/05/rpython-used-to-speed-up-risc-v-simulation-over-15x.html</guid><pubDate>Tue, 16 May 2023 11:22:35 GMT</pubDate></item><item><title>Repeated string concatenation is quadratic in PyPy (and CPython)</title><link>https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html</link><dc:creator>Carl Friedrich Bolz-Tereick</dc:creator><description>&lt;p&gt;This is a super brief blog post responding to an &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues/3885"&gt;issue&lt;/a&gt; that we got on the PyPy
+issue tracker. I am moving my response to the blog (with permission of the
+submitter) to have a post to point to, since it's a problem that comes up with
+some regularity. It's also documented on our page of &lt;a class="reference external" href="https://doc.pypy.org/en/latest/cpython_differences.html?highlight=join#performance-differences"&gt;differences between PyPy
+and CPython&lt;/a&gt; but I thought an additional blog post might be good.&lt;/p&gt;
+&lt;p&gt;The issue pointed out that a small program that operates on strings is much
+slower on PyPy compared to CPython. The program is a solution for 2016's
+Advent of Code &lt;a class="reference external" href="https://adventofcode.com/2016/day/16"&gt;Day 16&lt;/a&gt; and looks like this:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code python"&gt;&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-1" name="rest_code_c8bfc32dece149a08d92da716e397858-1" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-1"&gt;&lt;/a&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;dragon&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-2" name="rest_code_c8bfc32dece149a08d92da716e397858-2" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-2"&gt;&lt;/a&gt;    &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[::&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;replace&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'r'&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;replace&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;'1'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;replace&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;'r'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'1'&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-3" name="rest_code_c8bfc32dece149a08d92da716e397858-3" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-3"&gt;&lt;/a&gt;    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-4" name="rest_code_c8bfc32dece149a08d92da716e397858-4" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-4"&gt;&lt;/a&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-5" name="rest_code_c8bfc32dece149a08d92da716e397858-5" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-5"&gt;&lt;/a&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;diffstr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-6" name="rest_code_c8bfc32dece149a08d92da716e397858-6" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-6"&gt;&lt;/a&gt;    &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;""&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-7" name="rest_code_c8bfc32dece149a08d92da716e397858-7" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-7"&gt;&lt;/a&gt;    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-8" name="rest_code_c8bfc32dece149a08d92da716e397858-8" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-8"&gt;&lt;/a&gt;        &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'1'&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]]&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-9" name="rest_code_c8bfc32dece149a08d92da716e397858-9" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-9"&gt;&lt;/a&gt;    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-10" name="rest_code_c8bfc32dece149a08d92da716e397858-10" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-10"&gt;&lt;/a&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-11" name="rest_code_c8bfc32dece149a08d92da716e397858-11" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-11"&gt;&lt;/a&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;iterdiff&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-12" name="rest_code_c8bfc32dece149a08d92da716e397858-12" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-12"&gt;&lt;/a&gt;    &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-13" name="rest_code_c8bfc32dece149a08d92da716e397858-13" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-13"&gt;&lt;/a&gt;    &lt;span class="k"&gt;while&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-14" name="rest_code_c8bfc32dece149a08d92da716e397858-14" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-14"&gt;&lt;/a&gt;        &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;diffstr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-15" name="rest_code_c8bfc32dece149a08d92da716e397858-15" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-15"&gt;&lt;/a&gt;    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-16" name="rest_code_c8bfc32dece149a08d92da716e397858-16" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-16"&gt;&lt;/a&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-17" name="rest_code_c8bfc32dece149a08d92da716e397858-17" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-17"&gt;&lt;/a&gt;&lt;span class="n"&gt;size&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;35651584&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-18" name="rest_code_c8bfc32dece149a08d92da716e397858-18" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-18"&gt;&lt;/a&gt;&lt;span class="n"&gt;initstate&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;'10010000000110000'&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-19" name="rest_code_c8bfc32dece149a08d92da716e397858-19" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-19"&gt;&lt;/a&gt;&lt;span class="k"&gt;while&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;initstate&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-20" name="rest_code_c8bfc32dece149a08d92da716e397858-20" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-20"&gt;&lt;/a&gt;    &lt;span class="n"&gt;initstate&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;dragon&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;initstate&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-21" name="rest_code_c8bfc32dece149a08d92da716e397858-21" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-21"&gt;&lt;/a&gt;&lt;span class="n"&gt;initstate&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;initstate&lt;/span&gt;&lt;span class="p"&gt;[:&lt;/span&gt;&lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+&lt;a id="rest_code_c8bfc32dece149a08d92da716e397858-22" name="rest_code_c8bfc32dece149a08d92da716e397858-22" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_c8bfc32dece149a08d92da716e397858-22"&gt;&lt;/a&gt;&lt;span class="nb"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;iterdiff&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;initstate&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;The submitter pointed out, that the program is fast on CPython (~8s on my
+laptop) and slow (didn't finish) on PyPy.&lt;/p&gt;
+&lt;p&gt;The reason for the performance difference is that &lt;code class="docutils literal"&gt;+=&lt;/code&gt; on strings in a loop
+has quadratic complexity in PyPy, which is what &lt;code class="docutils literal"&gt;diffstr&lt;/code&gt; does. To see the
+quadraticness, consider that to add a character at the end of the string, the
+beginning of the string needs to be copied into a new chunk of memory. If the
+loop runs &lt;code class="docutils literal"&gt;n&lt;/code&gt; times, that means there are&lt;/p&gt;
+&lt;p&gt;&lt;code class="docutils literal"&gt;1 + 2 + 3 + ... + n = n * (n + 1) // 2&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;character copies.&lt;/p&gt;
+&lt;p&gt;Repeated string concatenations are in principle also quadratic in CPython, but
+CPython has an &lt;a class="reference external" href="https://docs.python.org/2/whatsnew/2.4.html#optimizations"&gt;optimization&lt;/a&gt; that makes them sometimes not quadratic, which is
+what makes this program not too slow in CPython.&lt;/p&gt;
+&lt;p&gt;In order to fix the problem on PyPy it's best to use a list for the string
+parts, which has the right amortized O(1) complexity for &lt;code class="docutils literal"&gt;.append&lt;/code&gt; calls, and
+then use &lt;code class="docutils literal"&gt;str.join&lt;/code&gt; after the loop:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code python"&gt;&lt;a id="rest_code_3b58120e058a430b8838c89e4548d3e6-1" name="rest_code_3b58120e058a430b8838c89e4548d3e6-1" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_3b58120e058a430b8838c89e4548d3e6-1"&gt;&lt;/a&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;diffstr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_3b58120e058a430b8838c89e4548d3e6-2" name="rest_code_3b58120e058a430b8838c89e4548d3e6-2" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_3b58120e058a430b8838c89e4548d3e6-2"&gt;&lt;/a&gt;    &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;
+&lt;a id="rest_code_3b58120e058a430b8838c89e4548d3e6-3" name="rest_code_3b58120e058a430b8838c89e4548d3e6-3" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_3b58120e058a430b8838c89e4548d3e6-3"&gt;&lt;/a&gt;    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_3b58120e058a430b8838c89e4548d3e6-4" name="rest_code_3b58120e058a430b8838c89e4548d3e6-4" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_3b58120e058a430b8838c89e4548d3e6-4"&gt;&lt;/a&gt;        &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;append&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'1'&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]])&lt;/span&gt;
+&lt;a id="rest_code_3b58120e058a430b8838c89e4548d3e6-5" name="rest_code_3b58120e058a430b8838c89e4548d3e6-5" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_3b58120e058a430b8838c89e4548d3e6-5"&gt;&lt;/a&gt;    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s2"&gt;""&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;With this change the program becomes a little bit faster on CPython for me, and
+on PyPy it stops being quadratic and runs in ~3.5s.&lt;/p&gt;
+&lt;p&gt;In general, it's best not to rely on the presence of this optimization in
+CPython either. Sometimes, a small innocent looking changes will break CPython's
+optimization. E.g. this useless change makes CPython also take ages:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code python"&gt;&lt;a id="rest_code_1aacf79ef6ce48c0983b25100991ad27-1" name="rest_code_1aacf79ef6ce48c0983b25100991ad27-1" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_1aacf79ef6ce48c0983b25100991ad27-1"&gt;&lt;/a&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;diffstr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_1aacf79ef6ce48c0983b25100991ad27-2" name="rest_code_1aacf79ef6ce48c0983b25100991ad27-2" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_1aacf79ef6ce48c0983b25100991ad27-2"&gt;&lt;/a&gt;    &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;""&lt;/span&gt;
+&lt;a id="rest_code_1aacf79ef6ce48c0983b25100991ad27-3" name="rest_code_1aacf79ef6ce48c0983b25100991ad27-3" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_1aacf79ef6ce48c0983b25100991ad27-3"&gt;&lt;/a&gt;    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_1aacf79ef6ce48c0983b25100991ad27-4" name="rest_code_1aacf79ef6ce48c0983b25100991ad27-4" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_1aacf79ef6ce48c0983b25100991ad27-4"&gt;&lt;/a&gt;        &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'1'&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]]&lt;/span&gt;
+&lt;a id="rest_code_1aacf79ef6ce48c0983b25100991ad27-5" name="rest_code_1aacf79ef6ce48c0983b25100991ad27-5" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_1aacf79ef6ce48c0983b25100991ad27-5"&gt;&lt;/a&gt;        &lt;span class="n"&gt;c&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;
+&lt;a id="rest_code_1aacf79ef6ce48c0983b25100991ad27-6" name="rest_code_1aacf79ef6ce48c0983b25100991ad27-6" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_1aacf79ef6ce48c0983b25100991ad27-6"&gt;&lt;/a&gt;    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;The reason why this change breaks the optimization in CPython is that it only
+triggers if the reference count of &lt;code class="docutils literal"&gt;b&lt;/code&gt; is 1, in which case it uses &lt;code class="docutils literal"&gt;realloc&lt;/code&gt;
+on the string. The change is unrealistic of course, but you could imagine a
+related that keeps an extra reference to &lt;code class="docutils literal"&gt;b&lt;/code&gt; for a sensible reason.&lt;/p&gt;
+&lt;p&gt;Another situation in which the optimization doesn't work is discussed in this
+&lt;a class="reference external" href="https://stackoverflow.com/a/44487738"&gt;StackOverflow question&lt;/a&gt; with an answer by Tim Peters.&lt;/p&gt;
+&lt;p&gt;It's unlikely that PyPy will fix this. We had a prototype how to do it, but it
+seems very little "production" code uses &lt;cite&gt;+=&lt;/cite&gt; on strings in a loop, and the fix
+makes the strings implementation quite a bit more complex.&lt;/p&gt;
+&lt;p&gt;So, in summary, don't use repeated concatenations in a loop!&lt;/p&gt;</description><category>performance</category><guid>https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html</guid><pubDate>Wed, 04 Jan 2023 09:00:00 GMT</pubDate></item></channel></rss>
