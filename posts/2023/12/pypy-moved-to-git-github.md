@@ -195,3 +195,15 @@ While GitLab uses `branch` for its prefix, the `git-remote-hg` script uses
 Thanks for helping to make PyPy better.
 
 Matti
+
+
+# Update
+
+In the meantime we found out that unfortunately something went wrong in the
+migration of the issues. The old [issue
+3655](https://foss.heptapod.net/pypy/pypy/-/issues/3655) got lost in the
+migration. This means that after number 3655 the numbers are different between
+github and heptapod, with heptapod being one larger. E.g. [issue 3700 on
+heptapod](https://foss.heptapod.net/pypy/pypy/-/issues/3700) is [issue 3699 on
+github](https://github.com/pypy/pypy/issues/3699). We are [investigating
+options](https://github.com/pypy/pypy/issues/4979). 
