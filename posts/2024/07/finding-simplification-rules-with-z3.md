@@ -71,7 +71,7 @@ simplification is valid for all values of `x`.
 Here's a terminal session showing the use of the Z3 Python API:
 
 
-```pycon
+```python-console
 >>>> import z3
 >>>> # construct a Z3 bitvector variable of width 8, with name x:
 >>>> x = z3.BitVec('x', 8)
@@ -86,7 +86,7 @@ Z3 checks the "satisfiability" of a formula. This means that it tries to find
 an example set of concrete values for the variables that occur in a formula,
 such that the formula becomes true. Examples:
 
-```pycon
+```python-console
 >>>> solver = z3.Solver()
 >>>> solver.check(x * x == 3)
 unsat
@@ -106,16 +106,26 @@ In order to use Z3 to prove something, we can ask Z3 to find counterexamples
 for the statement, meaning concrete values that would make the negation of the
 statement true:
 
-```pycon
+```python-console
 >>>> solver.check(z3.Not(x ^ -1 == ~x))
 unsat
->>>> # unsat means that we just proved that x ^ -1 == ~x is true for all x
->>>>
->>>> # let's try to prove something incorrect
+```
+
+The result `unsat` means that we just proved that `x ^ -1 == ~x` is true for
+all `x`, because there is no value for `x` that makes `not (x ^ -1 == ~x)`
+true.
+
+If we try to prove something incorrect in this way, the following happens:
+
+```python-console
 >>>> solver.check(z3.Not(x ^ -1 == x))
 sat
->>>> # this shows that x ^ -1 == x is (unsurprisingly) not always true,
->>>> # also giving a counterexample:
+```
+
+`sat` shows that `x ^ -1 == x` is (unsurprisingly) not always true, and we can
+ask for a counterexample:
+
+```python-console
 >>>> solver.model()
 [x = 0]
 ```
