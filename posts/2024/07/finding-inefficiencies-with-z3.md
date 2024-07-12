@@ -191,8 +191,10 @@ to satisfy their negation. If that returns unsat, we now that the proof worked.
 To synthesize, we use exists-forall to check whether the forall-query is
 satisfiable in order to be able to get the concrete value of the constant `c`.)
 
-Here's an examples of an inefficiency found this way: `(x ^ 1) ^ x == 1` (or,
-more generally: `(x ^ y) ^ x == y`).
+Here a few examples of inefficiencies found this way:
+
+- `(x ^ 1) ^ x == 1` (or, more generally: `(x ^ y) ^ x == y`)
+- if `x | y == 0`, it follows that `x == 0` and `y == 0`
 
 ## Minimization 
 
