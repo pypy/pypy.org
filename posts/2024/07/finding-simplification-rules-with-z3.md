@@ -83,8 +83,8 @@ x + 1
 ```
 
 Z3 checks the "satisfiability" of a formula. This means that it tries to find
-concrete values for all the variables that occur in a formula such that the
-formula becomes true. Examples:
+an example set of concrete values for the variables that occur in a formula,
+such that the formula becomes true. Examples:
 
 ```pycon
 >>>> solver = z3.Solver()
@@ -658,7 +658,7 @@ looking at sequences of instructions:
 
 In the next blog post I'll discuss an alternative approach to simply generating
 all possible sequences of instructions, that tries to address these problems.
-This works by using the real traces of benchmarks and mine those for
+This works by analyzing the real traces of benchmarks and mining those for
 inefficiencies, which only shows problems that occur in actual programs.
 
 
