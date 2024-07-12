@@ -7,6 +7,7 @@
 .. link:
 .. description:
 .. type: text
+.. has_math: True
 .. author: CF Bolz-Tereick
 -->
 
@@ -45,7 +46,8 @@ integers.
 
 To find rewrite rules, we will consider the binary operations (i.e. those
 taking two arguments) in PyPy traces that take and produce integers. The
-completely general form `op(x, y)` is not simplifiable. But if either `x == y`
+completely general form `op(x, y)` is not simplifiable on its own. But if
+either `x == y`
 or if one of the arguments is a constant, we can potentially simplify the
 operation into a simpler form. The results are either the variable `x`, or a
 (potentially different) constant. We'll ignore constant-folding where both
@@ -105,19 +107,31 @@ for the statement, meaning concrete values that would make the negation of the
 statement true:
 
 ```pycon
->>>> solver.check(x ^ -1 != ~x)
+>>>> solver.check(z3.Not(x ^ -1 == ~x))
 unsat
 >>>> # unsat means that we just proved that x ^ -1 == ~x is true for all x
->>>> solver.check(x ^ -1 != -x)
+>>>>
+>>>> # let's try to prove something incorrect
+>>>> solver.check(z3.Not(x ^ -1 == x))
 sat
->>>> # this shows that x ^ -1 == -x is not always true,
+>>>> # this shows that x ^ -1 == x is (unsurprisingly) not always true,
 >>>> # also giving a counterexample:
 >>>> solver.model()
-[x = 253]
+[x = 0]
 ```
 
+This way of proving this works because the `check` calls try to solve an
+(implicit) "exists" quantifier, over all the Z3 variables used in the formula.
+`check` will either return `z3.unsat`, which means that no concrete values make
+the formula true; or `z3.sat`, which means that you can get some concrete
+values that make the formula true by calling `solver.model()`.
 
+In math terms we prove things using `check` by de-Morgan's rules for quantifiers:
 
+$$ \lnot \exists x: \lnot f(x) \implies \forall x: f(x) $$
+
+Now that we've seen the basics of using the Z3 API on a few small examples,
+we'll use it in a bigger program.
 
 ## Encoding the integer operations of RPython's JIT into Z3 formulas
 
@@ -164,97 +178,94 @@ In order to reason about the IR operations, some ground work:
 ```python
 import z3
 
-LONG_BIT = 8
+INTEGER_WIDTH = 64
 solver = z3.Solver()
-solver.set("timeout", 5000) # milliseconds, ie 5s
-xvar = z3.BitVec('x', LONG_BIT)
-constvar = z3.BitVec('const', LONG_BIT)
-constvar2 = z3.BitVec('const2', LONG_BIT)
-TRUEBV = z3.BitVecVal(1, LONG_BIT)
-FALSEBV = z3.BitVecVal(0, LONG_BIT)
+solver.set("timeout", 10000) # milliseconds, ie 10s
+xvar = z3.BitVec('x', INTEGER_WIDTH)
+constvar = z3.BitVec('const', INTEGER_WIDTH)
+constvar2 = z3.BitVec('const2', INTEGER_WIDTH)
+TRUEBV = z3.BitVecVal(1, INTEGER_WIDTH)
+FALSEBV = z3.BitVecVal(0, INTEGER_WIDTH)
 ```
-
-We'll run this with `LONG_BIT = 8` for the time being because it's much faster,
-but requires the results to be interpreted carefully.
 
 And here's the a function to turn an integer IR operation of PyPy's JIT into Z3
 formulas:
 
 ```python
 def z3_expression(opname, arg0, arg1=None):
-    """ computes a tuple of (result, valid) of Z3 formulas. result is the
+    """ computes a tuple of (result, valid_if) of Z3 formulas. `result` is the
     formula representing the result of the operation, given argument formulas
-    arg0 and arg1. valid is a pre-condition that must be true for the result to
-    be meaningful. """
-    expr = None
-    valid = True # the precondition is mostly True, with few exceptions
+    arg0 and arg1. `valid_if` is a pre-condition that must be true for the
+    result to be meaningful. """
+    result = None
+    valid_if = True # the precondition is mostly True, with few exceptions
     if opname == "int_add":
-        expr = arg0 + arg1
+        result = arg0 + arg1
     elif opname == "int_sub":
-        expr = arg0 - arg1
+        result = arg0 - arg1
     elif opname == "int_mul":
-        expr = arg0 * arg1
+        result = arg0 * arg1
     elif opname == "int_and":
-        expr = arg0 & arg1
+        result = arg0 & arg1
     elif opname == "int_or":
-        expr = arg0 | arg1
+        result = arg0 | arg1
     elif opname == "int_xor":
-        expr = arg0 ^ arg1
+        result = arg0 ^ arg1
     elif opname == "int_eq":
-        expr = cond(arg0 == arg1)
+        result = cond(arg0 == arg1)
     elif opname == "int_ne":
-        expr = cond(arg0 != arg1)
+        result = cond(arg0 != arg1)
     elif opname == "int_lt":
-        expr = cond(arg0 < arg1)
+        result = cond(arg0 < arg1)
     elif opname == "int_le":
-        expr = cond(arg0 <= arg1)
+        result = cond(arg0 <= arg1)
     elif opname == "int_gt":
-        expr = cond(arg0 > arg1)
+        result = cond(arg0 > arg1)
     elif opname == "int_ge":
-        expr = cond(arg0 >= arg1)
+        result = cond(arg0 >= arg1)
     elif opname == "uint_lt":
-        expr = cond(z3.ULT(arg0, arg1))
+        result = cond(z3.ULT(arg0, arg1))
     elif opname == "uint_le":
-        expr = cond(z3.ULE(arg0, arg1))
+        result = cond(z3.ULE(arg0, arg1))
     elif opname == "uint_gt":
-        expr = cond(z3.UGT(arg0, arg1))
+        result = cond(z3.UGT(arg0, arg1))
     elif opname == "uint_ge":
-        expr = cond(z3.UGE(arg0, arg1))
+        result = cond(z3.UGE(arg0, arg1))
     elif opname == "int_lshift":
-        expr = arg0 << arg1
-        valid = z3.And(arg1 >= 0, arg1 < LONG_BIT)
+        result = arg0 << arg1
+        valid_if = z3.And(arg1 >= 0, arg1 < INTEGER_WIDTH)
     elif opname == "int_rshift":
-        expr = arg0 << arg1
-        valid = z3.And(arg1 >= 0, arg1 < LONG_BIT)
+        result = arg0 << arg1
+        valid_if = z3.And(arg1 >= 0, arg1 < INTEGER_WIDTH)
     elif opname == "uint_rshift":
-        expr = z3.LShR(arg0, arg1)
-        valid = z3.And(arg1 >= 0, arg1 < LONG_BIT)
+        result = z3.LShR(arg0, arg1)
+        valid_if = z3.And(arg1 >= 0, arg1 < INTEGER_WIDTH)
     elif opname == "uint_mul_high":
-        # zero-extend args to 2*LONG_BIT bit, then multiply and extract
-        # highest LONG_BIT bits
-        zarg0 = z3.ZeroExt(LONG_BIT, arg0)
-        zarg1 = z3.ZeroExt(LONG_BIT, arg1)
-        expr = z3.Extract(LONG_BIT * 2 - 1, LONG_BIT, zarg0 * zarg1)
+        # zero-extend args to 2*INTEGER_WIDTH bit, then multiply and extract
+        # highest INTEGER_WIDTH bits
+        zarg0 = z3.ZeroExt(INTEGER_WIDTH, arg0)
+        zarg1 = z3.ZeroExt(INTEGER_WIDTH, arg1)
+        result = z3.Extract(INTEGER_WIDTH * 2 - 1, INTEGER_WIDTH, zarg0 * zarg1)
     elif opname == "int_pydiv":
-        valid = arg1 != 0
+        valid_if = arg1 != 0
         r = arg0 / arg1
         psubx = r * arg1 - arg0
-        expr = r + (z3.If(arg1 < 0, psubx, -psubx) >> (LONG_BIT - 1))
+        result = r + (z3.If(arg1 < 0, psubx, -psubx) >> (INTEGER_WIDTH - 1))
     elif opname == "int_pymod":
-        valid = arg1 != 0
+        valid_if = arg1 != 0
         r = arg0 % arg1
-        expr = r + (arg1 & z3.If(arg1 < 0, -r, r) >> (LONG_BIT - 1))
+        result = r + (arg1 & z3.If(arg1 < 0, -r, r) >> (INTEGER_WIDTH - 1))
     elif opname == "int_is_true":
-        expr = cond(arg0 != FALSEBV)
+        result = cond(arg0 != FALSEBV)
     elif opname == "int_is_zero":
-        expr = cond(arg0 == FALSEBV)
+        result = cond(arg0 == FALSEBV)
     elif opname == "int_neg":
-        expr = -arg0
+        result = -arg0
     elif opname == "int_invert":
-        expr = ~arg0
+        result = ~arg0
     else:
         assert 0, "unknown operation " + opname
-    return expr, valid
+    return result, valid_if
 
 def cond(z3expr):
     """ helper function to turn a Z3 boolean result z3expr into a 1 or 0
@@ -264,14 +275,14 @@ def cond(z3expr):
 
 We map the semantics of a PyPy JIT operation to Z3 with the `z3_expression`
 function. It takes the name of a JIT operation and its two (or one) arguments
-into a pair of Z3 formulas, `expr` and `valid`. The resulting formulas are
+into a pair of Z3 formulas, `result` and `valid_if`. The resulting formulas are
 constructed with the operator overloading of Z3 variables/formulas.
 
-The first element `expr` of the result of `z3_expression` represents the result
-of performing the operation. `valid` is a bool that represents a condition that
+The first element `result` of the result of `z3_expression` represents the result
+of performing the operation. `valid_if` is a bool that represents a condition that
 needs to be `True` in order for the result of the operation to be defined. E.g.
 `int_pydiv(a, b)` is only valid if `b != 0`. Most operations are always valid,
-so they return `True` as that condition (we'll ignore `valid` for a bit, but it
+so they return `True` as that condition (we'll ignore `valid_if` for a bit, but it
 will become more relevant further down in the post).
 
 We can define a helper function to prove things by finding counterexamples:
@@ -299,9 +310,9 @@ prove `op(x, x) == x`.
 ```python
 
 for opname in opnames2:
-    expr, valid = z3_expression(opname, xvar, xvar)
-    if prove(expr == xvar):
-        print(f"{opname}(x, x) -> x, {expr}")
+    result, valid_if = z3_expression(opname, xvar, xvar)
+    if prove(result == xvar):
+        print(f"{opname}(x, x) -> x, {result}")
 ```
 
 This yields the simplifications:
@@ -330,12 +341,12 @@ and further queries.
 We can express this in a helper function:
 
 ```python
-def find_constant(z3expr, number_of_consts=5):
+def find_constant(z3expr, number_of_results=5):
     condition = z3.ForAll(
         [xvar],
         z3expr
     )
-    for i in range(number_of_consts):
+    for i in range(number_of_results):
         checkres = solver.check(condition)
         if checkres == z3.sat:
             # if a solver check succeeds, we can ask for a model, which is
@@ -356,16 +367,16 @@ We can use this new function for the three mentioned patterns:
 ```python
 # try to find constants for op(x, x) == c
 for opname in opnames2:
-    expr, valid = z3_expression(opname, xvar, xvar)
-    for const in find_constant(expr == constvar):
+    result, valid_if = z3_expression(opname, xvar, xvar)
+    for const in find_constant(result == constvar):
         print(f"{opname}(x, x) -> {const}")
 # try to find constants for op(x, c) == x and op(c, x) == x
 for opname in opnames2:
-    expr, valid = z3_expression(opname, xvar, constvar)
-    for const in find_constant(expr == xvar):
+    result, valid_if = z3_expression(opname, xvar, constvar)
+    for const in find_constant(result == xvar):
         print(f"{opname}(x, {const}) -> x")
-    expr, valid = z3_expression(opname, constvar, xvar)
-    for const in find_constant(expr == xvar):
+    result, valid_if = z3_expression(opname, constvar, xvar)
+    for const in find_constant(result == xvar):
         print(f"{opname}({const}, x) -> x")
 # this code is not quite correct, we'll correct it later
 ```
@@ -408,23 +419,23 @@ int_pymod(x, 0) -> x
 ```
 
 Most of these look good at first glance, but the last one reveals a problem:
-we've been ignoring the `valid` expression up to now. We can stop doing that by
-changing the code like this, which adds `z3.And(valid, ...)` to the argument of
+we've been ignoring the `valid_if` expression up to now. We can stop doing that by
+changing the code like this, which adds `z3.And(valid_if, ...)` to the argument of
 the calls to `find_constant`:
 
 ```python
 # try to find constants for op(x, x) == c, op(x, c) == x and op(c, x) == x
 for opname in opnames2:
-    expr, valid = z3_expression(opname, xvar, xvar)
-    for const in find_constant(z3.And(valid, expr == constvar)):
+    result, valid_if = z3_expression(opname, xvar, xvar)
+    for const in find_constant(z3.And(valid_if, result == constvar)):
         print(f"{opname}(x, x) -> {const}")
 # try to find constants for op(x, c) == x and op(c, x) == x
 for opname in opnames2:
-    expr, valid = z3_expression(opname, xvar, constvar)
-    for const in find_constant(z3.And(expr == xvar, valid)):
+    result, valid_if = z3_expression(opname, xvar, constvar)
+    for const in find_constant(z3.And(result == xvar, valid_if)):
         print(f"{opname}(x, {const}) -> x")
-    expr, valid = z3_expression(opname, constvar, xvar)
-    for const in find_constant(z3.And(expr == xvar, valid)):
+    result, valid_if = z3_expression(opname, constvar, xvar)
+    for const in find_constant(z3.And(result == xvar, valid_if)):
         print(f"{opname}({const}, x) -> x")
 ```
 
@@ -466,12 +477,12 @@ For the patterns `op(x, c1) == c2` and `op(c1, x) == c2` we need to synthesize
 two constants. We can again write a helper method for that:
 
 ```python
-def find_2consts(z3expr, number_of_consts=5):
+def find_2consts(z3expr, number_of_results=5):
     condition = z3.ForAll(
         [xvar],
         z3expr
     )
-    for i in range(number_of_consts):
+    for i in range(number_of_results):
         checkres = solver.check(condition)
         if checkres == z3.sat:
             model = solver.model()
@@ -488,13 +499,13 @@ And then use it like this:
 ```python
 for opname in opnames2:
     # try to find constants c1, c2 such that op(c1, x) -> c2
-    expr, valid = z3_expression(opname, constvar, xvar)
-    consts = find_2consts(z3.And(valid, expr == constvar2))
+    result, valid_if = z3_expression(opname, constvar, xvar)
+    consts = find_2consts(z3.And(valid_if, result == constvar2))
     for const, const2 in consts:
         print(f"{opname}({const}, x) -> {const2}")
     # try to find constants c1, c2 such that op(x, c1) -> c2
-    expr, valid = z3_expression(opname, xvar, constvar)
-    consts = find_2consts(z3.And(valid, expr == constvar2))
+    result, valid_if = z3_expression(opname, xvar, constvar)
+    consts = find_2consts(z3.And(valid_if, result == constvar2))
     for const, const2 in consts:
         print("%s(x, %s) -> %s" % (opname, const, const2))
 ```
@@ -527,23 +538,22 @@ int_or(-1, x) -> -1
 int_or(x, -1) -> -1
 ```
 
-The are true because in Two's Complement, `-1` has all bits set.
+The are true because in two's complement, `-1` has all bits set.
 
-The following ones look weird:
+The following ones require recognizing that `-9223372036854775808 == -2**63` is
+the most negative signed 64-bit integer, and `9223372036854775807 == 2 ** 63 -
+1` is the most positive one:
 
 ```
-int_lt(127, x) -> 0
-int_lt(x, -128) -> 0
-int_le(-128, x) -> 1
-int_le(x, 127) -> 1
-int_gt(-128, x) -> 0
-int_gt(x, 127) -> 0
-int_ge(127, x) -> 1
-int_ge(x, -128) -> 1
+int_lt(9223372036854775807, x) -> 0
+int_lt(x, -9223372036854775808) -> 0
+int_le(-9223372036854775808, x) -> 1
+int_le(x, 9223372036854775807) -> 1
+int_gt(-9223372036854775808, x) -> 0
+int_gt(x, 9223372036854775807) -> 0
+int_ge(9223372036854775807, x) -> 1
+int_ge(x, -9223372036854775808) -> 1
 ```
-
-They are the result of picking `LONG_BIT == 8`, where
-`127 == MAXINT` and `-128 == MININT`.
 
 The following ones are true because the bitpattern for `-1` is the largest
 unsigned number:
@@ -574,17 +584,17 @@ opnames1 = [
 
 for opname in opnames2:
     for opname1 in opnames1:
-        expr, valid = z3_expression(opname, xvar, constvar)
+        result, valid_if = z3_expression(opname, xvar, constvar)
         # try to find a constant op(x, c) == g(x)
-        expr1, valid1 = z3_expression(opname1, xvar)
-        consts = find_constant(z3.And(valid, valid1, expr == expr1))
+        result1, valid_if1 = z3_expression(opname1, xvar)
+        consts = find_constant(z3.And(valid_if, valid_if1, result == result1))
         for const in consts:
             print(f"{opname}(x, {const}) -> {opname1}(x)")
 
         # try to find a constant op(c, x) == g(x)
-        expr, valid = z3_expression(opname, constvar, xvar)
-        expr1, valid1 = z3_expression(opname1, xvar)
-        consts = find_constant(z3.And(valid, valid1, expr == expr1))
+        result, valid_if = z3_expression(opname, constvar, xvar)
+        result1, valid_if1 = z3_expression(opname1, xvar)
+        consts = find_constant(z3.And(valid_if, valid_if1, result == result1))
         for const in consts:
             print(f"{opname}({const}, x) -> {opname1}(x)")
 ```
@@ -623,8 +633,13 @@ at a single instruction, and not where the arguments of that instruction came
 from. They also don't require any knowledge about the properties of the
 arguments of the instructions (e.g. that they are positive).
 
+The rewrites in this post have mostly been in PyPy's JIT already. But now we
+mechanically confirmed that they are correct. I've also added the remaining
+useful looking ones, in particular `int_eq(x, 0) -> int_is_zero(x)` etc.
+
 If we wanted to scale this approach up, we would have to work much harder!
-There are a bunch of problems that come with generalizing the approach:
+There are a bunch of problems that come with generalizing the approach to
+looking at sequences of instructions:
 
 - Combinatorial explosion: if we look at sequences of instructions, we very
   quickly get a combinatorial explosion and it becomes untractable to try all
@@ -643,6 +658,8 @@ There are a bunch of problems that come with generalizing the approach:
 
 In the next blog post I'll discuss an alternative approach to simply generating
 all possible sequences of instructions, that tries to address these problems.
+This works by using the real traces of benchmarks and mine those for
+inefficiencies, which only shows problems that occur in actual programs.
 
 
 ## Sources
