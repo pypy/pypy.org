@@ -113,7 +113,7 @@ unsat
 
 The result `unsat` means that we just proved that `x ^ -1 == ~x` is true for
 all `x`, because there is no value for `x` that makes `not (x ^ -1 == ~x)`
-true.
+true (this works because -1 has all the bits set).
 
 If we try to prove something incorrect in this way, the following happens:
 
