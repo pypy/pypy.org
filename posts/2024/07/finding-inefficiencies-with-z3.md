@@ -1,5 +1,5 @@
 <!--
-.. title: Finding Missing JIT Compiler Optimizations with Z3
+.. title: Finding Complicated Missing JIT Compiler Optimizations with Z3
 .. slug: finding-missing-optimizations-z3
 .. date: 2024-07-07 19:14:09 UTC
 .. tags:
@@ -10,27 +10,30 @@
 .. author: CF Bolz-Tereick
 -->
 
-Last week I was at the [PLDI conference](https://pldi24.sigplan.org/) in
-Copenhagen to present a [paper](https://dl.acm.org/doi/10.1145/3652588.3663316)
-I co-authored with [Max Bernstein](https://bernsteinbear.com/). I also finally
-met [John Regehr](https://blog.regehr.org/), who I'd been talking on social
-media for a long time but had never met. John has been working on compiler
-correctness and better techniques for building compilers and optimizers since a
-very long time. The blog post [Finding JIT Optimizer Bugs using SMT Solvers and
-Fuzzing](https://www.pypy.org/posts/2022/12/jit-bug-finding-smt-fuzzing.html)
-was heavily inspired by this work. We talked a lot about his and his groups
-work on using Z3 to find missing optimizations.
+In last weeks post I've described how to use Z3 to find simple local peephole
+optimization patterns to for the integer operations in PyPy's JIT. An example
+is `int_and(x, 0) -> 0`. The post ended by discussing problems:
 
-In my previous blog post about finding optimizer bugs, I described how to use
-Z3 (an SMT solver) and fuzzing to find bugs in the integer optimization passes
-of PyPy's JIT. In this post I want to talk about early results from an
-experiment that came out of discussions with John (and also inspired by a talk
-by Nikolai Tillmann about
-[SPUR](https://web.archive.org/web/20130503204413/http://www.cs.iastate.edu/~design/vmil/2010/slides/p03-tillmann-slides.pdf)
-that I saw many years ago). In this experiment I try to use Z3 to find missing
-[peephole optimizations]() for integer operations in the traces of PyPy's JIT.
+- combinatorial explosion
+- non-minimal examples
+- how do we know that we even care about the patterns that it finds?
 
-## Motivation 
+In this post I want to discuss a different method:
+
+- start from real programs that we care about (e.g. benchmarks)
+- take their traces, ignore all the non-integer operations
+- translate the traces into big Z3 formulas, operation by operation
+- use Z3 to identify inefficiens in those concrete traces
+- minimize the inefficient programs by removing as many operations as possible
+
+that way we don't have to generate all possible sequences of ir operations up
+to a certain size, and we also get optimizations that we care about, because
+the patterns come from real programs
+
+post will be more high-level and describe the general approach, but not go
+through the implementation in detail.
+
+## Background 
 
 PyPy's JIT has historically always focused almost exclusively on the typical
 inefficiencies of Python programs, such as removing boxing, run-time type
@@ -39,7 +42,10 @@ two years I have applied the JIT also to a very different domain, that of CPU
 emulation, in the experimental [Pydrofoil](https://docs.pydrofoil.org) project
 (supports RISC-V and ARM by now). For Pydrofoil, the performance of integer
 operations is significantly more important than for "normal" Python code, which
-is why I've become much more interested in optimizing integer operations.
+is why I've become much more interested in optimizing integer operations. The
+simple integer operation rewrites of the last post were all implemented long
+ago, and so were a lot of more complicated ones. But there surely are a lot of
+them missing, compared to mature compilers.
 
 Finding missing optimizations is quite hard to do manually, because it involves
 carefully staring at huge concrete traces of programs that we care about. So
@@ -47,55 +53,10 @@ ideally we want to automate the problem. To make sure that we care about the
 optimizations that we find, we start from the traces of benchmarks that are
 interesting, such as booting Linux on the ARM and RISC-V emulators.
 
-We could find missing optimizations by using LLVM or GCC if we could translate
-RPython JIT traces to C code. But then we would be relying on the quality of
-GCC optimizations. Instead, we will use Z3, an SMT ('satisfiability modulo
-theories') solver by Microsoft Research, which was an excellent Python API. Z3
-has excellent support for reasoning about bitvectors, and we will use that to
-identify non-optimal integer operation sequences.
-
-## Background Z3
-
-Z3 is a STM solver, which means that it can answer the question whether a
-certain formula is satisfiable. This means that it will try to find concrete
-values for all the variables that occur in the formulas such that the formula
-becomes true. The formulas can be about objects in various theories, Z3 has
-support for (mathematical) integers, strings, arrays, unterinterpreted
-functions, etc. The theory we care about in this blog post is the **bitvector**
-theory. Bitvectors are vectors of bits of a fixed size, and they are great for
-expressing operations on machine integers with a fixed bit width. We use Z3
-extensively to fuzz the JIT's optimizer, so we already have a translation from
-JIT integer operations to Z3 formulas. I'm just reusing some of that
-infrastructure for finding missing optimizations.
-
-To give a bit of an idea of what using the Z3 Python API looks like, here's an
-example. Suppose we want to check that `x ^ -1` is the same as `~x` for
-arbitrary 64-bit integers (this is true because xor with a 1 bit flips the bit
-in `x`, and `-1` has all bits set in two's complement). 
-
-```pycon
->>>> import z3
->>>> a = z3.BitVec('a', 64) # we construct a bitvector variable with width 64
->>>> a ^ -1 == ~a # the variables have operators overloaded, so we can combine them into larger formulas
-a ^ 18446744073709551615 == ~a
->>>> z3.prove(a ^ -1 == ~a) # now we can ask Z3 to prove the formula
-proved
->>>> z3.prove(a ^ -1 == a) # try to prove something wrong
-counterexample
-[a = 0]
-```
-
-Or, an example with two variables: `a * (1 << b)` is the same as `a << b`:
-
-```pycon
->>>> b = z3.BitVec('b', 64)
->>>> solver.prove(a * (1 << b) == a << b)
-proved
-```
 
 ## General Recipe for Finding Missing Optimizations 
 
-Now that we have an idea how Z3 and bitvectors work, we want to use it to find
+We want to use it to find
 missing integer optimizations in the PyPy JIT. The general approach is to first
 collect a bunch of traces of integer heavy programs. Then we encode the integer
 operations in the traces into Z3 formulas and use different Z3 queries to
@@ -107,9 +68,32 @@ I'll write about each of these steps in turn.
 
 ## Encoding Traces as Z3 formulas 
 
-The blog post about [using Z3 to find bugs]() already contained the code to
-encode PyPy trace operations into Z3 formulas, so we don't need to repeat that
-here. But to give an example, XXX
+The last blog post already contained the code to encode individual trace
+operations into Z3 formulas, so we don't need to repeat that here. To encode
+traces of operations we introduce a Z3 variable for every operation in the
+trace and then call the `z3_expression` function for every single one of the
+operations in the trace.
+
+For example, for the following trace:
+
+```
+[i1]
+i2 = uint_rshift(i1, 32)
+i3 = int_and(i2, 65535)
+i4 = uint_rshift(i1, 48)
+i5 = int_lshift(i4, 16)
+i6 = int_or(i5, i3)
+jump(i6, i2) # equal
+```
+
+We would get the Z3 formula:
+
+```
+z3.And(i2 == LShR(i1, 32),
+       i3 == i2 & 65535,
+       i4 == LShR(i1, 48),
+       i5 == i4 << 16)
+```
 
 ## Identifying constant booleans with Z3
 
