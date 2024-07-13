@@ -336,7 +336,7 @@ int_or(x, x) -> x
 ## Synthesizing constants
 
 Supporting the next patterns is harder: `op(x, x) == c1`, `op(x, c1) == x`, and
-`op(x, c1) == x`. We don't know which constants to pick to try to get Z3 to
+`op(c1, x) == x`. We don't know which constants to pick to try to get Z3 to
 prove the equality. We could iterate over common constants like `0`, `1`,
 `MAXINT`, etc, or even over all the 256 values for a bitvector of length 8.
 However, we will instead ask Z3 to find the constants for us too.
