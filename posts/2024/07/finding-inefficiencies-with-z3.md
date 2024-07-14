@@ -10,9 +10,11 @@
 .. author: CF Bolz-Tereick
 -->
 
-In last weeks post I've described how to use Z3 to find simple local peephole
-optimization patterns to for the integer operations in PyPy's JIT. An example
-is `int_and(x, 0) -> 0`. The post ended by discussing problems:
+In last weeks post I've described [how to use Z3 to find simple local peephole
+optimization
+patterns](finding-simple-rewrite-rules-jit-z3.html)
+to for the integer operations in PyPy's JIT. An example is `int_and(x, 0) ->
+0`. The post ended by discussing problems:
 
 - combinatorial explosion
 - non-minimal examples
