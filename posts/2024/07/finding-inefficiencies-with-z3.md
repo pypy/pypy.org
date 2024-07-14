@@ -98,8 +98,7 @@ z3.And(i2 == LShR(i1, 32),
 ## Identifying constant booleans with Z3
 
 The very simplest thing we can try to find inefficient parts of the traces is
-to first focus on boolean variables. They are represented as word-sized ints
-with values 0 and 1 in PyPy's JIT. For every boolean variable in the trace we
+to first focus on boolean variables. For every boolean variable in the trace we
 can ask Z3 to prove that this variable must be always True or always False.
 Most of the time, neither of these proofs will succeed. But if Z3 manages to
 prove one of them, we know have found an ineffiency: instead of computing the
@@ -107,13 +106,14 @@ boolean result (eg by executing a comparison) we could have replaced the
 operation with the corresponding constant.
 
 Here's an example of an inefficiency found that way: if `x < y` and `y < z` are
-both true, PyPy's JIT isn't able to conclude from that that `x < z` must also
-be true. The JIT reasons about the concrete ranges (lower and upper bounds) for
-every integer variable, but it has no way to remember anything about
-relationships between different variables. This kind of reasoning would quite
-often be useful to remove list/string bounds checks. Here's a [talk about how
-LLVM does this](https://www.youtube.com/watch?app=desktop&v=1hm5ZVmBEvo) (but
-it might be too heavyweight for a JIT setting).
+both true, PyPy's JIT could conclude that `x < z` must also
+be true. However, currently the JIT cannot make that conclusion because the JIT
+only reasons about the concrete ranges (lower and upper bounds) for every
+integer variable, but it has no way to remember anything about relationships
+between different variables. This kind of reasoning would quite often be useful
+to remove list/string bounds checks. Here's a [talk about how LLVM does
+this](https://www.youtube.com/watch?app=desktop&v=1hm5ZVmBEvo) (but it might be
+too heavyweight for a JIT setting).
 
 Here are some more examples found that way:
 
@@ -153,27 +153,21 @@ inefficiencies. Here's a few examples:
   `((x & 1345) ^ 2048) - 2048 == x & 1345` (with different constants, of
   course). xor is add without carry, and `x & 1345` does not have the bit
   `2048` set. Therefore the `^ 2048` is equivalent to `+ 2048`, which the `-
-  2048` cancels. I don't understand at all why this appears so often in my
-  traces, but I see variations of it a lot.
+  2048` cancels. More generally, if `a & b == 0`, then `a + b == a | b == a ^
+  b`. I don't understand at all why this appears so often in my traces, but I
+  see variations of it a lot. LLVM can optimize this, but [GCC
+  can't](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=115829), thanks to
+  [Andrew Pinski for filing the
+  bug](https://hachyderm.io/@pinskia/112752641328799157)!
 
 ## Synthesizing more complicated constants with exists-forall 
 
 To find out whether some integer operations always return a constant result, we
 can't simply use the same trick as for those operations that return boolean
-results. For bools, enumerating all possible results (True and False) and then
-checking is feasible, but for 64-bit integers it very much is not. Therefore we
-can ask Z3 to come up with a constant for us. To do this, we have to use an
-"exists-forall query". To use this, we pose the following query for every
-operation `op` in the trace: "does there exist a constant `c` so that for all
-inputs of the trace the result of the operation `op` is equal to constant `c`?"
-If such a constant exists, we could have removed the operation, and replaced it
-with the constant that Z3 provides.
-
-(This is a bit of a subtle point, but for synthesizing constants we use Z3 in
-the "opposite" mode than if we ask it to prove stuff. To prove things, we try
-to satisfy their negation. If that returns unsat, we now that the proof worked.
-To synthesize, we use exists-forall to check whether the forall-query is
-satisfiable in order to be able to get the concrete value of the constant `c`.)
+results. Like in the last post, we can use `z3.ForAll` to find out whether Z3
+can synthesize constants for us, for the result of an operation in ints
+context. If such a constant exists, we could have removed the operation, and
+replaced it with the constant that Z3 provides.
 
 Here a few examples of inefficiencies found this way:
 
@@ -188,15 +182,17 @@ the examples smaller. Here's how that works:
 - We throw out all the operations that occur *after* the inefficient operation
   in the trace.
 - Then we remove all "dead" operations, ie operations that don't have their
-  results used (all the operations that we analyze are without side effects).
+  results used (all the operations that we can analyze with Z3 are without side
+  effects).
 - Now we try to remove every guard in the trace one by one and check
   afterwards, whether the resulting trace still has an inefficiency.
 - We also try to replace every single operation with a new argument to the
-  trace, to see whether the inefficiency is still present. This process is
-  super inefficient and I should probably be using
-  [shrinkray](https://github.com/DRMacIver/shrinkray) or
-  [C-Reduce](https://github.com/csmith-project/creduce) instead. However, it
-  works super well in practice and the runtime isn't too bad.
+  trace, to see whether the inefficiency is still present.
+
+ The minimization process is super inefficient and I should probably be using
+ [shrinkray](https://github.com/DRMacIver/shrinkray) or
+ [C-Reduce](https://github.com/csmith-project/creduce) instead. However, it
+ seems to work well in practice and the runtime isn't too bad.
 
 ## Results 
 
@@ -204,7 +200,7 @@ So far I am using the JIT traces of three programs: 1) Booting Linux on the
 Pydrofoil RISC-V emulator, 2) booting Linux on the Pydrofoil ARM emulator 3)
 running the PyPy bootstrap process on top of PyPy. The script identifies 94
 inefficiencies in the traces, obviously a lot of them come from repeating
-patterns. My next steps will be to inspect them all, categorize them, and
+patterns. My next steps will be to manually inspect them all, categorize them, and
 implement easy optimizations identified that way. I also want a way to sort the
 examples by execution count in the benchmarks, to get a feeling for which of
 them are most important.
@@ -225,5 +221,5 @@ Reusing the results of existing operations or replacing operations by constants
 can be seen as "zero-instruction superoptimization". I'll probably be rather
 busy for a while to add the missing optimizations identified by my simple
 script. But later extensions to actually synthesize one or several operations
-in the attempt to optimize the traces more and find more opportunities is
-possible.
+in the attempt to optimize the traces more and find more opportunities should
+be possible.
