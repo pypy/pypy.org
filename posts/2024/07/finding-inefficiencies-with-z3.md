@@ -248,10 +248,10 @@ def find_inefficiencies(trace):
 
 To find out whether some integer operations always return a constant result, we
 can't simply use the same trick as for those operations that return boolean
-results, because enumerating $2^64$ possible constants and checking them all
+results, because enumerating 2⁶⁴ possible constants and checking them all
 would take too long. Like in the last post, we can use `z3.ForAll` to find out
-whether Z3 can synthesize constants for us, for the result of an operation in
-ints context. If such a constant exists, we could have removed the operation,
+whether Z3 can synthesize a constant for the result of an operation for us.
+If such a constant exists, the JIT could have removed the operation,
 and replaced it with the constant that Z3 provides.
 
 Here a few examples of inefficiencies found this way:
