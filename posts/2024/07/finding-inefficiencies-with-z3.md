@@ -1,7 +1,7 @@
 <!--
 .. title: Mining JIT traces for missing optimizations with Z3
 .. slug: mining-jit-traces-missing-optimizations-z3
-.. date: 2024-07-07 19:14:09 UTC
+.. date: 2024-07-19 19:14:09 UTC
 .. tags:
 .. category:
 .. link:
@@ -12,19 +12,19 @@
 
 In my last post I've described [how to use Z3 to find simple local peephole
 optimization patterns](finding-simple-rewrite-rules-jit-z3.html)
-to for the integer operations in PyPy's JIT. An example is `int_and(x, 0) ->
+for the integer operations in PyPy's JIT. An example is `int_and(x, 0) ->
 0`. In this post I want to scale up the problem of identifying possible
-optimizations to much bigger sequences, also using Z3. For that, I am starting
-with the JIT traces of **real benchmarks**, after they have been optimized by
-the optimizer of PyPy's JTI. Then we can ask Z3 to find inefficient integer
-operations in those traces.
+optimizations to much bigger instruction sequences, also using Z3. For that, I
+am starting with the JIT traces of **real benchmarks**, after they have been
+optimized by the optimizer of PyPy's JIT. Then we can ask Z3 to find
+inefficient integer operations in those traces.
 
-Starting from the optimized traces of real programs has a bunch of big
+Starting from the optimized traces of real programs has some big
 advantages over the "classical" superoptimization approach of generating and
 then trying all possible sequences of instructions. It avoids the
-combinatorical explosion that happens with the latter approach. Starting from
-the traces of benchmarks or (even better) actual programs also makes sure that
-the missing optimizations that we actually care about the missing optimizations
+combinatorical explosion that happens with the latter approach. Also, starting
+from the traces of benchmarks or (even better) actual programs makes sure that
+we actually care about the missing optimizations
 that are found in this way. And because the traces are analyzed after they have
 been optimized by PyPy's optimizer, we only get reports for *missing*
 optimizations, that the JIT isn't able to do (yet).
@@ -36,7 +36,7 @@ well as reading his blog posts and papers. Thanks John!
 
 ## High-Level Approach
 
-The approach works as follows:
+The approach that I took works as follows:
 
 - Run benchmarks or other interesting programs and then dump the IR of the JIT
   traces into a file. The traces have at that point been already optimized by
@@ -55,14 +55,22 @@ In the post I will describe the details and show some pseudocode of the
 approach. I'll also make the proper code public eventually (but it needs a
 healthy dose of cleanups first).
 
+## Dumping PyPy Traces
+
+PyPy will write its JIT traces into the file `out` if the environment variable
+[`PYPYLOG`](https://doc.pypy.org/en/latest/man/pypy.1.html) is set as follows:
+
+```
+PYPYLOG=jit-log-opt:out
+```
 
 ## Encoding Traces as Z3 formulas
 
-The last blog post already contained the code to encode individual trace
-operations into Z3 formulas, so we don't need to repeat that here. To encode
-traces of operations we introduce a Z3 variable for every operation in the
-trace and then call the `z3_expression` function for every single one of the
-operations in the trace.
+The last blog post already contained the code to encode the results of
+individual trace operations into Z3 formulas, so we don't need to repeat that
+here. To encode traces of operations we introduce a Z3 variable for every
+operation in the trace and then call the `z3_expression` function for every
+single one of the operations in the trace.
 
 For example, for the following trace:
 
@@ -113,7 +121,7 @@ def find_inefficiencies(trace):
         if ...:
             return "inefficient", op
 
-        # not inefficient, add op to the solver and continue with the next op
+        # not inefficient, assert op into the solver and continue with the next op
         solver.add(z3resultvar == res)
     return None # no inefficiency found
 ```
@@ -122,8 +130,8 @@ def find_inefficiencies(trace):
 
 ## Identifying constant booleans with Z3
 
-The very simplest thing we can try to find inefficient parts of the traces is
-to first focus on boolean variables. For every operation in the trace that
+To get started finding inefficiencies in a trace, we can
+first focus on boolean variables. For every operation in the trace that
 returns a bool we can ask Z3 to prove that this variable must be always True or
 always False. Most of the time, neither of these proofs will succeed. But if Z3
 manages to prove one of them, we know have found an ineffiency: instead of
@@ -132,7 +140,7 @@ could have replaced the operation with the corresponding boolean constant.
 
 Here's an example of an inefficiency found that way: if `x < y` and `y < z` are
 both true, PyPy's JIT could conclude that `x < z` must also
-be true. However, currently the JIT cannot make that conclusion because the JIT
+be true. However, currently the JIT cannot make that conclusion because it
 only reasons about the concrete ranges (lower and upper bounds) for every
 integer variable, but it has no way to remember anything about relationships
 between different variables. This kind of reasoning would quite often be useful
@@ -148,8 +156,8 @@ Here are some more examples found that way:
   need to make sure that no object's hash is -1 (CPython uses -1 as an error
   value on the C level).
 
-Here's pseudo-code for how to implement this, it would go in the middle of the
-loop above:
+Here's pseudo-code for how to implement checking boolean operations for
+inefficiencies:
 
 ```python
 def find_inefficiencies(trace):
@@ -202,8 +210,8 @@ inefficiencies. Here's a few examples:
   `((x & 1345) ^ 2048) - 2048 == x & 1345` (with different constants, of
   course). xor is add without carry, and `x & 1345` does not have the bit
   `2048` set. Therefore the `^ 2048` is equivalent to `+ 2048`, which the `-
-  2048` cancels. More generally, if `a & b == 0`, then `a + b == a | b == a ^
-  b`. I don't understand at all why this appears so often in my traces, but I
+  2048` cancels. More generally, if `a & b == 0`, then `a + b == a | b == a ^ b`.
+  I don't understand at all why this appears so often in the traces, but I
   see variations of it a lot. LLVM can optimize this, but [GCC
   can't](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=115829), thanks to
   [Andrew Pinski for filing the
@@ -296,7 +304,7 @@ def find_inefficiencies(trace):
 Analyzing an inefficiency by hand in the context of a larger trace is quite
 tedious. Therefore I've implemented a (super inefficient) script to try to make
 the examples smaller. Here's how that works:
-- We throw out all the operations that occur *after* the inefficient operation
+- First throw out all the operations that occur *after* the inefficient operation
   in the trace.
 - Then we remove all "dead" operations, ie operations that don't have their
   results used (all the operations that we can analyze with Z3 are without side
@@ -306,7 +314,7 @@ the examples smaller. Here's how that works:
 - We also try to replace every single operation with a new argument to the
   trace, to see whether the inefficiency is still present.
 
- The minimization process is super inefficient and I should probably be using
+ The minimization process is sort of inefficient and I should probably be using
  [shrinkray](https://github.com/DRMacIver/shrinkray) or
  [C-Reduce](https://github.com/csmith-project/creduce) instead. However, it
  seems to work well in practice and the runtime isn't too bad.
@@ -315,7 +323,15 @@ the examples smaller. Here's how that works:
 
 So far I am using the JIT traces of three programs: 1) Booting Linux on the
 [Pydrofoil](https://docs.pydrofoil.org) RISC-V emulator, 2) booting Linux on the Pydrofoil ARM emulator 3)
-running the PyPy bootstrap process on top of PyPy. The script identifies 94
+running the PyPy bootstrap process on top of PyPy.
+
+I picked these programs because most Python programs don't contain interesting
+amounts of integer operations, and the traces of the emulators
+contain a lot of them. I also used the bootstrap process because I still wanted
+to try a big Python program and personally care about the runtime of this
+program a lot.
+
+The script identifies 94
 inefficiencies in the traces, obviously a lot of them come from repeating
 patterns. My next steps will be to manually inspect them all, categorize them, and
 implement easy optimizations identified that way. I also want a way to sort the
@@ -341,7 +357,7 @@ script. But later extensions to actually synthesize one or several operations
 in the attempt to optimize the traces more and find more opportunities should
 be possible.
 
-Finding inefficiencies in traces with Z3 is certainly significantly less
+Finding inefficiencies in traces with Z3 is significantly less
 annoying and also less error-prone than just manually inspecting traces and
 trying to spot optimization opportunities.
 
@@ -366,5 +382,8 @@ a tracing JIT with Z3 a long time ago, as part of the (now long dead, I think)
 project](https://web.archive.org/web/20160304055149/http://research.microsoft.com/en-us/projects/spur/).
 There's a [workshop
 paper](https://web.archive.org/web/20161029162737/http://csl.stanford.edu/~christos/pldi2010.fit/tillmann.provers4jit.pdf)
-from 2010 about this. In addition to bitvectors, they also use the Z3 support
-for arrays to model the C# heap and remove redundant stores.
+from 2010 about this. SPUR was trying to use Z3 built into the actual JIT (as
+opposed to using Z3 only to find places where the regular optimizers could be
+improved). In addition to bitvectors, SPUR also used the Z3 support for arrays
+to model the C# heap and remove redundant stores. This is still another future
+extension for all the Z3 work I've been doing in the context of the PyPy JIT.
