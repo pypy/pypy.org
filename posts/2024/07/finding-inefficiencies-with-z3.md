@@ -323,7 +323,7 @@ the examples smaller. Here's how that works:
 ## Results
 
 So far I am using the JIT traces of three programs: 1) Booting Linux on the
-[Pydrofoil](https://docs.pydrofoil.org) RISC-V emulator, 2) booting Linux on the Pydrofoil ARM emulator 3)
+[Pydrofoil](https://docs.pydrofoil.org) RISC-V emulator, 2) booting Linux on the Pydrofoil ARM emulator, and 3)
 running the PyPy bootstrap process on top of PyPy.
 
 I picked these programs because most Python programs don't contain interesting
