@@ -1,6 +1,6 @@
 <!--
-.. title: Finding Complicated Missing JIT Compiler Optimizations with Z3
-.. slug: finding-missing-optimizations-z3
+.. title: Mining JIT traces for missing optimizations with Z3
+.. slug: mining-jit-traces-missing-optimizations-z3
 .. date: 2024-07-07 19:14:09 UTC
 .. tags:
 .. category:
@@ -10,65 +10,53 @@
 .. author: CF Bolz-Tereick
 -->
 
-In last weeks post I've described [how to use Z3 to find simple local peephole
-optimization
-patterns](finding-simple-rewrite-rules-jit-z3.html)
+In my last post I've described [how to use Z3 to find simple local peephole
+optimization patterns](finding-simple-rewrite-rules-jit-z3.html)
 to for the integer operations in PyPy's JIT. An example is `int_and(x, 0) ->
-0`. The post ended by discussing problems:
+0`. In this post I want to scale up the problem of identifying possible
+optimizations to much bigger sequences, also using Z3. For that, I am starting
+with the JIT traces of **real benchmarks**, after they have been optimized by
+the optimizer of PyPy's JTI. Then we can ask Z3 to find inefficient integer
+operations in those traces.
 
-- combinatorial explosion
-- non-minimal examples
-- how do we know that we even care about the patterns that it finds?
+Starting from the optimized traces of real programs has a bunch of big
+advantages over the "classical" superoptimization approach of generating and
+then trying all possible sequences of instructions. It avoids the
+combinatorical explosion that happens with the latter approach. Starting from
+the traces of benchmarks or (even better) actual programs also makes sure that
+the missing optimizations that we actually care about the missing optimizations
+that are found in this way. And because the traces are analyzed after they have
+been optimized by PyPy's optimizer, we only get reports for *missing*
+optimizations, that the JIT isn't able to do (yet).
 
-In this post I want to discuss a different method:
-
-- start from real programs that we care about (e.g. benchmarks)
-- take their traces, ignore all the non-integer operations
-- translate the traces into big Z3 formulas, operation by operation
-- use Z3 to identify inefficiens in those concrete traces
-- minimize the inefficient programs by removing as many operations as possible
-
-that way we don't have to generate all possible sequences of ir operations up
-to a certain size, and we also get optimizations that we care about, because
-the patterns come from real programs
-
-post will be more high-level and describe the general approach, but not go
-through the implementation in detail.
-
-## Background 
-
-PyPy's JIT has historically always focused almost exclusively on the typical
-inefficiencies of Python programs, such as removing boxing, run-time type
-feedback, speculation type-specializing collections, etc. However, in the last
-two years I have applied the JIT also to a very different domain, that of CPU
-emulation, in the experimental [Pydrofoil](https://docs.pydrofoil.org) project
-(supports RISC-V and ARM by now). For Pydrofoil, the performance of integer
-operations is significantly more important than for "normal" Python code, which
-is why I've become much more interested in optimizing integer operations. The
-simple integer operation rewrites of the last post were all implemented long
-ago, and so were a lot of more complicated ones. But there surely are a lot of
-them missing, compared to mature compilers.
-
-Finding missing optimizations is quite hard to do manually, because it involves
-carefully staring at huge concrete traces of programs that we care about. So
-ideally we want to automate the problem. To make sure that we care about the
-optimizations that we find, we start from the traces of benchmarks that are
-interesting, such as booting Linux on the ARM and RISC-V emulators.
+The techniques and experiments I describe in this post are again the result of
+a bunch of discussions with John Regehr at a conference a few weeks ago, as
+well as reading his blog posts and papers. Thanks John!
 
 
-## General Recipe for Finding Missing Optimizations 
+## High-Level Approach
 
-We want to use it to find
-missing integer optimizations in the PyPy JIT. The general approach is to first
-collect a bunch of traces of integer heavy programs. Then we encode the integer
-operations in the traces into Z3 formulas and use different Z3 queries to
-identify inefficiencies in the traces. Once we found an inefficiency, we try to
-minimize the trace to the smallest trace that we can get that still shows an
-inefficiency to make it easier to understand. Then we inspect the minimized
-cases manually and (if possible) try to implement the missing optimizations.
-I'll write about each of these steps in turn.
+The approach works as follows:
 
-## Encoding Traces as Z3 formulas 
+- Run benchmarks or other interesting programs and then dump the IR of the JIT
+  traces into a file. The traces have at that point been already optimized by
+  the PyPy JIT's optimizer.
+- For every trace, ignore all the operations on non-integer variables.
+- Translate every integer operation into a Z3 formula.
+- For every operation, use Z3 to find out whether the operation is redundant
+  (how that is done is described below).
+- If the operation is redundant, the trace is less efficient than it could have
+  been, because the optimizer could also have removed the operation. Report the
+  inefficiency.
+- Minimize the inefficient programs by removing as many operations as possible
+  to make the problem easier to understand.
+
+In the post I will describe the details and show some pseudocode of the
+approach. I'll also make the proper code public eventually (but it needs a
+healthy dose of cleanups first).
+
+
+## Encoding Traces as Z3 formulas
 
 The last blog post already contained the code to encode individual trace
 operations into Z3 formulas, so we don't need to repeat that here. To encode
@@ -97,15 +85,50 @@ z3.And(i2 == LShR(i1, 32),
        i5 == i4 << 16)
 ```
 
+Usually we won't ask for the formula of the whole trace at once. Instead we go
+through the trace operation by operation and try to find inefficiencies in the
+current one we are looking at. Roughly like this (pseudo-)code:
+
+```python
+def newvar(name):
+    return z3.BitVec(name, INTEGER_WIDTH)
+
+def find_inefficiencies(trace):
+    solver = z3.Solver()
+    var_to_z3var = {}
+    for input_argument in trace.inputargs:
+        var_to_z3var[input_argument] = newz3var(input_argument)
+    for op in trace:
+        var_to_z3var[op] = z3resultvar = newz3var(op.resultvarname)
+        arg0 = op.args[0]
+        z3arg0 = var_to_z3var[arg0]
+        if len(op.args) == 2:
+            arg1 = op.args[1]
+            z3arg1 = var_to_z3var[arg1]
+        else:
+            z3arg1 = None
+        res, valid_if = z3_expression(op.name, z3arg0, z3arg1)
+        # checking for inefficiencies, see the next sections
+        ...
+        if ...:
+            return "inefficient", op
+
+        # not inefficient, add op to the solver and continue with the next op
+        solver.add(z3resultvar == res)
+    return None # no inefficiency found
+```
+
+
+
 ## Identifying constant booleans with Z3
 
 The very simplest thing we can try to find inefficient parts of the traces is
-to first focus on boolean variables. For every boolean variable in the trace we
-can ask Z3 to prove that this variable must be always True or always False.
-Most of the time, neither of these proofs will succeed. But if Z3 manages to
-prove one of them, we know have found an ineffiency: instead of computing the
-boolean result (eg by executing a comparison) we could have replaced the
-operation with the corresponding constant.
+to first focus on boolean variables. For every operation in the trace that
+returns a bool we can ask Z3 to prove that this variable must be always True or
+always False. Most of the time, neither of these proofs will succeed. But if Z3
+manages to prove one of them, we know have found an ineffiency: instead of
+computing the boolean result (eg by executing a comparison) the JIT's optimizer
+could have replaced the operation with the corresponding boolean constant.
 
 Here's an example of an inefficiency found that way: if `x < y` and `y < z` are
 both true, PyPy's JIT could conclude that `x < z` must also
@@ -119,13 +142,37 @@ too heavyweight for a JIT setting).
 
 Here are some more examples found that way:
 
-- `x - 1 == x` is always False 
+- `x - 1 == x` is always False
 - `x - (x == -1) == -1` is always False. The pattern `x - (x == -1)` happens a
   lot in PyPy's hash computations: To be compatible with the CPython hashes we
   need to make sure that no object's hash is -1 (CPython uses -1 as an error
   value on the C level).
 
-## Identifying redundant operations 
+Here's pseudo-code for how to implement this, it would go in the middle of the
+loop above:
+
+```python
+def find_inefficiencies(trace):
+    ...
+    for op in trace:
+        ...
+        res, valid_if = z3_expression(op.name, z3arg0, z3arg1)
+        # check for boolean constant result
+        if op.has_boolean_result():
+            if prove(solver, res == 0):
+                return "inefficient", op, 0
+            if prove(solver, res == 1):
+                return "inefficient", op, 1
+        # checking for other inefficiencies, see the next sections
+        ...
+
+        # not inefficient, add op to the solver and continue with the next op
+        solver.add(z3resultvar == res)
+    return None # no inefficiency found
+```
+
+
+## Identifying redundant operations
 
 A more interesting class of redundancy is to try to find two operations in a
 trace that compute the same result. We can do that by asking Z3 to prove for
@@ -162,21 +209,89 @@ inefficiencies. Here's a few examples:
   [Andrew Pinski for filing the
   bug](https://hachyderm.io/@pinskia/112752641328799157)!
 
-## Synthesizing more complicated constants with exists-forall 
+
+And here's some implementation pseudo-code again:
+
+```python
+def find_inefficiencies(trace):
+    ...
+    for op in trace:
+        ...
+        res, valid_if = z3_expression(op.name, z3arg0, z3arg1)
+        # check for boolean constant result
+        ...
+        # searching for redundant operations
+        for previous_op in trace:
+            if previous_op is op:
+                break # done, reached the current op
+            previous_op_z3var = var_to_z3var[previous_op]
+            if prove(solver, previous_op_z3var == res):
+                return "inefficient", op, previous_op
+        ...
+        # more code here later
+        ...
+
+        # not inefficient, add op to the solver and continue with the next op
+        solver.add(z3resultvar == res)
+    return None # no inefficiency found
+```
+
+## Synthesizing more complicated constants with exists-forall
 
 To find out whether some integer operations always return a constant result, we
 can't simply use the same trick as for those operations that return boolean
-results. Like in the last post, we can use `z3.ForAll` to find out whether Z3
-can synthesize constants for us, for the result of an operation in ints
-context. If such a constant exists, we could have removed the operation, and
-replaced it with the constant that Z3 provides.
+results, because enumerating $2^64$ possible constants and checking them all
+would take too long. Like in the last post, we can use `z3.ForAll` to find out
+whether Z3 can synthesize constants for us, for the result of an operation in
+ints context. If such a constant exists, we could have removed the operation,
+and replaced it with the constant that Z3 provides.
 
 Here a few examples of inefficiencies found this way:
 
 - `(x ^ 1) ^ x == 1` (or, more generally: `(x ^ y) ^ x == y`)
 - if `x | y == 0`, it follows that `x == 0` and `y == 0`
+- if `x != MAXINT`, then `x + 1 > x`
 
-## Minimization 
+Implementing this is actually slightly annoying. The `solver.add` calls for
+non-inefficient ops add assertions to the solver, which are now confusing the
+`z3.ForAll` query. We could remove all assertion from the solver, then do the
+`ForAll` query, then add the assertions back. What I ended doing instead was
+instantiating a second solver object that I'm using for the `ForAll` queries,
+that remains empty the whole time.
+
+```python
+def find_inefficiencies(trace):
+    solver = z3.Solver()
+    empty_solver = z3.Solver()
+    var_to_z3var = {}
+    ...
+    for op in trace:
+        ...
+        res, valid_if = z3_expression(op.name, z3arg0, z3arg1)
+        # check for boolean constant result
+        ...
+        # searching for redundant operations
+        ...
+        # checking for constant results
+        constvar = z3.BitVec('find_const', INTEGER_WIDTH)
+        condition = z3.ForAll(
+            var_to_z3var.values(),
+            z3.Implies(
+                *solver.assertions(),
+                expr == constvar
+            )
+        )
+        if empty_solver.check(condition) == z3.sat:
+            model = empty_solver.model()
+            const = model[constvar].as_signed_long()
+            return "inefficient", op, const
+
+        # not inefficient, add op to the solver and continue with the next op
+        solver.add(z3resultvar == res)
+    return None # no inefficiency found
+```
+
+## Minimization
 
 Analyzing an inefficiency by hand in the context of a larger trace is quite
 tedious. Therefore I've implemented a (super inefficient) script to try to make
@@ -196,10 +311,10 @@ the examples smaller. Here's how that works:
  [C-Reduce](https://github.com/csmith-project/creduce) instead. However, it
  seems to work well in practice and the runtime isn't too bad.
 
-## Results 
+## Results
 
 So far I am using the JIT traces of three programs: 1) Booting Linux on the
-Pydrofoil RISC-V emulator, 2) booting Linux on the Pydrofoil ARM emulator 3)
+[Pydrofoil](https://docs.pydrofoil.org) RISC-V emulator, 2) booting Linux on the Pydrofoil ARM emulator 3)
 running the PyPy bootstrap process on top of PyPy. The script identifies 94
 inefficiencies in the traces, obviously a lot of them come from repeating
 patterns. My next steps will be to manually inspect them all, categorize them, and
@@ -217,7 +332,7 @@ about that? Will have to try eventually.
 This was again much easier to do than I would have expected! Given that I had
 the translation of trace ops to Z3 already in place, it was a matter of about a
 day's of programming to use this infrastructure to find the first problems and
-minimizing them. 
+minimizing them.
 
 Reusing the results of existing operations or replacing operations by constants
 can be seen as "zero-instruction superoptimization". I'll probably be rather
@@ -225,3 +340,31 @@ busy for a while to add the missing optimizations identified by my simple
 script. But later extensions to actually synthesize one or several operations
 in the attempt to optimize the traces more and find more opportunities should
 be possible.
+
+Finding inefficiencies in traces with Z3 is certainly significantly less
+annoying and also less error-prone than just manually inspecting traces and
+trying to spot optimization opportunities.
+
+
+## Random Notes and Sources
+
+Again, John's blog posts:
+
+- [Let’s Work on an LLVM Superoptimizer](https://blog.regehr.org/archives/1109)
+- [Early Superoptimizer Results](https://blog.regehr.org/archives/1146)
+- [A Few Synthesizing Superoptimizer Results](https://blog.regehr.org/archives/1252)
+- [Synthesizing Constants](https://blog.regehr.org/archives/1636)
+
+and papers:
+
+- [A Synthesizing Superoptimizer](https://arxiv.org/pdf/1711.04422)
+- [Hydra: Generalizing Peephole Optimizations with Program Synthesis](https://dl.acm.org/doi/pdf/10.1145/3649837)
+
+I remembered recently that I had seen the approach of optimizing the traces of
+a tracing JIT with Z3 a long time ago, as part of the (now long dead, I think)
+[SPUR
+project](https://web.archive.org/web/20160304055149/http://research.microsoft.com/en-us/projects/spur/).
+There's a [workshop
+paper](https://web.archive.org/web/20161029162737/http://csl.stanford.edu/~christos/pldi2010.fit/tillmann.provers4jit.pdf)
+from 2010 about this. In addition to bitvectors, they also use the Z3 support
+for arrays to model the C# heap and remove redundant stores.
