@@ -666,7 +666,7 @@ looking at sequences of instructions:
   that they typically aren't found in realistic programs. It would be much
   better to somehow focus on the patterns that real benchmarks are using.
 
-In the [next blog post](finding-missing-optimizations-z3.html) I'll discuss an alternative approach to simply generating
+In the [next blog post](mining-jit-traces-missing-optimizations-z3.html) I'll discuss an alternative approach to simply generating
 all possible sequences of instructions, that tries to address these problems.
 This works by analyzing the real traces of benchmarks and mining those for
 inefficiencies, which only shows problems that occur in actual programs.
