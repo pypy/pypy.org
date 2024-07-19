@@ -333,7 +333,7 @@ to try a big Python program and personally care about the runtime of this
 program a lot.
 
 The script identifies 94
-inefficiencies in the traces, obviously a lot of them come from repeating
+inefficiencies in the traces, a lot of them come from repeating
 patterns. My next steps will be to manually inspect them all, categorize them, and
 implement easy optimizations identified that way. I also want a way to sort the
 examples by execution count in the benchmarks, to get a feeling for which of
