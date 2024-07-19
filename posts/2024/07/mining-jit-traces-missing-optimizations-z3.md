@@ -31,7 +31,9 @@ optimizations, that the JIT isn't able to do (yet).
 
 The techniques and experiments I describe in this post are again the result of
 a bunch of discussions with John Regehr at a conference a few weeks ago, as
-well as reading his blog posts and papers. Thanks John!
+well as reading his blog posts and papers. Thanks John! Also thanks to [Max
+Bernstein](https://bernsteinbear.com/) for super helpful feedback on the drafts
+of this blog post (and for poking me to write things in general).
 
 
 ## High-Level Approach
@@ -61,8 +63,11 @@ PyPy will write its JIT traces into the file `out` if the environment variable
 [`PYPYLOG`](https://doc.pypy.org/en/latest/man/pypy.1.html) is set as follows:
 
 ```
-PYPYLOG=jit-log-opt:out
+PYPYLOG=jit-log-opt:out pypy <program.py>
 ```
+
+This environment variable works for PyPy, but also for other virtual machines
+built with RPython.
 
 (This is really a side point for the rest of the blog post, but since the
 question came up I wanted to clarify it: Operations on integers in the Python
