@@ -304,6 +304,7 @@ def find_inefficiencies(trace):
 Analyzing an inefficiency by hand in the context of a larger trace is quite
 tedious. Therefore I've implemented a (super inefficient) script to try to make
 the examples smaller. Here's how that works:
+
 - First throw out all the operations that occur *after* the inefficient operation
   in the trace.
 - Then we remove all "dead" operations, ie operations that don't have their
