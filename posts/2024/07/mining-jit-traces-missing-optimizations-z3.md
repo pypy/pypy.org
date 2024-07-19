@@ -64,6 +64,17 @@ PyPy will write its JIT traces into the file `out` if the environment variable
 PYPYLOG=jit-log-opt:out
 ```
 
+(This is really a side point for the rest of the blog post, but since the
+question came up I wanted to clarify it: Operations on integers in the Python
+program that the JIT is running don't all correspond 1-to-1 with the `int_...`
+operations in the traces. The `int_...` trace operations always operate on
+machine words. The Python `int` type supports arbitrarily large integers. PyPy
+will optimistically try to lower the operations on Python integers into machine
+word operations, but adds the necessary guards into the trace to make sure that
+overflow outside of the range of machine words is caught. In case one of these
+guards fails the interpreter switches to a big integer heap-allocated
+representation.)
+
 ## Encoding Traces as Z3 formulas
 
 The last blog post already contained the code to encode the results of
