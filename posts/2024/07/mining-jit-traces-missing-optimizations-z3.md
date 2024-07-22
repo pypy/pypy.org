@@ -220,7 +220,7 @@ inefficiencies. Here's a few examples:
   already in place, so this will be a relatively easy fix).
 - `(x & 0xffffffff) | ((x >> 32) << 32) == x`. Having the JIT optimize this
   would maybe require first recognizing that `(x >> 32) << 32` can be expressed
-  as a mask: `(x & 0xffffffff00000000)`, and then using `(x & c1) | (x & c1) ==
+  as a mask: `(x & 0xffffffff00000000)`, and then using `(x & c1) | (x & c2) ==
   x & (c1 | c2)`
 - A commonly occurring pattern is variations of this one:
   `((x & 1345) ^ 2048) - 2048 == x & 1345` (with different constants, of
