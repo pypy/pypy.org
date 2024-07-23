@@ -9,7 +9,7 @@
 .. type: text
 .. has_math: False
 .. author: Max Bernstein
-.. permalink: https://bernsteinbear.com/blog/toy-abstract-interpretation/
+.. canonical: https://bernsteinbear.com/blog/toy-abstract-interpretation/
 -->
 
 CF Bolz-Tereick wrote some excellent posts in which they [introduce a small IR
