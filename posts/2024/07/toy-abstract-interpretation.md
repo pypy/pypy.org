@@ -12,6 +12,14 @@
 .. canonical: https://bernsteinbear.com/blog/toy-abstract-interpretation/
 -->
 
+This is a <a
+href="https://bernsteinbear.com/blog/toy-abstract-interpretation/" rel=canonical>cross-post</a>
+from Max Bernstein from his excellent blog where he writes about programming
+languages, compilers, optimizations, virtual machines. He's looking for a
+(dynamic language runtime or compiler related) job too.
+
+_________________
+
 CF Bolz-Tereick wrote some excellent posts in which they [introduce a small IR
 and optimizer][toy-optimizer] and [extend it with allocation
 removal][toy-allocation-removal]. We also did a live stream together in which
