@@ -530,7 +530,7 @@ digraph G {
     {rank=same; nonnegative; negative;}
 }
 -->
-    <object class="svg" type="image/svg+xml" data="/assets/img/complex-lattice.svg">
+    <object class="svg" type="image/svg+xml" data="/images/2024-complex-lattice.svg">
     </object>
 </figure>
 
