@@ -476,7 +476,7 @@ Otherwise the resulting bit is unknown. Let's look at all the combinations:
 and
 input1: 000111???
 input2: 01?01?01? 
-result: 00001????
+result: 00001?0??
 ```
 
 ```python
