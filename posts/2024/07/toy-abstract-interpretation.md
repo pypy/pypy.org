@@ -1,7 +1,7 @@
 <!--
 .. title: Abstract interpretation in the Toy Optimizer
 .. slug: toy-abstract-interpretation
-.. date: 2024-07-23 19:55:00 UTC
+.. date: 2024-07-24 14:48:00 UTC
 .. tags:
 .. category:
 .. link:
