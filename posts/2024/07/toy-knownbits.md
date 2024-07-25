@@ -27,6 +27,8 @@ PyPy has implemented and merged a more complicated version of the same abstract
 domain for the "real" PyPy JIT. A more thorough explanation of that real world
 implementation will follow.
 
+TODO: add acknowledgements (at least Nico, Max, Santosh, Armin etc).
+
 ## Motivation
 
 In many programs that do bit-manipulation of integers, some of the bits of the
@@ -586,3 +588,372 @@ def test_hypothesis_or(t1, t2):
     assert k3.contains(n3)
 ```
 
+Implementing support for `abstract_xor` is relatively simple, and left as an
+exercise :-).
+
+## Addition and Subtraction
+
+`invert`, `and`, and `or` are relatively simple transfer functions to write,
+because they compose over the individual bits of the integers. The arithmetic
+functions `add` and `sub` are significantly harder, because of carries and
+borrows. Coming up with the formulas for them and gaining an intuitive
+understanding is quite tricky and involves carefully going through a few
+examples with pen and paper. We didn't come up with the implementation
+ourselves, but instead took them from the TODO paper. Here's the code, with
+example tests and hypothesis tests:
+
+```python
+class KnownBits:
+    ...
+
+    def abstract_add(self, other):
+        sum_ones = self.ones + other.ones
+        sum_unknowns = self.unknowns + other.unknowns
+        all_carries = sum_ones + sum_unknowns
+        ones_carries = all_carries ^ sum_ones
+        unknowns = self.unknowns | other.unknowns | ones_carries
+        ones = sum_ones & ~unknowns
+        return KnownBits(ones, unknowns)
+
+    def abstract_sub(self, other):
+        diff_ones = self.ones - other.ones
+        val_borrows = (diff_ones + self.unknowns) ^ (diff_ones - other.unknowns)
+        unknowns = self.unknowns | other.unknowns | val_borrows
+        ones = diff_ones & ~unknowns
+        return KnownBits(ones, unknowns)
+
+
+def test_add():
+    k1 = KnownBits.from_str('0?10?10?10')
+    k2 = KnownBits.from_str('0???111000')
+    res = k1.abstract_add(k2)
+    assert str(res) ==   "?????01?10"
+
+def test_sub():
+    k1 = KnownBits.from_str('0?10?10?10')
+    k2 = KnownBits.from_str('0???111000')
+    res = k1.abstract_sub(k2)
+    assert str(res) ==   "...?11?10"
+    k1 = KnownBits.from_str(    '...1?10?10?10')
+    k2 = KnownBits.from_str('...10000???111000')
+    res = k1.abstract_sub(k2)
+    assert str(res) ==   "111?????11?10"
+
+@given(knownbits_and_contained_number, knownbits_and_contained_number)
+def test_hypothesis_add(t1, t2):
+    k1, n1 = t1
+    k2, n2 = t2
+    k3 = k1.abstract_add(k2)
+    n3 = n1 + n2
+    assert k3.contains(n3)
+
+@given(knownbits_and_contained_number, knownbits_and_contained_number)
+def test_hypothesis_sub(t1, t2):
+    k1, n1 = t1
+    k2, n2 = t2
+    k3 = k1.abstract_sub(k2)
+    n3 = n1 - n2
+    assert k3.contains(n3)
+```
+
+Now we are in a pretty good situation, and have implemented abstract versions
+for a bunch of important arithmetic and binary functions. What's also surprising
+is that the implementation of all of the transfer functions is quite efficient.
+We didn't have to write loops over the individual bits at all, instead we found
+closed form expressions using primitive operations on the underlying integers
+`ones` and `unknowns`. This means that computing the results of abstract
+operations is quite efficient, which is important when using the abstract domain
+in the context of a JIT compiler.
+
+## Proving correctness of the transfer functions with Z3
+
+As one can probably tell from my most recent posts, I've been thinking about
+compiler correctness a lot recently. Getting the transfer functions absolutely
+correct is really crucial, because a bug in them would lead to miscompilation of
+Python code when the abstract domain is added to the JIT. While the randomized
+tests are great, it's still entirely possible for them to miss bugs. The state
+space for the arguments of a binary transfer function is `3**64 * 3**64`, and if
+only a small part of that contains wrong behaviour it would be really unlikely
+for us to find it with random tests by chance. Therefore I was reluctant to
+merge the PyPy branch that contained the new abstract domain for a long time.
+
+To increase our confidence in the correctness of the transfer functions further,
+we can use Z3 to *prove* their correctness, which gives us much stronger
+guarantees (not 100%, obviously). In this subsection I will show how to do that.
+
+The condition that we prove for 
+
+Here's an attempt to do this manually in the Python repl:
+
+```
+>>>> import z3
+>>>> solver = z3.Solver()
+>>>> # like last blog post, proof by failing to find counterexamples
+>>>> def prove(cond): assert solver.check(z3.Not(cond)) == z3.unsat
+>>>>
+>>>> # let's set up a z3 bitvector variable for an abitrary concrete value
+>>>> n1 = z3.BitVec('concrete_value', 64)
+>>>> n1
+concrete_value
+>>>> # due to operator overloading we can manipulate z3 formulas
+>>>> n2 = ~n1
+>>>> n2
+~concrete_value
+>>>> 
+>>>> # now z3 bitvector variables for the ones and zeros fields
+>>>> ones = z3.BitVec('abstract_ones', 64)
+>>>> unknowns = z3.BitVec('abstract_unknowns', 64)
+>>>> # we construct a KnownBits instance with the z3 variables
+>>>> k1 = KnownBits(ones, unknowns)
+>>>> # due to operator overloading we can call the methods on k1:
+>>>> k2 = k1.abstract_invert()
+>>>> k2.ones
+~abstract_unknowns & ~abstract_ones
+>>>> k2.unknowns
+abstract_unknowns
+>>>> # here's the correctness condition that we want to prove:
+>>>> k2.contains(n2)
+~concrete_value & ~abstract_unknowns ==
+~abstract_unknowns & ~abstract_ones
+>>>> # let's try
+>>>> prove(k2.contains(n2))
+Traceback (most recent call last):
+  File "/home/cfbolz/bin/pypy-c-jit-184949-5ab4e2e078e2-linux64/lib/pypy3.10/code.py", line 90, in runcode
+    exec(code, self.locals)
+  File "<stdin>", line 1, in <module>
+  File "<stdin>", line 1, in prove
+AssertionError
+>>>> # it doesn't work! let's look at the countexample to see why:
+>>>> solver.model()
+[abstract_unknowns = 0,
+ abstract_ones = 0,
+ concrete_value = 1]
+>>>> # we can build a KnownBits instance with the values in the
+>>>> # counterexample:
+>>>> ~1 # concrete result
+-2
+>>>> counter_example_k1 = KnownBits(0, 0)
+>>>> counter_example_k1
+KnownBits.from_constant(0)
+>>>> counter_example_k2 = counter_example_k1.abstract_invert()
+>>>> counter_example_k2
+KnownBits.from_constant(-1)
+>>>> # let's check the failing condition
+>>>> counter_example_k2.contains(~1)
+False
+```
+
+What is the problem here? We didn't tell Z3 that `n1` was supposed to be a
+member of `k1`. We can add this as a precondition to the solver, and then the
+prove works:
+
+```
+>>>> solver.add(k1.contains(n1))
+>>>> prove(k2.contains(n2)) # works!
+```
+
+This is super cool! It's really a proof about the actual implementation, because
+we call the implementation methods directly, and due to the operator overloading
+that Z3 does we can be sure that we are actually checking a statement that
+corresponds to the Python code. This eliminates one source of errors in formal
+methods.
+
+Doing the proof manually on the Python REPL is kind of annoying though, and we
+also would like to make sure that the proofs are re-done when we change the
+code. What we would really like to do is writing the proofs as a unit-test that
+we can run in CI. Doing this is possible, and the unit tests that really perform
+proofs look pleasingly similar to the Hypothesis-based ones.
+
+First we need to set up a bit of infrastructure:
+
+```python
+INTEGER_WIDTH = 64
+
+def BitVec(name):
+    return z3.BitVec(name, INTEGER_WIDTH)
+
+def BitVecVal(val):
+    return z3.BitVecVal(val, INTEGER_WIDTH)
+
+solver = z3.Solver()
+
+n1 = BitVec("n1")
+k1 = KnownBits(BitVec("n1_ones"), BitVec("n1_unkowns"))
+solver.add(k1.contains(n1))
+
+n2 = BitVec("n2")
+k2 = KnownBits(BitVec("n2_ones"), BitVec("n2_unkowns"))
+solver.add(k2.contains(n2))
+
+def prove(cond):
+    z3res = solver.check(z3.Not(cond))
+    if z3res != z3.unsat:
+        assert z3res == z3.sat # can't be timeout, we set no timeout
+        # make the counterexample global, to make inspecting the bug in pdb
+        # easier
+        global model 
+        model = solver.model()
+        # print the count-example values for n1, n2, k1, k2:
+        print(f"n1={model.eval(n1)}, n2={model.eval(n2)}")
+        counter_example_k1 = KnownBits(model.eval(k1.ones).as_signed_long(),
+                                       model.eval(k1.unknowns).as_signed_long())
+        counter_example_k2 = KnownBits(model.eval(k2.ones).as_signed_long(),
+                                       model.eval(k2.unknowns).as_signed_long())
+        print(f"k1={counter_example_k1}, k2={counter_example_k2}")
+        print(f"but {cond=} evaluates to {model.eval(cond)}")
+        raise ValueError(solver.model())
+```
+
+And then we can write proof-unit-tests like this:
+
+
+```python
+def test_z3_abstract_invert():
+    k2 = k1.abstract_invert()
+    n2 = ~n1
+    prove(k2.contains(n2))
+
+def test_z3_abstract_and():
+    k3 = k1.abstract_and(k2)
+    n3 = n1 & n2
+    prove(k3.contains(n3))
+
+def test_z3_abstract_or():
+    k3 = k1.abstract_or(k2)
+    n3 = n1 | n2
+    prove(k3.contains(n3))
+
+def test_z3_abstract_add():
+    k3 = k1.abstract_add(k2)
+    n3 = n1 + n2
+    prove(k3.contains(n3))
+
+def test_z3_abstract_sub():
+    k3 = k1.abstract_sub(k2)
+    n3 = n1 - n2
+    prove(k3.contains(n3))
+```
+
+(it's possible to write a bit more Python-metaprogramming-magic and unify the
+Hypothesis and Z3 tests into the same test definition, and then first try to
+find some random counterexamples and if that works, do a Z3 proof.)
+
+
+## Cases where this style of Z3 proof doesn't work
+
+Unfortunately the approach described in the previous section only works for a
+very small number of cases. It breaks down as soon as the `KnownBits` methods
+that we're calling contain any `if` conditions (including hidden ones like
+the short-circuiting `and` and `or` in Python). Let's look at an example and
+implement `abstract_eq`. `eq` is supposed to be an operation that compares two
+integers and returns 0 or 1 if they are different or equal, respectively.
+Implementing this in knownbits looks like this with example and hypothesis
+tests:
+
+```python
+class KnownBits:
+    ...
+
+    def abstract_eq(self, other):
+        # the result is a 0, 1, or ?
+
+        # can only be known equal if they are both constants
+        if self.is_constant() and other.is_constant() and self.ones == other.ones:
+            return KnownBits.from_constant(1)
+        # check whether we have known disagreeing bits, then we know the result
+        # is 0
+        if self._disagrees(other):
+            return KnownBits.from_constant(0)
+        return KnownBits(0, 1) # an unknown boolean
+
+    def _disagrees(self, other):
+        # check whether the bits disagree in any place where both are known
+        both_known = self.knowns & other.knowns
+        return self.ones & both_known != other.ones & both_known
+
+def test_eq():
+    k1 = KnownBits.from_str('...?')
+    k2 = KnownBits.from_str('...?')
+    assert str(k1.abstract_eq(k2)) == '?'
+    k1 = KnownBits.from_constant(10)
+    assert str(k1.abstract_eq(k1)) == '1'
+    k1 = KnownBits.from_constant(10)
+    k2 = KnownBits.from_constant(20)
+    assert str(k1.abstract_eq(k2)) == '0'
+
+@given(knownbits_and_contained_number, knownbits_and_contained_number)
+def test_hypothesis_eq(t1, t2):
+    k1, n1 = t1
+    k2, n2 = t2
+    k3 = k1.abstract_eq(k2)
+    assert k3.contains(int(n1 == n2))
+```
+
+Trying to do the proof in the same style as before breaks:
+
+```python
+>>>> k3 = k1.abstract_eq(k2)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "knownbits.py", line 246, in abstract_eq
+    if self._disagrees(other):
+  File "venv/site-packages/z3/z3.py", line 381, in __bool__
+    raise Z3Exception("Symbolic expressions cannot be cast to concrete Boolean values.")
+z3.z3types.Z3Exception: Symbolic expressions cannot be cast to concrete Boolean values.
+```
+
+We cannot call `abstract_eq` on a `KnownBits` with Z3 variables as fields,
+because once we hit an `if` statement, the whole approach of relying on the
+operator overloading breaks down. Z3 doesn't actually parse the Python code or
+anything advanced like that, we rather build an expression only by running the
+code and letting the Z3 formulas build up.
+
+To still prove the correctness of `abstract_eq` we need to manually transform
+the control flow logic of the function into a Z3 formula that uses the `z3.If`
+expression, using a small helper function:
+
+```python
+def z3_cond(b, trueval=1, falseval=0):
+    return z3.If(b, BitVecVal(trueval), BitVecVal(falseval))
+
+def test_z3_abstract_eq_logic():
+    n3 = z3_cond(n1 == n2) # concrete result
+    # follow the *logic* of abstract_eq, we can't call it due to the ifs in it
+    case1cond = z3.And(k1.is_constant(), k2.is_constant(), k1.ones == k2.ones)
+    case2cond = k1._disagrees(k2)
+
+    # ones is 1 in the first case, 0 otherwise
+    ones = z3_cond(case1cond, 1, 0)
+
+    # in the first two cases, unknowns is 0, 1 otherwise
+    unknowns = z3_cond(z3.Or(case1cond, case2cond), 0, 1)
+    k3 = KnownBits(ones, unknowns)
+    prove(k3.contains(n3))
+```
+
+This proof works. It is a lot less satisfying than the previous ones though,
+because we could have done an error in the manual transcription from Python code
+to Z3 formulas (there are possibly more heavy-handed approaches where we do
+this transformation more automatically using e.g. the `ast` module to analyze
+the source code, but that's a much more complicated researchy project). To
+lessen this problem somewhat we can factor out the parts of the logic that don't
+have any conditions into small helper methods (like `_disagrees` in this
+example) and use them in the manual conversion of the code to Z3 formulas.
+
+The final condition that Z3 checks, btw, is this one:
+
+```
+If(n1 == n2, 1, 0) &
+~If(Or(And(n1_unkowns == 0,
+           n2_unkowns == 0,
+           n1_ones == n2_ones),
+       n1_ones & ~n1_unkowns & ~n2_unkowns !=
+       n2_ones & ~n1_unkowns & ~n2_unkowns),
+    0, 1) ==
+If(And(n1_unkowns == 0, n2_unkowns == 0, n1_ones == n2_ones),
+   1, 0)
+```
+
+## Making Statements about Precision
+
+## Using the Abstract Domain in the Toy Optimizer
