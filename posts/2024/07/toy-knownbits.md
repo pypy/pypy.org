@@ -141,8 +141,10 @@ class KnownBits:
         return self.knowns & ~self.ones
 ```
 
-Also, for debugging we want a way to print the known bits in a human-readable
-form (it's not important to understand the details of `__str__`).
+Also, for debugging and for writing tests we want a way to print the known bits
+in a human-readable form, and also to have a way to construct a `KnownBits`
+instance from a string  (it's not important to understand the details of
+`__str__` or `from_str` for the rest of the post).
 
 ```python
 class KnownBits:
@@ -185,6 +187,30 @@ class KnownBits:
             res.append('0')
         res.reverse()
         return "".join(res)
+
+    @staticmethod
+    def from_str(s):
+        """ Construct a KnownBits instance that from a string. String can start
+        with ...1 to mean that all higher bits are 1, or ...? to mean that all
+        higher bits are unknown. Otherwise it is assumed that the higher bits
+        are all 0. """
+        ones, unknowns = 0, 0
+        startindex = 0
+        if s.startswith("...?"):
+            unknowns = -1
+            startindex = 4
+        elif s.startswith("...1"):
+            ones = -1
+            startindex = 4
+        for index in range(startindex, len(s)):
+            ones <<= 1
+            unknowns <<= 1
+            c = s[index]
+            if c == '1':
+                ones |= 1
+            elif c == '?':
+                unknowns |= 1
+        return KnownBits(ones, unknowns)
 ```
 
 Let's write a unit tests for `str`:
@@ -194,7 +220,7 @@ def test_str():
     assert str(KnownBits.from_constant(0)) == '0'
     assert str(KnownBits.from_constant(5)) == '101'
     assert str(KnownBits(5, 0b10)) == '1?1'
-    assert str(KnownBits(-16, 0b10)) == '...100?0'
+    assert str(KnownBits(~0b1111, 0b10)) == '...100?0'
     assert str(KnownBits(1, ~0b1)) == '...?1'
 ```
 
@@ -220,15 +246,15 @@ and a test:
 
 ```python
 def test_contains():
-    k1 = KnownBits(0b101, 0b10) # 1?1
+    k1 = KnownBits.from_str('1?1')
     assert k1.contains(0b111)
     assert k1.contains(0b101)
     assert not k1.contains(0b110)
     assert not k1.contains(0b011)
 
-    k2 = KnownBits(1, -2) # ...?1
+    k2 = KnownBits.from_str('...?1') # all odd numbers
     for i in range(-101, 100):
-        assert k2.contains(i) == bool(i & 1)
+        assert k2.contains(i) == (i & 1)
 ```
 
 ## Transfer Functions
@@ -259,11 +285,11 @@ And a unit-test:
 
 ```python
 def test_invert():
-    k1 = KnownBits(0b010010010, 0b001001001) # 0...01?01?01?
+    k1 = KnownBits.from_str('01?01?01?')
     k2 = k1.abstract_invert()
     assert str(k2) == '...10?10?10?'
 
-    k1 = KnownBits(0, -1) # all unknown
+    k1 = KnownBits.from_str('...?')
     k2 = k1.abstract_invert()
     assert str(k2) == '...?'
 ```
@@ -281,6 +307,13 @@ Therefore we'll look at property-based-test for `KnownBits` next.
 We want to do property-based tests of `KnownBits`, to try
 make it less likely that we'll get a corner-case in the implementation wrong.
 We'll use [Hypothesis](https://hypothesis.readthedocs.io/en/latest/) for that.
+
+I can't give a decent introduction to Hypothesis here, but want to give a few
+hints about the API. Hypothesis is a way to run unit tests with randomly
+generated input. It provides *strategies* to describe the data that the test
+functions expects. Hypothesis provides primitive strategies (for things like
+integers, strings, floats, etc) and ways to build composite strategies out of
+the primitive ones.
 
 To be able to write the tests, we need to generate random `KnownBits` instances,
 and we also want an `int` instance that is a member of the `KnownBits` instance.
@@ -334,9 +367,15 @@ method:
 @given(knownbits_and_contained_number)
 def test_contains(t):
     k, n = t
-    print(bin(n), k)
     assert k.contains(t)
 ```
+
+The `@given` decorator is used to tell Hypothesis which strategy to use to
+generate random data for the test function. Hypothesis will run the test with a
+number of random examples (100 by default). If it finds an error, it will try to
+minimize the example needed that demonstrates the problem, to try to make it
+easier to understand what is going wrong. It also saves all failing cases into
+an example database and tries them again on subsequent runs.
 
 This test is as much a check for whether we got the strategies right as it is
 for the logic in `KnownBits.contains`. Here's an example output of random
@@ -344,40 +383,27 @@ concrete and abstract values that we are getting here:
 
 
 ```
-0b11100000010110 ...?1??0????10??0
--0b11001001011010 ...100110110100110
-0b1110111100010000010011010111110 1110111100010000010011010111110
-0b1100111 1100111
-0b1100111 ...?0000?0??11?01?1
-0b1001010110011 1001010110011
-0b101111111101101 101111111101101
-0b1000101 1000101
--0b10011001010 ...101100110110
--0b10011001010 ...1?1?01?0011?1?0
--0b10011001010 ...?0??00??0??0
--0b111011010011000 ...?10?000
--0b111011010011000 ...?000?00?0??0?000
--0b1101010101 ...1????????0?011
--0b1101010101 ...?00?0?0?0??
-0b1011110 ...?0?00?10?11??
--0b101101101101 ...?0?00?00?00??
--0b10011011110101 ...101100100001011
-0b111000000000001 ...?0?0?01
--0b101100 ...?0?0?00
--0b101011100100100 ...1010100011011100
--0b111101101111110 ...1000010010000010
--0b100001010111011011001010101100001111000110110111110011110101111 ...1011110101000100100110101010011110000111001001000?0??0??01???001
--0b100001010111011011001010101100001111000110110111110011110101111 ...?0????0?0?000?00?00??0?0?0?00????0000???00?00?00000??0000?0?000?
-0b1001011101111 1001011101111
--0b110011011011101 ...?01?0?0????
--0b110011011011101 ...?00??00?00?000??
--0b110000001110110 ...?001?11?????10??
--0b111011000001101 ...?000?00?????00??
-0b111100100101100001101101101101000000010110100000111011111111010 111100100101100001101101101101000000010110100000111011111111010
+110000011001101 ...?0???1
+...1011011 ...1011011
+...1001101110101000010010011111011 ...1001101110101000010010011111011
+...1001101110101000010010011111011 ...100110111010100001?010?1??1??11
+1000001101111101001011010011111101000011000111011001011111101 1000001101111101001011010011111101000011000111011001011111101
+1000001101111101001011010011111101000011000111011001011111101 1000001101111101001011010011111101000011000111????01?11?????1
+1111100000010 1111100000010
+1111100000010 ...?11111?00000??
+110110 110110
+110110 ...?00?00????11??10
+110110 ??0??0
+...100010111011111 ...?100?10111??111?
+...1000100000110001 ...?000?00000??000?
+110000001110 ...?0?0??000?00?0?0000000?00???0000?????00???000?0?00?01?000?0??1??
+110000001110 ??000000???0
+1011011010000001110101001111000010001001011101010010010001000000010101010010001101110101111111010101010010101100110000011110000 1011011010000001110101001111000010001001011101010010010001000000010101010010001101110101111111010101010010101100110000011110000
+...1011010010010100 ...1011010010010100
+...1011111110110011 ...1011111110110011
+101000011110110 101000011?10?1?
+100101 ?00?0?
 ```
-
-(The examples with negative concrete values are a little bit tricky to read,
-because one needs to mentally factor in two's complement.)
 
 That looks suitably random, but we might want to bias our random numbers a
 little bit towards common error values like small constants, powers of two, etc.
@@ -405,36 +431,41 @@ ints = strategies.sampled_from(ints_special) | strategies.integers()
 Now we get data like this:
 
 ```
--0b1111011101100 ...10000100010100
-0b11011011000111 11011011000111
--0b1001100 ...10110100
--0b1001100 ...1????1?0
--0b111111 ...1000001
--0b111111 ...1?111?1?1111????11?1111??1??1?????111??1??1??1?1??1111?1????00?1
-0b1001111 1001111
-0b1001111 1?0?1??
-0b10011101 10?1?1??
-0b101011 ?0?0??
--0b101 ...?11???1
--0b101 ...?0??
--0b100101000010100 ...1011010111101100
--0b11100 ...100100
--0b1000000000000000000000000000000000000000000000001 ...?1111111111111111111111111111111111111111111111
--0b10000000000000000000000000000000000000000000000 ...?0000000000000000000000000000000000000000000000
--0b10000000000000000000000000000000000000000000000 ...10000000000000000000000000000000000000000000000
-0b1001110 ...?10???1?
--0b1100011 ...?00???0?
-0b1100000 ...?0???????????????
-0b1100000 ??00000
-0b1100000 1100000
-0b1001110 ?0000000000000000000000000000000000000000001001110
-0b1 ?0000000000000000000000000000000000000000000000001
-0b10000000000000000000000000000000000000000000000000 ?0000000000000000000000000000000000000000000000000
-0b1 ?0000000000000000000000000000000000000000000000001
-0b1 ?
-0b1 ?
--0b10001111010111001010000011000 ...?1??0???11???0?
--0b10001111010111001010000011000 ...?0???0000?0?000??0?0?????0?000
+1110 1110
+...10000000000000000001 ...10000??0??0000??00?1
+1 ??0??0000??00?1
+1 ?
+...10101100 ...10101100
+110000000011001010111011111111111111011110010001001100110001011 ...?0?101?
+110000000011001010111011111111111111011110010001001100110001011 ??00000000??00?0?0???0??????????????0????00?000?00??00??000?0??
+...1011111111111111111111111111 ...?11?11??
+...1011111111111111111111111111 ...?0??????????????????????????
+0 ...?0??????????????????????????
+101101 101101
+111111111111111111111111111111111111111111111 111111111111111111111111111111111111111111111
+10111 10111
+...101100 ...1?111011?0
+101000 ?001010?0
+101000 ?0?000
+110010 110010
+...100111 ...100111
+1111011010010 1111011010010
+...1000000000000000000000000000000000000 ...1000000000000000000000000000000000000
+```
+
+We can also write a test that checks that the somewhat tricky logic in
+`__str__` and `from_str` is correct, by making sure that the two functions
+round-trip (ie converting a `KnownBits` to a string and then back to a
+`KnownBits` instance yields the abstract value).
+
+```python
+@given(knownbits_and_contained_number)
+def test_hypothesis_str_roundtrips(t1):
+    k1, n1 = t1
+    s = str(k1)
+    k2 = KnownBits.from_str(s)
+    assert k1.ones == k2.ones
+    assert k1.unknowns == k2.unknowns
 ```
 
 Now let's actually apply this infrastructure to test `abstract_invert`.
@@ -462,6 +493,13 @@ def test_hypothesis_invert(t):
     assert k2.contains(n2) # the abstract result must contain the real result
 ```
 
+This is the *only* condition needed for `abstract_invert` to be correct. If
+`abstract_invert` fulfils this property for every combination of abstract and
+concrete value then `abstract_invert` is *correct*. Note however, that this test
+does not actually check whether `abstract_invert` gives us precise results. A
+correct (but imprecise) implementation of `abstract_invert` would simply return
+a completely unknown result, regardless of what is known about the input
+`KnownBits`.
 
 ## Implementing Binary Transfer Functions
 
@@ -493,10 +531,9 @@ Here's an example unit-test and a property-based test for `and`:
 
 ```python
 def test_and():
-    k1 = KnownBits(0b010010010, 0b001001001) # 0...01?01?01?
-    assert str(k1) == "1?01?01?"
-    k2 = KnownBits(0b000111000, 0b000000111) # 0...000111???
-    assert str(k2) ==   "111???"
+    # test all combinations of 0, 1, ? in one example
+    k1 = KnownBits.from_str('01?01?01?')
+    k2 = KnownBits.from_str('000111???')
     res = k1.abstract_and(k2)     # should be: 0...00001?0??
     assert str(res) ==   "1?0??"
 
@@ -535,10 +572,8 @@ Here's an example unit-test and a property-based test for `or`:
 
 ```python
 def test_or():
-    k1 = KnownBits(0b010010010, 0b001001001) # 0...01?01?01?
-    assert str(k1) == "1?01?01?"
-    k2 = KnownBits(0b000111000, 0b000000111) # 0...000111???
-    assert str(k2) ==   "111???"
+    k1 = KnownBits.from_str('01?01?01?')
+    k2 = KnownBits.from_str('000111???')
     res = k1.abstract_or(k2)     # should be:  0...01?111?1?
     assert str(res) ==   "1?111?1?"
 
@@ -551,6 +586,3 @@ def test_hypothesis_or(t1, t2):
     assert k3.contains(n3)
 ```
 
-## Addition and Subtraction
-
-...
