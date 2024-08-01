@@ -1093,8 +1093,8 @@ domain in the toy optimizer. The code for this follows [Max' intro post about
 abstract interpretation](https://pypy.org/posts/2024/07/toy-abstract-interpretation.html)
 quite closely.
 
-For completeness sake, here's the basic infrastructure classes that make up the
-IR again (they are identical to the previous toy posts):
+For completeness sake, in the fold there's the basic infrastructure classes
+that make up the IR again (they are identical to the previous toy posts). <details>
 
 ```python
 class Value:
@@ -1179,7 +1179,10 @@ def bb_to_str(l : Block, varprefix : str = "var"):
     return "\n".join(res)
 ```
 
-Now we can write some first tests. The first test is simply checking constant folding:
+</details>
+
+Now we can write some first tests, the first one simply checking constant
+folding:
 
 ```python
 def test_constfold_two_ops():
@@ -1239,10 +1242,10 @@ optvar2 = int_add(optvar1, 16)
 optvar3 = dummy(1)"""
 ```
 
-Now we can implement `simplify`:
+Here is `simplify`:
 
 ```python
-def unknown_transfer_functions(*args):
+def unknown_transfer_functions(*abstract_args):
     return KnownBits.all_unknown()
 
 
@@ -1262,8 +1265,8 @@ def simplify(bb: Block) -> Block:
             transfer_function = getattr(KnownBits, f"abstract_{intopname}")
         else:
             transfer_function = unknown_transfer_functions
-        args = [knownbits_of(arg.find()) for arg in op.args]
-        abstract_res = abstract_values[op] = transfer_function(*args)
+        abstract_args = [knownbits_of(arg.find()) for arg in op.args]
+        abstract_res = abstract_values[op] = transfer_function(*abstract_args)
         # if the result is a constant, we optimize the operation away and make
         # it equal to the constant result
         if abstract_res.is_constant():
@@ -1279,7 +1282,7 @@ only difference is that we apply the transfer function *first*, to be able to
 detect whether the abstract domain can tell us that the result has to always be
 a constant. This code makes all three tests pass.
 
-## Using the `KnownBits` Domain for Conditional Peephole rewrites
+## Using the `KnownBits` Domain for Conditional Peephole Rewrites
 
 So far we are only using the `KnownBits` domain to find out that certain
 operations have to produce a constant. We can also use the `KnownBits` domain
@@ -1287,12 +1290,12 @@ to check whether certain operation rewrites are correct. Let's use one of the
 examples from the [Mining JIT traces for missing optimizations with
 Z3](https://pypy.org/posts/2024/07/mining-jit-traces-missing-optimizations-z3.html)
 post, where Z3 found the inefficiency `(x << 4) & -0xf == x << 4` in PyPy JIT
-traces. We don't have shift operations, but we can generalize this optimization
+traces. We don't have shift operations, but we want to generalize this optimization
 anyway. The general form of this rewrite is that under some circumstances `x &
 y == x`, and we can use the `KnownBits` domain to detect situations where this
 must be true.
 
-To understand *when* `x & y == x` is true, we can think about individual pairs
+To understand *when* `x & y == x` is true, we can think about individual pairs of
 bits `a` and `b`. If `a == 0`, then `a & b == 0 & b == 0 == a`. If `b == 1`
 then `a & b == a & 1 == a`. So if either `a == 0` or `b == 1` is true,
 `a & b == a` follows. And if either of these conditions is true for *all* the
@@ -1310,8 +1313,8 @@ class KnownBits:
         return self.zeros | other.ones == -1
 ```
 
-Since this reasoning feels ripe for errors, let's check that our understanding
-is correct with Z3:
+Since my reasoning about this feels ripe for errors, let's check that our
+understanding is correct with Z3:
 
 ```python
 def test_prove_is_and_identity():
@@ -1358,28 +1361,34 @@ optvar3 = int_or(optvar1, 15)
 optvar4 = dummy(optvar2)"""
 ```
 
-To make these tests pass, we can add the conditional rewrite of `int_and` to
-`simplify`:
+The first test could also be made to pass by implementing a reassociation
+optimization that turns `(x & c1) & c2` into `x & (c1 & c2)`. But we want to
+use `KnownBits` and conditionally rewrite `int_and`. So to make the tests pass,
+we can change `simplify` like this:
 
 ```python
 def simplify(bb: Block) -> Block:
-    parity = {}
+    abstract_values = {} # dict mapping Operation to KnownBits
 
     def knownbits_of(val : Value):
         ...
 
     opt_bb = Block()
     for op in bb:
-        _, _, name_without_prefix = op.name.rpartition("int_")
-        transfer_function = getattr(KnownBits, f"abstract_{name_without_prefix}", unknown_transfer_functions)
-        args = [knownbits_of(arg.find()) for arg in op.args]
-        abstract_res = parity[op] = transfer_function(*args)
+        # apply the transfer function on the abstract arguments
+        if op.name.startswith("int_"):
+            intopname = op.name[4:]
+            transfer_function = getattr(KnownBits, f"abstract_{intopname}")
+        else:
+            transfer_function = unknown_transfer_functions
+        abstract_args = [knownbits_of(arg.find()) for arg in op.args]
+        abstract_res = abstract_values[op] = transfer_function(*abstract_args)
         if abstract_res.is_constant():
             op.make_equal_to(Constant(abstract_res.ones))
             continue
         # <<<< new code
         if op.name == "int_and":
-            k1, k2 = args
+            k1, k2 = abstract_args
             if k1.is_and_identity(k2):
                 op.make_equal_to(op.arg(0))
                 continue
