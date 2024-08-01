@@ -213,6 +213,13 @@ class KnownBits:
             elif c == '?':
                 unknowns |= 1
         return KnownBits(ones, unknowns)
+
+    @staticmethod
+    def all_unknown():
+        """ convenience constructor for the "all bits unknown" abstract value
+        """
+        return KnownBits.from_str("...?")
+
 ```
 
 Let's write a unit tests for `str`:
@@ -338,7 +345,7 @@ We can turn this function into a hypothesis strategy to generate input data
 using the `strategies.builds` function:
 
 ```python
-from hypothesis import strategies, given
+from hypothesis import strategies, given, settings
 
 ints = strategies.integers()
 
@@ -502,6 +509,8 @@ does not actually check whether `abstract_invert` gives us precise results. A
 correct (but imprecise) implementation of `abstract_invert` would simply return
 a completely unknown result, regardless of what is known about the input
 `KnownBits`.
+
+TODO: add a paragraph about the Galois connection here
 
 ## Implementing Binary Transfer Functions
 
@@ -681,8 +690,6 @@ To increase our confidence in the correctness of the transfer functions further,
 we can use Z3 to *prove* their correctness, which gives us much stronger
 guarantees (not 100%, obviously). In this subsection I will show how to do that.
 
-The condition that we prove for 
-
 Here's an attempt to do this manually in the Python repl:
 
 ```
@@ -779,10 +786,12 @@ solver = z3.Solver()
 
 n1 = BitVec("n1")
 k1 = KnownBits(BitVec("n1_ones"), BitVec("n1_unkowns"))
+# add preconditions that connect n1 and k1, valid in all the tests
 solver.add(k1.contains(n1))
 
 n2 = BitVec("n2")
 k2 = KnownBits(BitVec("n2_ones"), BitVec("n2_unkowns"))
+# same for n2 and k2
 solver.add(k2.contains(n2))
 
 def prove(cond):
@@ -916,8 +925,7 @@ expression, using a small helper function:
 def z3_cond(b, trueval=1, falseval=0):
     return z3.If(b, BitVecVal(trueval), BitVecVal(falseval))
 
-def test_z3_abstract_eq_logic():
-    n3 = z3_cond(n1 == n2) # concrete result
+def z3_abstract_eq(k1, k2):
     # follow the *logic* of abstract_eq, we can't call it due to the ifs in it
     case1cond = z3.And(k1.is_constant(), k2.is_constant(), k1.ones == k2.ones)
     case2cond = k1._disagrees(k2)
@@ -927,7 +935,10 @@ def test_z3_abstract_eq_logic():
 
     # in the first two cases, unknowns is 0, 1 otherwise
     unknowns = z3_cond(z3.Or(case1cond, case2cond), 0, 1)
-    k3 = KnownBits(ones, unknowns)
+    return KnownBits(ones, unknowns)
+
+def test_z3_abstract_eq_logic():
+    k3 = z3_abstract_eq(k1, k2)
     prove(k3.contains(n3))
 ```
 
@@ -956,4 +967,429 @@ If(And(n1_unkowns == 0, n2_unkowns == 0, n1_ones == n2_ones),
 
 ## Making Statements about Precision
 
-## Using the Abstract Domain in the Toy Optimizer
+So far we have only used Z3 to prove statements about correctness, i.e. that
+our abstract operations overapproximate what can happen with concrete values.
+While proving this property is essential if we want to avoid miscompilation,
+correctness alone is not a very strong constraint on the implementation of our
+abstract transfer functions. We could simply return `Knownbits.unknowns()` for
+every `abstract_*` method and the resulting overapproximation would be correct,
+but useless in practice.
+
+It's much harder to make statements about whether the transfer functions are
+maximally precise. There are two aspects of precision I want to discuss in this
+section, however.
+
+The first aspect is that we would really like it if the transfer functions
+compute the maximally precise results for singleton sets. If all abstract
+arguments of an operations are constants, i.e. contain only a single concrete
+element, then we know that the resulting set also has only a single element. We
+can prove that all our transfer functions have this property:
+
+```python
+def test_z3_prove_constant_folding():
+    k3 = k1.abstract_invert()
+    prove(z3.Implies(k1.is_constant(),
+                     k3.is_constant()))
+
+    k3 = k1.abstract_and(k2)
+    prove(z3.Implies(z3.And(k1.is_constant(), k2.is_constant()),
+                     k3.is_constant()))
+
+    k3 = k1.abstract_or(k2)
+    prove(z3.Implies(z3.And(k1.is_constant(), k2.is_constant()),
+                     k3.is_constant()))
+
+    k3 = k1.abstract_sub(k2)
+    prove(z3.Implies(z3.And(k1.is_constant(), k2.is_constant()),
+                     k3.is_constant()))
+
+    k3 = z3_abstract_eq(k1, k2)
+    prove(z3.Implies(z3.And(k1.is_constant(), k2.is_constant()),
+                     k3.is_constant()))
+```
+
+Proving with Z3 that the transfer functions are maximally precise for
+non-constant arguments seems to be relatively hard. I tried a few completely
+rigorous approaches and failed. The paper [Sound, Precise, and Fast Abstract
+Interpretation with Tristate Numbers](https://arxiv.org/pdf/2105.05398)
+contains an optimality proof for the transfer functions of addition and
+subtraction, so we can be quite certain that they are as precise as is
+possible.
+
+I still want to show an approach for trying to find concrete examples of
+abstract values that are less precise than they could be, using a combination
+of Hypothesis and Z3. The idea is to use hypothesis to pick random abstract
+values. Then we compute the abstract result using our transfer function.
+Afterwards we can ask Z3 to find us an abstract result that is better than the
+one our tranfer function produced. If Z3 finds a better abstract result, we
+have a concrete example of imprecision for our transfer function. Those tests
+aren't strict proofs, because they rely on generating random abstract values,
+but they can still be valuable (not for the transfer functions in this blog
+post, which are all optimal).
+
+Here is what the code looks like (this is a little bit bonus content, I'll not
+explain the details and can only hope that the comments are somewhat helpful):
+
+```python
+@given(random_knownbits_and_contained_number, random_knownbits_and_contained_number)
+@settings(deadline=None)
+def test_check_precision(t1, t2):
+    b1, n1 = t1
+    b2, n2 = t2
+    # apply transfer function
+    b3 = b1.abstract_add(b2)
+    example_res = n1 + n2
+
+    # try to find a better version of b3 with Z3
+    solver = z3.Solver()
+    solver.set("timeout", 8000)
+
+    var1 = BitVec('v1')
+    var2 = BitVec('v2')
+
+    ones = BitVec('ones')
+    unknowns = BitVec('unknowns')
+    better_b3 = KnownBits(ones, unknowns)
+    print(b1, b2, b3)
+
+    # we're trying to find an example for a better b3, so we use check, without
+    # negation:
+    res = solver.check(z3.And(
+        # better_b3 should be a valid knownbits instance
+        better_b3.is_well_formed(),
+        # it should be better than b3, ie there are known bits in better_b3
+        # that we don't have in b3
+        better_b3.knowns & ~b3.knowns != 0,
+        # now encode the correctness condition for better_b3 with a ForAll:
+        # for all concrete values var1 and var2, it must hold that if
+        # var1 is in b1 and var2 is in b2 it follows that var1 + var2 is in
+        # better_b3
+        z3.ForAll(
+        [var1, var2],
+        z3.Implies(
+            z3.And(b1.contains(var1), b2.contains(var2)),
+            better_b3.contains(var1 + var2)))))
+    # if this query is satisfiable, we have found a better result for the
+    # abstract_and
+    if res == z3.sat:
+        model = solver.model()
+        rb3 = KnownBits(model.eval(ones).as_signed_long(), model.eval(unknowns).as_signed_long())
+        print("better", rb3)
+        assert 0
+    if res == z3.unknown:
+        print("timeout")
+```
+
+It does not actually fail for `abstract_add` (nor the other abstract
+functions). To see the test failing we can add some imprecision to the
+implementation of `abstract_add` to see Hypothesis and Z3 find examples of
+values that are not optimally precise.
+
+
+## Using the Abstract Domain in the Toy Optimizer for Generalized Constant Folding
+
+Now after all this work we can finally actually use the knownbits abstract
+domain in the toy optimizer. The code for this follows [Max' intro post about
+abstract interpretation](https://pypy.org/posts/2024/07/toy-abstract-interpretation.html)
+quite closely.
+
+For completeness sake, here's the basic infrastructure classes that make up the
+IR again (they are identical to the previous toy posts):
+
+```python
+class Value:
+    def find(self):
+        raise NotImplementedError("abstract")
+
+    def extract(self):
+        raise NotImplementedError("abstract")
+
+@dataclass(eq=False)
+class Operation(Value):
+    name : str
+    args : list[Value]
+
+    forwarded : Optional[Value] = None
+
+    def find(self) -> Value:
+        op = self
+        while isinstance(op, Operation):
+            next = op.forwarded
+            if next is None:
+                return op
+            op = next
+        return op
+
+    def arg(self, index):
+        return self.args[index].find()
+
+    def make_equal_to(self, value : Value):
+        self.find().forwarded = value
+
+    def extract(self):
+        return Operation(self.name, [arg.find for arg in self.args])
+
+    def extract(self):
+        raise NotImplementedError("abstract")
+
+@dataclass(eq=False)
+class Constant(Value):
+    value : object
+
+    def find(self):
+        return self
+
+class Block(list):
+    def __getattr__(self, opname):
+        def wraparg(arg):
+            if not isinstance(arg, Value):
+                arg = Constant(arg)
+            return arg
+        def make_op(*args):
+            op = Operation(opname,
+                [wraparg(arg) for arg in args])
+            self.append(op)
+            return op
+        return make_op
+
+    def emit(self, op):
+        self.append(op.extract())
+
+
+def bb_to_str(l : Block, varprefix : str = "var"):
+    def arg_to_str(arg : Value):
+        if isinstance(arg, Constant):
+            return str(arg.value)
+        else:
+            return varnames[arg]
+
+    varnames = {}
+    res = []
+    for index, op in enumerate(l):
+        # give the operation a name used while
+        # printing:
+        var =  f"{varprefix}{index}"
+        varnames[op] = var
+        arguments = ", ".join(
+            arg_to_str(op.arg(i))
+                for i in range(len(op.args))
+        )
+        strop = f"{var} = {op.name}({arguments})"
+        res.append(strop)
+    return "\n".join(res)
+```
+
+Now we can write some first tests. The first test is simply checking constant folding:
+
+```python
+def test_constfold_two_ops():
+    bb = Block()
+    var0 = bb.getarg(0)
+    var1 = bb.int_add(5, 4)
+    var2 = bb.int_add(var1, 10)
+    var3 = bb.int_add(var2, var0)
+
+    opt_bb = simplify(bb)
+    assert bb_to_str(opt_bb, "optvar") == """\
+optvar0 = getarg(0)
+optvar1 = int_add(19, optvar0)"""
+```
+
+Caling the transfer functions on constant `KnownBits` produces a constant
+results, as we have seen. Therefore "regular" constant folding should hopefully
+be achieved by optimizing with the `KnownBits` abstract domain too.
+
+The next two tests are slightly more complicated and can't be optimized by
+regular constant-folding. They follow the motivating examples from the start of
+this blog post, a hundred years ago:
+
+```
+def test_constfold_via_knownbits():
+    bb = Block()
+    var0 = bb.getarg(0)
+    var1 = bb.int_or(var0, 1)
+    var2 = bb.int_and(var1, 1)
+    var3 = bb.dummy(var2)
+
+    opt_bb = simplify(bb)
+    assert bb_to_str(opt_bb, "optvar") == """\
+optvar0 = getarg(0)
+optvar1 = int_or(optvar0, 1)
+optvar2 = dummy(1)"""
+
+def test_constfold_alignment_check():
+    bb = Block()
+    var0 = bb.getarg(0)
+    var1 = bb.int_invert(0b1111)
+    # mask off the lowest four bits, thus var2 is aligned
+    var2 = bb.int_and(var0, var1)
+    # add 16 to aligned quantity
+    var3 = bb.int_add(var2, 16)
+    # check alignment of result
+    var4 = bb.int_and(var3, 0b1111)
+    var5 = bb.int_eq(var4, 0)
+    # var5 should be const-folded to 1
+    var6 = bb.dummy(var5)
+
+    opt_bb = simplify(bb)
+    assert bb_to_str(opt_bb, "optvar") == """\
+optvar0 = getarg(0)
+optvar1 = int_and(optvar0, -16)
+optvar2 = int_add(optvar1, 16)
+optvar3 = dummy(1)"""
+```
+
+Now we can implement `simplify`:
+
+```python
+def unknown_transfer_functions(*args):
+    return KnownBits.all_unknown()
+
+
+def simplify(bb: Block) -> Block:
+    abstract_values = {} # dict mapping Operation to KnownBits
+
+    def knownbits_of(val : Value):
+        if isinstance(val, Constant):
+            return KnownBits.from_constant(val.value)
+        return abstract_values[val]
+
+    opt_bb = Block()
+    for op in bb:
+        # apply the transfer function on the abstract arguments
+        if op.name.startswith("int_"):
+            intopname = op.name[4:]
+            transfer_function = getattr(KnownBits, f"abstract_{intopname}")
+        else:
+            transfer_function = unknown_transfer_functions
+        args = [knownbits_of(arg.find()) for arg in op.args]
+        abstract_res = abstract_values[op] = transfer_function(*args)
+        # if the result is a constant, we optimize the operation away and make
+        # it equal to the constant result
+        if abstract_res.is_constant():
+            op.make_equal_to(Constant(abstract_res.ones))
+            continue
+        # otherwise emit the op
+        opt_bb.append(op)
+    return opt_bb
+```
+
+The code follows the approach from the previous blog post very closely. The
+only difference is that we apply the transfer function *first*, to be able to
+detect whether the abstract domain can tell us that the result has to always be
+a constant. This code makes all three tests pass.
+
+## Using the `KnownBits` Domain for Conditional Peephole rewrites
+
+So far we are only using the `KnownBits` domain to find out that certain
+operations have to produce a constant. We can also use the `KnownBits` domain
+to check whether certain operation rewrites are correct. Let's use one of the
+examples from the [Mining JIT traces for missing optimizations with
+Z3](https://pypy.org/posts/2024/07/mining-jit-traces-missing-optimizations-z3.html)
+post, where Z3 found the inefficiency `(x << 4) & -0xf == x << 4` in PyPy JIT
+traces. We don't have shift operations, but we can generalize this optimization
+anyway. The general form of this rewrite is that under some circumstances `x &
+y == x`, and we can use the `KnownBits` domain to detect situations where this
+must be true.
+
+To understand *when* `x & y == x` is true, we can think about individual pairs
+bits `a` and `b`. If `a == 0`, then `a & b == 0 & b == 0 == a`. If `b == 1`
+then `a & b == a & 1 == a`. So if either `a == 0` or `b == 1` is true,
+`a & b == a` follows. And if either of these conditions is true for *all* the
+bits of `x` and `y`, we can know that `x & y == x`.
+
+We can write a method on `KnownBits` to check for this condition:
+
+```python
+class KnownBits:
+    ...
+
+    def is_and_identity(self, other):
+        """ Return True if n1 & n2 == n1 for any n1 in self and n2 in other.
+        (or, equivalently, return True if n1 | n2 == n2)"""
+        return self.zeros | other.ones == -1
+```
+
+Since this reasoning feels ripe for errors, let's check that our understanding
+is correct with Z3:
+
+```python
+def test_prove_is_and_identity():
+    prove(z3.Implies(k1.is_and_identity(k2), n1 & n2 == n1))
+```
+
+Now let's use this in the toy optimizer. Here are two tests for this rewrite:
+
+```python
+def test_remove_redundant_and():
+    bb = Block()
+    var0 = bb.getarg(0)
+    var1 = bb.int_invert(0b1111)
+    # mask off the lowest four bits
+    var2 = bb.int_and(var0, var1)
+    # applying the same mask is not redundant
+    var3 = bb.int_and(var2, var1)
+    var4 = bb.dummy(var3)
+
+    opt_bb = simplify(bb)
+    assert bb_to_str(opt_bb, "optvar") == """\
+optvar0 = getarg(0)
+optvar1 = int_and(optvar0, -16)
+optvar2 = dummy(optvar1)"""
+
+def test_remove_redundant_and_more_complex():
+    bb = Block()
+    var0 = bb.getarg(0)
+    var1 = bb.getarg(1)
+    # var2 has bit pattern ????
+    var2 = bb.int_and(var0, 0b1111)
+    # var3 has bit pattern ...?1111
+    var3 = bb.int_or(var1, 0b1111)
+    # var4 is just var2
+    var4 = bb.int_and(var2, var3)
+    var5 = bb.dummy(var4)
+
+    opt_bb = simplify(bb)
+    assert bb_to_str(opt_bb, "optvar") == """\
+optvar0 = getarg(0)
+optvar1 = getarg(1)
+optvar2 = int_and(optvar0, 15)
+optvar3 = int_or(optvar1, 15)
+optvar4 = dummy(optvar2)"""
+```
+
+To make these tests pass, we can add the conditional rewrite of `int_and` to
+`simplify`:
+
+```python
+def simplify(bb: Block) -> Block:
+    parity = {}
+
+    def knownbits_of(val : Value):
+        ...
+
+    opt_bb = Block()
+    for op in bb:
+        _, _, name_without_prefix = op.name.rpartition("int_")
+        transfer_function = getattr(KnownBits, f"abstract_{name_without_prefix}", unknown_transfer_functions)
+        args = [knownbits_of(arg.find()) for arg in op.args]
+        abstract_res = parity[op] = transfer_function(*args)
+        if abstract_res.is_constant():
+            op.make_equal_to(Constant(abstract_res.ones))
+            continue
+        # <<<< new code
+        if op.name == "int_and":
+            k1, k2 = args
+            if k1.is_and_identity(k2):
+                op.make_equal_to(op.arg(0))
+                continue
+        # >>>> end changes
+        opt_bb.append(op)
+    return opt_bb
+```
+
+And with that, the new tests pass as well.
+
+## Conclusion
+
+...
