@@ -11,23 +11,25 @@
 .. author: CF Bolz-Tereick
 -->
 
-After Max' introduction to abstract interpretation for the toy optimizer in the
+After [Max' introduction to abstract interpretation for the toy optimizer](https://bernsteinbear.com/blog/toy-abstract-interpretation/) in the
 last post, I want to present a more complicated abstract domain in this post.
 This abstract domain reasons about the individual bits of a variable in a trace.
 Every bit can be either "known zero", "known one" or "unknown". The abstract
 domain is useful for optimizing integer operations that perform integer
 manipulations.
 
-The presentation in this post will still be in the context of the toy optimizer.
-We'll spend a significant part of the post convincing ourselves that the code
-that we're writing is really correct, using both property-based testing and
-proofs (again with Z3).
+The presentation in this post will still be in the context of the
+[toy optimizer](/categories/toy-optimizer). We'll spend a significant part of
+the post convincing ourselves that the code that we're writing is really
+correct, using both property-based testing and proofs (again with Z3).
 
 PyPy has implemented and merged a more complicated version of the same abstract
 domain for the "real" PyPy JIT. A more thorough explanation of that real world
 implementation will follow.
 
 TODO: add acknowledgements (at least Nico, Max, Santosh, Armin etc).
+
+[TOC]
 
 ## Motivation
 
@@ -725,8 +727,6 @@ abstract_unknowns
 >>>> # let's try
 >>>> prove(k2.contains(n2))
 Traceback (most recent call last):
-  File "/home/cfbolz/bin/pypy-c-jit-184949-5ab4e2e078e2-linux64/lib/pypy3.10/code.py", line 90, in runcode
-    exec(code, self.locals)
   File "<stdin>", line 1, in <module>
   File "<stdin>", line 1, in prove
 AssertionError
@@ -1090,19 +1090,19 @@ values that are not optimally precise.
 
 Now after all this work we can finally actually use the knownbits abstract
 domain in the toy optimizer. The code for this follows [Max' intro post about
-abstract interpretation](https://pypy.org/posts/2024/07/toy-abstract-interpretation.html)
+abstract interpretation](https://bernsteinbear.com/blog/toy-abstract-interpretation/)
 quite closely.
 
 For completeness sake, in the fold there's the basic infrastructure classes
-that make up the IR again (they are identical to the previous toy posts). <details>
+that make up the IR again (they are identical to the previous toy posts).
 
+<details>
+<summary>toy infrastructure</summary>
 ```python
 class Value:
     def find(self):
         raise NotImplementedError("abstract")
 
-    def extract(self):
-        raise NotImplementedError("abstract")
 
 @dataclass(eq=False)
 class Operation(Value):
@@ -1126,11 +1126,6 @@ class Operation(Value):
     def make_equal_to(self, value : Value):
         self.find().forwarded = value
 
-    def extract(self):
-        return Operation(self.name, [arg.find for arg in self.args])
-
-    def extract(self):
-        raise NotImplementedError("abstract")
 
 @dataclass(eq=False)
 class Constant(Value):
@@ -1138,6 +1133,7 @@ class Constant(Value):
 
     def find(self):
         return self
+
 
 class Block(list):
     def __getattr__(self, opname):
@@ -1151,9 +1147,6 @@ class Block(list):
             self.append(op)
             return op
         return make_op
-
-    def emit(self, op):
-        self.append(op.extract())
 
 
 def bb_to_str(l : Block, varprefix : str = "var"):
@@ -1260,11 +1253,9 @@ def simplify(bb: Block) -> Block:
     opt_bb = Block()
     for op in bb:
         # apply the transfer function on the abstract arguments
-        if op.name.startswith("int_"):
-            intopname = op.name[4:]
-            transfer_function = getattr(KnownBits, f"abstract_{intopname}")
-        else:
-            transfer_function = unknown_transfer_functions
+        name_without_prefix = op.name.removeprefix("int_")
+        method_name = f"abstract_{name_without_prefix}"
+        transfer_function = getattr(KnownBits, method_name, unknown_transfer_functions)
         abstract_args = [knownbits_of(arg.find()) for arg in op.args]
         abstract_res = abstract_values[op] = transfer_function(*abstract_args)
         # if the result is a constant, we optimize the operation away and make
@@ -1288,7 +1279,7 @@ So far we are only using the `KnownBits` domain to find out that certain
 operations have to produce a constant. We can also use the `KnownBits` domain
 to check whether certain operation rewrites are correct. Let's use one of the
 examples from the [Mining JIT traces for missing optimizations with
-Z3](https://pypy.org/posts/2024/07/mining-jit-traces-missing-optimizations-z3.html)
+Z3](/posts/2024/07/mining-jit-traces-missing-optimizations-z3.html)
 post, where Z3 found the inefficiency `(x << 4) & -0xf == x << 4` in PyPy JIT
 traces. We don't have shift operations, but we want to generalize this optimization
 anyway. The general form of this rewrite is that under some circumstances `x &
@@ -1376,17 +1367,18 @@ def simplify(bb: Block) -> Block:
     opt_bb = Block()
     for op in bb:
         # apply the transfer function on the abstract arguments
-        if op.name.startswith("int_"):
-            intopname = op.name[4:]
-            transfer_function = getattr(KnownBits, f"abstract_{intopname}")
-        else:
-            transfer_function = unknown_transfer_functions
+        name_without_prefix = op.name.removeprefix("int_")
+        method_name = f"abstract_{name_without_prefix}"
+        transfer_function = getattr(KnownBits, method_name, unknown_transfer_functions)
         abstract_args = [knownbits_of(arg.find()) for arg in op.args]
         abstract_res = abstract_values[op] = transfer_function(*abstract_args)
+        # if the result is a constant, we optimize the operation away and make
+        # it equal to the constant result
         if abstract_res.is_constant():
             op.make_equal_to(Constant(abstract_res.ones))
             continue
         # <<<< new code
+        # conditionally rewrite int_and(x, y) to x
         if op.name == "int_and":
             k1, k2 = abstract_args
             if k1.is_and_identity(k2):
@@ -1397,8 +1389,41 @@ def simplify(bb: Block) -> Block:
     return opt_bb
 ```
 
-And with that, the new tests pass as well.
+And with that, the new tests pass as well. A real implementation would also
+check the other argument order, but we leave that out for the sake of brevity.
+
+This rewrite also generalizes the rewrites `int_and(0, x) -> 0` and
+`int_and(-1, x) -> x`, let's add tests for those:
+
+```python
+def test_remove_and_simple():
+    bb = Block()
+    var0 = bb.getarg(0)
+    var1 = bb.getarg(1)
+    var2 = bb.int_and(0, var0) # == 0
+    var3 = bb.int_invert(var2) # == -1
+    var4 = bb.int_and(var1, var3) # == var1
+    var5 = bb.dummy(var4)
+
+    opt_bb = simplify(bb)
+    assert bb_to_str(opt_bb, "optvar") == """\
+optvar0 = getarg(0)
+optvar1 = getarg(1)
+optvar2 = dummy(optvar1)"""
+```
+
+This test just passes.
+
 
 ## Conclusion
 
-...
+In this post we've seen the implementation, testing and proofs about a 'known
+bits' abstract domain, as well as its use in the toy optimizer. There are many
+more uses of the abstract domain possible.
+
+In the next posts I'll write about the real implementation of a knownbits
+domain in PyPy's JIT, as well as some lose ends.
+
+Sources:
+
+TODO
