@@ -16,18 +16,25 @@ last post, I want to present a more complicated abstract domain in this post.
 This abstract domain reasons about the individual bits of a variable in a trace.
 Every bit can be either "known zero", "known one" or "unknown". The abstract
 domain is useful for optimizing integer operations that perform integer
-manipulations.
+manipulations. The abstract domain follows quite closely the tristate abstract
+domain of the eBPF verifier in the Linux Kernel, as described by the paper
+[Sound, Precise, and Fast Abstract Interpretation with Tristate
+Numbers](https://arxiv.org/abs/2105.05398) by Harishankar Vishwanathan, Matan
+Shachnai, Srinivas Narayana, and Santosh Nagarakatte.
 
 The presentation in this post will still be in the context of the
 [toy optimizer](/categories/toy-optimizer). We'll spend a significant part of
-the post convincing ourselves that the code that we're writing is really
-correct, using both property-based testing and proofs (again with Z3).
+the post convincing ourselves that the abstract domain transfer functions that
+we're writing are really correct, using both property-based testing and
+automated proofs (again using Z3).
 
 PyPy has implemented and merged a more complicated version of the same abstract
 domain for the "real" PyPy JIT. A more thorough explanation of that real world
 implementation will follow.
 
-TODO: add acknowledgements (at least Nico, Max, Santosh, Armin etc).
+I'd like to thank Max Bernstein and Armin Rigo for lots of great feedback on
+drafts of this post The PyPy implementation was mainly done Nico Rittinghaus
+and me.
 
 [TOC]
 
@@ -65,12 +72,12 @@ again all `0`, therefore the second assert is always true. So we would like a
 compiler to remove the second assert.
 
 Both of these will optimizations are doable with the help of the knownbits
-domain that we'll discuss in the rest of the post.
+abstract domain that we'll discuss in the rest of the post.
 
 
 ## The Knownbits Abstract Domain
 
-An abstract value of the knownbits domain needs to be able to store for every
+An abstract value of the knownbits domain needs to be able to store, for every
 bit of an integer, whether it is known 0, known 1, or unknown. To represent
 three different states, we need 2 bits, which we will call `one` and `unknown`.
 Here's the encoding:
@@ -123,9 +130,9 @@ class KnownBits:
 
 ```
 
-We can also add some convenience properties. Sometimes it is easier to work with
-an integer where all the *known* bits are set, or one where all the known zeros
-are set:
+We can also add some convenience properties. Sometimes it is easier to work
+with an integer where all the *known* bits are set, or one where the positions
+of all the known zeros have a set bit:
 
 ```python
 class KnownBits:
@@ -512,7 +519,14 @@ correct (but imprecise) implementation of `abstract_invert` would simply return
 a completely unknown result, regardless of what is known about the input
 `KnownBits`.
 
-TODO: add a paragraph about the Galois connection here
+The "proper" CS term for this notion of correctness is called *soundness*. The
+correctness condition on the transfer functions is called a *Galois
+connection*. I won't go into any mathematical/technical details here, but
+wanted to at least mention the terms. I found [Martin
+Kellogg](https://web.njit.edu/~mjk76/)'s
+[slides](https://web.njit.edu/~mjk76/teaching/cs684-sp24/assets/lecture-12.pdf#34)
+to be quite an approachable introducion to the Galois connection and who to
+show soundness.
 
 ## Implementing Binary Transfer Functions
 
@@ -1419,11 +1433,25 @@ This test just passes.
 
 In this post we've seen the implementation, testing and proofs about a 'known
 bits' abstract domain, as well as its use in the toy optimizer. There are many
-more uses of the abstract domain possible.
+more uses of the abstract domain possible in 
 
 In the next posts I'll write about the real implementation of a knownbits
 domain in PyPy's JIT, as well as some lose ends.
 
 Sources:
 
-TODO
+* [Known bits in LLVM](https://github.com/llvm/llvm-project/blob/main/llvm/lib/Support/KnownBits.cpp)
+* [Tristate numbers for known bits in Linux eBPF](https://github.com/torvalds/linux/blob/master/kernel/bpf/tnum.c)
+* [Sound, Precise, and Fast Abstract Interpretation with Tristate Numbers](https://arxiv.org/abs/2105.05398)
+* [Verifying the Veriﬁer: eBPF Range Analysis Veriﬁcation](https://people.cs.rutgers.edu/~sn349/papers/agni-cav2023.pdf)
+* [Bit-Twiddling: Addition with Unknown
+  Bits](https://dougallj.wordpress.com/2020/01/13/bit-twiddling-addition-with-unknown-bits/)
+  is a super readable blog post by Dougall J. I've taken the `ones` and
+  `unknowns` naming from this post, which I find significantly clearer than
+  `value` and `mask`, which the Linux kernel uses.
+* [Bits, Math and Performance(?)](https://bitmath.blogspot.com/), a fantastic
+  blog by [Harold Aptroot](https://mastodon.gamedev.place/@harold). There are a
+  lot of relevant posts about known bits, range analysis etc. Harold is also
+  the author of [Haroldbot](http://haroldbot.nl/), a website that can be used
+  for bitvector calculations, and also checks bitvector identities.
+* [Sharpening Constraint Programming approaches for Bit-Vector Theory](https://cea.hal.science/cea-01795779/document)
