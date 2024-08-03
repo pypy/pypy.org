@@ -1498,3 +1498,5 @@ Sources:
   the author of [Haroldbot](http://haroldbot.nl/), a website that can be used
   for bitvector calculations, and also checks bitvector identities.
 * [Sharpening Constraint Programming approaches for Bit-Vector Theory](https://cea.hal.science/cea-01795779/document)
+* [Deriving Abstract Transfer Functions for Analyzing Embedded Software](https://users.cs.utah.edu/~regehr/papers/lctes06_2/fp019-regehr.pdf)
+* [Synthesizing Abstract Transformers](https://arxiv.org/abs/2105.00493)
