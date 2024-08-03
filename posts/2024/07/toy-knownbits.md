@@ -1,7 +1,7 @@
 <!--
 .. title: A Knownbits Abstract Domain for the Toy Optimizer, Correctly
 .. slug: toy-knownbits
-.. date: 2024-07-30 12:00:00 UTC
+.. date: 2024-08-03 14:00:00 UTC
 .. tags: toy-optimizer, z3
 .. category:
 .. link:
