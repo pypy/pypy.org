@@ -525,7 +525,7 @@ connection*. I won't go into any mathematical/technical details here, but
 wanted to at least mention the terms. I found [Martin
 Kellogg](https://web.njit.edu/~mjk76/)'s
 [slides](https://web.njit.edu/~mjk76/teaching/cs684-sp24/assets/lecture-12.pdf#34)
-to be quite an approachable introducion to the Galois connection and who to
+to be quite an approachable introduction to the Galois connection and who to
 show soundness.
 
 ## Implementing Binary Transfer Functions
@@ -692,7 +692,7 @@ in the context of a JIT compiler.
 
 ## Proving correctness of the transfer functions with Z3
 
-As one can probably tell from my most recent posts, I've been thinking about
+As one can probably tell from my recent posts, I've been thinking about
 compiler correctness a lot recently. Getting the transfer functions absolutely
 correct is really crucial, because a bug in them would lead to miscompilation of
 Python code when the abstract domain is added to the JIT. While the randomized
@@ -744,7 +744,7 @@ Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
   File "<stdin>", line 1, in prove
 AssertionError
->>>> # it doesn't work! let's look at the countexample to see why:
+>>>> # it doesn't work! let's look at the counterexample to see why:
 >>>> solver.model()
 [abstract_unknowns = 0,
  abstract_ones = 0,
@@ -796,27 +796,26 @@ def BitVec(name):
 def BitVecVal(val):
     return z3.BitVecVal(val, INTEGER_WIDTH)
 
-solver = z3.Solver()
+def z3_setup_variables():
+    solver = z3.Solver()
 
-n1 = BitVec("n1")
-k1 = KnownBits(BitVec("n1_ones"), BitVec("n1_unkowns"))
-# add preconditions that connect n1 and k1, valid in all the tests
-solver.add(k1.contains(n1))
+    n1 = BitVec("n1")
+    k1 = KnownBits(BitVec("n1_ones"), BitVec("n1_unkowns"))
+    solver.add(k1.contains(n1))
 
-n2 = BitVec("n2")
-k2 = KnownBits(BitVec("n2_ones"), BitVec("n2_unkowns"))
-# same for n2 and k2
-solver.add(k2.contains(n2))
+    n2 = BitVec("n2")
+    k2 = KnownBits(BitVec("n2_ones"), BitVec("n2_unkowns"))
+    solver.add(k2.contains(n2))
+    return solver, k1, n1, k2, n2
 
-def prove(cond):
+def prove(cond, solver):
     z3res = solver.check(z3.Not(cond))
     if z3res != z3.unsat:
         assert z3res == z3.sat # can't be timeout, we set no timeout
         # make the counterexample global, to make inspecting the bug in pdb
         # easier
-        global model 
+        global model
         model = solver.model()
-        # print the count-example values for n1, n2, k1, k2:
         print(f"n1={model.eval(n1)}, n2={model.eval(n2)}")
         counter_example_k1 = KnownBits(model.eval(k1.ones).as_signed_long(),
                                        model.eval(k1.unknowns).as_signed_long())
@@ -832,29 +831,34 @@ And then we can write proof-unit-tests like this:
 
 ```python
 def test_z3_abstract_invert():
+    solver, k1, n1, _, _ = z3_setup_variables()
     k2 = k1.abstract_invert()
     n2 = ~n1
-    prove(k2.contains(n2))
+    prove(k2.contains(n2), solver)
 
 def test_z3_abstract_and():
+    solver, k1, n1, k2, n2 = z3_setup_variables()
     k3 = k1.abstract_and(k2)
     n3 = n1 & n2
-    prove(k3.contains(n3))
+    prove(k3.contains(n3), solver)
 
 def test_z3_abstract_or():
+    solver, k1, n1, k2, n2 = z3_setup_variables()
     k3 = k1.abstract_or(k2)
     n3 = n1 | n2
-    prove(k3.contains(n3))
+    prove(k3.contains(n3), solver)
 
 def test_z3_abstract_add():
+    solver, k1, n1, k2, n2 = z3_setup_variables()
     k3 = k1.abstract_add(k2)
     n3 = n1 + n2
-    prove(k3.contains(n3))
+    prove(k3.contains(n3), solver)
 
 def test_z3_abstract_sub():
+    solver, k1, n1, k2, n2 = z3_setup_variables()
     k3 = k1.abstract_sub(k2)
     n3 = n1 - n2
-    prove(k3.contains(n3))
+    prove(k3.contains(n3), solver)
 ```
 
 (it's possible to write a bit more Python-metaprogramming-magic and unify the
@@ -952,8 +956,10 @@ def z3_abstract_eq(k1, k2):
     return KnownBits(ones, unknowns)
 
 def test_z3_abstract_eq_logic():
+    solver, k1, n1, k2, n2 = z3_setup_variables()
+    n3 = z3_cond(n1 == n2) # concrete result
     k3 = z3_abstract_eq(k1, k2)
-    prove(k3.contains(n3))
+    prove(k3.contains(n3), solver)
 ```
 
 This proof works. It is a lot less satisfying than the previous ones though,
@@ -1001,25 +1007,26 @@ can prove that all our transfer functions have this property:
 
 ```python
 def test_z3_prove_constant_folding():
+    solver, k1, n1, k2, n2 = z3_setup_variables()
     k3 = k1.abstract_invert()
     prove(z3.Implies(k1.is_constant(),
-                     k3.is_constant()))
+                     k3.is_constant()), solver)
 
     k3 = k1.abstract_and(k2)
     prove(z3.Implies(z3.And(k1.is_constant(), k2.is_constant()),
-                     k3.is_constant()))
+                     k3.is_constant()), solver)
 
     k3 = k1.abstract_or(k2)
     prove(z3.Implies(z3.And(k1.is_constant(), k2.is_constant()),
-                     k3.is_constant()))
+                     k3.is_constant()), solver)
 
     k3 = k1.abstract_sub(k2)
     prove(z3.Implies(z3.And(k1.is_constant(), k2.is_constant()),
-                     k3.is_constant()))
+                     k3.is_constant()), solver)
 
     k3 = z3_abstract_eq(k1, k2)
     prove(z3.Implies(z3.And(k1.is_constant(), k2.is_constant()),
-                     k3.is_constant()))
+                     k3.is_constant()), solver)
 ```
 
 Proving with Z3 that the transfer functions are maximally precise for
@@ -1048,13 +1055,13 @@ explain the details and can only hope that the comments are somewhat helpful):
 @given(random_knownbits_and_contained_number, random_knownbits_and_contained_number)
 @settings(deadline=None)
 def test_check_precision(t1, t2):
-    b1, n1 = t1
-    b2, n2 = t2
+    k1, n1 = t1
+    k2, n2 = t2
     # apply transfer function
-    b3 = b1.abstract_add(b2)
+    k3 = k1.abstract_add(k2)
     example_res = n1 + n2
 
-    # try to find a better version of b3 with Z3
+    # try to find a better version of k3 with Z3
     solver = z3.Solver()
     solver.set("timeout", 8000)
 
@@ -1063,32 +1070,32 @@ def test_check_precision(t1, t2):
 
     ones = BitVec('ones')
     unknowns = BitVec('unknowns')
-    better_b3 = KnownBits(ones, unknowns)
-    print(b1, b2, b3)
+    better_k3 = KnownBits(ones, unknowns)
+    print(k1, k2, k3)
 
-    # we're trying to find an example for a better b3, so we use check, without
+    # we're trying to find an example for a better k3, so we use check, without
     # negation:
     res = solver.check(z3.And(
-        # better_b3 should be a valid knownbits instance
-        better_b3.is_well_formed(),
-        # it should be better than b3, ie there are known bits in better_b3
-        # that we don't have in b3
-        better_b3.knowns & ~b3.knowns != 0,
-        # now encode the correctness condition for better_b3 with a ForAll:
+        # better_k3 should be a valid knownbits instance
+        better_k3.is_well_formed(),
+        # it should be better than k3, ie there are known bits in better_k3
+        # that we don't have in k3
+        better_k3.knowns & ~k3.knowns != 0,
+        # now encode the correctness condition for better_k3 with a ForAll:
         # for all concrete values var1 and var2, it must hold that if
-        # var1 is in b1 and var2 is in b2 it follows that var1 + var2 is in
-        # better_b3
+        # var1 is in k1 and var2 is in k2 it follows that var1 + var2 is in
+        # better_k3
         z3.ForAll(
         [var1, var2],
         z3.Implies(
-            z3.And(b1.contains(var1), b2.contains(var2)),
-            better_b3.contains(var1 + var2)))))
+            z3.And(k1.contains(var1), k2.contains(var2)),
+            better_k3.contains(var1 + var2)))))
     # if this query is satisfiable, we have found a better result for the
-    # abstract_and
+    # abstract_add
     if res == z3.sat:
         model = solver.model()
-        rb3 = KnownBits(model.eval(ones).as_signed_long(), model.eval(unknowns).as_signed_long())
-        print("better", rb3)
+        rk3 = KnownBits(model.eval(ones).as_signed_long(), model.eval(unknowns).as_signed_long())
+        print("better", rk3)
         assert 0
     if res == z3.unknown:
         print("timeout")
