@@ -38,6 +38,8 @@ I'd like to thank Max Bernstein and Armin Rigo for lots of great feedback on
 drafts of this post. The PyPy implementation was mainly done by Nico
 Rittinghaus and me.
 
+**Contents:**
+
 [TOC]
 
 ## Motivation
@@ -243,7 +245,7 @@ class KnownBits:
 
 </details>
 
-And here's a unit test for `str`:
+And here's a [pytest](https://pytest.org)-style unit test for `str`:
 
 ```python
 def test_str():
@@ -486,7 +488,7 @@ Now we get data like this:
 We can also write a test that checks that the somewhat tricky logic in
 `__str__` and `from_str` is correct, by making sure that the two functions
 round-trip (ie converting a `KnownBits` to a string and then back to a
-`KnownBits` instance yields the abstract value).
+`KnownBits` instance produces the same abstract value).
 
 ```python
 @given(knownbits_and_contained_number)
@@ -503,7 +505,7 @@ Now let's actually apply this infrastructure to test `abstract_invert`.
 
 ## When are Transfer Functions Correct? How do we test them?
 
-Abstract value, i.e. instances of `KnownBits` represent *sets* of concrete
+Abstract values, i.e. instances of `KnownBits` represent *sets* of concrete
 values. We want the transfer functions to compute *overapproximations* of the
 concrete values. So if we have an arbitrary abstract value `k`, with a concrete
 number `n` that is a member of the abstract values (i.e.
@@ -525,7 +527,7 @@ def test_hypothesis_invert(t):
 
 This is the *only* condition needed for `abstract_invert` to be correct. If
 `abstract_invert` fulfils this property for every combination of abstract and
-concrete value then `abstract_invert` is *correct*. Note however, that this test
+concrete value then `abstract_invert` is correct. Note however, that this test
 does not actually check whether `abstract_invert` gives us precise results. A
 correct (but imprecise) implementation of `abstract_invert` would simply return
 a completely unknown result, regardless of what is known about the input
@@ -537,7 +539,7 @@ connection*. I won't go into any mathematical/technical details here, but
 wanted to at least mention the terms. I found [Martin
 Kellogg](https://web.njit.edu/~mjk76/)'s
 [slides](https://web.njit.edu/~mjk76/teaching/cs684-sp24/assets/lecture-12.pdf#34)
-to be quite an approachable introduction to the Galois connection and who to
+to be quite an approachable introduction to the Galois connection and how to
 show soundness.
 
 ## Implementing Binary Transfer Functions
@@ -635,9 +637,10 @@ because they compose over the individual bits of the integers. The arithmetic
 functions `add` and `sub` are significantly harder, because of carries and
 borrows. Coming up with the formulas for them and gaining an intuitive
 understanding is quite tricky and involves carefully going through a few
-examples with pen and paper. We didn't come up with the implementation
-ourselves, but instead took them from the TODO paper. Here's the code, with
-example tests and hypothesis tests:
+examples with pen and paper. When implementing this in PyPy, Nico and I didn't
+come up with the implementation ourselves, but instead took them from the
+[Tristate Numbers](https://arxiv.org/abs/2105.05398) paper. Here's the code,
+with example tests and hypothesis tests:
 
 ```python
 class KnownBits:
@@ -705,7 +708,7 @@ in the context of a JIT compiler.
 ## Proving correctness of the transfer functions with Z3
 
 As one can probably tell from my recent posts, I've been thinking about
-compiler correctness a lot recently. Getting the transfer functions absolutely
+compiler correctness a lot. Getting the transfer functions absolutely
 correct is really crucial, because a bug in them would lead to miscompilation of
 Python code when the abstract domain is added to the JIT. While the randomized
 tests are great, it's still entirely possible for them to miss bugs. The state
@@ -787,15 +790,16 @@ prove works:
 
 This is super cool! It's really a proof about the actual implementation, because
 we call the implementation methods directly, and due to the operator overloading
-that Z3 does we can be sure that we are actually checking a statement that
+that Z3 does we can be sure that we are actually checking a formula that
 corresponds to the Python code. This eliminates one source of errors in formal
 methods.
 
 Doing the proof manually on the Python REPL is kind of annoying though, and we
 also would like to make sure that the proofs are re-done when we change the
 code. What we would really like to do is writing the proofs as a unit-test that
-we can run in CI. Doing this is possible, and the unit tests that really perform
-proofs look pleasingly similar to the Hypothesis-based ones.
+we can run while developing and in CI. Doing this is possible, and the unit
+tests that really perform proofs look pleasingly similar to the
+Hypothesis-based ones.
 
 First we need to set up a bit of infrastructure:
 
@@ -809,14 +813,23 @@ def BitVecVal(val):
     return z3.BitVecVal(val, INTEGER_WIDTH)
 
 def z3_setup_variables():
+    # instantiate a solver
     solver = z3.Solver()
 
+    # a Z3 variable for the first concrete value
     n1 = BitVec("n1")
+    # a KnownBits instances that uses Z3 variables as its ones and unknowns,
+    # representing the first abstract value
     k1 = KnownBits(BitVec("n1_ones"), BitVec("n1_unkowns"))
+    # add the precondition to the solver that the concrete value n1 must be a
+    # member of the abstract value k1
     solver.add(k1.contains(n1))
 
+    # a Z3 variable for the second concrete value
     n2 = BitVec("n2")
+    # a KnownBits instances for the second abstract value
     k2 = KnownBits(BitVec("n2_ones"), BitVec("n2_unkowns"))
+    # add the precondition linking n2 and k2 to the solver
     solver.add(k2.contains(n2))
     return solver, k1, n1, k2, n2
 
@@ -824,8 +837,8 @@ def prove(cond, solver):
     z3res = solver.check(z3.Not(cond))
     if z3res != z3.unsat:
         assert z3res == z3.sat # can't be timeout, we set no timeout
-        # make the counterexample global, to make inspecting the bug in pdb
-        # easier
+        # make the model with the counterexample global, to make inspecting the
+        # bug easier when running pytest --pdb
         global model
         model = solver.model()
         print(f"n1={model.eval(n1)}, n2={model.eval(n2)}")
@@ -896,7 +909,7 @@ very small number of cases. It breaks down as soon as the `KnownBits` methods
 that we're calling contain any `if` conditions (including hidden ones like
 the short-circuiting `and` and `or` in Python). Let's look at an example and
 implement `abstract_eq`. `eq` is supposed to be an operation that compares two
-integers and returns 0 or 1 if they are different or equal, respectively.
+integers and returns `0` or `1` if they are different or equal, respectively.
 Implementing this in knownbits looks like this (with example and hypothesis
 tests):
 
@@ -1067,7 +1080,7 @@ non-constant arguments seems to be relatively hard. I tried a few completely
 rigorous approaches and failed. The paper [Sound, Precise, and Fast Abstract
 Interpretation with Tristate Numbers](https://arxiv.org/pdf/2105.05398)
 contains an optimality proof for the transfer functions of addition and
-subtraction, so we can be quite certain that they are as precise as is
+subtraction, so we can be certain that they are as precise as is
 possible.
 
 I still want to show an approach for trying to find concrete examples of
@@ -1075,7 +1088,7 @@ abstract values that are less precise than they could be, using a combination
 of Hypothesis and Z3. The idea is to use hypothesis to pick random abstract
 values. Then we compute the abstract result using our transfer function.
 Afterwards we can ask Z3 to find us an abstract result that is better than the
-one our tranfer function produced. If Z3 finds a better abstract result, we
+one our transfer function produced. If Z3 finds a better abstract result, we
 have a concrete example of imprecision for our transfer function. Those tests
 aren't strict proofs, because they rely on generating random abstract values,
 but they can still be valuable (not for the transfer functions in this blog
@@ -1291,7 +1304,7 @@ optvar2 = int_add(optvar1, 16)
 optvar3 = dummy(1)"""
 ```
 
-Here is `simplify`:
+Here is `simplify` to make these tests pass:
 
 ```python
 def unknown_transfer_functions(*abstract_args):
@@ -1410,8 +1423,8 @@ optvar4 = dummy(optvar2)"""
 ```
 
 The first test could also be made to pass by implementing a reassociation
-optimization that turns `(x & c1) & c2` into `x & (c1 & c2)`. But we want to
-use `KnownBits` and conditionally rewrite `int_and`. So to make the tests pass,
+optimization that turns `(x & c1) & c2` into `x & (c1 & c2)` and then constant-folds the second `and`. But here we want to
+use `KnownBits` and conditionally rewrite `int_and` to its first argument. So to make the tests pass,
 we can change `simplify` like this:
 
 ```python
@@ -1449,7 +1462,7 @@ def simplify(bb: Block) -> Block:
 And with that, the new tests pass as well. A real implementation would also
 check the other argument order, but we leave that out for the sake of brevity.
 
-This rewrite also generalizes the rewrites `int_and(0, x) -> 0` and
+This rewrite also generalizes the [rewrites](https://pypy.org/posts/2024/07/finding-simple-rewrite-rules-jit-z3.html) `int_and(0, x) -> 0` and
 `int_and(-1, x) -> x`, let's add a test for those:
 
 ```python
@@ -1469,7 +1482,7 @@ optvar1 = getarg(1)
 optvar2 = dummy(optvar1)"""
 ```
 
-This test just passes.
+This test just passes. And that's it for this post!
 
 
 ## Conclusion
