@@ -15,8 +15,8 @@ After [Max' introduction to abstract interpretation for the toy optimizer](https
 last post, I want to present a more complicated abstract domain in this post.
 This abstract domain reasons about the individual bits of a variable in a trace.
 Every bit can be either "known zero", "known one" or "unknown". The abstract
-domain is useful for optimizing integer operations that perform integer
-manipulations. The abstract domain follows quite closely the tristate abstract
+domain is useful for optimizing integer operations, particularly the bitwise operations.
+The abstract domain follows quite closely the tristate abstract
 domain of the eBPF verifier in the Linux Kernel, as described by the paper
 [Sound, Precise, and Fast Abstract Interpretation with Tristate
 Numbers](https://arxiv.org/abs/2105.05398) by Harishankar Vishwanathan, Matan
@@ -33,15 +33,16 @@ domain for the "real" PyPy JIT. A more thorough explanation of that real world
 implementation will follow.
 
 I'd like to thank Max Bernstein and Armin Rigo for lots of great feedback on
-drafts of this post The PyPy implementation was mainly done Nico Rittinghaus
-and me.
+drafts of this post. The PyPy implementation was mainly done by Nico
+Rittinghaus and me.
 
 [TOC]
 
 ## Motivation
 
 In many programs that do bit-manipulation of integers, some of the bits of the
-integer variables of the program can be known. Here's a simple example:
+integer variables of the program can be statically known. Here's a simple
+example:
 
 ```
 x = a | 1
@@ -53,7 +54,7 @@ else:
 ```
 
 After the assignment `x = a | 1`, we know that the lowest bit of `x` must be `1`
-(the other bits are unknown) and can remove the condition `x & 1` by
+(the other bits are unknown) and an optimizer could remove the condition `x & 1` by
 constant-folding it to `1`.
 
 Another (more complicated) example is:
@@ -64,7 +65,8 @@ j = i + 16
 assert j & 0b111 == 0
 ```
 
-This kind of code could e.g. happen in a CPU emulator, where `i` and `j` are
+This kind of code could e.g. happen in a [CPU
+emulator](https://docs.pydrofoil.org/en/latest/), where `i` and `j` are
 integers that represent emulated pointers, and the `assert`s are alignment
 checks. The first assert implies that the lowest three bits of i must be `0`.
 Adding 16 to such a number produces a result where the lowest three bits are
@@ -78,7 +80,8 @@ abstract domain that we'll discuss in the rest of the post.
 ## The Knownbits Abstract Domain
 
 An abstract value of the knownbits domain needs to be able to store, for every
-bit of an integer, whether it is known 0, known 1, or unknown. To represent
+bit of an integer variable in a program, whether it is known 0, known 1, or
+unknown. To represent
 three different states, we need 2 bits, which we will call `one` and `unknown`.
 Here's the encoding:
 
@@ -90,7 +93,9 @@ Here's the encoding:
 | 1   | 1       |  illegal |
 
 The `unknown` bit is set if we don't know the value of the bit ("?"), the `one`
-bit is set if the bit is known to be a `1`.
+bit is set if the bit is known to be a `1`. Since two bits are enough to encode
+four different states, but we only need three, the combination of a set `one`
+bit and a set `unknown` is not allowed.
 
 We don't just want to encode a single bit, however. Instead, we want to do this
 for all the bits of an integer variable. Therefore the instances of the abstract
@@ -154,8 +159,11 @@ class KnownBits:
 
 Also, for debugging and for writing tests we want a way to print the known bits
 in a human-readable form, and also to have a way to construct a `KnownBits`
-instance from a string  (it's not important to understand the details of
-`__str__` or `from_str` for the rest of the post).
+instance from a string. It's not important to understand the details of
+`__str__` or `from_str` for the rest of the post, so I'm putting them into a fold:
+
+<details>
+<summary><code>KnownBits</code> from and to string conversions</summary>
 
 ```python
 class KnownBits:
@@ -231,7 +239,9 @@ class KnownBits:
 
 ```
 
-Let's write a unit tests for `str`:
+</details>
+
+And here's a unit test for `str`:
 
 ```python
 def test_str():
@@ -244,8 +254,8 @@ def test_str():
 
 An instance of `KnownBits` represents a set of integers, namely those that match
 the known bits stored in the instance. We can write a method `contains` that
-takes an `int` and returns `True` if the value matches the pattern of the known
-bits:
+takes a concrete `int` value and returns `True` if the value matches the
+pattern of the known bits:
 
 
 ```python
@@ -861,9 +871,20 @@ def test_z3_abstract_sub():
     prove(k3.contains(n3), solver)
 ```
 
-(it's possible to write a bit more Python-metaprogramming-magic and unify the
-Hypothesis and Z3 tests into the same test definition, and then first try to
-find some random counterexamples and if that works, do a Z3 proof.)
+It's possible to write a bit more Python-metaprogramming-magic and unify the
+Hypothesis and Z3 tests into the same test definition.[^proof_bitwidths]
+
+[^proof_bitwidths]: There's a subtletly about the Z3 proofs that I'm sort of
+    glossing over here. Python integers are of arbitrary width, and the
+    `KnownBits` code is actually carefully written to work for integers of any
+    size. This property is tested by the Hypothesis tests, which don't limit
+    the sizes of the generated random integers. However, the Z3 proofs only
+    check bitvectors of a fixed bitwidth of 64. There are various ways to deal
+    with this situation. For most "real" compilers, the bitwidth of integers
+    would be fixed anyway. Then the components `ones` and `unknowns` of the
+    `KnownBits` class would use the number of bits the corresponding integer
+    variable has, and the Z3 proofs would use the same width. This is what we
+    do in the PyPy JIT.
 
 
 ## Cases where this style of Z3 proof doesn't work
@@ -874,8 +895,8 @@ that we're calling contain any `if` conditions (including hidden ones like
 the short-circuiting `and` and `or` in Python). Let's look at an example and
 implement `abstract_eq`. `eq` is supposed to be an operation that compares two
 integers and returns 0 or 1 if they are different or equal, respectively.
-Implementing this in knownbits looks like this with example and hypothesis
-tests:
+Implementing this in knownbits looks like this (with example and hypothesis
+tests):
 
 ```python
 class KnownBits:
@@ -884,7 +905,7 @@ class KnownBits:
     def abstract_eq(self, other):
         # the result is a 0, 1, or ?
 
-        # can only be known equal if they are both constants
+        # if they are both the same constant, they must be equal
         if self.is_constant() and other.is_constant() and self.ones == other.ones:
             return KnownBits.from_constant(1)
         # check whether we have known disagreeing bits, then we know the result
@@ -969,7 +990,17 @@ this transformation more automatically using e.g. the `ast` module to analyze
 the source code, but that's a much more complicated researchy project). To
 lessen this problem somewhat we can factor out the parts of the logic that don't
 have any conditions into small helper methods (like `_disagrees` in this
-example) and use them in the manual conversion of the code to Z3 formulas.
+example) and use them in the manual conversion of the code to Z3 formulas.[^tests_vs_proofs]
+
+[^tests_vs_proofs]: The less close connection between implementation and proof
+    for `abstract_eq` is one of the reasons why it makes sense to do
+    unit-testing *in addition* to proofs. For a more detailed explanation of
+    why both tests and proofs are good to
+    have, see [Jeremy Siek's blog
+    post](https://siek.blogspot.com/2024/06/data-structures-and-algorithms-correctly.html#correct-software-via-write-test-and-prove:~:text=We%20recognize%20that%20once%20step,detect%20most%20of%20the%20bugs),
+    as well as the [Knuth
+    quote](https://www-cs-faculty.stanford.edu/~knuth/faq.html#:~:text=What's%20the%20exact%20citation%20of%20your%20oft%2Dcited%20comment%20about%20bugs?).
+
 
 The final condition that Z3 checks, btw, is this one:
 
@@ -1104,7 +1135,8 @@ def test_check_precision(t1, t2):
 It does not actually fail for `abstract_add` (nor the other abstract
 functions). To see the test failing we can add some imprecision to the
 implementation of `abstract_add` to see Hypothesis and Z3 find examples of
-values that are not optimally precise.
+values that are not optimally precise (for example by setting some bits
+of `unknowns` in the implementation of `abstract_add` unconditionally).
 
 
 ## Using the Abstract Domain in the Toy Optimizer for Generalized Constant Folding
@@ -1115,7 +1147,8 @@ abstract interpretation](https://bernsteinbear.com/blog/toy-abstract-interpretat
 quite closely.
 
 For completeness sake, in the fold there's the basic infrastructure classes
-that make up the IR again (they are identical to the previous toy posts).
+that make up the IR again (they are identical or at least extremely close to
+the previous toy posts).
 
 <details>
 <summary>toy infrastructure</summary>
@@ -1212,7 +1245,7 @@ optvar0 = getarg(0)
 optvar1 = int_add(19, optvar0)"""
 ```
 
-Caling the transfer functions on constant `KnownBits` produces a constant
+Calling the transfer functions on constant `KnownBits` produces a constant
 results, as we have seen. Therefore "regular" constant folding should hopefully
 be achieved by optimizing with the `KnownBits` abstract domain too.
 
@@ -1237,13 +1270,13 @@ optvar2 = dummy(1)"""
 def test_constfold_alignment_check():
     bb = Block()
     var0 = bb.getarg(0)
-    var1 = bb.int_invert(0b1111)
-    # mask off the lowest four bits, thus var2 is aligned
+    var1 = bb.int_invert(0b111)
+    # mask off the lowest three bits, thus var2 is aligned
     var2 = bb.int_and(var0, var1)
     # add 16 to aligned quantity
     var3 = bb.int_add(var2, 16)
     # check alignment of result
-    var4 = bb.int_and(var3, 0b1111)
+    var4 = bb.int_and(var3, 0b111)
     var5 = bb.int_eq(var4, 0)
     # var5 should be const-folded to 1
     var6 = bb.dummy(var5)
@@ -1251,7 +1284,7 @@ def test_constfold_alignment_check():
     opt_bb = simplify(bb)
     assert bb_to_str(opt_bb, "optvar") == """\
 optvar0 = getarg(0)
-optvar1 = int_and(optvar0, -16)
+optvar1 = int_and(optvar0, -8)
 optvar2 = int_add(optvar1, 16)
 optvar3 = dummy(1)"""
 ```
@@ -1330,7 +1363,8 @@ understanding is correct with Z3:
 
 ```python
 def test_prove_is_and_identity():
-    prove(z3.Implies(k1.is_and_identity(k2), n1 & n2 == n1))
+    solver, k1, n1, k2, n2 = z3_setup_variables()
+    prove(z3.Implies(k1.is_and_identity(k2), n1 & n2 == n1), solver)
 ```
 
 Now let's use this in the toy optimizer. Here are two tests for this rewrite:
@@ -1414,7 +1448,7 @@ And with that, the new tests pass as well. A real implementation would also
 check the other argument order, but we leave that out for the sake of brevity.
 
 This rewrite also generalizes the rewrites `int_and(0, x) -> 0` and
-`int_and(-1, x) -> x`, let's add tests for those:
+`int_and(-1, x) -> x`, let's add a test for those:
 
 ```python
 def test_remove_and_simple():
@@ -1439,11 +1473,13 @@ This test just passes.
 ## Conclusion
 
 In this post we've seen the implementation, testing and proofs about a 'known
-bits' abstract domain, as well as its use in the toy optimizer. There are many
-more uses of the abstract domain possible in 
+bits' abstract domain, as well as its use in the toy optimizer to generalize
+constant folding, and to implement conditional peephole rewrites.
 
 In the next posts I'll write about the real implementation of a knownbits
-domain in PyPy's JIT, as well as some lose ends.
+domain in PyPy's JIT, its combination with the existing interval abstract
+domain, how to deal with gaining informations from conditions in the program,
+and some lose ends.
 
 Sources:
 
