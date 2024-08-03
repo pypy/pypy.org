@@ -16,8 +16,10 @@ last post, I want to present a more complicated abstract domain in this post.
 This abstract domain reasons about the individual bits of a variable in a trace.
 Every bit can be either "known zero", "known one" or "unknown". The abstract
 domain is useful for optimizing integer operations, particularly the bitwise operations.
-The abstract domain follows quite closely the tristate abstract
-domain of the eBPF verifier in the Linux Kernel, as described by the paper
+The abstract domain follows quite closely the [tristate abstract domain of the
+eBPF verifier in the Linux
+Kernel](https://github.com/torvalds/linux/blob/master/kernel/bpf/tnum.c), as
+described by the paper
 [Sound, Precise, and Fast Abstract Interpretation with Tristate
 Numbers](https://arxiv.org/abs/2105.05398) by Harishankar Vishwanathan, Matan
 Shachnai, Srinivas Narayana, and Santosh Nagarakatte.
