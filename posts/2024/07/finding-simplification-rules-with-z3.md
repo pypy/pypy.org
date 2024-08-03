@@ -2,7 +2,7 @@
 .. title: Finding Simple Rewrite Rules for the JIT with Z3
 .. slug: finding-simple-rewrite-rules-jit-z3
 .. date: 2024-07-12 19:14:09 UTC
-.. tags:
+.. tags: z3, jit
 .. category:
 .. link:
 .. description:
