@@ -1,7 +1,7 @@
 .. title: Allocation Removal in the Toy Optimizer
 .. slug: toy-optimizer-allocation-removal
 .. date: 2022-10-25 7:55:00 UTC
-.. tags:
+.. tags: toy-optimizer
 .. category:
 .. link:
 .. description:

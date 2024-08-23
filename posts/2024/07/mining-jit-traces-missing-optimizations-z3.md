@@ -2,7 +2,7 @@
 .. title: Mining JIT traces for missing optimizations with Z3
 .. slug: mining-jit-traces-missing-optimizations-z3
 .. date: 2024-07-19 17:01:09 UTC
-.. tags:
+.. tags: z3, jit
 .. category:
 .. link:
 .. description:
