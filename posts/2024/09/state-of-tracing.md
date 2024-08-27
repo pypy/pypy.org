@@ -21,14 +21,20 @@ Twitter](https://twitter.com/ShriramKMurthi/status/1818009884484583459):
 I replied with my personal (partly pretty subjective) opinions about the
 question in a lengthy Twitter thread (which also spawned an even lengthier
 discussion). I wanted to turn what I wrote there into a blog post to make it
-more widely available. The blog post i still somewhat terse, I've tried to at
-least add links to further information. Please ask in the comments if something
-is particularly unclear.
+more widely available. The blog post i still somewhat terse, I've written a
+small background section and tried to at least add links to further
+information. Please ask in the comments if something is particularly unclear.
 
 
-## Meta-tracing
+## Background
 
-First some personal context: my perspective is informed by nearly [two
+I'll explain a few of the central terms of the rest of the post. JIT compilers
+are compilers that do their work at runtime, interleaved (or concurrent with)
+the execution of the program.
+
+## Personal and Project Context
+
+Some personal context: my perspective is informed by nearly [two
 decades](https://mail.python.org/archives/list/pypy-dev@python.org/thread/TZM37YJ733G445R6JGTV26333RQEPLRX/)
 of work on PyPy. PyPy's implementation language, [RPython](https://rpython.readthedocs.io/), has support for a
 meta-JIT, which allows it to re-use its JIT infrastructure for the various
@@ -56,6 +62,8 @@ things easier to compile and we support the introspection and debugging
 features of Python. We try very hard to have no opinions on language design.
 The CPython core developers come up with the semantics, we somehow deal with
 them.
+
+## Meta-tracing
 
 PyPy started using a [tracing
 JIT](https://en.wikipedia.org/wiki/Tracing_just-in-time_compilation) approach
@@ -186,8 +194,10 @@ highlight:
 > success story. I think it has to do with how big and branchy the bytecode
 > implementations are for typical dynamic languages; the trace captures latent
 > type feedback naturally.
+>
+> There is an upper limit, tho."
 
-There is an upper limit, tho." [Ben Titzer](https://twitter.com/TitzerBL/status/1818385622203298265)
+[Ben Titzer](https://twitter.com/TitzerBL/status/1818385622203298265)
 
 I agree with this completely, the complexity of Python bytecodes is a big
 factor for why meta tracing works well for us. But also in Python there are
@@ -226,9 +236,11 @@ operations on them is very important too, for good performance.
 
 [Maxime Chevalier](https://twitter.com/Love2Code/status/1818292516753383644)
 
+
 ## Conclusion
 
-Given access to enough developers and in the context of "normal" jitting (ie not meta-jitting) it's very unclear to me that you should use tracing. It makes
+Given access to enough developers and in the context of "normal" jitting (ie
+not meta-jitting) it's very unclear to me that you should use tracing. It makes
 more sense to rather spend effort on a solid control-flow-graph-based baseline
 and then try to get some of the good properties of tracing on top (path
 splitting, partial inlining, partial escape analysis, etc).
