@@ -11,11 +11,9 @@
 
 We provide pre-compiled binaries for many platforms and OSes:
 
-* the Python2.7 compatible release — **PyPy2.7 v7.3.16**
+* the Python2.7 compatible release — **PyPy2.7 v7.3.17**
 
-* the Python3.9 compatible release — **PyPy3.9 v7.3.16**
-
-* the Python3.10 compatible release — **PyPy3.10 v7.3.16**
+* the Python3.10 compatible release — **PyPy3.10 v7.3.17**
 
 .. note::
 
@@ -30,7 +28,7 @@ We provide pre-compiled binaries for many platforms and OSes:
   table start
 
 ..
-  Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.9>``
+  Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.10>``
 
 .. list-table:: `PyPy latest`_
    :widths: 20 15 15 15 35
@@ -38,18 +36,15 @@ We provide pre-compiled binaries for many platforms and OSes:
 
    * - OS
      - PyPy3.10
-     - PyPy3.9
      - PyPy2.7
      - Notes
 
    * - **Linux x86 64 bit**
      - Download__
      - Download__
-     - Download__
      - compatible with CentOS7 and later.
 
    * - **Windows 64 bit**
-     - Download__
      - Download__
      - Download__
      - compatible with any windows 64-bit
@@ -59,45 +54,37 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - Download__
      - Download__
-     - Download__
-     - MacOS >= 11. Not signed, for signed packages use conda_.
+     - MacOS >= 11. Not signed, for signed packages use Homebrew_.
 
    * - **MacOS x86_64**
 
      - Download__
      - Download__
-     - Download__
      - MacOS >= 10.15, not for Mojave and below. Not signed, for signed
-       packages or older versions use conda_.
+       packages use Homebrew_.
 
    * - **Linux ARM64**
 
      - Download__
      - Download__
-     - Download__
      - compatible with CentOS7 and later.
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.16-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.16-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.16-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-linux64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.16-win64.zip
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.16-win64.zip
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.16-win64.zip
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-win64.zip
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-win64.zip
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.16-macos_arm64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.16-macos_arm64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.16-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-macos_arm64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.16-macos_x86_64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.16-macos_x86_64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.16-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-macos_x86_64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.16-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.16-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.16-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-aarch64.tar.bz2
 
-.. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.16.html
+.. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.17.html
 .. _`vcredist.x64.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
 
 ..
@@ -110,7 +97,6 @@ We provide pre-compiled binaries for many platforms and OSes:
 
    * - OS
      - PyPy3.10
-     - PyPy3.9
      - PyPy2.7
      - Notes
 
@@ -118,24 +104,10 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - Download__
      - Download__
-     - Download__
      - compatible with CentOS7 and later
 
-   * - **S390x**
-
-     - Download__
-     - Download__
-     - Download__
-     - built on Redhat Linux 7.2 [1]_
-
-
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.16-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.16-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.16-linux32.tar.bz2
-
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.16-s390x.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.16-s390x.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.16-s390x.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-linux32.tar.bz2
 
 .. [1]
   Linux binaries are provided for the
@@ -165,19 +137,12 @@ packaged libraries are frozen to the version shipped, so updating your system
 libraries will not affect this installation of PyPy. Also see the note about
 SSL certificates below.
 
-For s390x, and ppc64, the binaries target a specific operating system.
-These binaries are dynamically linked, and thus might not be usable due to the
-sad story of linux binary compatibility.  This means that **Linux binaries are
-only usable on the distributions written next to them** unless you're ready to
-hack your system by adding symlinks to the libraries it tries to open.  There
-are better solutions:
+There are other solutions:
 
 * download PyPy from your release vendor (usually an outdated
   version): `Ubuntu`_ (`PPA`_), `Debian`_, `Homebrew`_, MacPorts,
   `Fedora`_, `Gentoo`_ and `Arch`_ are known to package PyPy, with various
   degrees of being up-to-date. FreshPorts_ packages for FreeBSD.
-
-* use conda_, which will also enable installing binary-compiled packages.
 
 * `recompile the CFFI-based`_ TCL/TK, OpenSSL, or sqlite3 modules, using system
   libraries and the scripts in ``pypy/lib_pypy/pypy_tools``. This solution will
@@ -209,7 +174,6 @@ are better solutions:
 .. _`portable-pypy`: https://github.com/squeaky-pl/portable-pypy#portable-pypy-distribution-for-linux
 .. _`recompile the CFFI-based`: https://doc.pypy.org/en/latest/build.html#build-cffi-import-libraries-for-the-stdlib
 .. _`certifi`: https://pypi.org/project/certifi/
-.. _conda: /posts/2022/11/pypy-and-conda-forge.html
 
 ..
   notes_and_links finish
@@ -288,8 +252,7 @@ a symlink to it, otherwise it will not find its libraries.
 Installing more modules
 -----------------------
 
-Using `conda`_ is the easiest way to get binary packages  with a minimum of
-compilation. The tpyical ``pip`` workflow for packages with binary extensions
+The tpyical ``pip`` workflow for packages with binary extensions
 requires that the package maintainers provide a wheel for PyPy, which is
 sometimes too much work for the overburdened maintainers. For more information
 see the `installation documentation_`
@@ -326,13 +289,11 @@ Building from source
    Alternatively, get one of the following smaller packages for the source at
    the same revision as the above binaries:
 
-   * `pypy2.7-v7.3.16-src.tar.bz2`__ (sources, PyPy 2.7 only)
-   * `pypy3.9-v7.3.16-src.tar.bz2`__ (sources, PyPy 3.9 only)
-   * `pypy3.10-v7.3.16-src.tar.bz2`__ (sources, PyPy 3.10 only)
+   * `pypy2.7-v7.3.17-src.tar.bz2`__ (sources, PyPy 2.7 only)
+   * `pypy3.10-v7.3.17-src.tar.bz2`__ (sources, PyPy 3.10 only)
 
-   .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.16-src.tar.bz2
-   .. __: https://downloads.python.org/pypy/pypy3.9-v7.3.16-src.tar.bz2
-   .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.16-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-src.tar.bz2
 
 
 2. Make sure you **installed the dependencies.**  See the list here__.
@@ -464,7 +425,7 @@ pre-compiling them, normal users will get errors:
   normally found: e.g. in your project's main directory, or in a
   directory that you add to the env var ``PYTHONPATH``.
 
-.. _`package.py`: https://github.com/pypy/pypy/blob/release-pypy3.9-v7.3.16/pypy/tool/release/package.py
+.. _`package.py`: https://github.com/pypy/pypy/blob/release-pypy3.10-v7.3.17/pypy/tool/release/package.py
 
 Checksums
 ---------
