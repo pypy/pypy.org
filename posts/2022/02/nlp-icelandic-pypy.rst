@@ -1,7 +1,7 @@
 .. title: Natural Language Processing for Icelandic with PyPy: A Case Study
 .. slug: nlp-icelandic-case-study
 .. date: 2022-02-06 15:00:00 UTC
-.. tags: casestudy
+.. tags: casestudy, guestpost
 .. category: 
 .. link: 
 .. description: 
