@@ -31,7 +31,7 @@ We provide pre-compiled binaries for many platforms and OSes:
   Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.10>``
 
 .. list-table:: `PyPy latest`_
-   :widths: 20 15 15 15 35
+   :widths: 20 15 15 35
    :header-rows: 1
 
    * - OS
@@ -92,7 +92,7 @@ We provide pre-compiled binaries for many platforms and OSes:
 
 
 .. list-table:: Other Platfoms
-   :widths: 20 15 15 15 35
+   :widths: 20 15 15 35
    :header-rows: 1
 
    * - OS
@@ -108,12 +108,6 @@ We provide pre-compiled binaries for many platforms and OSes:
 
 .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-linux32.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-linux32.tar.bz2
-
-.. [1]
-  Linux binaries are provided for the
-  distributions listed here.  **If your distribution is not exactly this
-  one, it won't work,** you will probably see:
-  ``pypy: error while loading shared libraries: ...``.
 
 .. _`Default (with a JIT Compiler)`:
 
