@@ -11,8 +11,6 @@
 -->
 
 
-# Guest Post: How PortaOne uses PyPy for high-performance processing, connecting over 1B of phone calls every month
-
 The PyPy project is always happy to hear about industrial use  and deployments
 of PyPy. For the [GC bug
 finding](https://www.pypy.org/posts/2024/03/fixing-bug-incremental-gc.html)
@@ -21,6 +19,8 @@ that Serhii Titov, head of the QA department at PortaOne, was up to writing
 this guest post to describe their use and experience with the project.
 
 -----
+
+## What does PortaOne do?
 
 We at [PortaOne Inc.](https://www.portaone.com/) allow telecom operators to
 launch new services (or provide existing services more efficiently) using our
@@ -63,6 +63,8 @@ processed in sub-threads. We have custom wrappers  around `threading.Thread`
 and also `asyncore.dispatcher`. The results of such operations are returned to
 the main thread.
 
+## Improving our performance with PyPy
+
 We started with CPython and then in 2014 switched to PyPy because it was
 faster. Here's an exact quote from our first testing notes: "PyPy gives
 significant performance boost, ~50%". Nowadays, after years of changes in all
@@ -71,6 +73,8 @@ the software involved, PyPy still gives us +50% boost compared to CPython.
 Taking care of real time traffic for so many people around the globe is
 something we're really proud of. I hope the PyPy team can be proud of it as
 well, as the PyPy product is a part of this solution.
+
+## Finding a garbage collector bug: stage 1, the GC hooks
 
 However our path with PyPy wasn't perfectly smooth. There were very rare cases
 of crashes on PyPy that we weren't able to catch. That's because to make
@@ -99,6 +103,8 @@ GC](https://doc.pypy.org/en/latest/gc_info.html#gc-hooks). Yevhenii created
 ticket [#4899](https://github.com/pypy/pypy/issues/4899) and within 2-3 days we
 got a fix from a [member of the PyPy team](https://github.com/cfbolz), in true open-source fashion.
 
+## Finding a garbage collector bug: stage 2, the real bug
+
 Then came stage 2. In parallel with the previous ticket, Yevhenii created
 [#4900](https://github.com/pypy/pypy/issues/4900) that we still see failing
 with coredumps quite often, and they are not connected to GC custom hooks. In a
@@ -115,6 +121,8 @@ another bug in the garbage collector, somehow related to object pinning.
 
 Here's our current state: we have to add `PYPY_GC_MAX_PINNED=0`, but we do not
 face the crashes anymore.
+
+## Conclusion and next steps
 
 Gratitude is extended to Carl for his invaluable assistance in resolving the
 nasty bugss, because it seems we're the only ones who suffered from the last
