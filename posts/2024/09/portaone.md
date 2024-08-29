@@ -1,7 +1,7 @@
 <!--
 .. title: Guest Post: How PortaOne uses PyPy for high-performance processing, connecting over 1B of phone calls every month
 .. slug: portaone
-.. date: 2024-09-03 14:00:00 UTC
+.. date: 2024-08-29 09:00:00 UTC
 .. tags: casestudy, guestpost
 .. category:
 .. link:
