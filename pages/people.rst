@@ -117,7 +117,7 @@ Holger Krekel
 .. image:: images/people/holger1.jpg
 
 Holger Krekel is a founder of the PyPy project and has participated in
-PyPy core developement for several years as well as maintained much of
+PyPy core development for several years as well as maintained much of
 its infrastructure.  He also is the author of the popular `py.test`_ and
 `tox`_ testing tools as well as execnet_, a library for easily deploying
 different interacting Python interpreters side by side.  He helped

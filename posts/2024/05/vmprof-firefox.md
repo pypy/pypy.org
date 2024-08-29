@@ -26,7 +26,7 @@ Those so far could give you some general visualizations of your profile, but do 
 To bring all of those features together in one tool, you may take a look at the vmprof-firefox-converter.
 
 Created in the context of my bachelor's thesis, the vmprof-firefox-converter is a tool for analyzing VMProf profiles with the [Firefox profiler](https://profiler.firefox.com/) user interface. 
-Instead of building a new user interface from scratch, this allows us to re-use the user interface work Mozilla put into the Firefox profiler.
+Instead of building a new user interface from scratch, this allows us to reuse the user interface work Mozilla put into the Firefox profiler.
 The Firefox profiler offers a timeline where you can zoom into profiles and work with different visualizations like a flame graph or a stack chart.
 To understand why there is time spent inside a function, you can revisit the source code and even dive into the intermediate representation of functions executed by PyPy's just-in-time compiler.
 Additionally, there is a visualization for PyPy's log output, to keep track whether PyPy spent time inside the interpreter, JIT or GC throughout the profiling time.

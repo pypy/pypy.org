@@ -31,7 +31,7 @@ we did [some more heap optimizations][toy-heap].
 
 [toy-heap]: https://www.youtube.com/watch?v=w-UHg0yOPSE
 
-In this blog post, I'm going to write a small abtract interpreter for the Toy
+In this blog post, I'm going to write a small abstract interpreter for the Toy
 IR and then show how we can use it to do some simple optimizations. It assumes
 that you are familiar with the little IR, which I have reproduced unchanged in
 [a GitHub Gist][toy-ir].

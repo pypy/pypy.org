@@ -91,7 +91,7 @@ We provide pre-compiled binaries for many platforms and OSes:
   table finish
 
 
-.. list-table:: Other Platfoms
+.. list-table:: Other Platforms
    :widths: 20 15 15 35
    :header-rows: 1
 
@@ -246,7 +246,7 @@ a symlink to it, otherwise it will not find its libraries.
 Installing more modules
 -----------------------
 
-The tpyical ``pip`` workflow for packages with binary extensions
+The typical ``pip`` workflow for packages with binary extensions
 requires that the package maintainers provide a wheel for PyPy, which is
 sometimes too much work for the overburdened maintainers. For more information
 see the `installation documentation_`

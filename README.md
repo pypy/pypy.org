@@ -16,7 +16,7 @@ venv_nikola/bin/nikola`, then `./venv_nikola/bin/nikola new_post`.
 
 After you make changes, you can do `make build` to regenerate the pages in
 ``public/`` for local viewing, but **do not commit these**, they will be
-rebuilt and commited via a CI deploy step. You can also do ``make auto`` to
+rebuilt and committed via a CI deploy step. You can also do ``make auto`` to
 start a server that will serve the pages, and rebuild them when any changes are
 made to the sources.
 
