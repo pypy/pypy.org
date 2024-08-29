@@ -135,7 +135,3 @@ P.S. If you are a perfectionist and at this point you have mixed feelings and
 you are still bothered by the question "But there might still be a bug in the
 GC, what about that?" - Carl has some ideas about it and he will sort it out
 (we will help with the testing/verification part).
-
-
-
-
