@@ -293,7 +293,7 @@ def test_contains():
 
 Now that we have implemented the basics of the `KnownBits` class, we need to
 start implementing the transfer functions. They are for computing what we know
-about the *results* of an operation, given the knownledge we have about the bits
+about the *results* of an operation, given the knowledge we have about the bits
 of the arguments.
 
 We'll start with a simple unary operation, `invert(x)` (which is `~x` in Python
@@ -729,7 +729,7 @@ Here's an attempt to do this manually in the Python repl:
 >>>> # like last blog post, proof by failing to find counterexamples
 >>>> def prove(cond): assert solver.check(z3.Not(cond)) == z3.unsat
 >>>>
->>>> # let's set up a z3 bitvector variable for an abitrary concrete value
+>>>> # let's set up a z3 bitvector variable for an arbitrary concrete value
 >>>> n1 = z3.BitVec('concrete_value', 64)
 >>>> n1
 concrete_value
@@ -1493,7 +1493,7 @@ constant folding, and to implement conditional peephole rewrites.
 
 In the next posts I'll write about the real implementation of a knownbits
 domain in PyPy's JIT, its combination with the existing interval abstract
-domain, how to deal with gaining informations from conditions in the program,
+domain, how to deal with gaining information from conditions in the program,
 and some lose ends.
 
 Sources:

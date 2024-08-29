@@ -324,7 +324,7 @@ yet.
 ## Writing a GC fuzzer/property based test
 
 Finding bugs in the GC is always extremely disconcerting, particularly since
-this one manged to hide for so long (more than ten years!). Therefore I wanted
+this one managed to hide for so long (more than ten years!). Therefore I wanted
 to use these bugs as motivation to try to find more problems in PyPy's GC. Given
 the ridiculous effectiveness of fuzzing, I used
 [hypothesis](https://hypothesis.readthedocs.io/en/latest/) to write a

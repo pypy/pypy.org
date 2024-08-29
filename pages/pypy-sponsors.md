@@ -11,7 +11,7 @@
 -->
 
 Keeping a project as ambitious as PyPy requires resources. Sometimes the
-problems encoutered are general, like updating python versions or supporting
+problems encountered are general, like updating python versions or supporting
 various c-extensions. Sometimes the problems are specific and require precise
 solutions that may not generalize to all users. Likewise, sponsorship of PyPy
 can be general or specific.
