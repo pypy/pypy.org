@@ -10,12 +10,12 @@ endif
 
 all: build
 
-.PHONY: clean build help import_blogger
+.PHONY: clean build help import_blogger codespell
 
 
 venv_nikola/bin/nikola:  ## create a virtualenv to build the website
 > @virtualenv -ppython3 ./venv_nikola
-> @venv_nikola/bin/python -mpip install nikola==8.2.2 markdown==3.3 jinja2 aiohttp watchdog ruamel.yaml feedparser
+> @venv_nikola/bin/python -mpip install nikola==8.2.2 markdown==3.3 jinja2 aiohttp watchdog ruamel.yaml feedparser codespell
 > @venv_nikola/bin/nikola plugin -i sidebar
 > @venv_nikola/bin/nikola plugin -i localsearch
 
@@ -23,7 +23,11 @@ plugins/import_blogger: venv_nikola/bin/nikola
 > venv_nikola/bin/nikola plugin -i import_blogger
 > venv_nikola/bin/pip install feedparser
 
-build: venv_nikola/bin/nikola  ## build the website if needed, the result is in ./public
+codespell: venv_nikola/bin/nikola  ## check and fix typos
+# If codespell is not found, rerun `make venv_nikola/bin/nikola`
+> venv_nikola/bin/codespell --ignore-words-list=gameboy,ist,mata,nd,openend,theses --quiet=3 --skip="./venv_nikola/*,./archive/*,*.html,*.js,./public" --write-changes
+
+build: codespell  ## build the website if needed, the result is in ./public
 > venv_nikola/bin/nikola build
 > @for f in $$(grep "include.*sidebar-en.inc" -lr public/) ;do \
 >    sed -i -e'/<!-- include sidebar-en.inc -->/r public/sidebar-en.inc' $$f; \
