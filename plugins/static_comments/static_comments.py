@@ -211,7 +211,7 @@ class StaticComments(SignalHandler):
                 # make sure this is a comment to "file"
                 if not filename[1:].startswith(post_base + '-comment'):
                     continue
-                # There is both a *.mata and a *.html. Send only the base of
+                # There is both a *.meta and a *.html. Send only the base of
                 # the *.meta for parsing
                 parts = filename.rsplit('.', 1)
                 if parts[1] != 'meta':
@@ -243,7 +243,7 @@ class StaticComments(SignalHandler):
         """Given a list of comments, rearranges them according to hierarchy and returns ordered list with indentation information."""
         # First, build tree structure out of TreeNode with comments attached
         root_list = []
-        comment_nodes = dict()
+        comment_nodes = {}
         for comment in comments:
             node = utils.TreeNode(comment.id)
             node.comment = comment

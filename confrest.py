@@ -34,5 +34,3 @@ class Project(Project):
     Page = PyPyPage
     def get_docpath(self):
         return self.mydir
-
-

@@ -90,7 +90,7 @@ TRANSLATIONS_PATTERN = '{path}.{lang}.{ext}'
 
 NAVIGATION_LINKS = {
     DEFAULT_LANG: (
-        
+
         (
             (
                 ('/features.html', 'What is PyPy?'),
@@ -111,7 +111,7 @@ NAVIGATION_LINKS = {
           ),
           'Blog',
         ),
-            
+
         (
           (
             ('https://twitter.com/pypyproject', 'Twitter'),
