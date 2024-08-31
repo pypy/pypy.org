@@ -211,7 +211,7 @@ class StaticComments(SignalHandler):
                 # make sure this is a comment to "file"
                 if not filename[1:].startswith(post_base + '-comment'):
                     continue
-                # There is both a *.mata and a *.html. Send only the base of
+                # There is both a *.meta and a *.html. Send only the base of
                 # the *.meta for parsing
                 parts = filename.rsplit('.', 1)
                 if parts[1] != 'meta':
