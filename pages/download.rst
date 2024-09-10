@@ -7,11 +7,9 @@
 .. description:
 
 
-We provide pre-compiled binaries for many platforms and OSes. There are also
-pre-compiled binaries available on `conda-forge`_. We have found conda-forge
-a convenient and cooperative community for distributing not only the
-interpreter, but many packages like SciPy that are difficult to build and 
-which do not yet have binary PyPy builds available on PyPI.
+We provide pre-compiled binaries for many platforms and OSes. Please note
+that we are `sunsetting conda-forge support`_ and will no longer officially
+publish PyPy3.10 and above on it.
 
 .. note::
   Our `nightly binary builds`_ have the most recent bugfixes and performance
@@ -21,7 +19,7 @@ which do not yet have binary PyPy builds available on PyPI.
 
 .. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
 .. _`other versions`: https://downloads.python.org/pypy/
-.. _`conda-forge`: /posts/2022/11/pypy-and-conda-forge.html
+.. _`sunsetting conda-forge support`: /posts/2024/08/conda-forge-proposes-dropping-support-for-pypy.html
 
 .. include:: pages/download_advanced.rst
     :start-after: table start
