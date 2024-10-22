@@ -426,10 +426,10 @@ extensions that I plan to work on in the future:
 - A related problem is that I don't understand what it means for a rewrite to be
   correct if some of the operations are only defined for a subset of the input
   values. E.g. division isn't defined if the divisor is zero. In theory, a
-  division operation in the trace should always be preceeded by a check that the
+  division operation in the trace should always be preceded by a check that the
   divisor isn't zero. But sometimes other optimization move the check around and
   the connection to the division gets lost or muddled. What optimizations can we
-  still savely perform on the division? There's lots of prior work on this
+  still safely perform on the division? There's lots of prior work on this
   question, but I still don't understand what the correct approach in our
   context would be.
 
