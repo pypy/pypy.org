@@ -285,6 +285,27 @@ The output of that will look something like this::
 
 .. _`PYPYLOG`: https://rpython.readthedocs.io/en/latest/logging.html
 
+Termination and Confluence
+--------------------------------------------------------------
+
+Right now there are unfortunately no checks that the rules actually rewrite
+operations towards "simpler" forms. There is no cost model, and also nothing
+that prevents you from writing a rule like this::
+
+
+    neg_complication: int_neg(x) # leads to infinite rewrites
+        => int_mul(-1, x)
+
+Doing this would lead to endless rewrites if there is also another rule that
+turns multiplication with -1 into negation.
+
+There is also no checking for confluence__ (yet?), i.e. the property that all
+rewrites starting from the same input trace always lead to the same output
+trace, no matter in which order the rules are applied.
+
+.. __: https://en.wikipedia.org/wiki/Confluence_(abstract_rewriting)
+
+
 Proofs
 --------------------------------------------------------------
 
