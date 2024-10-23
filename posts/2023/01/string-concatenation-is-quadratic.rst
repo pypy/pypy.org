@@ -6,7 +6,7 @@
 .. link:
 .. description:
 .. type: rest
-.. author: Carl Friedrich Bolz-Tereick
+.. author: CF Bolz-Tereick
 
 This is a super brief blog post responding to an issue_ that we got on the PyPy
 issue tracker. I am moving my response to the blog (with permission of the
