@@ -1,5 +1,5 @@
 .. title: A DSL for Peephole Transformation Rules of Integer Operations in the PyPy JIT
-.. slug: jit-bug-finding-smt-fuzzing
+.. slug: jit-peephole-dsl
 .. date: 2024-10-23 15:00:00 UTC
 .. tags: jit, z3
 .. category:
@@ -470,7 +470,7 @@ extensions that I plan to work on in the future:
   question, but I still don't understand what the correct approach in our
   context would be.
 
-- Ordering comparisons like `int_lt`, `int_le` and their unsigned variants are
+- Ordering comparisons like ``int_lt``, ``int_le`` and their unsigned variants are
   not ported to the DSL yet. Comparisons are an area where the JIT is not super
   good yet at optimizing away operations. This is a pretty big topic and I've
   started a project with Nico Rittinghaus to try to improve the situation a bit
