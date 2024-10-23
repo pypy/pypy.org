@@ -1,6 +1,6 @@
 .. title: A DSL for Peephole Transformation Rules of Integer Operations in the PyPy JIT
 .. slug: jit-bug-finding-smt-fuzzing
-.. date: 2024-10-25 18:00:00 UTC
+.. date: 2024-10-23 15:00:00 UTC
 .. tags: jit, z3
 .. category:
 .. link:
