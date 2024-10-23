@@ -179,6 +179,13 @@ However, the syntax allows you to be explicit about unsignedness for some
 operations. E.g. ``>>u`` exists for unsigned right shifts (and I plan to add
 ``>u``, ``>=u``, ``<u``, ``<=u`` for comparisons).
 
+Here's an example of a rule that uses ``>>u``::
+
+    urshift_lshift_x_c_c: uint_rshift(int_lshift(x, C), C)
+        mask = (-1 << C) >>u C
+        => int_and(x, mask)
+
+
 Checks
 --------------------------------------------------------------
 
@@ -356,12 +363,11 @@ This leads to the following counterexample::
     target expression: int_add(a, b) with Z3 formula a + b
     has counterexample value: 5
 
-Some ``IntBound`` methods cannot be used in Z3 proofs because they have `too
-complex control flow`__ If that is the case, they can have Z3-equivalent
-formulations defined (in every
-case this is done, it's a potential proof hole if the Z3 friendly reformulation
-and the real implementation differ from each other, therefore extra care is
-required to make very sure they are equivalent).
+Some ``IntBound`` methods cannot be used in Z3 proofs because their `control
+flow is too complex`__. If that is the case, they can have Z3-equivalent
+formulations defined (in every case this is done, it's a potential proof hole if
+the Z3 friendly reformulation and the real implementation differ from each
+other, therefore extra care is required to make very sure they are equivalent).
 
 .. __: /posts/2024/08/toy-knownbits.html#cases-where-this-style-of-z3-proof-doesnt-work).
 
@@ -401,7 +407,8 @@ Implementation Notes
 
 The implementation of the DSL is done in a relatively ad-hoc manner. It is
 parsed using `rply`__, there's a small type checker that tries to find common
-problems in how the rules are written. Z3 is again used via the Python API. The
+problems in how the rules are written. Z3 is used via the Python API, like in
+the previous blog posts that are using it. The
 pattern matching RPython code is generated using an approach inspired by Luc
 Maranget's paper `Compiling Pattern Matching to Good Decision Trees`__. See
 `this blog post`__ for an approachable introduction.
@@ -477,3 +484,13 @@ extensions that I plan to work on in the future:
 
 .. __: https://egraphs-good.github.io/
 .. __: https://vimeo.com/843540328
+
+Acknowledgements
+========================
+
+Thank you to `Max Bernstein`__ and `Martin Berger`__ for super helpful feedback on
+drafts of the post!
+
+.. __: https://bernsteinbear.com/
+
+.. __: https://martinfriedrichberger.net/
