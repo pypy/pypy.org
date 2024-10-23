@@ -23,9 +23,12 @@ should be simplified and optimized. The rules are then compiled to
 RPython code that then becomes part of the JIT's optimization passes.
 
 To make it less likely to introduce incorrect optimizations into the JIT, the
-rules are automatically proven correct with Z3 as part of the build process.
+rules are automatically proven correct with Z3 as part of the build process (for
+a more hands-on intro to how that works you can look at the `knownbits`__ post).
 In this blog post I want to motivate why I introduced the DSL and give an
 introduction to how it works.
+
+.. __: https://pypy.org/posts/2024/08/toy-knownbits.html#proving-correctness-of-the-transfer-functions-with-z3
 
 Motivation
 ===========================
@@ -34,9 +37,10 @@ This summer, after I wrote my `scripts to mine JIT traces for missed optimizatio
 opportunities, I started implementing a few of the integer peephole rewrite that
 the script identified. Unfortunately, doing so led to the problem that the way
 we express these rewrites up to now is very imperative and verbose. Here's a
-snippet of RPython code that shows some rewrites for integer multiplication. You
-don't need to understand it, but basically it's in very imperative style and
-there's quite a lot of boilerplate.
+snippet of RPython code that shows some rewrites for integer multiplication
+(look at the comments to see what the different parts actually do). You don't
+need to understand the code in detail, but basically it's in very imperative
+style and there's quite a lot of boilerplate.
 
 .. __: /posts/2024/07/mining-jit-traces-missing-optimizations-z3.html
 
@@ -48,12 +52,14 @@ there's quite a lot of boilerplate.
         arg1 = get_box_replacement(op.getarg(1))
         b1 = self.getintbound(arg1)
 
-        # If one side of the op is 1 the result is the other side.
         if b0.known_eq_const(1):
+            # 1 * x == x
             self.make_equal_to(op, arg1)
         elif b1.known_eq_const(1):
+            # x * 1 == x
             self.make_equal_to(op, arg0)
         elif b0.known_eq_const(0) or b1.known_eq_const(0):
+            # 0 * x == x * 0 == 0
             self.make_constant_int(op, 0)
         else:
             for lhs, rhs in [(arg0, arg1), (arg1, arg0)]:
@@ -61,15 +67,18 @@ there's quite a lot of boilerplate.
                 if lh_info.is_constant():
                     x = lh_info.get_constant_int()
                     if x & (x - 1) == 0:
+                        # x * (2 ** c) == x << c
                         new_rhs = ConstInt(highest_bit(lh_info.get_constant_int()))
                         op = self.replace_op_with(op, rop.INT_LSHIFT, args=[rhs, new_rhs])
                         self.optimizer.send_extra_operation(op)
                         return
                     elif x == -1:
+                        # x * -1 == -x
                         op = self.replace_op_with(op, rop.INT_NEG, args=[rhs])
                         self.optimizer.send_extra_operation(op)
                         return
                 else:
+                    # x * (1 << y) == x << y
                     shiftop = self.optimizer.as_operation(get_box_replacement(lhs), rop.INT_LSHIFT)
                     if shiftop is None:
                         continue
@@ -84,10 +93,10 @@ there's quite a lot of boilerplate.
                         return
             return self.emit(op)
 
-Adding more rules to these functions was very tedious and got super confusing
-after a while. In addition I was worried about making mistakes when writing this
-kind of code, and I had basically no feedback at all about which of these rules
-are actually applied a lot in real programs.
+Adding more rules to these functions is very tedious and gets super confusing
+when the functions get bigger. In addition I am always worried about making
+mistakes when writing this kind of code, and there is no feedback at all about
+which of these rules are actually applied a lot in real programs.
 
 Therefore I decided to write a small domain specific language with the goal of
 expressing these rules in a more declarative way. In the rest of the post I'll
@@ -114,7 +123,7 @@ form ``int_add(x, 0)``, where ``x`` will match anything and ``0`` will match onl
 constant zero. After the ``=>`` arrow is the target of the rewrite, i.e. what the
 operation is rewritten to, in this case ``x``.
 
-The rule language knowns which of the operations are commutative, so ``add_zero``
+The rule language has a list of which of the operations are commutative, so ``add_zero``
 will also optimize ``int_add(0, x)`` to ``x``.
 
 Variables in the pattern can repeat::
@@ -134,9 +143,9 @@ This pattern matches ``int_sub`` operations, where the first argument was
 produced by an ``int_add`` operation. In addition, one of the arguments of the
 addition has to be the same as the second argument of the subtraction.
 
-The constants ``MININT``, ``MAXINT`` and ``LONG_BIT`` (which is either 32 or 64) can
-be used in rules, they behave like writing numbers but allow
-bit-width-independent formulations::
+The constants ``MININT``, ``MAXINT`` and ``LONG_BIT`` (which is either 32 or 64,
+depending on which platform the JIT is built for) can be used in rules, they
+behave like writing numbers but allow bit-width-independent formulations::
 
     is_true_and_minint: int_is_true(int_and(x, MININT))
         => int_lt(x, 0)
@@ -174,7 +183,7 @@ Checks
 --------------------------------------------------------------
 
 Some rewrites are only true under certain conditions. For example,
-``int_eq(x, 1)`` can be rewritten to ``x``, if ``x`` is know to store a boolean value. This can
+``int_eq(x, 1)`` can be rewritten to ``x``, if ``x`` is known to store a boolean value. This can
 be expressed with *checks*::
 
     eq_one: int_eq(x, 1)
@@ -239,7 +248,7 @@ Every rewrite rule should have at least one unit test where it triggers. To
 ensure this, the `unit test file that mainly checks integer optimizations`__ in the
 JIT has an assert at the end of a test run, that every rule fired at least once.
 
-.. __: https://github.com/pypy/pypy/blob/main/rpython/jit/metainterp/optimizeopt/test/test_optimizeintbound.py
+.. __: https://github.com/pypy/pypy/blob/d92d0bfd38318ede1cbaadadafd77da69d431fad/rpython/jit/metainterp/optimizeopt/test/test_optimizeintbound.py
 
 Printing rule statistics
 --------------------------------------------------------------
@@ -356,7 +365,7 @@ a rule violating this::
         => x
 
 Right now the error messages if this goes wrong are not completely easy to
-understand, I hope to be able to improve this later::
+understand. I hope to be able to improve this later::
 
     Rule 'never_applies' cannot ever apply
     in line 1
@@ -373,7 +382,7 @@ The implementation of the DSL is done in a relatively ad-hoc manner. It is
 parsed using `rply`__, there's a small type checker that tries to find common
 problems in how the rules are written. Z3 is again used via the Python API. The
 pattern matching RPython code is generated using an approach inspired by Luc
-Maranget's paper `Compiling Pattern Matching to Good Decision Trees`__, see
+Maranget's paper `Compiling Pattern Matching to Good Decision Trees`__. See
 `this blog post`__ for an approachable introduction.
 
 .. __: https://rply.readthedocs.io/
@@ -411,7 +420,7 @@ old imperative style (mostly for complicated reasons, the easily ported ones are
 all done). Since I've only been porting optimizations that had existed prior to
 the existence of the DSL, performance numbers of benchmarks didn't change.
 
-.. __: https://github.com/pypy/pypy/blob/main/rpython/jit/metainterp/ruleopt/real.rules
+.. __: https://github.com/pypy/pypy/blob/d92d0bfd38318ede1cbaadadafd77da69d431fad/rpython/jit/metainterp/ruleopt/real.rules
 
 There are a number of features that are still missing and some possible
 extensions that I plan to work on in the future:
@@ -436,7 +445,7 @@ extensions that I plan to work on in the future:
 - Ordering comparisons like `int_lt`, `int_le` and their unsigned variants are
   not ported to the DSL yet. Comparisons are an area where the JIT is not super
   good yet at optimizing away operations. This is a pretty big topic and I've
-  started a project with Nico Rittinhaus to try to improve the situation a bit
+  started a project with Nico Rittinghaus to try to improve the situation a bit
   more generally.
 
 - A more advanced direction of work would be to implement a simplified form of
@@ -444,8 +453,6 @@ extensions that I plan to work on in the future:
   structure already, and we probably can't afford a full one in terms of compile
   time costs, but maybe we can have two thirds or something?
 
-- The DSL isn't integrated with common subexpression elimination yet, and that
-  could potentially yield some further improvement.
 
 .. __: https://egraphs-good.github.io/
 .. __: https://vimeo.com/843540328
