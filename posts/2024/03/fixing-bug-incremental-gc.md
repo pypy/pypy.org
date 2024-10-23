@@ -7,7 +7,7 @@
 .. link:
 .. description:
 .. type: text
-.. author: Carl Friedrich Bolz-Tereick
+.. author: CF Bolz-Tereick
 -->
 
 # Introduction
