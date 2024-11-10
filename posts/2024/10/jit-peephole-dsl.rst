@@ -170,7 +170,7 @@ target operation. To do that, there can be extra assignments between the rule he
 and the rule target.::
 
     sub_add_consts: int_sub(int_add(x, C1), C2) # incomplete
-        C = C1 + C1
+        C = C1 + C2
         => int_sub(x, C)
 
 The right hand side of such an assignment is a subset of Python syntax,
