@@ -8,10 +8,24 @@
 .. link: 
 .. description: 
 .. type: text
-.. author:
+.. author: Corbin
 -->
 
-# Guest Post: Final Encoding in RPython Interpreters
+## Introduction
+
+This post started as a quick note summarizing a recent experiment I carried
+out upon a small RPython interpreter by rewriting it in an uncommon style. It
+is written for folks who have already written some RPython and want to take a
+deeper look at interpreter architecture.
+
+Some experiments are about finding solutions to problems. This experiment is
+about taking a solution which is already well-understood and applying it in
+the context of RPython to find a new approach. As we will see, there is no
+real change in functionality or the number of clauses in the interpreter; it's
+more like a comparison between endo- and exoskeletons, a different arrangement
+of equivalent bones and plates.
+
+## Overview
 
 An RPython interpreter for a programming language generally does three or four
 things, in order:
@@ -112,7 +126,9 @@ class BF(object):
 Note that the `.loop()` method takes another program as an argument.
 Initial-encoded ASTs have other initial-encoded ASTs as fields on class
 instances; final-encoded ASTs have other final-encoded ASTs as parameters
-to interface methods.
+to interface methods. RPython infers all of the types, so the reader has to
+know that `i` is usually an integer while `bfs` is a sequence of Brainfuck
+operations.
 
 We're using a class to implement this functionality. Later, we'll treat it as
 a mixin, rather than a superclass, to avoid typing problems.
@@ -562,14 +578,16 @@ by reimplementing an optimizer as an abstract interpreter respecting the
 algebraic laws. This could be the most important lesson for compiler
 engineers, if it happens to generalize.
 
-Final encoding was popularized via the tagless-final movement. A "tag", in
-this jargon, is a runtime identifier for an object's type or class; a tagless
-encoding effectively doesn't allow `isinstance()` at all. In the above
-presentation, tags could be hacked in, but were not materially relevant to
-most steps. Tags were required for the final evaluation step, though, and the
-tagless-final insight is that certain type systems can express type-safe
-evaluation without those tags. We won't go further in this direction because
-tags also communicate valuable information to the JIT.
+Final encoding was popularized via the tagless-final movement in OCaml and
+Scala, including famously in a series of tutorials by [Kiselyov et
+al](https://okmij.org/ftp/tagless-final/). A "tag", in this jargon, is a
+runtime identifier for an object's type or class; a tagless encoding
+effectively doesn't allow `isinstance()` at all. In the above presentation,
+tags could be hacked in, but were not materially relevant to most steps. Tags
+were required for the final evaluation step, though, and the tagless-final
+insight is that certain type systems can express type-safe evaluation without
+those tags. We won't go further in this direction because tags also
+communicate valuable information to the JIT.
 
 ### Summarizing Table
 
@@ -582,3 +600,17 @@ traversals allocate stack | traversals allocate heap
 tags are available with `isinstance()` | tags are only available through hacks
 cost of adding a new AST node: one class | cost of adding a new AST node: one method on every other class
 cost of adding a new behavior: one method on every other class | cost of adding a new behavior: one class
+
+## Credits
+
+Thanks to folks in `#pypy` on Libera Chat: arigato for the idea, larstiq for
+pushing me to write it up, and cfbolz and mattip for reviewing and finding
+mistakes. The original IRC discussion leading to this blog post is available
+[here](https://gist.github.com/MostAwesomeDude/fd86ad2d2e38af7aa67b6e548aabe008).
+
+This interpreter is part of the [rpypkgs](https://github.com/rpypkgs/rpypkgs)
+suite, a Nix flake for RPython interpreters. Readers with Nix installed can
+run this interpreter directly from the flake:
+
+    $ nix-prefetch-url https://github.com/MG-K/pypy-tutorial-ko/raw/refs/heads/master/mandel.b
+    $ nix run github:rpypkgs/rpypkgs#bf -- /nix/store/ngnphbap9ncvz41d0fkvdh61n7j2bg21-mandel.b
