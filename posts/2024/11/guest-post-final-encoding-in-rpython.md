@@ -2,7 +2,7 @@
 .. type: text
 .. title: Guest Post: Final Encoding in RPython Interpreters
 .. slug: guest-post-final-encoding-in-rpython
-.. date: 2024-11-11 17:08:36 UTC
+.. date: 2024-11-14 08:42:36 UTC
 .. tags: guestpost
 .. category: 
 .. link: 
