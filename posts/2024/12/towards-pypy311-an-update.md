@@ -58,6 +58,7 @@ is released, we cannot change the headers significantly.
 
 ## So what is left?
 Summarizing the milestones and other things to do:
+
 - Update to the recently released 3.11.11 stdlib
 - Make sure [vmprof](https://vmprof.readthedocs.io/en/latest/) works
 - Update the `time` module to use more `MONOTONIC_CLOCK`, implement
@@ -101,8 +102,11 @@ comparison, where previously it used CPython3.7. It is common knowledge that
 the newer CPython versions are faster, and we see this now quite clearly.
 Diving into individual benchmarks, we can see that ones where PyPy-with-a-jit
 was comparable to CPython3.7 seem to be the ones that CPython3.11 improved
-greatly. So the new graph has more lines that extend past 1.5 than the old
-graph. ![new graph](/images/2024-12-new-graph.png) ![old
+greatly. Looking at a [comparison of the
+runs](https://speed.pypy.org/comparison/?exe=22%2BL%2Bpy3.11%2C2%2B2360%2C2%2B3893&ben=1%2C34%2C58%2C63%2C60%2C27%2C61%2C2%2C25%2C57%2C3%2C46%2C4%2C5%2C41%2C42%2C22%2C44%2C6%2C59%2C39%2C7%2C8%2C65%2C45%2C23%2C62%2C66%2C24%2C9%2C10%2C47%2C48%2C49%2C50%2C51%2C11%2C12%2C13%2C40%2C14%2C69%2C15%2C70%2C67%2C68%2C64%2C35%2C36%2C37%2C38%2C16%2C52%2C54%2C55%2C53%2C56%2C28%2C30%2C32%2C29%2C33%2C17%2C18%2C19%2C20%2C43&env=3&hor=true&bas=2%2B2360&chart=normal+bars)
+this can be seen in benchmarks like deltablue and the sqlalchemy family. So the
+new graph has more lines that extend past 1.5 than the old graph. ![new
+graph](/images/2024-12-new-graph.png) ![old
 graph](/images/2024-12-old-graph.png).
 
 
