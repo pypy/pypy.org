@@ -26,8 +26,8 @@ largest changes needed to support Python3.11, maybe I missed something else?
 We then created a [milestone](https://github.com/pypy/pypy/milestone/15) with
 many of the changes that might not be caught in testing. As of today that
 milestone stands at 24/40 issues closed, 16 open. This is in addition to the
-[v7.3.18 milestone](https://github.com/pypy/pypy/milestone/22), which has 10/23
-issues closed, 13 open.
+[v7.3.18 milestone](https://github.com/pypy/pypy/milestone/22), which has 11/23
+issues closed, 12 open.
 
 We also updated our infrastructure to run nightly [buildbot test of the
 py3.11](https://buildbot.pypy.org/summary?branch=py3.11) branch, including adding py3.11 to our benchmarking site [speed.pypy.org](https://speed.pypy.org/).
@@ -39,7 +39,8 @@ more involved changes to the interpreter to behave more like CPython. For instan
 PyPy we used `x.__format__("#x")`. This subtle difference caused a failure in
 the `repr` of `IntEnum`. Tracking down problems like these takes time. We are
 now down to about 250 failing stdlib tests, with thousands passing. For comparison, 
-PyPy3.10 has around 100 failing stdlib tests.
+PyPy3.10, first released in June 2023, still has around 100 failing stdlib
+tests.
 
 ## C-extension support
 PyPy supports the Python C-API via a cpyext compatibility layer. We "mangle"
@@ -48,10 +49,11 @@ modules into PyPy, since the ABI is different. So a function like
 `PyLong_FromLong` will be exported from the c shared object as
 `PyPyLong_FromLong`. One of my long-standing goals is to remove this mangling,
 but it then requires that our c declarations, inlined functions, and macros in
-the headers match 1:1 the CPython headers. We can get by with no implementing
-parts of the interfaces, but what is declared must be identical. This is a
-long-term project, with each release the headers get closer to the CPython
-versions. I hope to concentrate on the PyUnicode interfaces for this release.
+the headers match 1:1 the CPython headers. We can get by with not declaring and
+implementing parts of the interfaces, but what is declared must be identical.
+This is a long-term project, with each release the headers get closer to the
+CPython versions. I hope to concentrate on the PyUnicode interfaces for this
+release.
 
 Note that the time to do this is before a new version release. Once the version
 is released, we cannot change the headers significantly.
@@ -105,8 +107,15 @@ was comparable to CPython3.7 seem to be the ones that CPython3.11 improved
 greatly. Looking at a [comparison of the
 runs](https://speed.pypy.org/comparison/?exe=22%2BL%2Bpy3.11%2C2%2B2360%2C2%2B3893&ben=1%2C34%2C58%2C63%2C60%2C27%2C61%2C2%2C25%2C57%2C3%2C46%2C4%2C5%2C41%2C42%2C22%2C44%2C6%2C59%2C39%2C7%2C8%2C65%2C45%2C23%2C62%2C66%2C24%2C9%2C10%2C47%2C48%2C49%2C50%2C51%2C11%2C12%2C13%2C40%2C14%2C69%2C15%2C70%2C67%2C68%2C64%2C35%2C36%2C37%2C38%2C16%2C52%2C54%2C55%2C53%2C56%2C28%2C30%2C32%2C29%2C33%2C17%2C18%2C19%2C20%2C43&env=3&hor=true&bas=2%2B2360&chart=normal+bars)
 this can be seen in benchmarks like deltablue and the sqlalchemy family. So the
-new graph has more lines that extend past 1.5 than the old graph. ![new
-graph](/images/2024-12-new-graph.png) ![old
+new graph has more lines that extend past 1.5 than the old graph.
+<p style='text-align: center;'>
+New graph with PyPy3.11
+</p>
+![new graph](/images/2024-12-new-graph.png)
+<p style='text-align: center;'>
+Older graph with PyPy3.10
+</p>
+![old
 graph](/images/2024-12-old-graph.png).
 
 
