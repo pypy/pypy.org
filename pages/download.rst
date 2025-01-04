@@ -7,11 +7,9 @@
 .. description:
 
 
-We provide pre-compiled binaries for many platforms and OSes. There are also
-pre-compiled binaries available on `conda-forge`_. We have found conda-forge
-a convenient and cooperative community for distributing not only the
-interpreter, but many packages like SciPy that are difficult to build and 
-which do not yet have binary PyPy builds available on PyPI.
+We provide pre-compiled binaries for many platforms and OSes. Please note
+that we are `sunsetting conda-forge support`_ and will no longer officially
+publish PyPy3.10 and above on it.
 
 .. note::
   Our `nightly binary builds`_ have the most recent bugfixes and performance
@@ -21,7 +19,7 @@ which do not yet have binary PyPy builds available on PyPI.
 
 .. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
 .. _`other versions`: https://downloads.python.org/pypy/
-.. _`conda-forge`: /posts/2022/11/pypy-and-conda-forge.html
+.. _`sunsetting conda-forge support`: /posts/2024/08/conda-forge-proposes-dropping-support-for-pypy.html
 
 .. include:: pages/download_advanced.rst
     :start-after: table start
@@ -37,15 +35,12 @@ Source
 .. class:: download_menu
 
 * `3.10 Source (tar.bz2)`__; `3.10 Source (zip)`__.
-* `3.9 Source (tar.bz2)`__; `3.9 Source (zip)`__.
 * `2.7 Source (tar.bz2)`__; `2.7 Source (zip)`__.
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.16-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.16-src.zip
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.16-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.9-v7.3.16-src.zip
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.16-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.16-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-src.zip
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-src.zip
 
 
 More information

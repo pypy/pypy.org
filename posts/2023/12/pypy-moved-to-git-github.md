@@ -102,9 +102,9 @@ Note that the branches were named `branches/XXX` by the migration, not `branch/X
 I used the solution from
 [node-gitlab-2-github](https://github.com/piceaTech/node-gitlab-2-github) which
 worked almost perfectly. It is important to do the conversion on a __private
-repo__ otherwise every mention of a sucessfully mapped user name notifies
+repo__ otherwise every mention of a successfully mapped user name notifies
 the user about the transfer. This can be quite annoying for a repo the size of
-PyPy with 600 merge requests and over 4000 issues. Issues transfered without a
+PyPy with 600 merge requests and over 4000 issues. Issues transferred without a
 problem: the script properly retained the issue numbers. However the script
 does not convert the Mercurial hashes to Git hashes, so the bare hashes in
 comments show up without a link to the commit. Merge requests are more of a problem:
@@ -128,7 +128,7 @@ Heptapod" from this transition.
 ## Credits
 We would like to express our gratitude to the [Octobus](https://octobus.net/)
 team who support Heptapod. The transition from Bitbucket was quite an effort,
-and they have generously hosted our developement since then. We wish them all
+and they have generously hosted our development since then. We wish them all
 the best, and still believe that Mercurial should have "won".
 
 ## Next steps

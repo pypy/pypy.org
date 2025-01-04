@@ -11,7 +11,7 @@
 language that was co-developed with it.  The main reason to use it
 instead of CPython is speed: it runs generally faster (see next section).
 
-**PyPy** implements **Python 2.7.18, 3.10.14, and 3.9.19**.
+**PyPy** implements **Python 2.7.18 and 3.10.14**.
 It supports all of the core language. It supports most of
 the commonly used Python standard library modules. For known differences with
 CPython, see our `compatibility`_ page.
@@ -21,6 +21,7 @@ The following CPU architectures are supported and maintained:
 * `x86 (IA-32)`_ and `x86_64`_ 
 * `ARM`_ platforms (ARMv6 or ARMv7, with VFPv3, and Apple Silicon arm64)
 * `AArch64`_
+* `RISCV`
 * `PowerPC`_ 64bit both little and big endian
 * `System Z (s390x)`_
 

@@ -1,12 +1,12 @@
 .. title: Finding JIT Optimizer Bugs using SMT Solvers and Fuzzing
 .. slug: jit-bug-finding-smt-fuzzing
 .. date: 2022-12-11 18:00:00 UTC
-.. tags: jit, testing
+.. tags: jit, testing, z3
 .. category:
 .. link:
 .. description:
 .. type: rest
-.. author: Carl Friedrich Bolz-Tereick
+.. author: CF Bolz-Tereick
 
 In this blog post I want to describe a recent bug finding technique that I've
 added to the PyPy JIT testing infrastructure. This technique uses the Z3

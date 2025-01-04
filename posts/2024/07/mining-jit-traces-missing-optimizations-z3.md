@@ -22,7 +22,7 @@ inefficient integer operations in those traces.
 Starting from the optimized traces of real programs has some big
 advantages over the "classical" superoptimization approach of generating and
 then trying all possible sequences of instructions. It avoids the
-combinatorical explosion that happens with the latter approach. Also, starting
+combinatorial explosion that happens with the latter approach. Also, starting
 from the traces of benchmarks or (even better) actual programs makes sure that
 we actually care about the missing optimizations
 that are found in this way. And because the traces are analyzed after they have
