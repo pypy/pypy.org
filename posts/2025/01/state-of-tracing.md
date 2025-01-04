@@ -49,7 +49,7 @@ the different implementation.
 Some personal context: my perspective is informed by nearly [two
 decades](https://mail.python.org/archives/list/pypy-dev@python.org/thread/TZM37YJ733G445R6JGTV26333RQEPLRX/)
 of work on PyPy. PyPy's implementation language, [RPython](https://rpython.readthedocs.io/), has support for a
-meta-JIT, which allows it to re-use its JIT infrastructure for the various
+meta-JIT, which allows it to reuse its JIT infrastructure for the various
 Python versions that we support (currently we do releases of PyPy2.7 and
 PyPy3.10 together). Our meta-JIT infrastructure has been used for some
 experimental different languages like:
@@ -82,7 +82,7 @@ JIT](https://en.wikipedia.org/wiki/Tracing_just-in-time_compilation) approach
 *not* because we thought method-based just-in-time compilers are bad.
 Historically we [had
 tried](https://foss.heptapod.net/pypy/extradoc/-/blob/branch/extradoc/eu-report/D08.2_JIT_Compiler_Architecture-2007-05-01.pdf)
-to implemend a method-based meta-JIT that was using partial evaluation (we wrote
+to implement a method-based meta-JIT that was using partial evaluation (we wrote
 three or four method-based prototypes that all weren't as good as we hoped).
 After all those [experiments
 failed](https://pypy.org/posts/2008/10/sprint-discussions-jit-generator-3301578822967655604.html)
