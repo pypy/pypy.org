@@ -1,7 +1,7 @@
 <!--
 .. title: Musings on Tracing in PyPy
 .. slug: musings-tracing
-.. date: 2024-09-01 17:01:09 UTC
+.. date: 2025-01-05 17:01:09 UTC
 .. tags:
 .. category:
 .. link:
@@ -10,7 +10,7 @@
 .. author: CF Bolz-Tereick
 -->
 
-A few weeks ago, [Shriram Krishnamurthi](https://cs.brown.edu/~sk/) [asked on
+Last summer, [Shriram Krishnamurthi](https://cs.brown.edu/~sk/) [asked on
 Twitter](https://twitter.com/ShriramKMurthi/status/1818009884484583459):
 
 > "I'm curious what the current state of tracing JITs is. They used to be all the
@@ -18,19 +18,31 @@ Twitter](https://twitter.com/ShriramKMurthi/status/1818009884484583459):
 > haven't heard of them at all. Is the latter because they are ubiquitous, or
 > because they proved to not work so well?"
 
-I replied with my personal (partly pretty subjective) opinions about the
+I replied with my personal (pretty subjective) opinions about the
 question in a lengthy Twitter thread (which also spawned an even lengthier
 discussion). I wanted to turn what I wrote there into a blog post to make it
-more widely available. The blog post i still somewhat terse, I've written a
-small background section and tried to at least add links to further
-information. Please ask in the comments if something is particularly unclear.
+more widely available (Twitter is no longer easily consumable without an
+account), and also because I'm mostly not using Twitter anymore. The blog post
+i still somewhat terse, I've written a small background section and tried to at
+least add links to further information. Please ask in the comments if something
+is particularly unclear.
 
 
 ## Background
 
-I'll explain a few of the central terms of the rest of the post. JIT compilers
+I'll explain a few of the central terms of the rest of the post. *JIT compilers*
 are compilers that do their work at runtime, interleaved (or concurrent with)
-the execution of the program.
+the execution of the program. There are (at least) two common general styles of
+JIT compiler architectures. The most common one is that of a method-based JIT,
+which will compile one method or function at a time. Then there are tracing JIT
+compilers, which generate code by tracing the execution of the user's program.
+They often focus on loops as stheir main unit of compilation.
+
+Then there is the distinction between a "regular" JIT compiler and that of a
+*meta-JIT*. A regular JIT is built to compile one specific source language to
+machine code. A meta-JIT is a framework for building JIT compilers for a
+variety of different languages, re-using as much machinery as possible between
+the different implementation.
 
 ## Personal and Project Context
 
@@ -70,7 +82,7 @@ JIT](https://en.wikipedia.org/wiki/Tracing_just-in-time_compilation) approach
 *not* because we thought method-based just-in-time compilers are bad.
 Historically we [had
 tried](https://foss.heptapod.net/pypy/extradoc/-/blob/branch/extradoc/eu-report/D08.2_JIT_Compiler_Architecture-2007-05-01.pdf)
-to implemend a method-based meta-JIT that was partial evaluation (we wrote
+to implemend a method-based meta-JIT that was using partial evaluation (we wrote
 three or four method-based prototypes that all weren't as good as we hoped).
 After all those [experiments
 failed](https://pypy.org/posts/2008/10/sprint-discussions-jit-generator-3301578822967655604.html)
@@ -78,7 +90,7 @@ we switched to the [tracing
 approach](https://dl.acm.org/doi/10.1145/1565824.1565827), and only at this
 point did our meta-JIT start producing interesting performance.
 
-In the meta-JIT context tracing has good propreties, because tracing has
+In the meta-JIT context tracing has good properties, because tracing has
 relatively understandable behavior and its easy(ish) to tweak how things work
 [with extra annotations in the interpreter
 source](https://dl.acm.org/doi/10.1145/2069172.2069181).
@@ -101,10 +113,10 @@ example[^help]).
 
 Later [Truffle](https://dl.acm.org/doi/abs/10.1145/2509578.2509581) came along
 and made a method-based meta-JIT using partial evaluation work. However Truffle
-(and [Graal]()) has had significantly more people working on it and much more
+(and [Graal](https://www.oracle.com/java/graalvm/)) has had significantly more people working on it and much more
 money invested. In addition, it at first required a quite specific style of
 [AST-based interpreters](https://dl.acm.org/doi/10.1145/2384577.2384587) (in
-the last few years they have also started supporting bytecode-based
+the last few years they have also added support for bytecode-based
 interpreters).
 
 It's still my impression that getting similar results with Truffle is [more
@@ -117,27 +129,28 @@ meta-JITs don't *have* to be based on tracing.
 
 ## Tracing, the good
 
-Let's now discuss some of the advantages of tracing that go beyond the ease of
-using tracing for a meta-JIT.
+Let's now actually get to he heart of Shriram's question and discuss some of
+the advantages of tracing that go beyond the ease of using tracing for a
+meta-JIT.
 
 Tracing allows for doing very aggressive [partial
 inlining](https://www.cs.fsu.edu/~xyuan/INTERACT-15/papers/paper11.pdf),
-following just the hot path through lots of layers of abstraction, is obviously
-often really useful for generating fast code
+Following just the hot path through lots of layers of abstraction is obviously
+often really useful for generating fast code.
 
 It's definitely possible to achieve the same effect in a method-based context
 with [path splitting](https://dl.acm.org/doi/pdf/10.1145/117954.117955). But it
 requires a lot more implementation work and is not trivial, because the path
 [execution counts](https://dl.acm.org/doi/10.1145/504282.504295) of inlined
-functions can often be very call-site dependent, and tracing gives you
-call-site dependent path splitting "for free".
+functions can often be very call-site dependent. Tracing, on the other hand,
+gives you call-site dependent path splitting "for free".
 
 (The aggressive partial inlining and path splitting is even more important in
 the meta-tracing context of PyPy, where some of inlined layers are a part of
 the language runtime, and where rare corner cases that are never executed in
-practice are basically absolutely everywhere.)
+practice are everywhere.)
 
-Another advantage of tracing is that it makes a whole bunch of optimizations
+Another advantage of tracing is that it makes a number of optimizations
 really easy to implement, because there are (to first approximation) no control
 flow merges. This makes all the optimizations that we do (super-)[local
 optimizations](https://en.wikipedia.org/wiki/Optimizing_compiler#Local_vs._global_scope),
@@ -164,7 +177,7 @@ Tracing also comes with a significant number of downsides. Probably the biggest
 one is that it tends to have big performance cliffs (PyPy certainly has them,
 and other tracing JITs such as TraceMonkey had them too). In my experience the
 'good' cases of tracing are really good, but if something goes wrong you are
-annoyed and performance can become a lot slower. With a simple method jit the
+annoyed and performance can become a lot slower. With a simple method JIT the
 performance is often much more "even".
 
 Another set of downsides is that tracing has a number of corner cases and
@@ -199,7 +212,7 @@ highlight:
 
 [Ben Titzer](https://twitter.com/TitzerBL/status/1818385622203298265)
 
-I agree with this completely, the complexity of Python bytecodes is a big
+I agree with this completely. The complexity of Python bytecodes is a big
 factor for why meta tracing works well for us. But also in Python there are
 many builtin types (collection types, types that form the [meta-object
 protocol](https://en.wikipedia.org/wiki/Metaobject#Metaobject_protocol) of
@@ -221,6 +234,11 @@ operations on them is very important too, for good performance.
 > interpreters of the time were also quite slow."
 
 [me](https://twitter.com/cfbolz/status/1818609594219811245)
+
+In the meantime there were some more reminiscences about tracing in Javascript
+by [Shu-Yu Guo in a panel
+discussion](https://www.youtube.com/live/_VF3pISRYRc?t=24797s) and by [Jason
+Orendorff on Mastodon](https://kfogel.org/notice/AngH0uqyJl231yLLOa).
 
 ----
 
@@ -262,7 +280,7 @@ meta-JIT approach. Instagram is running on
 [Cinder](https://github.com/facebookincubator/cinder/) and also CPython has
 [grown a JIT
 recently](https://tonybaloney.github.io/posts/python-gets-a-jit.html) which
-will be part of the upcoming [3.13 release, but only as an off-by-default build
+was part of the recent [3.13 release, but only as an off-by-default build
 option](https://docs.python.org/3.13/whatsnew/3.13.html#an-experimental-just-in-time-jit-compiler),
 so I'm very excited about how Python's performance will develop in the next
 years!
