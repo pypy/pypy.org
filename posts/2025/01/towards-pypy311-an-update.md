@@ -1,7 +1,7 @@
 <!--
 .. title: Towards PyPy3.11 - an update
 .. slug: towards-pypy311-an-update
-.. date: 2024-12-26 13:29:11 UTC
+.. date: 2025-01-04 13:29:11 UTC
 .. tags: release
 .. category: 
 .. link: 
