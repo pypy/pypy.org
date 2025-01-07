@@ -2,7 +2,7 @@
 .. title: Profiling PyPy using the Firefox profiler user interface
 .. slug: vmprof-firefox-converter
 .. date: 2024-04-26 14:38:00 UTC
-.. tags:
+.. tags: profiling, vmprof
 .. category:
 .. link:
 .. description:
