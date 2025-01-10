@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about vmprof)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/vmprof.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2025 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Fri, 10 Jan 2025 10:52:21 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>Profiling PyPy using the Firefox profiler user interface</title><link>https://www.pypy.org/posts/2024/05/vmprof-firefox-converter.html</link><dc:creator>Christoph Jung</dc:creator><description>&lt;h3 id="introduction"&gt;Introduction&lt;/h3&gt;
+&lt;p&gt;If you ever wanted to profile your Python code on PyPy, you probably came across &lt;a href="https://vmprof.readthedocs.io/en/latest/vmprof.html"&gt;VMProf&lt;/a&gt; — a statistical profiler for PyPy.&lt;/p&gt;
+&lt;p&gt;VMProf's console output can already give some insights into where your code spends time, 
+but it is far from showing all the information captured while profiling.&lt;/p&gt;
+&lt;p&gt;There have been some tools around to visualize VMProf's output.
+Unfortunately the vmprof.com user interface is no longer available and vmprof-server is not as easy to use, you may want to take a look at a local viewer or converter.
+Those so far could give you some general visualizations of your profile, but do not show any PyPy related context like PyPy's log output (&lt;a href="https://rpython.readthedocs.io/en/latest/logging.html"&gt;PyPyLog&lt;/a&gt;, which is output when using the PYPYLOG environment variable to log JIT actions).&lt;/p&gt;
+&lt;p&gt;To bring all of those features together in one tool, you may take a look at the vmprof-firefox-converter.&lt;/p&gt;
+&lt;p&gt;Created in the context of my bachelor's thesis, the vmprof-firefox-converter is a tool for analyzing VMProf profiles with the &lt;a href="https://profiler.firefox.com/"&gt;Firefox profiler&lt;/a&gt; user interface. 
+Instead of building a new user interface from scratch, this allows us to reuse the user interface work Mozilla put into the Firefox profiler.
+The Firefox profiler offers a timeline where you can zoom into profiles and work with different visualizations like a flame graph or a stack chart.
+To understand why there is time spent inside a function, you can revisit the source code and even dive into the intermediate representation of functions executed by PyPy's just-in-time compiler.
+Additionally, there is a visualization for PyPy's log output, to keep track whether PyPy spent time inside the interpreter, JIT or GC throughout the profiling time.&lt;/p&gt;
+&lt;h3 id="profiling-word-count"&gt;Profiling word count&lt;/h3&gt;
+&lt;p&gt;In this blog post, I want to show an example of how to use the vmprof-firefox-converter for a simple Python program.
+Based on Ben Hoyt's blog &lt;a href="https://benhoyt.com/writings/count-words/"&gt;Performance comparison: counting words in Python, Go, C++, C, AWK, Forth, and Rust&lt;/a&gt; we will profile two python versions of a word counter running on PyPy. One being a bit more optimized. For this, VMProf will be used, but instead of just going with the console output, we will use the Firefox profiler user interface.&lt;/p&gt;
+&lt;p&gt;At first, we are going to look at a simple way of counting words with &lt;code&gt;Collections.Counter&lt;/code&gt;.
+This will read one line from the standard input at a time and count the words with &lt;code&gt;counter.update()&lt;/code&gt;&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;counts = collections.Counter()
+for line in sys.stdin:
+    words = line.lower().split()
+    counts.update(words)
+
+for word, count in counts.most_common():
+    print(word, count)
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;To start profiling, simply execute:
+&lt;code&gt;pypy -m vmprofconvert -run simple.py &amp;lt;kjvbible_x10.txt&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;This will run the above code with vmprof, automatically capture and convert the results and finally open the Firefox profiler. &lt;/p&gt;
+&lt;p&gt;The input file is the king James version of the bible concatenated ten times.&lt;/p&gt;
+&lt;p&gt;To get started, we take a look at the call stack.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_call_stack_crp.png?raw=true"&gt;
+Here we see that most of the time is spent in native code (marked as blue) e.g., the &lt;code&gt;counter.update()&lt;/code&gt; or &lt;code&gt;split()&lt;/code&gt; C implementation.&lt;/p&gt;
+&lt;p&gt;Now let's proceed with the more optimized version.
+This time we read 64 Kb of data from the standard input and count the words with &lt;code&gt;counter.update()&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;counts = collections.Counter()
+remaining = ''
+while True:
+    chunk = remaining + sys.stdin.read(64*1024)
+    if not chunk:
+        break
+    last_lf = chunk.rfind('\n')  # process to last LF character
+    if last_lf == -1:
+        remaining = ''
+    else:
+        remaining = chunk[last_lf+1:]
+        chunk = chunk[:last_lf]
+    counts.update(chunk.lower().split())
+
+for word, count in counts.most_common():
+    print(word, count)
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;As we did before, we are going to take a peek at the call stack.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_call_stack_crp.png?raw=true"&gt; &lt;/p&gt;
+&lt;p&gt;Now there is more time spent in native code, caused by larger chunks of text passed to  &lt;code&gt;counter.update()&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;This becomes even more clear by comparing the stack charts.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_stack_chart.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;Here, in the unoptimized case, we only read in one line at each loop iteration.
+This results in small "spikes" in the stack chart. &lt;/p&gt;
+&lt;p&gt;But let's take an even closer look.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_stack_chart_zoom.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;Zoomed in, we see the call stack alternating between &lt;code&gt;_count_elements()&lt;/code&gt; and (unfortunately unsymbolized) native calls coming from reading and splitting the input text (e.g., &lt;code&gt;decode()&lt;/code&gt;).&lt;/p&gt;
+&lt;p&gt;Let us now take a look at the optimized case.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_stack_chart.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;And if we look closer at the same interval as before, we see some spikes, but slightly different.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_stack_chart_zoom.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;Even though we do not want to compare the (amount of) milliseconds directly, we clearly see that the spikes are wider, i.e. the time spent in those function calls is longer.
+You may already know where this comes from.
+We read a 64 Kb chunk of data from std in and pass that to &lt;code&gt;counter.update()&lt;/code&gt;, so both these tasks do more work and take longer.
+Bigger chunks mean there is less alternating between reading and counting, so there is more time spent doing work than "doing" loop iterations.&lt;/p&gt;
+&lt;h3 id="getting-started"&gt;Getting started&lt;/h3&gt;
+&lt;p&gt;You can get the converter from &lt;a href="https://github.com/Cskorpion/vmprof-firefox-converter"&gt;GitHub&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Both VMProf and the vmprof-firefox-converter were created for profiling PyPy, but you can also use them with CPython. &lt;/p&gt;
+&lt;p&gt;This project is still somewhat experimental, so if you want to try it out, please let us know whether it worked for you.&lt;/p&gt;</description><category>profiling</category><category>vmprof</category><guid>https://www.pypy.org/posts/2024/05/vmprof-firefox-converter.html</guid><pubDate>Fri, 26 Apr 2024 14:38:00 GMT</pubDate></item><item><title>Native profiling in VMProf</title><link>https://www.pypy.org/posts/2017/04/native-profiling-in-vmprof-6949065546884243105.html</link><dc:creator>Richard Plangger</dc:creator><description>&lt;p&gt;We are happy to announce a new release for the PyPI package &lt;span&gt;vmprof&lt;/span&gt;.&lt;br&gt;
+It is now able to capture native stack frames on Linux and Mac OS X to show you bottle necks in compiled code (such as CFFI modules, Cython or C Python extensions). It supports PyPy, CPython versions 2.7, 3.4, 3.5 and 3.6. Special thanks to Jetbrains for funding the native profiling support.&lt;br&gt;
+&lt;br&gt;
+&lt;/p&gt;&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://3.bp.blogspot.com/-94RAR1lkAP8/WNmQn-kpLhI/AAAAAAAAAqE/RXg6T4hptnQtH-8fdi87yh_BI37eN6COQCLcB/s1600/vmprof-logo.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img alt="vmprof logo" border="0" src="https://3.bp.blogspot.com/-94RAR1lkAP8/WNmQn-kpLhI/AAAAAAAAAqE/RXg6T4hptnQtH-8fdi87yh_BI37eN6COQCLcB/s1600/vmprof-logo.png" title="vmprof logo"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;/div&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;What is vmprof?&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;If you have already worked with vmprof you can skip the next two section. If not, here is a short introduction:&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;The goal of vmprof package is to give you more insight into your program. It is a statistical profiler. Another prominent profiler you might already have worked with is cProfile. It is bundled with the Python standard library.&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;vmprof's distinct feature (from most other profilers) is that it does not significantly slow down your program execution. The employed strategy is statistical, rather than deterministic. Not every function call is intercepted, but it samples stack traces and memory usage at a configured sample rate (usually around 100hz). You can imagine that this creates a lot less contention than doing work before and after each function call.&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;As mentioned earlier cProfile gives you a complete profile, but it needs to intercept every function call (it is a deterministic profiler). Usually this means that you have to capture and record every function call, but this takes an significant amount time.&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;br&gt;
+&lt;/span&gt;&lt;/span&gt; &lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;The overhead vmprof consumes is roughly 3-4% of your total program runtime or even less if you reduce the sampling frequency. Indeed it lets you sample and inspect much larger programs. If you failed to profile a large application with cProfile, please give vmprof a shot.&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;span style="font-size: large;"&gt;vmprof.com or PyCharm&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;div&gt;
+&lt;div&gt;
+There are two major alternatives to the command-line tools shipped with vmprof:&lt;/div&gt;
+&lt;ul&gt;
+&lt;li&gt;A web service on &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;PyCharm Professional Edition &lt;/li&gt;
+&lt;/ul&gt;
+&lt;div&gt;
+While the command line tool is only good for quick inspections, &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt;
+ and PyCharm compliment each other providing deeper insight into your 
+program. With PyCharm you can view the per-line profiling results inside
+ the editor. With the &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt; you get a handy visualization of the profiling results as a flame chart and memory usage graph.&lt;/div&gt;
+&lt;/div&gt;
+&lt;div&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div&gt;
+&lt;div&gt;
+Since the PyPy Team runs and maintains the service on &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt; (which is by the way free and open-source), I’ll explain some more details here. On &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt; you can inspect the generated profile interactively instead of looking at console output. What is sent to &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt;? You can find details &lt;a href="https://vmprof.readthedocs.io/en/latest/data.html" target="_blank"&gt;here&lt;/a&gt;.&lt;/div&gt;
+&lt;/div&gt;
+&lt;br&gt;&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;b&gt;Flamegraph&lt;/b&gt;: &lt;/span&gt;&lt;/span&gt;Accumulates and displays the most frequent codepaths. It allows you to quickly and accurately identify hot spots in your code. The flame graph below is a very short run of richards.py (Thus it shows a lot of time spent in PyPy's JIT compiler).&lt;br&gt;
+&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://4.bp.blogspot.com/-n5LoH2hf7qI/WNvtNvIAbsI/AAAAAAAAAqc/zn0AXv8fkzIMQXWUwMLtLFpjochspz5MwCLcB/s1600/flamegraph.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="231" src="https://4.bp.blogspot.com/-n5LoH2hf7qI/WNvtNvIAbsI/AAAAAAAAAqc/zn0AXv8fkzIMQXWUwMLtLFpjochspz5MwCLcB/s400/flamegraph.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+&lt;br&gt;
+&lt;b&gt;List all functions (optionally sorted)&lt;/b&gt;: the equivalent of the vmprof command line output in the web.&lt;br&gt;
+&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://3.bp.blogspot.com/-zzAmBuf-3KM/WNvtNze_sZI/AAAAAAAAAqg/9u4Kxv_OzMsTV7KgRx9PvXGHOAPdfXYUgCLcB/s1600/list-of-functions.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="215" src="https://3.bp.blogspot.com/-zzAmBuf-3KM/WNvtNze_sZI/AAAAAAAAAqg/9u4Kxv_OzMsTV7KgRx9PvXGHOAPdfXYUgCLcB/s400/list-of-functions.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+ &lt;b&gt;Memory curve&lt;/b&gt;: A line plot that shows how how many MBytes have been consumed over the lifetime of your program (see more info in the section below).&lt;br&gt;
+&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://cloud.githubusercontent.com/assets/175722/17400119/70d43a84-5a46-11e6-974b-913cfa22a531.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="187" src="https://cloud.githubusercontent.com/assets/175722/17400119/70d43a84-5a46-11e6-974b-913cfa22a531.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;span style="font-size: large;"&gt;Native programs&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;The new feature introduced in vmprof 0.4.x allows you to look beyond the Python level. As you might know, Python maintains a stack of frames to save the execution. Up to now the vmprof profiles only contained that level of information. But what if you program jumps to native code (such as calling gzip compression on a large file)? Up to now you would not see that information.&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;br&gt;&lt;/span&gt;&lt;/span&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;Many packages make use of the CPython C API (which we discurage, please lookup &lt;a href="https://cffi.readthedocs.org/" target="_blank"&gt;cffi&lt;/a&gt; for a better way to call C). Have you ever had the issue that you know that your performance problems reach down to, but you could not profile it properly?&lt;b&gt; Now you can!&lt;/b&gt;&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;br&gt;
+&lt;/span&gt;&lt;/span&gt; &lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;Let's inspect a very simple Python program to find out why a program is significantly slower on Linux than on Mac:&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;span&gt;import numpy as np&lt;br&gt;
+n = 1000&lt;br&gt;
+a = np.random.random((n, n))&lt;br&gt;
+b = np.random.random((n, n))&lt;br&gt;
+c = np.dot(np.abs(a), b)&lt;/span&gt;&lt;br&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+Take two NxN random matrix objects and create a dot product. The first argument to the dot product provides the absolute value of the random matrix.&lt;br&gt;
+&lt;br&gt;
+&lt;table border="1" style="border: 1px solid silver;"&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td&gt;Run&lt;/td&gt;&lt;td&gt;Python&lt;/td&gt;&lt;td&gt;NumPy&lt;/td&gt;&lt;td&gt;OS&lt;/td&gt;&lt;td&gt;n=...&lt;/td&gt; &lt;td&gt;Took&lt;/td&gt; &lt;/tr&gt;
+&lt;tr&gt; &lt;td&gt;[1]&lt;/td&gt;&lt;td&gt;CPython 3.5.2&lt;/td&gt;&lt;td&gt;NumPy 1.12.1&lt;/td&gt;&lt;td&gt;Mac OS X, 10.12.3&lt;/td&gt;&lt;td&gt;n=5000&lt;/td&gt;&lt;td&gt;~9 sec&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt; &lt;td&gt;[2]&lt;/td&gt;&lt;td&gt;CPython 3.6.0&lt;/td&gt;&lt;td&gt;NumPy 1.12.1&lt;/td&gt;&lt;td&gt;Linux 64, Kernel 4.9.14&lt;/td&gt;&lt;td&gt;n=1000&lt;/td&gt;&lt;td&gt;~26 sec&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;br&gt;
+Note that the Linux machine operates on a 5 times smaller matrix, still it takes much longer. What is wrong? Is Linux slow? CPython 3.6.0? Well no, lets inspect and &lt;a href="https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac" target="_blank"&gt;[1]&lt;/a&gt; and &lt;a href="https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c" target="_blank"&gt;[2]&lt;/a&gt; (shown below in that order).&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://3.bp.blogspot.com/-WF-JpMQhJaI/WNvx8CPNpTI/AAAAAAAAAqw/ixZpWng6TDc4kIlEHu9zhqrNX4tx0S4rgCLcB/s1600/macosx-profile-blog.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="105" src="https://3.bp.blogspot.com/-WF-JpMQhJaI/WNvx8CPNpTI/AAAAAAAAAqw/ixZpWng6TDc4kIlEHu9zhqrNX4tx0S4rgCLcB/s400/macosx-profile-blog.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://1.bp.blogspot.com/-gjM2uj5Ko_E/WNvx73qcXEI/AAAAAAAAAqs/cMvDfcHQ2eAti4BRU0ldwGQ5M-1_TQ2FACEw/s1600/linux-blog.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="113" src="https://1.bp.blogspot.com/-gjM2uj5Ko_E/WNvx73qcXEI/AAAAAAAAAqs/cMvDfcHQ2eAti4BRU0ldwGQ5M-1_TQ2FACEw/s400/linux-blog.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+&lt;a href="https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c" target="_blank"&gt;[2]&lt;/a&gt; runs on Linux, spends nearly all of the time in PyArray_MatrixProduct2, if you compare to &lt;a href="https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac" target="_blank"&gt;[1]&lt;/a&gt; on Mac OS X, you'll see that a lot of time is spent in generating the random numbers and the rest in cblas_matrixproduct.&lt;br&gt;
+&lt;br&gt;
+Blas has a very efficient implementation so you can achieve the same on Linux if you install a blas implementation (such as openblas).&lt;br&gt;
+&lt;br&gt;
+Usually you can spot potential program source locations that take a lot of time and might be the first starting point to resolve performance issues.&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;Beyond Python programs &lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+It is not unthinkable that the strategy can be reused for native programs. Indeed this can already be done by creating a small cffi wrapper around an entry point of a compiled C program. It would even work for programs compiled from other languages (e.g. C++ or Fortran). The resulting function names are the full symbol name embedded into either the executable symboltable or extracted from the dwarf debugging information. Most of those will be compiler specific and contain some cryptic information.&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;Memory profiling&lt;/span&gt;&lt;br&gt;
+We thankfully received a code contribution from the company Blue Yonder. They have built a memory profiler (for Linux and Mac OS X) on top of vmprof.com that displays the memory consumption for the runtime of your process.&lt;br&gt;
+&lt;br&gt;
+You can run it the following way:&lt;br&gt;
+&lt;br&gt;
+&lt;span&gt;$ python -m vmprof --mem --web script.py&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+By adding --mem, vmprof will capture memory information and display it in the dedicated view on vmprof.com. You can view it by by clicking the 'Memory' switch in the flamegraph view.&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;There is more&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+Some more minor highlights contained in 0.4.x:&lt;br&gt;
+&lt;ul&gt;
+&lt;li&gt;VMProf support for Windows 64 bit (No native profiling)&lt;/li&gt;
+&lt;li&gt;VMProf can read profiles generated by another host system&lt;/li&gt;
+&lt;li&gt;VMProf is now bundled in several binary wheel for fast and easy installation (Mac OS X, Linux 32/64 for CPython 2.7, 3.4, 3.5, 3.6)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;span style="font-size: large;"&gt;Future plans - Profile Streaming&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+vmprof has not reached the end of development. There are many features we could implement. But there is one feature that could be a great asset to many Python developers.&lt;br&gt;
+&lt;br&gt;
+Continuous delivery of your statistical profile, or in short, profile streaming. One of the great strengths of vmprof is that is consumes very little overhead. It is not a crazy idea to run this in production.&lt;br&gt;
+&lt;br&gt;
+It would require a smart way to stream the profile in the background to vmprof.com and new visualizations to look at much more data your Python service produces.&lt;br&gt;
+&lt;br&gt;
+If that sounds like a solid vmprof improvement, don't hesitate to get in touch with us (e.g. IRC #pypy, mailing list pypy-dev, or comment below)&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;You can help! &lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+There are some immediate things other people could help with. Either by donating time or money (yes we have occasional contributors which is great)!&lt;br&gt;
+&lt;ul&gt;
+&lt;li&gt;We gladly received code contribution for the memory profiler. But it was not enough time to finish the migration completely. Sadly it is a bit brittle right now.&lt;/li&gt;
+&lt;li&gt;We would like to spend more time on other visualizations. This should include to give a much better user experience on vmprof.com (like a tutorial that explains the visualization that we already have). &lt;/li&gt;
+&lt;li&gt;Build Windows 32/64 bit wheels (for all CPython versions we currently support)&lt;/li&gt;
+&lt;/ul&gt;
+We are also happy to accept google summer of code projects on vmprof for new visualizations and other improvements. If you qualify and are interested, don't hesitate to ask!&lt;br&gt;
+&lt;br&gt;
+Richard Plangger (plan_rich) and the PyPy Team&lt;br&gt;
+&lt;br&gt;
+[1] Mac OS X &lt;a href="https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac"&gt;https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac&lt;/a&gt;&lt;br&gt;
+[2] Linux64 &lt;a href="https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c"&gt;https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c&lt;/a&gt;</description><category>profiling</category><category>vmprof</category><guid>https://www.pypy.org/posts/2017/04/native-profiling-in-vmprof-6949065546884243105.html</guid><pubDate>Sat, 01 Apr 2017 14:17:00 GMT</pubDate></item></channel></rss>
