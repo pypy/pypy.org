@@ -36,7 +36,7 @@ the execution of the program. There are (at least) two common general styles of
 JIT compiler architectures. The most common one is that of a method-based JIT,
 which will compile one method or function at a time. Then there are tracing JIT
 compilers, which generate code by tracing the execution of the user's program.
-They often focus on loops as stheir main unit of compilation.
+They often focus on loops as their main unit of compilation.
 
 Then there is the distinction between a "regular" JIT compiler and that of a
 *meta-JIT*. A regular JIT is built to compile one specific source language to
@@ -184,7 +184,7 @@ Another set of downsides is that tracing has a number of corner cases and
 "weird" behaviour in certain situations. Questions such as:
 - When do you stop inlining?
 - What happens when you [trace recursion](https://mail.python.org/archives/list/pypy-dev@python.org/thread/GQQ7ABUFHGEAHWN7RQZM6D54CDROQINR/)?
-- What happens if your traces are [consistently too long, even without inling](https://pypy.org/posts/2021/09/jit-auto-generated-code.html)?
+- What happens if your traces are [consistently too long, even without inlining](https://pypy.org/posts/2021/09/jit-auto-generated-code.html)?
 - and so on...
 
 Some of these problems can be solved by adding heuristics to the tracing JIT,
