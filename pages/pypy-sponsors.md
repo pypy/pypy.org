@@ -21,7 +21,8 @@ can be general or specific.
 PyPy has had many [financial contributors](categories/sponsors.html) in the
 past. We are grateful to them, and to the following current sponsors:
 
-- [Baroque Software](https://baroquesoftware.com) who hosts the [buildbot
+- [![Baroque Software logo](/images/baroque-software.png
+  "Baroque Software")](https://baroquesoftware.com) hosts the [buildbot
   master](https://buildbot.pypy.org) as well as our [benchmark
   runner](https://speed.pypy.org/about/)
 
