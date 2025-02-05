@@ -2,7 +2,7 @@
 .. title: Low Overhead Allocation Sampling in a Garbage Collected Virtual Machine
 .. slug: pypy-gc-sampling
 .. date: 2025-01-26 14:38:00 UTC
-.. tags: Garbage Collector, PyPy, profiling, VMProf
+.. tags: PyPy, Garbage Collector, Profiling, VMProf
 .. category:
 .. link:
 .. description:
@@ -34,7 +34,8 @@ Instead, we will take a look at the fast path (allocations in the nursery) and h
 
 The nursery (a small continuous memory area) utilizes pointers, to keep track from where on the nursery is free and where it ends, called `nursery_free` and `nursery_top`. When memory is allocated, the GC checks if there is enough space in the nursery left. If there is enough space, the `nursery_free` pointer will be returned as the start address for the new allocated memory, and `nursery_free` will be moved forward by the amount of allocated memory.
 
-<img src="allocation_sampling_images/nursery_allocation_s.svg">
+
+<img src="../../../images/2025_02_allocation_sampling_images/nursery_allocation.svg">
 
 
 ``` Python
@@ -56,13 +57,13 @@ Understanding this is crucial for our allocation sampling approach, so let us go
 We already saw an example on how an allocation into a non-full nursery will look like.
 But what happens, if the nursery is (too) full?
 
-<img src="allocation_sampling_images/nursery_full_s.svg">
+<img src="../../../images/2025_02_allocation_sampling_images/nursery_full.svg">
 
 
-As soon as an object doesn't fit into the nursery anymore, it will be collected. A nursery collection will move all surviving objects into the old-space, so that the nursery is completely free afterwards, and the requested allocation can be made.
+As soon as an object doesn't fit into the nursery anymore, it will be collected. A nursery collection will move all surviving objects into the old-space, so that the nursery is free afterwards, and the requested allocation can be made.
 
 
-<img src="allocation_sampling_images/nursery_collected_s.svg">
+<img src="../../../images/2025_02_allocation_sampling_images/nursery_collected.svg">
 
 
 Note that this is still a bit of a simplification.
@@ -73,7 +74,7 @@ To decide whether the GC should trigger a sample, the sampling logic is integrat
 
 Image we'd have a nursery of 2MB and want to sample every 512KB allocated, then you could imagine our nursery looking like that:
 
-<img src="allocation_sampling_images/nursery_sampling.svg">
+<img src="../../../images/2025_02_allocation_sampling_images/nursery_sampling.svg">
 
 And now here comes our secret trick. We use the sample point as `nursery_top`, so that allocating a chunk of 512KB would exceed the nursery top and start a nursery collection.
 But of course we don't want to do a minor collection just then, so before starting a collection, we need to check if the nursery is actually full or if that is just an exceeded sample point. The latter will then trigger a sample via VMProf's C-interface.
@@ -90,16 +91,16 @@ How is that possible you ask?
 The sampling point is not limited by the nursery size, but if it is 'outside' the nursery (e.g. because `sample_n_bytes` is set to twice the nursery size) it won't be used as nursery_top until it 'fits' into the nursery.
 
 
-<img src="allocation_sampling_images/nursery_sampling_larger_than_nursery.svg">
+<img src="../../../images/2025_02_allocation_sampling_images/nursery_sampling_larger_than_nursery.svg">
 
 
 After every nursery collection, we'd usually set the `sample_point` to `nursery_free + sample_n_bytes`, but if it is larger than the nursery, then the amount of collected memory during the last nursery collection is subsracted from `sample_point`.
 
 
-<img src="allocation_sampling_images/nursery_sampling_larger_than_nursery_post_minor.svg">
+<img src="../../../images/2025_02_allocation_sampling_images/nursery_sampling_larger_than_nursery_post_minor.svg">
 
 
-At some point the `sample _point` will be smaller than the nursery size, then it will be used as `nursery_top` again to trigger a sample when exceeded.
+At some point the `sample_point` will be smaller than the nursery size, then it will be used as `nursery_top` again to trigger a sample when exceeded.
 
 
 !!Maybe exclude psuedo code here!!
@@ -138,10 +139,9 @@ def collect_and_reserve(size_of_allocation):
 
 The tight integration of sampling into the nursery's bump-pointer logic does add only slight overhead.
 
-
 Every time an allocation exceeds the `sample_point`, `collect_and_reserve` is called to sample over the size of the allocation (as described in previous section). The resulting overhead is directly controlled by the sampling rate, as the amount of samples is `size_of_allocation / sample_n_bytes`.
 
-After sampling, the `sample_point` and `nursery_top` must be sett accordingly.
+After sampling, the `sample_point` and `nursery_top` must be set accordingly.
 This will be done once after sampling in `collect_and_reserve`.
 
 Setting a pointer like `sampling_point`, `nursery_top`, etc. due to sampling, are additions, subtractions, loads and stores on the lowest level. Those are not expensive on their own, but rather when excecuted very often.
@@ -183,7 +183,7 @@ The y-axis shows the overhead, while the x-axis indicates the equivalent of samp
 
 All benchmarks ran with JIT and native profiling.
 
-<img src="allocation_sampling_images/blog_allocation_sampling_overhead.png">
+<img src="../../../images/2025_02_allocation_sampling_images/allocation_sampling_overhead.png">
 
 
 As you may notice, the amounts of samples per second are quite different, and the overhead does not scale linearly with the number of samples per second.
