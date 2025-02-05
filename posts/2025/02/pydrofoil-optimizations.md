@@ -15,7 +15,7 @@ specification for these instruction sets (together with Martin Berger, John
 Witulski, Matti Picus, Jubo Xu, Ryan Lin, and others). I have written [very
 little](/posts/2023/05/rpython-used-to-speed-up-risc-v-simulation-over-15x.txt)
 about it, so in this post I wanted to explain the architecture of Pydrofoil a
-little bit better, how some of the optimizations that I have implemted for it
+little bit better, how some of the optimizations that I have implemented for it
 work, and explore which of the optimizations help how much.
 
 
