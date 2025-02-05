@@ -280,7 +280,7 @@ flow graphs from them. The control flow graphs consist of basic blocks and
 (conditional) jumps between them. Here's a screenshot of the constructed CFG of
 the `execute` clause of `ITYPE` instructions:
 
-![itype flow graph](images/2025-pydrofoil-itype-before.svg)
+![itype flow graph](/images/2025-pydrofoil-itype-before.svg)
 
 # Static Pydrofoil IR Optimizations
 
@@ -427,7 +427,7 @@ removes all allocations in this code sequence completely.
 After inlining and bitvector/integer operation optimization the control flow
 graph of the `execute` clause for `ITYPE` instructions looks like this:
 
-![itype flow graph after optimizations](images/2025-pydrofoil-itype-after.svg)
+![itype flow graph after optimizations](/images/2025-pydrofoil-itype-after.svg)
 
 
 # Function Specialization
@@ -669,7 +669,7 @@ them during host machine code generation.
 Here's a state diagram of the various states and transitions a machine word can
 be in:
 
-![memory state transitions](images/2025-pydrofoil-mem-states.svg)
+![memory state transitions](/images/2025-pydrofoil-mem-states.svg)
 
 The result of this approach is that instruction fetch can mostly be
 constant-folded to no machine code instructions at all: the program counter is
@@ -778,7 +778,7 @@ completely impractical to run any interesting benchmark to completion with them.
 
 The results look like this:
 
-![ablations](images/2025-pydrofoil-ablations.svg)
+![ablations](/images/2025-pydrofoil-ablations.svg)
 
 We can see that the JIT is the most important component for getting Pydrofoil's
 performance, it provides (together with memory immutability tracking) a 15x
@@ -797,7 +797,7 @@ latter two were fairly slow again, so I didn't run them to completion and
 instead extrapolated their instructions/second numbers, the results should
 therefore be taken with a grain of salt. In any case, here are the results:
 
-![comparison qemu](images/2025-pydrofoil-qemu.svg)
+![comparison qemu](/images/2025-pydrofoil-qemu.svg)
 
 Qemu is 14x faster than Pydrofoil, Sail is more than 200x slower than Pydrofoil,
 Spike is more than 3x slower than Pydrofoil.
