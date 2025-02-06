@@ -114,7 +114,7 @@ NAVIGATION_LINKS = {
             
         (
           (
-            ('https://twitter.com/pypyproject', 'Twitter'),
+            ('https://bsky.app/profile/pypyproject.bsky.social', 'Bluesky'),
             ('https://libera.irclog.whitequark.org/pypy', 'IRC logs'),
             ('https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt', 'YouTube'),
             ('https://www.twitch.tv/pypyproject', 'Twitch'),
