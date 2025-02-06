@@ -17,10 +17,6 @@ management. Modules that use the `CPython C API`_ will probably work, but will
 not achieve a speedup via the JIT. We encourage library authors to use `CFFI`_
 and HPy_ instead.
 
-If you are looking for how to use PyPy with the scientific python ecosystem,
-we encourage you to use `conda`_, since they repackage common libraries like
-scikit-learn and SciPy for PyPy.
-
 Refcounting, ``__del__``, and resource use
 ------------------------------------------
 
