@@ -100,7 +100,7 @@ go through this step-by-step.
 We already saw an example on how an allocation into a non-full nursery will
 look like. But what happens, if the nursery is (too) full?
 
-<img src=/images/2025_02_allocation_sampling_images/nursery_full.svg">
+<img src="/images/2025_02_allocation_sampling_images/nursery_full.svg">
 
 
 As soon as an object doesn't fit into the nursery anymore, it will be
