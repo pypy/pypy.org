@@ -2,7 +2,7 @@
 .. title: Low Overhead Allocation Sampling in a Garbage Collected Virtual Machine
 .. slug: pypy-gc-sampling
 .. date: 2025-01-26 14:38:00 UTC
-.. tags: PyPy, Garbage Collector, Profiling, VMProf
+.. tags: gc, profiling, vmprof
 .. category:
 .. link:
 .. description:
