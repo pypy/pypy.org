@@ -41,7 +41,7 @@ They often focus on loops as their main unit of compilation.
 Then there is the distinction between a "regular" JIT compiler and that of a
 *meta-JIT*. A regular JIT is built to compile one specific source language to
 machine code. A meta-JIT is a framework for building JIT compilers for a
-variety of different languages, re-using as much machinery as possible between
+variety of different languages, reusing as much machinery as possible between
 the different implementation.
 
 ## Personal and Project Context

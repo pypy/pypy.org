@@ -11,9 +11,11 @@
 
 We provide pre-compiled binaries for many platforms and OSes:
 
-* the Python2.7 compatible release — **PyPy2.7 v7.3.17**
+* the Python2.7 compatible release — **PyPy2.7 v7.3.18**
 
-* the Python3.10 compatible release — **PyPy3.10 v7.3.17**
+* the Python3.10 compatible release — **PyPy3.10 v7.3.18**
+
+* the Python3.11 compatible release — **PyPy3.11 v7.3.18**
 
 .. note::
 
@@ -31,10 +33,11 @@ We provide pre-compiled binaries for many platforms and OSes:
   Anonymous tags work, this kind of tag doesn't ``Download <linux64-pypy3.10>``
 
 .. list-table:: `PyPy latest`_
-   :widths: 20 15 15 35
+   :widths: 20 15 15 15 35
    :header-rows: 1
 
    * - OS
+     - PyPy3.11
      - PyPy3.10
      - PyPy2.7
      - Notes
@@ -42,9 +45,11 @@ We provide pre-compiled binaries for many platforms and OSes:
    * - **Linux x86 64 bit**
      - Download__
      - Download__
+     - Download__
      - compatible with CentOS7 and later.
 
    * - **Windows 64 bit**
+     - Download__
      - Download__
      - Download__
      - compatible with any windows 64-bit
@@ -54,10 +59,12 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - Download__
      - Download__
+     - Download__
      - MacOS >= 11. Not signed, for signed packages use Homebrew_.
 
    * - **MacOS x86_64**
 
+     - Download__
      - Download__
      - Download__
      - MacOS >= 10.15, not for Mojave and below. Not signed, for signed
@@ -67,24 +74,30 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - Download__
      - Download__
+     - Download__
      - compatible with CentOS7 and later.
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.11-v7.3.18-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.18-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.18-linux64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-win64.zip
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-win64.zip
+.. __: https://downloads.python.org/pypy/pypy3.11-v7.3.18-win64.zip
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.18-win64.zip
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.18-win64.zip
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-macos_arm64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.11-v7.3.18-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.18-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.18-macos_arm64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-macos_x86_64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.11-v7.3.18-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.18-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.18-macos_x86_64.tar.bz2
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.11-v7.3.18-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.18-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.18-aarch64.tar.bz2
 
-.. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.17.html
+.. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.18.html
 .. _`vcredist.x64.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
 
 ..
@@ -92,10 +105,11 @@ We provide pre-compiled binaries for many platforms and OSes:
 
 
 .. list-table:: Other Platforms
-   :widths: 20 15 15 35
+   :widths: 20 15 15 15 35
    :header-rows: 1
 
    * - OS
+     - PyPy3.11
      - PyPy3.10
      - PyPy2.7
      - Notes
@@ -104,10 +118,12 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - Download__
      - Download__
+     - Download__
      - compatible with CentOS7 and later
 
-.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.11-v7.3.18-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.10-v7.3.18-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.18-linux32.tar.bz2
 
 .. _`Default (with a JIT Compiler)`:
 
@@ -283,11 +299,13 @@ Building from source
    Alternatively, get one of the following smaller packages for the source at
    the same revision as the above binaries:
 
-   * `pypy2.7-v7.3.17-src.tar.bz2`__ (sources, PyPy 2.7 only)
-   * `pypy3.10-v7.3.17-src.tar.bz2`__ (sources, PyPy 3.10 only)
+   * `pypy3.11-v7.3.18-src.tar.bz2`__ (sources, PyPy 3.10 only)
+   * `pypy3.10-v7.3.18-src.tar.bz2`__ (sources, PyPy 3.10 only)
+   * `pypy2.7-v7.3.18-src.tar.bz2`__ (sources, PyPy 2.7 only)
 
-   .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.17-src.tar.bz2
-   .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.17-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy3.11-v7.3.18-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy3.10-v7.3.18-src.tar.bz2
+   .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.18-src.tar.bz2
 
 
 2. Make sure you **installed the dependencies.**  See the list here__.
@@ -419,7 +437,7 @@ pre-compiling them, normal users will get errors:
   normally found: e.g. in your project's main directory, or in a
   directory that you add to the env var ``PYTHONPATH``.
 
-.. _`package.py`: https://github.com/pypy/pypy/blob/release-pypy3.10-v7.3.17/pypy/tool/release/package.py
+.. _`package.py`: https://github.com/pypy/pypy/blob/release-pypy3.11-v7.3.18/pypy/tool/release/package.py
 
 Checksums
 ---------

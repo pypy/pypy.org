@@ -202,7 +202,7 @@ A more interesting class of redundancy is to try to find two operations in a
 trace that compute the same result. We can do that by asking Z3 to prove for
 each pair of different operations in the trace to prove that the result is
 always the same. If a previous operation returns the same result, the JIT could
-have re-used that result instead of re-computing it, saving time. Doing this
+have reused that result instead of re-computing it, saving time. Doing this
 search for equivalent operations with Z3 is quadratic in the number of
 operations, but since traces have a maximum length it is not too bad in
 practice.
