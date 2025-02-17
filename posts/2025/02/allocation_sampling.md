@@ -133,36 +133,7 @@ exist more than one sample point at any time. After we created the sampling
 point, it will be used as nursery top, if exceeded at some point, we will just
 add `sample_n_bytes` to that sampling point, i.e. move it forward.
 
-The nursery usually has a size of a few megabytes, but profiling long-running
-or larger applications with tons of allocations could result in very high
-number of samples per second (and thus overhead). To combat that it is possible
-to use sampling rates higher than the nursery size.
-
-How is that possible you ask?
-
-The sampling point is not limited by the nursery size, but if it is 'outside'
-the nursery (e.g. because `sample_n_bytes` is set to twice the nursery size) it
-won't be used as nursery_top until it 'fits' into the nursery.
-
-
-<img src="../../../images/2025_02_allocation_sampling_images/nursery_sampling_larger_than_nursery.svg">
-
-
-After every nursery collection, we'd usually set the `sample_point` to
-`nursery_free + sample_n_bytes`, but if it is larger than the nursery, then the
-amount of collected memory during the last nursery collection is subsracted
-from `sample_point`.
-
-
-<img src="../../../images/2025_02_allocation_sampling_images/nursery_sampling_larger_than_nursery_post_minor.svg">
-
-
-At some point the `sample_point` will be smaller than the nursery size, then it
-will be used as `nursery_top` again to trigger a sample when exceeded.
-
-
-!!Maybe exclude psuedo code here!!
-
+Here's how the updated `collect_and_reserve` function looks like:
 
 ``` Python
 def collect_and_reserve(size_of_allocation):
@@ -231,6 +202,34 @@ profiling precision) and overhead can be completely adjusted.
 We also suspect linkage between user program stack depth and overhead (a deeper
 stack takes longer to walk, leading to higher overhead), especially when
 walking the C call stack to.
+
+## Sampling rates bigger than the nursery size
+
+The nursery usually has a size of a few megabytes, but profiling long-running
+or larger applications with tons of allocations could result in very high
+number of samples per second (and thus overhead). To combat that it is possible
+to use sampling rates higher than the nursery size.
+
+The sampling point is not limited by the nursery size, but if it is 'outside'
+the nursery (e.g. because `sample_n_bytes` is set to twice the nursery size) it
+won't be used as `nursery_top` until it 'fits' into the nursery.
+
+
+<img src="/images/2025_02_allocation_sampling_images/nursery_sampling_larger_than_nursery.svg">
+
+
+After every nursery collection, we'd usually set the `sample_point` to
+`nursery_free + sample_n_bytes`, but if it is larger than the nursery, then the
+amount of collected memory during the last nursery collection is subtracted
+from `sample_point`.
+
+
+<img src="/images/2025_02_allocation_sampling_images/nursery_sampling_larger_than_nursery_post_minor.svg">
+
+
+At some point the `sample_point` will be smaller than the nursery size, then it
+will be used as `nursery_top` again to trigger a sample when exceeded.
+
 
 ## Differences to Time-Based Sampling
 
