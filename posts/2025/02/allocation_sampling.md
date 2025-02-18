@@ -170,7 +170,7 @@ def collect_and_reserve(size_of_allocation):
             return gc.nursery_free
 
     # We did not exceed a sampling point and must do a minor collection, or
-    # we exceeded a sample point but we needed to do a minor collection anway
+    # we exceeded a sample point but we needed to do a minor collection anyway
     minor_collection()
     return gc.nursery_free
 ```
