@@ -92,7 +92,7 @@ As soon as an object doesn't fit into the nursery anymore, it will be collected.
 
 The last section described how the nursery allocation works normally. Now we'll talk how we integrate the new allocation sampling approach into it.
 
-To decide whether the GC should trigger a sample, the sampling logic is integrated into the bump pointer allocation logic. Usually, when there is not enough space in the nursery left to fulfill an allocation request, the nursery will be collected and the allocation will be done afterwards. We re-use that mechanism for sampling, by introducing a new pointer called `sample_point` that is calculated by `sample_point = nursery_free + sample_n_bytes` where `sample_n_bytes` is the number of bytes allocated before a sample is made (i.e. our sampling rate).
+To decide whether the GC should trigger a sample, the sampling logic is integrated into the bump pointer allocation logic. Usually, when there is not enough space in the nursery left to fulfill an allocation request, the nursery will be collected and the allocation will be done afterwards. We reuse that mechanism for sampling, by introducing a new pointer called `sample_point` that is calculated by `sample_point = nursery_free + sample_n_bytes` where `sample_n_bytes` is the number of bytes allocated before a sample is made (i.e. our sampling rate).
 
 Imagine we'd have a nursery of 2MB and want to sample every 512KB allocated, then you could imagine our nursery looking like that:
 
@@ -181,39 +181,49 @@ For testing and benchmarking, we usually started with a sampling rate of 128Kb a
 
 Now let us take a look at the allocation sampling overhead, by profiling some benchmarks. 
 
-The y-axis shows the profiling overhead, while the x-axis tells the sampling rate. The overhead is computed as `runtime_with_sampling /
-runtime_without_sampling`.
+The x-axis shows the sampling rate, while the y-axis shows the overhead, which is computed as `runtime_with_sampling / runtime_without_sampling`.
 
-All benchmarks were executed five times on a PyPy with JIT and native profiling enabled.
+All benchmarks were executed five times on a PyPy with JIT and native profiling enabled, so that every dot in the plot is one run of a benchmark.
 
-<img src="/images/2025_02_allocation_sampling_images/images/2025_02_allocation_sampling_images/allocation_sampling_overhead.png">
+<img src="/images/2025_02_allocation_sampling_images/as_overhead.png">
 
-...
+As you probably expected, the Overhead drops with higher allocation sampling rates.
+Reaching from as high as ~390% for 32kb allocation sampling to as low as < 10% for 32mb.
+
+Let me give one concrete example: One run of the microbenchmark at 32kb sampling took 15.596 seconds and triggered 822050 samples.
+That makes a ridiculous amount of `822050 / 15.596 = ~52709` samples per second. 
+
+There is probably no need for that amount of samples per second, so that for 'real' application profiling a much higher sampling rate would be sufficient.
+
 
 Let us compare that to time sampling.
 
-Again we ran those benchmarks with a series of time sampling rates. That is 1000, 5000, 10000, 15000, 20000, 25000 and 30000 samples per second.
+This time we ran those benchmarks with 100, 1000 and 2000 samples per second.
 
-[IMG time based sampling]
+<img src="/images/2025_02_allocation_sampling_images/ts_overhead.png">
 
-The overhead varies with the sampling rate. Both with allocation and time sampling you can reach any overhead you want and any level of profiling precision you want. The best approach probably is to just try out a sampling rate and choose what gives you the right tradeoff between precision and overhead (and disk usage).
+The overhead varies with the sampling rate. Both with allocation and time sampling, you can reach any amount of overhead and any level of profiling precision you want. The best approach probably is to just try out a sampling rate and choose what gives you the right tradeoff between precision and overhead (and disk usage).
 
 The benchmarks used are:
 
 microbenchmark 
+
 - https://github.com/Cskorpion/microbenchmark
 - `pypy microbench.py 65536`
 
 gcbench 
+
 - https://github.com/pypy/pypy/blob/main/rpython/translator/goal/gcbench.py
 - print statements removed
 - `pypy gcbench.py 1`
 
 pypy translate step
+
 - first step of the pypy translation (annotation step)
 - `pypy path/to/rpython --opt=0 --cc=gcc --dont-write-c-files --gc=incminimark --annotate path/to/pypy/goal/targetpypystandalone.py`
 
 interpreter pystone
+
 - pystone benchmark on top of an interpreted pypy on top of a translated pypy
 - `pypy path/to/pypy/bin/pyinteractive.py -c "import test.pystone; test.pystone.main(1)"`
 
