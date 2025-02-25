@@ -241,6 +241,12 @@ All benchmarks executed on:
 - Modified VMProf with allocation sampling support
     - https://github.com/Cskorpion/vmprof-python/tree/pypy_gc_allocation_sampling
 
+### Example
+
+<img src="/images/2025_02_allocation_sampling_images/allocation_sampling_call_tree.png">
+
+
+
 
 ## Conclusion
 
