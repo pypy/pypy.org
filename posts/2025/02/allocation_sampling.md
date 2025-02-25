@@ -208,12 +208,12 @@ The benchmarks used are:
 
 microbenchmark 
 
-- https://github.com/Cskorpion/microbenchmark
+- [https://github.com/Cskorpion/microbenchmark](https://github.com/Cskorpion/microbenchmark)
 - `pypy microbench.py 65536`
 
 gcbench 
 
-- https://github.com/pypy/pypy/blob/main/rpython/translator/goal/gcbench.py
+- [https://github.com/pypy/pypy/blob/main/rpython/translator/goal/gcbench.py](https://github.com/pypy/pypy/blob/main/rpython/translator/goal/gcbench.py)
 - print statements removed
 - `pypy gcbench.py 1`
 
@@ -236,10 +236,10 @@ All benchmarks executed on:
     - Sequential 1MB 1 Thread 8 Queues
 
 - Self built PyPy with allocation sampling features
-    - https://github.com/Cskorpion/pypy/tree/gc_allocation_sampling_u_2.7
+    - [https://github.com/Cskorpion/pypy/tree/gc_allocation_sampling_u_2.7](https://github.com/Cskorpion/pypy/tree/gc_allocation_sampling_u_2.7)
 
 - Modified VMProf with allocation sampling support
-    - https://github.com/Cskorpion/vmprof-python/tree/pypy_gc_allocation_sampling
+    - [https://github.com/Cskorpion/vmprof-python/tree/pypy_gc_allocation_sampling](https://github.com/Cskorpion/vmprof-python/tree/pypy_gc_allocation_sampling)
 
 ### Example
 
