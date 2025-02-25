@@ -243,11 +243,13 @@ All benchmarks executed on:
 
 ### Example
 
+We have also modified [vmprof-firefox-converter](https://github.com/Cskorpion/vmprof-firefox-converter/tree/allocation_sampling) to show the allocation samples in the Firefor Profiler UI. With the techniques from this post, the output looks like this:
+
 <img src="/images/2025_02_allocation_sampling_images/allocation_sampling_call_tree.png">
 
-
+While this view is interesting, it would be even better if we could also see what types of objects are being allocated in these functions. We will take about how to do this in a future blog post.
 
 
 ## Conclusion
 
-In this blog post we introduced allocation sampling for PyPy by going through the technical aspects and the corresponding overhead. In a future blog post, we are going to dive into the actual usage of allocation sampling with VMProf, and show an example case study. That will be accompanied by some new improvements and additional features, like extracting the type and (hopefully) size of an object that triggered a sample.
+In this blog post we introduced allocation sampling for PyPy by going through the technical aspects and the corresponding overhead. In a future blog post, we are going to dive into the actual usage of allocation sampling with VMProf, and show an example case study. That will be accompanied by some new improvements and additional features, like extracting the type of an object that triggered a sample.
