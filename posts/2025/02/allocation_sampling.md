@@ -1,13 +1,13 @@
 <!--
 .. title: Low Overhead Allocation Sampling with VMProf in PyPy's GC
 .. slug: pypy-gc-sampling
-.. date: 2025-02-28 14:38:00 UTC
+.. date: 2025-02-25 10:10:00 UTC
 .. tags: gc, profiling, vmprof
 .. category:
 .. link:
 .. description:
 .. type: text
-.. author: Christoph Jung
+.. author: Christoph Jung, CF Bolz-Tereick
 -->
 
 ## Introduction
