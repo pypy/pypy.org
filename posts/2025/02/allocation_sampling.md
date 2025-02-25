@@ -1,13 +1,13 @@
 <!--
 .. title: Low Overhead Allocation Sampling with VMProf in PyPy's GC
 .. slug: pypy-gc-sampling
-.. date: 2025-02-25 10:10:00 UTC
+.. date: 2025-02-25 10:16:00 UTC
 .. tags: gc, profiling, vmprof
 .. category:
 .. link:
 .. description:
 .. type: text
-.. author: Christoph Jung, CF Bolz-Tereick
+.. author: Christoph Jung
 -->
 
 ## Introduction
@@ -253,3 +253,9 @@ While this view is interesting, it would be even better if we could also see wha
 ## Conclusion
 
 In this blog post we introduced allocation sampling for PyPy by going through the technical aspects and the corresponding overhead. In a future blog post, we are going to dive into the actual usage of allocation sampling with VMProf, and show an example case study. That will be accompanied by some new improvements and additional features, like extracting the type of an object that triggered a sample.
+
+So far all this work is still experimental and happening on PyPy branches but
+we hope to get the technique stable enough to merge it to main and ship it with
+PyPy eventually.
+
+-- Christoph Jung and CF Bolz-Tereick
