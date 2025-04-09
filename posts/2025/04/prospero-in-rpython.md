@@ -423,8 +423,6 @@ implementation.
 
 ## Demanded Information Optimization
 
-TODO Max: I am having a hard time understanding the demanded bits thing from your localized-to-prospero explanation. I think some of it is that I am wondering "what about the other uses of operation A that operation B only needs one bit from" and part of it is that the sign operations are implicit here
-
 LLVM has an static analysis pass called 'demanded bits'. It is a backwards analysis that
 allows you to determine which bits of a value are actually used in the final
 result. This information can then be used in peephole optimizations. For
