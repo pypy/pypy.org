@@ -1,8 +1,8 @@
 <!--
 .. title: Doing the Prospero-Challenge in RPython
 .. slug: prospero-in-rpython
-.. date: 2025-04-10 17:01:09 UTC
-.. tags:
+.. date: 2025-04-09 15:07:09 UTC
+.. tags: toy-optimizer
 .. category:
 .. link:
 .. description:
