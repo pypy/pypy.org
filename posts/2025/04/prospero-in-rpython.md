@@ -69,8 +69,8 @@ Then I implemented a simple interpreter for the SSA-form
 input program. The interpreter is a simple register machine, where every
 operation is executed in order. The result of the operation is stored into a
 list of results, and the next operation is executed. This was the slow baseline
-implementation of the interpreter but it's very useful to compare the optimized
-versions against.
+implementation of the interpreter but it's very useful to compare against the optimized
+versions.
 
 This is roughly what the code looks like
 
