@@ -184,7 +184,7 @@ formula in the quadrant by executing it for every pixel.
 This is an interesting use case of JIT compiler/optimization techniques,
 requiring the optimizer itself to execute really quickly since it is an essential
 part of the performance of the algorithm. The optimizer runs literally hundreds
-of times to render a single image, and if the algorithm is used for 3D models
+of times to render a single image. If the algorithm is used for 3D models
 it becomes even more crucial.
 
 ## Writing a simple optimizer
