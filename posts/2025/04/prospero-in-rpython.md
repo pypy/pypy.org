@@ -444,7 +444,7 @@ In this case, the "demanded bits" of the `byteswap(a)` expression are
 `0b0...011111111`, which inversely means that we don't care about the upper 56
 bits. Therefore the whole expression can be optimized to `a >> 56`.
 
-For Fidget, we can observe that for the resulting pixel values, the value of
+For the Prospero challenge, we can observe that for the resulting pixel values, the value of
 the result is not used at all, only its sign. Essentially, every program ends
 implicitly with a `sign` operation that returns `0.0` for negative values and
 `1.0` for positive values. For clarity, I will show this `sign` operation in
