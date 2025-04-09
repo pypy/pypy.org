@@ -189,7 +189,7 @@ it becomes even more crucial.
 
 ## Writing a simple optimizer
 
-To implement the quadtree recursion is straightforward. Since the program has
+Implementing the quadtree recursion is straightforward. Since the program has
 no control flow the optimizer is very simple to write. I've written a couple of
 blog posts on how to easily write optimizers for linear sequences of
 operations, and I'm using the approach described in these [Toy
@@ -291,7 +291,7 @@ class Optimizer(object):
 
 The resulting optimized traces are then simply interpreted at the bottom of the
 quadtree recursion. Matt talks about also generating machine code from them,
-but when I tried to use PyPy's JIT for that it was simply way too slow at
+but when I tried to use PyPy's JIT for that it was way too slow at
 producing machine code.
 
 
@@ -300,9 +300,9 @@ producing machine code.
 To make sure that my interval computation in the optimizer is correct, I
 implemented a hypothesis-based property based test. It checks the abstract
 transfer functions of the interval domain for soundness. It does so by
-generating random concrete input values for an operation, random intervals that
+generating random concrete input values for an operation and random intervals that
 surround the random concrete values, then performs the concrete operation to
-get the concrete output, and checks that the abstract transfer function applied
+get the concrete output, and finally checks that the abstract transfer function applied
 to the input intervals gives an interval that contains the concrete output.
 
 For example, the random test for the `square` operation would look like this:
@@ -425,7 +425,7 @@ implementation.
 
 TODO Max: I am having a hard time understanding the demanded bits thing from your localized-to-prospero explanation. I think some of it is that I am wondering "what about the other uses of operation A that operation B only needs one bit from" and part of it is that the sign operations are implicit here
 
-LLVM has an information called 'demanded bits'. It is a backwards analysis that
+LLVM has an static analysis pass called 'demanded bits'. It is a backwards analysis that
 allows you to determine which bits of a value are actually used in the final
 result. This information can then be used in peephole optimizations. For
 example, if you have an expression that computes a value, but only the last
@@ -609,7 +609,7 @@ didn't implement it because I wasn't too interested in that aspect.
 
 ## Random testing of the optimizer
 
-To make sure I didn't break anything in the optimizer, I implemented a random
+To make sure I didn't break anything in the optimizer, I implemented a
 test that generates random input programs and checks that the output of the
 optimizer is equivalent to the input program. The test generates random
 operations, random intervals for the operations and a random input value within
@@ -716,5 +716,4 @@ The demanded info seem to help quite a bit, which was nice to see.
 ## Conclusion
 
 That's it! I had lots of fun with the challenge and have a whole bunch of other
-ideas I want to try out, but I should actually go back to working on my actual
-projects now ;-).
+ideas I want to try out, thanks Matt for this interesting puzzle.
