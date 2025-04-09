@@ -13,7 +13,7 @@
 
 Recently I had a lot of fun playing with the [Prospero
 Challenge](https://www.mattkeeter.com/projects/prospero/) by [Matt
-Keeter](https://www.mattkeeter.com/). The challenge is to render a 1024x1024 of
+Keeter](https://www.mattkeeter.com/). The challenge is to render a 1024x1024 image of
 a quote from The Tempest by Shakespeare. The input is a mathematical formula
 with 7866 operations, which is evaluated once per pixel.
 
