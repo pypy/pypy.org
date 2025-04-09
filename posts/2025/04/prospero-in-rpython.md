@@ -626,14 +626,14 @@ It's actually surprisingly annoying to visualize `prospero.vm` well, because
 it's quite a bit too large to just feed it into Graphviz. I made the problem
 slightly easier by grouping several operations together, where only the first
 operation in a group is used as the argument for more than one operation
-further in the program. This made it slightly more managable for Graphviz. But
+further in the program. This made it slightly more manageable for Graphviz. But
 it still wasn't a big enough improvement to be able to visualize all of
 `prospero.vm` in its unoptimized form at the top of the octree.
 
 Here's a visualization of the optimized `prospero.vm` at one of the octree
 levels:
 
-![graph vizualization of a part of the input program](/images/2025-image-prospero-dataflow.png)
+![graph visualization of a part of the input program](/images/2025-image-prospero-dataflow.png)
 
 The result is on top, every node points to its arguments. The `min` and `max`
 operations form a kind of "spine" of the expression tree, because they are
