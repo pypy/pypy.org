@@ -12,17 +12,13 @@
 
 ## Introduction
 
-Not long ago, we wrote a [blog
-post](https://pypy.org/posts/2025/02/pypy-gc-sampling.html) describing our
-approach to low overhead allocation sampling for PyPy. In this post we want to
-discuss extending the allocation sampling profiler to also store two extra
-pieces of information for every allocation sample:
+Not long ago, we wrote a [blogpost](https://pypy.org/posts/2025/02/pypy-gc-sampling.html) describing our approach to low overhead allocation sampling for PyPy.
+In this post we want to discuss extending the allocation sampling profiler to also store two extra pieces of information for every allocation sample:
 
 - the (RPython-level) type of the allocated object
 - whether the object lived for a long time, or died relatively quickly
 
-We also want to store some general statistics about the memory use of the PyPy
-GC.
+We also want to store some general statistics about the memory use of the PyPy GC.
 
 Additionally, we want to elaborate on how we tested the interaction of those
 features with the GC logic. Finally, we discuss the overhead of those features
@@ -33,11 +29,11 @@ and provide a case study to demonstrate how allocation sampling can be used.
 First, let us talk about the technical details. Hopefully you still remember
 how nursery allocations and sampling worked, as described in the previous
 blog post. Now we want to extend that approach by also finding out what type of
-allocation (i.e., object) triggered a sample and, if it survived, the next
+allocation (i.e., object) triggered a sample and, if it survived the next
 minor collection. So let us directly dive into how PyPy's GC stores the type of
-an object.
+an object, by looking at an example depiction of how an object with metadata looks like.
 
-TODO: add an image of an object (a bit boring, but an image always helps)
+<img src="/images/2025_05_allocation_sampling_images_2/object.png">
 
 Every object allocated by the GC has a header, composed of a 16-bit type ID and
 16 bits for GC flags.
@@ -83,8 +79,7 @@ Finally, the `GC state` tells the current major collection phase, which is one
 of: `scanning, marking, sweeping, finalizing`.
 
 To be able to map type IDs of RPython types from numbers to something human-readable,
-we also dump a mapping of RPython type IDs to
-their respective names into the profile so that an UI tool like the
+we also dump a mapping of RPython type IDs to their respective names into the profile so that an UI tool like the
 [vmprof-firefox-converter](https://github.com/Cskorpion/vmprof-firefox-converter)
 may use that to display the actual type names. As said earlier, those RPython
 names may not be super useful for non PyPy developers, so we plan to add
@@ -103,16 +98,14 @@ tests don't really guarantee the correctness of the complex interaction of the
 GC- and allocation sampling logic.
 
 Secondly, we implemented allocation sampling into the already existing
-[randomized testing facility
-(fuzzer)](https://pypy.org/posts/2024/03/fixing-bug-incremental-gc.html) for
-PyPy's GC.
+[randomized testing facility (fuzzer)](https://pypy.org/posts/2024/03/fixing-bug-incremental-gc.html) for PyPy's GC.
 
 Fuzzing PyPy's GC with hypothesis has two phases. The first phase is generating
 random action sequences. Those actions consist of object-, string-, or array
 allocations, freeing allocated objects, accessing an object and from now on
 also activating and deactivating allocation sampling with a random sampling
 rate. In the second phase, these actions are executed against the GC
-implemenation and their intermediate results asserted.
+implementation and their intermediate results asserted.
 
 If there is a bug in the GC, e.g., freeing an object too early, the fuzzer
 could produce a random action sequence that leads to an error when accessing an
@@ -140,22 +133,7 @@ minor collection. This only introduces little overhead when sampling is
 enabled, and only one new pointer comparison at every minor collection when
 sampling is turned off.
 
-
-Remember this graph from the previous blog post, where we discussed the
-overhead of allocation sampling (without extracting information about allocated
-objects)
-
-<img src="/images/2025_02_allocation_sampling_images/as_overhead.png">
-
-The overhead reached from ~390% to < 10%.
-
-Again, we profiled the same benchmarks on the exact same setup as last time.
-
-
-<img src="/images/2025_05_allocation_sampling_images_2/as_overhead2.png">
-
-TODO ... 
-
+Benchmarking our new extensions to PyPys allocation profiler showed that there were barely any changes to the overhead.
 
 ## Case Study
 
@@ -263,6 +241,6 @@ spent time opening files, reading from files, waiting for subprocesses to
 finish, etc. 
 
 We are also hoping to transfer some of the techniques used here for profiling
-PyPy to profile the CPU simulator generator Pydrofoil.
+PyPy to profile the ISA simulator generator Pydrofoil.
 
 -- Christoph Jung and CF Bolz-Tereick
