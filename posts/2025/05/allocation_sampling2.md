@@ -21,7 +21,8 @@ pieces of information for every allocation sample:
 - the (RPython-level) type of the allocated object
 - whether the object lived for a long time, or died relatively quickly
 
-We also want to store some general statistics about the memory use of the PyPy GC.
+We also want to store some general statistics about the memory use of the PyPy
+GC.
 
 Additionally, we want to elaborate on how we tested the interaction of those
 features with the GC logic. Finally, we discuss the overhead of those features
@@ -30,52 +31,59 @@ and provide a case study to demonstrate how allocation sampling can be used.
 ## Getting more information from PyPy's GC
 
 First, let us talk about the technical details. Hopefully you still remember
-how nursery allocations and sampling worked, as described in part one of our
-Blog post. Now we want to extend that approach by also finding out what type of
+how nursery allocations and sampling worked, as described in the previous
+blog post. Now we want to extend that approach by also finding out what type of
 allocation (i.e., object) triggered a sample and, if it survived, the next
 minor collection. So let us directly dive into how PyPy's GC stores the type of
 an object.
 
-Every object allocated by the GC has a header, which is basically a 32-bit
-signed integer, composed of a (shifted) 16-bit type ID and 16-bit GC flags.
+TODO: add an image of an object (a bit boring, but an image always helps)
+
+Every object allocated by the GC has a header, composed of a 16-bit type ID and
+16 bits for GC flags.
 This means for every object allocated, as soon as we've got its address, we can
 just read the type from its header. Unfortunately, those type IDs correspond to
-RPython types and not Python (app-level) types, which may not be very intuitive
-for non PyPy developers. Getting the app-level types would either be
-computationally costly or even impossible, due to the objects not being
-completely initialized at that point.
+RPython types and not Python (app-level) types. The RPython-level types may not
+be very intuitive for non PyPy developers. Unfortunately getting the type at
+the Python level would either be computationally costly or even impossible, due
+to the objects not being completely initialized at the point where the GC would
+like to find out the type.
 
 Let's talk about the second piece of information we want to get our hands on:
 Did an allocated object survive the next minor collection after it was
 allocated, or did it not? During minor collections, there is a point in time
-where surviving objects are known and marked via one GC header flag (one bit).
+where surviving objects are known and marked via one GC header flag. This is
+only a rough indication of how long the object survived, but since most objects
+die young (i.e. before the first minor collection), it's still interesting to
+identify call sites where object get allocated that survive longer than one
+minor collection.
 
-Now let us put all those pieces together. Remember how the sampling worked?
-There is that `nursery_top` and every time it is exceeded, the function
-`collect_and_reserve` is called. This function checks if the nursery is full or
-if the `nursery_top` was just a`sample_point`. If the latter is the case, a
-sample (or multiple samples) will be triggered. Finally, the allocation request
-will be fulfilled, and the address of the allocated object will be returned.
-That is where our new modifications start. Before returning the address of that
-freshly allocated object, we put that address into a list. In the middle of the
-next minor collection, when the objects to be tenured are known, we can just
-take every address inside that list and look into the corresponding GC header
-to read the type ID and the survives-this-minor-collection bit. Then we repack
-the 16 bit type ID and a single bit for tenured/freed into one 32-bit integer
-for each sampled object into another list. Before passing that new list of
-sampled object types and their lifetime information to VMProf, we record some
-GC-statistics, like `total_memory_used, total_size_of_arenas` and the`GC`'s
-state. All this information will be passed to VMProf, which then penultimately
-records the VM's RSS and finally writes everything to disk. 
+A quick recap of how sampling worked: Every `n` bytes allocated, a sample will
+be triggered. Afterwards, the allocation request will be fulfilled, returning
+the address of free memory for the newly allocated object to the caller. That
+is where our new modifications start. Before returning the address of that
+freshly allocated object, we put that address into a list. In this way, we
+maintain a list `sampled_objects` of the sampled objects that were allocated
+since that last collection.
 
+This list is then used during the next minor collection. After the heap has
+been traced and all surviving objects are known, we can take every address
+inside `sampled_objects` and look into the corresponding GC header to read the
+type ID and to find out whether the object survived or not. These two pieces of
+information are then stored into the profile on disk, together with some
+statistics about the current state of the GC.
+
+That information is the following:
 The `total_size_of_arenas` tells us how much space the GC actually has to
-allocate objects, while `total_memory_used` tells us how much of that is
-already occupied. But there is more to a VM than just the memory the GC
-manages, thus the `vmRSS` tells us how much memory PyPy consumes in General.
+allocate tenured objects, while `total_memory_used` tells us how much of that
+is already occupied. But there is more to a VM than just the memory the GC
+manages, thus the `vmRSS` tells us how much memory PyPy consumes from the point
+of view of the operating system.
 Finally, the `GC state` tells the current major collection phase, which is one
 of: `scanning, marking, sweeping, finalizing`.
 
-After the profiling has finished, we also dump a mapping of RPython type IDs to
+To be able to map type IDs of RPython types from numbers to something human-readable,
+we also dump a mapping of RPython type IDs to
 their respective names into the profile so that an UI tool like the
 [vmprof-firefox-converter](https://github.com/Cskorpion/vmprof-firefox-converter)
 may use that to display the actual type names. As said earlier, those RPython
@@ -95,14 +103,16 @@ tests don't really guarantee the correctness of the complex interaction of the
 GC- and allocation sampling logic.
 
 Secondly, we implemented allocation sampling into the already existing
-randomized testing facility (fuzzer) for PyPy's GC.
+[randomized testing facility
+(fuzzer)](https://pypy.org/posts/2024/03/fixing-bug-incremental-gc.html) for
+PyPy's GC.
 
 Fuzzing PyPy's GC with hypothesis has two phases. The first phase is generating
 random action sequences. Those actions consist of object-, string-, or array
 allocations, freeing allocated objects, accessing an object and from now on
 also activating and deactivating allocation sampling with a random sampling
-rate. In the second phase, these actions are executed and their intermediate
-results asserted. 
+rate. In the second phase, these actions are executed against the GC
+implemenation and their intermediate results asserted.
 
 If there is a bug in the GC, e.g., freeing an object too early, the fuzzer
 could produce a random action sequence that leads to an error when accessing an
@@ -116,7 +126,8 @@ trigger a sample and if it actually did. For a failing check we then get the
 sequence of actions that led to the failed check, so we can trace the bug down.
 
 Fuzzing was very helpful for getting rid of many bugs inside the allocation
-sampling logic.
+sampling logic, because it demonstrated interactions between sampling and
+garbage collection that we hadn't foreseen properly.
 
 ### Overhead
 
