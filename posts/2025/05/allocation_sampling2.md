@@ -1,6 +1,6 @@
 <!--
-.. title: Low Overhead Allocation Sampling with VMProf in PyPy's GC 2
-.. slug: pypy-gc-sampling2
+.. title: Profiling Types and Survival Rates in PyPy's Memory Profiler
+.. slug: type-survival-profiling
 .. date: 2025-04-14 9:57:00 UTC
 .. tags: gc, profiling, vmprof
 .. category:
