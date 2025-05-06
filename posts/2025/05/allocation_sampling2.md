@@ -143,67 +143,41 @@ sampling is turned off.
 
 Here we want to show you a real world example of how we used allocation
 sampling with the vmprof-firefox-converter to profile some real-world program
-and learned something from that.
+and improved the allocation rate of the JIT optimizer in the process.
 
 ### PyPy VM Optimization
 
-One day we profiled some benchmark executing SymPy functions and looked at
+We profiled some benchmark executing SymPy functions and looked at
 sampled list allocations.
 
 <img src="/images/2025_05_allocation_sampling_images_2/pure_from_args_calltree.png">
 
 There we stumbled upon PyPy's JIT-optimizer functions `postprocess_INT_ADD` and
-`pure_from_args`. Both those functions take part in marking an (integer-?)
-operation as pure.
+`pure_from_args`. Both those functions take part in optimizing pure integer
+operations.
 
-If PyPy's JIT encounters a `INT_ADD` operation that is pure and thus can be
-cached and replaced by its result, `postprocess_INT_ADD` will be called to also
-mark `INT_SUB` operations on the corresponding arguments as pure. 
+If PyPy's JIT encounters a `INT_ADD` operation that cannot be [optimized away](https://pypy.org/posts/2024/10/jit-peephole-dsl.html)
+`postprocess_INT_ADD` will be called to also cache some arithmetic rewrites of
+that addition. E.g. if the JIT emits an operation `x = a + b` it will remember
+that `x - a` can be optimized to `b` from then on.
+This is done by calling an API `pure_from_args(INT_SUB, [arg0, arg1])`. Similar
+logic exists for other integer operations like multiplication or xor.
 
-This is done by getting the arguments `arg0` and `arg1` of the `INT_ADD` and
-then calling `pure_from_args(INT_SUB, [arg0, arg1])` (simplified) which caches
-`INT_SUB` for the current arguments.
+The reason why these `postprocess_...` functions of the JIT appear in the
+memory profile is that they all allocate a list. This list is extremely
+short-lived, one level deeper its elements are read out again and discarded,
+and yet another list is built, which is discarded one function call further.
+Additionally, in all of these postprocess methods, there are never more than
+two arguments passed to `pure_from_args` inside that list.
 
-Post-Processing optimization is done not only for `INT_ADD` but `INT_MUL`,
-`INT_XOR` and others too, BUT there are never more than two arguments passed to
-`pure_from_args` inside that list.
-
-`pure_from_args` looks (somewhat simplified) like that:
-
-``` python
-def pure_from_args(op, args_list): 
-    rop = ResOperation(op, [get_box_replacement(arg) for arg in args_list])
-    ...
-```
-
-Knowing that `pure_from_args` is only ever called with up to two arguments
-inside that list, it could be split up into two functions, one for the
-one-argument case and one for the two-argument case:
-
-(Also a bit simplified)
-
-``` python  
-def pure_from_args1(abstract_op, arg0): 
-    rop = ResOperation(op)
-    rop.setarg(0, get_box_replacement(arg0))
-    ...
-
-def pure_from_args2(abstract_op, arg0, arg1):
-    rop = ResOperation(op)
-    rop.setarg(0, get_box_replacement(arg0))
-    rop.setarg(1, get_box_replacement(arg1))
-    ...
-```
-
-Now `arg0` and `arg1` can be passed directly to
-`pure_from_args1/pure_from_args2` and don't need to be put into a list.
-Additionally they don't need to be repacked into a list to be passed to
-`ResOperation`.
-
+After seeing `pure_from_args` in the memory allocation profile, we decided to
+rewrite it to make the list allocations unnecessary. To achieve this, we split
+it up into two functions, `pure_from_args1` and `pure_from_args2`, that take
+the elements of the list as extra arguments directly, foregoing the allocation.
 Then all call sites were
 [adapted](https://github.com/pypy/pypy/commit/ef590f639e529ebe319c7d5ff8f5e03e31bcc304)
 to either call `pure_from_args1` or `pure_from_args2` directly, and thus saving
-two list allocations per `pure_From_args` call.
+two list allocations per `pure_from_args` call.
 
 
 ## Summary
