@@ -125,7 +125,12 @@ garbage collection that we hadn't foreseen properly.
 ### Overhead
 
 We already talked about that last time, but adding now features could add more
-overhead, so let's take a look at that once more.
+overhead, so we re-ran the benchmarks from the last post. We won't go into
+further details about that here, but it turns out that the new features of also
+persisting RPython types and whether the object survived the next minor
+collection did not change the overhead of sampling in a measurable way. The
+reason for that is that the main cost of allocation sampling is the cost of
+walking the call stack at the allocation point.
 
 Every time we sample, we also store the address of the allocated object in a
 list. That list, together with some GC stats, is then dumped to VMProf at every
@@ -133,7 +138,6 @@ minor collection. This only introduces little overhead when sampling is
 enabled, and only one new pointer comparison at every minor collection when
 sampling is turned off.
 
-Benchmarking our new extensions to PyPys allocation profiler showed that there were barely any changes to the overhead.
 
 ## Case Study
 
