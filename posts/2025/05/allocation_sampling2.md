@@ -33,7 +33,7 @@ allocation (i.e., object) triggered a sample and, if it survived the next
 minor collection. So let us directly dive into how PyPy's GC stores the type of
 an object, by looking at an example depiction of how an object with metadata looks like.
 
-<img src="/images/2025_05_allocation_sampling_images_2/object.png">
+<img src="/images/2025_05_allocation_sampling_images_2/object.svg">
 
 Every object allocated by the GC has a header, composed of a 16-bit type ID and
 16 bits for GC flags.
