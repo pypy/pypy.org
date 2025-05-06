@@ -14,10 +14,15 @@
 
 Not long ago, we wrote a [blog
 post](https://pypy.org/posts/2025/02/pypy-gc-sampling.html) describing our
-approach to low overhead allocation sampling for PyPy. To improve that
-approach, we want to extend our work by extracting more information from PyPy's
-GC. Our main contribution is retrieving the types and lifetime of objects that
-triggered a sample, together with some general memory stats of PyPy's GC.
+approach to low overhead allocation sampling for PyPy. In this post we want to
+discuss extending the allocation sampling profiler to also store two extra
+pieces of information for every allocation sample:
+
+- the (RPython-level) type of the allocated object
+- whether the object lived for a long time, or died relatively quickly
+
+We also want to store some general statistics about the memory use of the PyPy GC.
+
 Additionally, we want to elaborate on how we tested the interaction of those
 features with the GC logic. Finally, we discuss the overhead of those features
 and provide a case study to demonstrate how allocation sampling can be used.
@@ -29,9 +34,9 @@ how nursery allocations and sampling worked, as described in part one of our
 Blog post. Now we want to extend that approach by also finding out what type of
 allocation (i.e., object) triggered a sample and, if it survived, the next
 minor collection. So let us directly dive into how PyPy's GC stores the type of
-Object.
+an object.
 
-Every Object allocated by the GC has a header, which is basically a 32-bit
+Every object allocated by the GC has a header, which is basically a 32-bit
 signed integer, composed of a (shifted) 16-bit type ID and 16-bit GC flags.
 This means for every object allocated, as soon as we've got its address, we can
 just read the type from its header. Unfortunately, those type IDs correspond to
