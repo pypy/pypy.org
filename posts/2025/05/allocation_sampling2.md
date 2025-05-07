@@ -207,7 +207,10 @@ simultaneously do allocation and time sampling can give insight into where the
 program spends time and what functions allocate much memory, leading to garbage
 collections. This tool is aimed at both PyPy developers and non-PyPy
 developers, with the target of being easy to use while introducing little
-overhead. 
+overhead.
+
+Right now the tool is still in development, we hope to merge and release it with
+a PyPy release some time soon.
 
 ## Future Work 
 
@@ -225,7 +228,7 @@ PyPy has a logging interface, which is used to log GC and JIT events with a
 timestamp. Unfortunately those timestamps are the clock counts read from the
 CPU’s `TSC` (Time Stamp Counter ~ number of cycles since last reset) register
 (at least on x86/x86_64), which are not perfectly suitable for measuring time.
-VMProf on the other hand (our modified VMProf) uses timestamps retrieved with
+Our modified version of VMProf on the other hand uses timestamps retrieved with
 Unix' `CLOCK_MONOTONIC`. This means we cannot exactly associate pypylog events
 with VMProf samples. An easy fix would be to use the same timestamps for
 pypylog as we do for VMProf, but this could introduce more overhead. A better
@@ -238,6 +241,7 @@ spent time opening files, reading from files, waiting for subprocesses to
 finish, etc. 
 
 We are also hoping to transfer some of the techniques used here for profiling
-PyPy to profile the ISA simulator generator Pydrofoil.
+PyPy to profile other RPython languages, such as the CPU simulators generated
+by Pydrofoil.
 
 -- Christoph Jung and CF Bolz-Tereick
