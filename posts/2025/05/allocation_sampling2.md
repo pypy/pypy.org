@@ -198,6 +198,10 @@ Then all call sites were
 to either call `pure_from_args1` or `pure_from_args2` directly, and thus saving
 two list allocations per `pure_from_args` call.
 
+This experience is maybe typical for using allocation profiling: the internal
+RPython class names are much more useful for PyPy core developers, we will have
+to see whether application developers can also make use of the results.
+
 
 ## Summary
  
