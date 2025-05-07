@@ -36,7 +36,8 @@ an object, by looking at an example depiction of how an object with metadata loo
 <img src="/images/2025_05_allocation_sampling_images_2/object.svg">
 
 Every object allocated by the GC has a header, composed of a 16-bit type ID and
-16 bits for GC flags.
+16 bits for GC flags. (The padding is only on 64-bit platforms and emitted on
+32-bit PyPy.)
 This means for every object allocated, as soon as we've got its address, we can
 just read the type from its header. Unfortunately, those type IDs correspond to
 RPython types and not Python (app-level) types. The RPython-level types may not
@@ -95,13 +96,13 @@ placing an additional frame on top of the corresponding sampled call stack,
 that contains the (RPython) type of the sampled object.
 Furthermore, the category (color of the frame) tells if the object was collected (green) or if it survived (red).
 
-<img src="/images/2025_05_allocation_sampling_images_2/infocalltree.png">
+<a href="/images/2025_05_allocation_sampling_images_2/infocalltree.png"><img src="/images/2025_05_allocation_sampling_images_2/infocalltree.png"></a>
 
 The little ticks on top of the GC-sampled Thread timeline mark minor collections.
 
 There is also the flame graph view that gives a quick overview of what functions ran the most and now also tells what sampled object types died before the first minor collection and which types were tenured.
 
-<img src="/images/2025_05_allocation_sampling_images_2/infoflamegraph.png">
+<a href="/images/2025_05_allocation_sampling_images_2/infoflamegraph.png"><img src="/images/2025_05_allocation_sampling_images_2/infoflamegraph.png"></a>
 
 
 ## Evaluation
