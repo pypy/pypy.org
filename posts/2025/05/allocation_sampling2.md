@@ -86,6 +86,24 @@ names may not be super useful for non PyPy developers, so we plan to add
 descriptions for most common RPython types to the vmprof-firefox-converter. 
 
 
+## Visualising the New Information in the Firefox Profiler
+
+To be able to use the new collected information, we adapted the vmprof-firefox-converter
+to include the sampled object types and GC statistics in the converted profile.
+The sampled object types and their survival information are displayed by
+placing an additional frame on top of the corresponding sampled call stack,
+that contains the (RPython) type of the sampled object.
+Furthermore, the category (color of the frame) tells if the object was collected (green) or if it survived (red).
+
+<img src="/images/2025_05_allocation_sampling_images_2/infocalltree.png">
+
+The little ticks on top of the GC-sampled Thread timeline mark minor collections.
+
+There is also the flame graph view that gives a quick overview of what functions ran the most and now also tells what sampled object types died before the first minor collection and which types were tenured.
+
+<img src="/images/2025_05_allocation_sampling_images_2/infoflamegraph.png">
+
+
 ## Evaluation
 
 ### Verification
