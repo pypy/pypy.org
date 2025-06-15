@@ -1,7 +1,7 @@
 <!--
 .. title: How fast can the RPython GC allocate?
 .. slug: rpython-gc-allocation-speed
-.. date: 2025-06-12 15:48:30 UTC+02:00
+.. date: 2025-06-15 15:48:30 UTC+02:00
 .. tags: gc, benchmarking, rpython
 .. category: 
 .. link: 
@@ -82,7 +82,7 @@ def run(initialize_field, loops):
     print(mem / (t2 - t1), 'GB/s')
 ```
 
-Then we need to add some RPython schaffolding:
+Then we need to add some RPython scaffolding:
 
 ```python
 def main(argv):
@@ -146,6 +146,10 @@ with initialization
 1.538717 GB/s
 ```
 
+This is not a fair comparison, because the Boehm GC uses conservative stack
+scanning, therefore it cannot move objects, which requires much more
+complicated allocation.
+
 ## Let's look at `perf stats`
 
 We can use `perf` to get some statistics about the executions:
@@ -196,14 +200,16 @@ with initialization
        0.005999000 seconds sys
 ```
 
-This is pretty cool, we can run this loop with an IPC of >5. Every allocation
-takes `110116790943 / 10000000000 ≈ 11` instructions and `21074240395 /
-10000000000 ≈ 2.1` cycles, including the loop around it.
+This is pretty cool, we can run this loop with >5 instructions per cycle. Every
+allocation takes `110116790943 / 10000000000 ≈ 11` instructions and
+`21074240395 / 10000000000 ≈ 2.1` cycles, including the loop around it.
 
 
 ## How often does the GC run?
 
-The RPython GC queries the L2 cache size to determine the size of the nursery. We can find out what it is like this:
+The RPython GC queries the L2 cache size to determine the size of the nursery.
+We can find out what it is by turning on PYPYLOG, selecting the proper logging
+categories, and printing to `stdout` via `:-`:
 
 ```console
 $ PYPYLOG=gc-set-nursery-size,gc-hardware:- ./targetallocatealot-c 1 1
@@ -447,7 +453,8 @@ debug_merge_point(0, 0, 'run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-9~#
 To find the machine code address of the trace, we need to search for this line:
 
 ```
-Loop 1 (run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-9~#24 FOR_ITER) has address 0x7ced473ffa0b to 0x7ced473ffbb0 (bootstrap 0x7ced473ff980)
+Loop 1 (run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-9~#24 FOR_ITER) \
+    has address 0x7ced473ffa0b to 0x7ced473ffbb0 (bootstrap 0x7ced473ff980)
 ```
 
 Then we can use a script in the PyPy repo to disassemble the generated machine code:
