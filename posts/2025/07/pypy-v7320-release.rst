@@ -47,8 +47,7 @@ making RPython's JIT even better.
 
 If you are a python library maintainer and use C-extensions, please consider
 making a HPy_ / CFFI_ / cppyy_ version of your library that would be performant
-on PyPy. In any case, both `cibuildwheel`_ and the `multibuild system`_ support
-building wheels for PyPy.
+on PyPy. In any case, `cibuildwheel`_ supports building wheels for PyPy.
 
 .. _`PyPy`: https://doc.pypy.org/
 .. _`RPython`: https://rpython.readthedocs.org
