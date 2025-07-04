@@ -1,6 +1,6 @@
 .. title: PyPy v7.3.20 release
 .. slug: pypy-v7320-release
-.. date: 2025-07-06 12:00:00 UTC
+.. date: 2025-07-04 12:00:00 UTC
 .. tags: release
 .. category: 
 .. link: 
