@@ -8,7 +8,9 @@
 
 
 We provide pre-compiled binaries for many platforms and OSes.
+
 .. note::
+
   Our `nightly binary builds`_ have the most recent bugfixes and performance
   improvements, though they can be less stable than the official releases. See
   these links for `other versions`_ or `more information`_ including other
