@@ -168,6 +168,6 @@ To read more about its features, try ``pypy_interact.py --help`` or go to
 .. _Scheme: https://bitbucket-archive.softwareheritage.org/projects/py/pypy/lang-scheme.html
 .. _Gameboy: https://bitbucket-archive.softwareheritage.org/projects/py/pypy/lang-gameboy.html
 .. _Topaz: https://github.com/topazproject/topaz
-.. _HippyVM: http://www.hippyvm.com/
+.. _HippyVM: https://github.com/hippyvm/hippyvm
 .. _Pydrofoil: https://docs.pydrofoil.org
 .. _Sail: https://github.com/rems-project/sail
