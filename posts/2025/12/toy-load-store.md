@@ -18,18 +18,18 @@ about programming languages, compilers, optimizations, virtual machines.
 
 _________________
 
-A long, long time ago (two years!) [CF Bolz-Tereick][cf] and I made a [video about
-load/store forwarding][video] and an accompanying [GitHub Gist][gist] about
-load/store forwarding in the Toy Optimizer. I said I would write a blog post
-about it, but never found the time&mdash;it got lost amid a sea of large life
-changes.
+A long, long time ago (two years!) [CF Bolz-Tereick][cf] and I made a [video
+about load/store forwarding][video] and an accompanying [GitHub Gist][gist]
+about load/store forwarding (also called load elimination) in the Toy Optimizer. I
+said I would write a blog post about it, but never found the time&mdash;it got lost
+amid a sea of large life changes.
 
 [cf]: https://cfbolz.de/
 [video]: https://www.youtube.com/watch?v=w-UHg0yOPSE
 [gist]: https://gist.github.com/tekknolagi/4e3fa26d350f6d3b39ede40d372b97fe
 
 It's a neat idea: do an abstract interpretation over the trace, modeling the
-heap at compile-time, removing redundant reads and writes. That means it's
+heap at compile-time, eliminating redundant loads and stores. That means it's
 possible to optimize traces like this:
 
 ```
@@ -50,7 +50,10 @@ v2 = store(v0, 6, 123)
 v5 = do_something(v1, 123, v1)
 ```
 
-This indicates that we were able to remove two redundant loads by keeping
+(where `load(v0, 5)` is equivalent to `*(v0+5)` in C syntax and `store(v0, 6,
+123)` is equvialent to `*(v0+6)=123` in C syntax)
+
+This indicates that we were able to eliminate two redundant loads by keeping
 around information about previous loads and stores. Let's get to work making
 this possible.
 
@@ -58,7 +61,7 @@ this possible.
 
 We'll start off with the usual infrastructure from the [Toy
 Optimizer series][toy-optimizer]: a very stringly-typed representation of a
-[trace-based SSA IR][toy-ir] and a union-find rewrite mechanism.
+[trace-based SSA IR][toy-ir] and a union-find rewrite mechamism.
 
 [toy-optimizer]: https://pypy.org/categories/toy-optimizer.html
 [toy-ir]: https://gist.github.com/tekknolagi/4e3fa26d350f6d3b39ede40d372b97fe#file-port-py-L4-L112
@@ -173,7 +176,7 @@ def optimize_load_store(bb: Block):
     return opt_bb
 ```
 
-That makes our test pass&mdash;yay!---but at great cost. It means any store
+That makes our test pass&mdash;yay!&mdash;but at great cost. It means any store
 operation mucks up redundant loads. In our world where we frequently read from
 and write to objects, this is what we call a huge bummer.
 
@@ -333,7 +336,7 @@ def optimize_load_store(bb: Block):
 ```
 
 This makes the test pass. It makes another test fail, but only
-because&mdash;oops---we now know more. You can delete the old test because the new
+because&mdash;oops&mdash;we now know more. You can delete the old test because the new
 test supersedes it.
 
 Now, note that we are not removing the store. This is because we have nothing
@@ -424,7 +427,7 @@ var0 = getarg(0)
 var1 = store(var0, 0, 5)"""
 ```
 
-Unfortunately, this only works if the values&mdash;constants or SSA values---are
+Unfortunately, this only works if the values&mdash;constants or SSA values&mdash;are
 known to be the same. If we store *different* values, we can't optimize. In the
 live stream, we left this an exercise for the viewer:
 
