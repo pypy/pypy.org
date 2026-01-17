@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A DSL for Peephole Transformation Rules of Integer Operations in the PyPy JIT | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2024/10/jit-peephole-dsl.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="CF Bolz-Tereick">
+<link rel="prev" href="../08/portaone.html" title="Guest Post: How PortaOne uses PyPy for high-performance processing, connecting over 1B of phone calls every month" type="text/html">
+<link rel="next" href="../11/guest-post-final-encoding-in-rpython.html" title="Guest Post: Final Encoding in RPython Interpreters" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="A DSL for Peephole Transformation Rules of Integer Operations in the P">
+<meta property="og:url" content="https://www.pypy.org/posts/2024/10/jit-peephole-dsl.html">
+<meta property="og:description" content="As is probably apparent from the sequence of blog posts about the topic in the
+last year, I have been thinking about and working on integer optimizations in the JIT
+compiler a lot. This work was mainl">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2024-10-23T15:00:00Z">
+<meta property="article:tag" content="jit">
+<meta property="article:tag" content="z3">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-rest h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">A DSL for Peephole Transformation Rules of Integer Operations in the PyPy JIT</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/cf-bolz-tereick.html">CF Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2024-10-23T15:00:00Z" itemprop="datePublished" title="2024-10-23 15:00">2024-10-23 15:00</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="jit-peephole-dsl.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>As is probably apparent from the sequence of blog posts about the topic in the
+last year, I have been thinking about and working on integer optimizations in the JIT
+compiler a lot. This work was mainly motivated by <a class="reference external" href="https://docs.pydrofoil.org/en/latest/">Pydrofoil</a>, where integer
+operations matter a lot more than for your typical Python program.</p>
+<p>In this post I'll describe my most recent change, which is a new small domain
+specific language that I implemented to specify peephole optimizations on
+integer operations in the JIT.
+It uses pattern matching to specify how (sequences of) integer operations
+should be simplified and optimized. The rules are then compiled to
+RPython code that then becomes part of the JIT's optimization passes.</p>
+<p>To make it less likely to introduce incorrect optimizations into the JIT, the
+rules are automatically proven correct with Z3 as part of the build process (for
+a more hands-on intro to how that works you can look at the <a class="reference external" href="https://pypy.org/posts/2024/08/toy-knownbits.html#proving-correctness-of-the-transfer-functions-with-z3">knownbits</a> post).
+In this blog post I want to motivate why I introduced the DSL and give an
+introduction to how it works.</p>
+<section id="motivation"><h2>Motivation<a href="#motivation" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>This summer, after I wrote my <a class="reference external" href="../07/mining-jit-traces-missing-optimizations-z3.html">scripts to mine JIT traces for missed optimization</a>
+opportunities, I started implementing a few of the integer peephole rewrite that
+the script identified. Unfortunately, doing so led to the problem that the way
+we express these rewrites up to now is very imperative and verbose. Here's a
+snippet of RPython code that shows some rewrites for integer multiplication
+(look at the comments to see what the different parts actually do). You don't
+need to understand the code in detail, but basically it's in very imperative
+style and there's quite a lot of boilerplate.</p>
+<div class="code"><pre class="code python"><a id="rest_code_902b019e928b4919803dd79027a5b4cb-1" name="rest_code_902b019e928b4919803dd79027a5b4cb-1" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">optimize_INT_MUL</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="p">):</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-2" name="rest_code_902b019e928b4919803dd79027a5b4cb-2" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-2"></a>    <span class="n">arg0</span> <span class="o">=</span> <span class="n">get_box_replacement</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">getarg</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-3" name="rest_code_902b019e928b4919803dd79027a5b4cb-3" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-3"></a>    <span class="n">b0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getintbound</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-4" name="rest_code_902b019e928b4919803dd79027a5b4cb-4" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-4"></a>    <span class="n">arg1</span> <span class="o">=</span> <span class="n">get_box_replacement</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">getarg</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-5" name="rest_code_902b019e928b4919803dd79027a5b4cb-5" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-5"></a>    <span class="n">b1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getintbound</span><span class="p">(</span><span class="n">arg1</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-6" name="rest_code_902b019e928b4919803dd79027a5b4cb-6" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-6"></a>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-7" name="rest_code_902b019e928b4919803dd79027a5b4cb-7" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-7"></a>    <span class="k">if</span> <span class="n">b0</span><span class="o">.</span><span class="n">known_eq_const</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-8" name="rest_code_902b019e928b4919803dd79027a5b4cb-8" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-8"></a>        <span class="c1"># 1 * x == x</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-9" name="rest_code_902b019e928b4919803dd79027a5b4cb-9" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-9"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">make_equal_to</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">arg1</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-10" name="rest_code_902b019e928b4919803dd79027a5b4cb-10" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-10"></a>    <span class="k">elif</span> <span class="n">b1</span><span class="o">.</span><span class="n">known_eq_const</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-11" name="rest_code_902b019e928b4919803dd79027a5b4cb-11" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-11"></a>        <span class="c1"># x * 1 == x</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-12" name="rest_code_902b019e928b4919803dd79027a5b4cb-12" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-12"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">make_equal_to</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">arg0</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-13" name="rest_code_902b019e928b4919803dd79027a5b4cb-13" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-13"></a>    <span class="k">elif</span> <span class="n">b0</span><span class="o">.</span><span class="n">known_eq_const</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="n">b1</span><span class="o">.</span><span class="n">known_eq_const</span><span class="p">(</span><span class="mi">0</span><span class="p">):</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-14" name="rest_code_902b019e928b4919803dd79027a5b4cb-14" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-14"></a>        <span class="c1"># 0 * x == x * 0 == 0</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-15" name="rest_code_902b019e928b4919803dd79027a5b4cb-15" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-15"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">make_constant_int</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-16" name="rest_code_902b019e928b4919803dd79027a5b4cb-16" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-16"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-17" name="rest_code_902b019e928b4919803dd79027a5b4cb-17" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-17"></a>        <span class="k">for</span> <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs</span> <span class="ow">in</span> <span class="p">[(</span><span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">),</span> <span class="p">(</span><span class="n">arg1</span><span class="p">,</span> <span class="n">arg0</span><span class="p">)]:</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-18" name="rest_code_902b019e928b4919803dd79027a5b4cb-18" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-18"></a>            <span class="n">lh_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getintbound</span><span class="p">(</span><span class="n">lhs</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-19" name="rest_code_902b019e928b4919803dd79027a5b4cb-19" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-19"></a>            <span class="k">if</span> <span class="n">lh_info</span><span class="o">.</span><span class="n">is_constant</span><span class="p">():</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-20" name="rest_code_902b019e928b4919803dd79027a5b4cb-20" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-20"></a>                <span class="n">x</span> <span class="o">=</span> <span class="n">lh_info</span><span class="o">.</span><span class="n">get_constant_int</span><span class="p">()</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-21" name="rest_code_902b019e928b4919803dd79027a5b4cb-21" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-21"></a>                <span class="k">if</span> <span class="n">x</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-22" name="rest_code_902b019e928b4919803dd79027a5b4cb-22" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-22"></a>                    <span class="c1"># x * (2 ** c) == x &lt;&lt; c</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-23" name="rest_code_902b019e928b4919803dd79027a5b4cb-23" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-23"></a>                    <span class="n">new_rhs</span> <span class="o">=</span> <span class="n">ConstInt</span><span class="p">(</span><span class="n">highest_bit</span><span class="p">(</span><span class="n">lh_info</span><span class="o">.</span><span class="n">get_constant_int</span><span class="p">()))</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-24" name="rest_code_902b019e928b4919803dd79027a5b4cb-24" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-24"></a>                    <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">replace_op_with</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">rop</span><span class="o">.</span><span class="n">INT_LSHIFT</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">rhs</span><span class="p">,</span> <span class="n">new_rhs</span><span class="p">])</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-25" name="rest_code_902b019e928b4919803dd79027a5b4cb-25" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-25"></a>                    <span class="bp">self</span><span class="o">.</span><span class="n">optimizer</span><span class="o">.</span><span class="n">send_extra_operation</span><span class="p">(</span><span class="n">op</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-26" name="rest_code_902b019e928b4919803dd79027a5b4cb-26" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-26"></a>                    <span class="k">return</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-27" name="rest_code_902b019e928b4919803dd79027a5b4cb-27" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-27"></a>                <span class="k">elif</span> <span class="n">x</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-28" name="rest_code_902b019e928b4919803dd79027a5b4cb-28" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-28"></a>                    <span class="c1"># x * -1 == -x</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-29" name="rest_code_902b019e928b4919803dd79027a5b4cb-29" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-29"></a>                    <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">replace_op_with</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">rop</span><span class="o">.</span><span class="n">INT_NEG</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">rhs</span><span class="p">])</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-30" name="rest_code_902b019e928b4919803dd79027a5b4cb-30" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-30"></a>                    <span class="bp">self</span><span class="o">.</span><span class="n">optimizer</span><span class="o">.</span><span class="n">send_extra_operation</span><span class="p">(</span><span class="n">op</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-31" name="rest_code_902b019e928b4919803dd79027a5b4cb-31" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-31"></a>                    <span class="k">return</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-32" name="rest_code_902b019e928b4919803dd79027a5b4cb-32" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-32"></a>            <span class="k">else</span><span class="p">:</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-33" name="rest_code_902b019e928b4919803dd79027a5b4cb-33" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-33"></a>                <span class="c1"># x * (1 &lt;&lt; y) == x &lt;&lt; y</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-34" name="rest_code_902b019e928b4919803dd79027a5b4cb-34" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-34"></a>                <span class="n">shiftop</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">optimizer</span><span class="o">.</span><span class="n">as_operation</span><span class="p">(</span><span class="n">get_box_replacement</span><span class="p">(</span><span class="n">lhs</span><span class="p">),</span> <span class="n">rop</span><span class="o">.</span><span class="n">INT_LSHIFT</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-35" name="rest_code_902b019e928b4919803dd79027a5b4cb-35" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-35"></a>                <span class="k">if</span> <span class="n">shiftop</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-36" name="rest_code_902b019e928b4919803dd79027a5b4cb-36" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-36"></a>                    <span class="k">continue</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-37" name="rest_code_902b019e928b4919803dd79027a5b4cb-37" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-37"></a>                <span class="k">if</span> <span class="ow">not</span> <span class="n">shiftop</span><span class="o">.</span><span class="n">getarg</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">is_constant</span><span class="p">()</span> <span class="ow">or</span> <span class="n">shiftop</span><span class="o">.</span><span class="n">getarg</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">getint</span><span class="p">()</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-38" name="rest_code_902b019e928b4919803dd79027a5b4cb-38" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-38"></a>                    <span class="k">continue</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-39" name="rest_code_902b019e928b4919803dd79027a5b4cb-39" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-39"></a>                <span class="n">shiftvar</span> <span class="o">=</span> <span class="n">get_box_replacement</span><span class="p">(</span><span class="n">shiftop</span><span class="o">.</span><span class="n">getarg</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-40" name="rest_code_902b019e928b4919803dd79027a5b4cb-40" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-40"></a>                <span class="n">shiftbound</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getintbound</span><span class="p">(</span><span class="n">shiftvar</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-41" name="rest_code_902b019e928b4919803dd79027a5b4cb-41" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-41"></a>                <span class="k">if</span> <span class="n">shiftbound</span><span class="o">.</span><span class="n">known_nonnegative</span><span class="p">()</span> <span class="ow">and</span> <span class="n">shiftbound</span><span class="o">.</span><span class="n">known_lt_const</span><span class="p">(</span><span class="n">LONG_BIT</span><span class="p">):</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-42" name="rest_code_902b019e928b4919803dd79027a5b4cb-42" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-42"></a>                    <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">replace_op_with</span><span class="p">(</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-43" name="rest_code_902b019e928b4919803dd79027a5b4cb-43" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-43"></a>                            <span class="n">op</span><span class="p">,</span> <span class="n">rop</span><span class="o">.</span><span class="n">INT_LSHIFT</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">rhs</span><span class="p">,</span> <span class="n">shiftvar</span><span class="p">])</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-44" name="rest_code_902b019e928b4919803dd79027a5b4cb-44" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-44"></a>                    <span class="bp">self</span><span class="o">.</span><span class="n">optimizer</span><span class="o">.</span><span class="n">send_extra_operation</span><span class="p">(</span><span class="n">op</span><span class="p">)</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-45" name="rest_code_902b019e928b4919803dd79027a5b4cb-45" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-45"></a>                    <span class="k">return</span>
+<a id="rest_code_902b019e928b4919803dd79027a5b4cb-46" name="rest_code_902b019e928b4919803dd79027a5b4cb-46" href="jit-peephole-dsl.html#rest_code_902b019e928b4919803dd79027a5b4cb-46"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">op</span><span class="p">)</span>
+</pre></div>
+<p>Adding more rules to these functions is very tedious and gets super confusing
+when the functions get bigger. In addition I am always worried about making
+mistakes when writing this kind of code, and there is no feedback at all about
+which of these rules are actually applied a lot in real programs.</p>
+<p>Therefore I decided to write a small domain specific language with the goal of
+expressing these rules in a more declarative way. In the rest of the post I'll
+describe the DSL (most of that description is adapted from the <a class="reference external" href="https://rpython.readthedocs.io/en/latest/jit/ruleopt.html">documentation</a>
+about it that I wrote).</p>
+</section><section id="the-peephole-rule-dsl"><h2>The Peephole Rule DSL<a href="#the-peephole-rule-dsl" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<section id="simple-transformation-rules"><h3>Simple transformation rules<a href="#simple-transformation-rules" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The rules in the DSL specify how integer operation can be transformed into
+cheaper other integer operations. A rule always consists of a name, a pattern,
+and a target. Here's a simple rule:</p>
+<pre class="literal-block">add_zero: int_add(x, 0)
+    =&gt; x</pre>
+<p>The name of the rule is <code class="docutils literal">add_zero</code>. It matches operations in the trace of the
+form <code class="docutils literal">int_add(x, 0)</code>, where <code class="docutils literal">x</code> will match anything and <code class="docutils literal">0</code> will match only the
+constant zero. After the <code class="docutils literal">=&gt;</code> arrow is the target of the rewrite, i.e. what the
+operation is rewritten to, in this case <code class="docutils literal">x</code>.</p>
+<p>The rule language has a list of which of the operations are commutative, so <code class="docutils literal">add_zero</code>
+will also optimize <code class="docutils literal">int_add(0, x)</code> to <code class="docutils literal">x</code>.</p>
+<p>Variables in the pattern can repeat:</p>
+<pre class="literal-block">sub_x_x: int_sub(x, x)
+    =&gt; 0</pre>
+<p>This rule matches against <code class="docutils literal">int_sub</code> operations where the two arguments are the
+same (either the same box, or the same constant).</p>
+<p>Here's a rule with a more complicated pattern:</p>
+<pre class="literal-block">sub_add: int_sub(int_add(x, y), y)
+    =&gt; x</pre>
+<p>This pattern matches <code class="docutils literal">int_sub</code> operations, where the first argument was
+produced by an <code class="docutils literal">int_add</code> operation. In addition, one of the arguments of the
+addition has to be the same as the second argument of the subtraction.</p>
+<p>The constants <code class="docutils literal">MININT</code>, <code class="docutils literal">MAXINT</code> and <code class="docutils literal">LONG_BIT</code> (which is either 32 or 64,
+depending on which platform the JIT is built for) can be used in rules, they
+behave like writing numbers but allow bit-width-independent formulations:</p>
+<pre class="literal-block">is_true_and_minint: int_is_true(int_and(x, MININT))
+    =&gt; int_lt(x, 0)</pre>
+<p>It is also possible to have a pattern where some arguments needs to be a
+constant, without specifying which constant. Those patterns look like this:</p>
+<pre class="literal-block">sub_add_consts: int_sub(int_add(x, C1), C2) # incomplete
+    # more goes here
+    =&gt; int_sub(x, C)</pre>
+<p>Variables in the pattern that start with a <code class="docutils literal">C</code> match against constants only.
+However, in this current form the rule is incomplete, because the variable <code class="docutils literal">C</code>
+that is being used in the target operation is not defined anywhere. We will see
+how to compute it in the next section.</p>
+</section><section id="computing-constants-and-other-intermediate-results"><h3>Computing constants and other intermediate results<a href="#computing-constants-and-other-intermediate-results" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Sometimes it is necessary to compute intermediate results that are used in the
+target operation. To do that, there can be extra assignments between the rule head
+and the rule target.:</p>
+<pre class="literal-block">sub_add_consts: int_sub(int_add(x, C1), C2) # incomplete
+    C = C1 + C2
+    =&gt; int_sub(x, C)</pre>
+<p>The right hand side of such an assignment is a subset of Python syntax,
+supporting arithmetic using <code class="docutils literal">+</code>, <code class="docutils literal">-</code>, <code class="docutils literal">*</code>, and certain helper functions.
+However, the syntax allows you to be explicit about unsignedness for some
+operations. E.g. <code class="docutils literal">&gt;&gt;u</code> exists for unsigned right shifts (and I plan to add
+<code class="docutils literal">&gt;u</code>, <code class="docutils literal">&gt;=u</code>, <code class="docutils literal">&lt;u</code>, <code class="docutils literal">&lt;=u</code> for comparisons).</p>
+<p>Here's an example of a rule that uses <code class="docutils literal">&gt;&gt;u</code>:</p>
+<pre class="literal-block">urshift_lshift_x_c_c: uint_rshift(int_lshift(x, C), C)
+    mask = (-1 &lt;&lt; C) &gt;&gt;u C
+    =&gt; int_and(x, mask)</pre>
+</section><section id="checks"><h3>Checks<a href="#checks" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Some rewrites are only true under certain conditions. For example,
+<code class="docutils literal">int_eq(x, 1)</code> can be rewritten to <code class="docutils literal">x</code>, if <code class="docutils literal">x</code> is known to store a boolean value. This can
+be expressed with <em>checks</em>:</p>
+<pre class="literal-block">eq_one: int_eq(x, 1)
+    check x.is_bool()
+    =&gt; x</pre>
+<p>A check is followed by a boolean expression. The variables from the pattern can
+be used as <code class="docutils literal">IntBound</code> instances in checks (and also in assignments) to find out
+what the abstract interpretation of the JIT knows about the value of a trace variable
+(<code class="docutils literal">IntBound</code> is the name of the abstract domain that the JIT uses for integers,
+despite the fact that it also stores <a class="reference external" href="../08/toy-knownbits.html">knownbits</a> information nowadays).</p>
+<p>Here's another example:</p>
+<pre class="literal-block">mul_lshift: int_mul(x, int_lshift(1, y))
+    check y.known_ge_const(0) and y.known_le_const(LONG_BIT)
+    =&gt; int_lshift(x, y)</pre>
+<p>It expresses that <code class="docutils literal">x * (1 &lt;&lt; y)</code> can be rewritten to <code class="docutils literal">x &lt;&lt; y</code> but checks that
+<code class="docutils literal">y</code> is known to be between <code class="docutils literal">0</code> and <code class="docutils literal">LONG_BIT</code>.</p>
+<p>Checks and assignments can be repeated and combined with each other:</p>
+<pre class="literal-block">mul_pow2_const: int_mul(x, C)
+    check C &gt; 0 and C &amp; (C - 1) == 0
+    shift = highest_bit(C)
+    =&gt; int_lshift(x, shift)</pre>
+<p>In addition to calling methods on <code class="docutils literal">IntBound</code> instances, it's also possible to
+access their attributes, like in this rule:</p>
+<pre class="literal-block">and_x_c_in_range: int_and(x, C)
+    check x.lower &gt;= 0 and x.upper &lt;= C &amp; ~(C + 1)
+    =&gt; x</pre>
+</section><section id="rule-ordering-and-liveness"><h3>Rule Ordering and Liveness<a href="#rule-ordering-and-liveness" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The generated optimizer code will give preference to applying rules that
+produce a constant or a variable as a rewrite result. Only if none of those
+match do rules that produce new result operations get applied. For example, the
+rules <code class="docutils literal">sub_x_x</code> and <code class="docutils literal">sub_add</code> are tried before trying <code class="docutils literal">sub_add_consts</code>,
+because the former two rules optimize to a constant and a variable
+respectively, while the latter produces a new operation as the result.</p>
+<p>The rule <code class="docutils literal">sub_add_consts</code> has a possible problem, which is that if the
+intermediate result of the <code class="docutils literal">int_add</code> operation in the rule head is used by
+some other operations, then the <code class="docutils literal">sub_add_consts</code> rule does not actually
+reduce the number of operations (and might actually make things slightly worse
+due to increased register pressure). However, currently it would be extremely
+hard to take that kind of information into account in the optimization pass of
+the JIT, so we optimistically apply the rules anyway.</p>
+</section><section id="checking-rule-coverage"><h3>Checking rule coverage<a href="#checking-rule-coverage" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Every rewrite rule should have at least one unit test where it triggers. To
+ensure this, the <a class="reference external" href="https://github.com/pypy/pypy/blob/d92d0bfd38318ede1cbaadadafd77da69d431fad/rpython/jit/metainterp/optimizeopt/test/test_optimizeintbound.py">unit test file that mainly checks integer optimizations</a> in the
+JIT has an assert at the end of a test run, that every rule fired at least once.</p>
+</section><section id="printing-rule-statistics"><h3>Printing rule statistics<a href="#printing-rule-statistics" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The JIT can print statistics about which rule fired how often in the
+<code class="docutils literal"><span class="pre">jit-intbounds-stats</span></code> logging category, using the <a class="reference external" href="https://rpython.readthedocs.io/en/latest/logging.html">PYPYLOG</a> mechanism. For
+example, to print the category to stdout at the end of program execution, run
+PyPy like this:</p>
+<pre class="literal-block">PYPYLOG=jit-intbounds-stats:- pypy ...</pre>
+<p>The output of that will look something like this:</p>
+<pre class="literal-block">int_add
+    add_reassoc_consts 2514
+    add_zero 107008
+int_sub
+    sub_zero 31519
+    sub_from_zero 523
+    sub_x_x 3153
+    sub_add_consts 159
+    sub_add 55
+    sub_sub_x_c_c 1752
+    sub_sub_c_x_c 0
+    sub_xor_x_y_y 0
+    sub_or_x_y_y 0
+int_mul
+    mul_zero 0
+    mul_one 110
+    mul_minus_one 0
+    mul_pow2_const 1456
+    mul_lshift 0
+...</pre>
+</section><section id="termination-and-confluence"><h3>Termination and Confluence<a href="#termination-and-confluence" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Right now there are unfortunately no checks that the rules actually rewrite
+operations towards "simpler" forms. There is no cost model, and also nothing
+that prevents you from writing a rule like this:</p>
+<pre class="literal-block">neg_complication: int_neg(x) # leads to infinite rewrites
+    =&gt; int_mul(-1, x)</pre>
+<p>Doing this would lead to endless rewrites if there is also another rule that
+turns multiplication with -1 into negation.</p>
+<p>There is also no checking for <a class="reference external" href="https://en.wikipedia.org/wiki/Confluence_(abstract_rewriting)">confluence</a> (yet?), i.e. the property that all
+rewrites starting from the same input trace always lead to the same output
+trace, no matter in which order the rules are applied.</p>
+</section><section id="proofs"><h3>Proofs<a href="#proofs" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>It is very easy to write a peephole rule that is not correct in all corner
+cases. Therefore all the rules are proven correct with Z3 before compiled into
+actual JIT code, by default. When the proof fails, a (hopefully minimal)
+counterexample is printed. The counterexample consists of values for all the
+inputs that fulfil the checks, values for the intermediate expressions, and
+then two <em>different</em> values for the source and the target operations.</p>
+<p>E.g. if we try to add the incorrect rule:</p>
+<pre class="literal-block">mul_is_add: int_mul(a, b)
+    =&gt; int_add(a, b)</pre>
+<p>We get the following counterexample as output:</p>
+<pre class="literal-block">Could not prove correctness of rule 'mul_is_add'
+in line 1
+counterexample given by Z3:
+counterexample values:
+a: 0
+b: 1
+operation int_mul(a, b) with Z3 formula a*b
+has counterexample result vale: 0
+BUT
+target expression: int_add(a, b) with Z3 formula a + b
+has counterexample value: 1</pre>
+<p>If we add conditions, they are taken into account and the counterexample will
+fulfil the conditions:</p>
+<pre class="literal-block">mul_is_add: int_mul(a, b)
+    check a.known_gt_const(1) and b.known_gt_const(2)
+    =&gt; int_add(a, b)</pre>
+<p>This leads to the following counterexample:</p>
+<pre class="literal-block">Could not prove correctness of rule 'mul_is_add'
+in line 46
+counterexample given by Z3:
+counterexample values:
+a: 2
+b: 3
+operation int_mul(a, b) with Z3 formula a*b
+has counterexample result vale: 6
+BUT
+target expression: int_add(a, b) with Z3 formula a + b
+has counterexample value: 5</pre>
+<p>Some <code class="docutils literal">IntBound</code> methods cannot be used in Z3 proofs because their <a class="reference external" href="../08/toy-knownbits.html#cases-where-this-style-of-z3-proof-doesnt-work).">control
+flow is too complex</a>. If that is the case, they can have Z3-equivalent
+formulations defined (in every case this is done, it's a potential proof hole if
+the Z3 friendly reformulation and the real implementation differ from each
+other, therefore extra care is required to make very sure they are equivalent).</p>
+<p>It's possible to skip the proof of individual rules entirely by adding
+<code class="docutils literal">SORRY_Z3</code> to its body (but we should try not to do that too often):</p>
+<pre class="literal-block">eq_different_knownbits: int_eq(x, y)
+    SORRY_Z3
+    check x.known_ne(y)
+    =&gt; 0</pre>
+</section><section id="checking-for-satisfiability"><h3>Checking for satisfiability<a href="#checking-for-satisfiability" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>In addition to checking whether the rule yields a correct optimization, we also
+check whether the rule can ever apply. This ensures that there are <em>some</em>
+runtime values that would fulfil all the checks in a rule. Here's an example of
+a rule violating this:</p>
+<pre class="literal-block">never_applies: int_is_true(x)
+    check x.known_lt_const(0) and x.known_gt_const(0) # impossible condition, always False
+    =&gt; x</pre>
+<p>Right now the error messages if this goes wrong are not completely easy to
+understand. I hope to be able to improve this later:</p>
+<pre class="literal-block">Rule 'never_applies' cannot ever apply
+in line 1
+Z3 did not manage to find values for variables x such that the following condition becomes True:
+And(x &lt;= x_upper,
+    x_lower &lt;= x,
+    If(x_upper &lt; 0, x_lower &gt; 0, x_upper &lt; 0))</pre>
+</section><section id="implementation-notes"><h3>Implementation Notes<a href="#implementation-notes" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The implementation of the DSL is done in a relatively ad-hoc manner. It is
+parsed using <a class="reference external" href="https://rply.readthedocs.io/">rply</a>, there's a small type checker that tries to find common
+problems in how the rules are written. Z3 is used via the Python API, like in
+the previous blog posts that are using it. The
+pattern matching RPython code is generated using an approach inspired by Luc
+Maranget's paper <a class="reference external" href="http://moscova.inria.fr/~maranget/papers/ml05e-maranget.pdf">Compiling Pattern Matching to Good Decision Trees</a>. See
+<a class="reference external" href="https://compiler.club/compiling-pattern-matching/">this blog post</a> for an approachable introduction.</p>
+</section></section><section id="conclusion"><h2>Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Now that I've described the DSL, here are the rules that are equivalent to the
+imperative code in the motivation section:</p>
+<pre class="literal-block">mul_zero: int_mul(x, 0)
+    =&gt; 0
+
+mul_one: int_mul(x, 1)
+    =&gt; x
+
+mul_minus_one: int_mul(x, -1)
+    =&gt; int_neg(x)
+
+mul_pow2_const: int_mul(x, C)
+    check C &gt; 0 and C &amp; (C - 1) == 0
+    shift = highest_bit(C)
+    =&gt; int_lshift(x, shift)
+
+mul_lshift: int_mul(x, int_lshift(1, y))
+    check y.known_ge_const(0) and y.known_le_const(LONG_BIT)
+    =&gt; int_lshift(x, y)</pre>
+<p>The current status of the DSL is that it got merged to PyPy's main branch. I
+rewrote a part of the integer rewrites <a class="reference external" href="https://github.com/pypy/pypy/blob/d92d0bfd38318ede1cbaadadafd77da69d431fad/rpython/jit/metainterp/ruleopt/real.rules">into the DSL</a>, but some are still in the
+old imperative style (mostly for complicated reasons, the easily ported ones are
+all done). Since I've only been porting optimizations that had existed prior to
+the existence of the DSL, performance numbers of benchmarks didn't change.</p>
+<p>There are a number of features that are still missing and some possible
+extensions that I plan to work on in the future:</p>
+<ul class="simple">
+<li><p>All the integer operations that the DSL handles so far are the variants that
+do not check for overflow (or where overflow was proven to be impossible to
+happen). In regular Python code the overflow-checking variants <cite>int_add_ovf</cite>
+etc are much more common, but the DSL doesn't support them yet. I plan to fix
+this, but don't completely understand how the correctness proofs for them
+should be done correctly.</p></li>
+<li><p>A related problem is that I don't understand what it means for a rewrite to be
+correct if some of the operations are only defined for a subset of the input
+values. E.g. division isn't defined if the divisor is zero. In theory, a
+division operation in the trace should always be preceded by a check that the
+divisor isn't zero. But sometimes other optimization move the check around and
+the connection to the division gets lost or muddled. What optimizations can we
+still safely perform on the division? There's lots of prior work on this
+question, but I still don't understand what the correct approach in our
+context would be.</p></li>
+<li><p>Ordering comparisons like <code class="docutils literal">int_lt</code>, <code class="docutils literal">int_le</code> and their unsigned variants are
+not ported to the DSL yet. Comparisons are an area where the JIT is not super
+good yet at optimizing away operations. This is a pretty big topic and I've
+started a project with Nico Rittinghaus to try to improve the situation a bit
+more generally.</p></li>
+<li><p>A more advanced direction of work would be to implement a simplified form of
+<a class="reference external" href="https://egraphs-good.github.io/">e-graphs</a> (or <a class="reference external" href="https://vimeo.com/843540328">ae-graphs</a>). The JIT has like half of an e-graph data
+structure already, and we probably can't afford a full one in terms of compile
+time costs, but maybe we can have two thirds or something?</p></li>
+</ul></section><section id="acknowledgements"><h2>Acknowledgements<a href="#acknowledgements" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Thank you to <a class="reference external" href="https://bernsteinbear.com/">Max Bernstein</a> and <a class="reference external" href="https://martinfriedrichberger.net/">Martin Berger</a> for super helpful feedback on
+drafts of the post!</p>
+</section>
+</div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/jit.html" rel="tag">jit</a></li>
+            <li><a class="tag p-category" href="../../../categories/z3.html" rel="tag">z3</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="../08/portaone.html" rel="prev" title="Guest Post: How PortaOne uses PyPy for high-performance processing, connecting over 1B of phone calls every month">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../11/guest-post-final-encoding-in-rpython.html" rel="next" title="Guest Post: Final Encoding in RPython Interpreters">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="A DSL for Peephole Transformation Rules of Integer Operations in the PyPy JIT" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

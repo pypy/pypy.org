@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="A Faster Python">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy (old posts, page 32) | PyPy</title>
+<link href="../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/blog/index-32.html">
+<link rel="icon" href="../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../favicon32x32.ico" sizes="32x32">
+<link rel="prev" href="index-33.html" type="text/html">
+<link rel="next" href="index-31.html" type="text/html">
+<!--[if lt IE 9]><script src="../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../assets/css/tipuesearch.css">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../index.html">
+                    <image id="toplogo" src="../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href=".">Index</a> </li>  
+                    <li> <a href="../categories/">Tags</a> </li>  
+                    <li> <a href="../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><div class="post">
+<div class="postindex">
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2015/01/faster-more-memory-efficient-and-more-4096950404745375390.html" class="u-url">Faster, more memory efficient and more ordered dictionaries on PyPy</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2015/01/faster-more-memory-efficient-and-more-4096950404745375390.html" rel="bookmark">
+            <time class="published dt-published" datetime="2015-01-22T11:31:00Z" itemprop="datePublished" title="2015-01-22 11:31">2015-01-22 11:31</time></a>
+            </p>
+                <p class="commentline">18 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+<p>Hello everyone!</p>
+<p>As of today, we merged the latest branch that brings better dictionaries to PyPy by default. The work is based on an idea by Raymond Hettinger on <a class="reference external" href="https://mail.python.org/pipermail/python-dev/2012-December/123028.html">python-dev</a>, with prior work done notably in Java.  It was done by Maciej Fijałkowski and Armin Rigo, with Laurence Tratt recently prodding us to finish it.  (Earlier work going in a similar direction include Alex Gaynor's work on ordered dicts in Topaz, which was also used in the Hippy VM.  Each of these pieces of work is itself based on the original dict implementation in RPython, whose origins fade in the Subversion prehistory of PyPy.)  Coincidentally, a very similar idea has been implemented in Zend PHP very recently. <a class="reference external" href="https://nikic.github.io/2014/12/22/PHPs-new-hashtable-implementation.html">Zend implementation description</a>.</p>
+<p>This post covers the basics of design and implementation as well as some basic benchmarks.</p>
+</div>
+<div class="section" id="dictionaries-are-now-ordered">
+<h3>Dictionaries are now ordered!</h3>
+<p>One surprising part is that the new design, besides being more
+memory efficient, is ordered by design: it preserves the
+insertion order.  This is not forbidden by the Python language, which allows any order.  It makes the <tt class="docutils literal">collections.OrderedDict</tt> subclass much faster than before: it is now a thin subclass of <tt class="docutils literal">dict</tt>.  Obviously, we recommend that any portable Python program continues to use <tt class="docutils literal">OrderedDict</tt> when ordering is important.  Note that a non-portable program might rely on more: for example, a <tt class="docutils literal">**keywords</tt> argument now receives the keywords in the same order as the one in which they were given in the call.  (Whether such a thing might be called a language design change or not is a bit borderline.)  The point is that Python programs that work on CPython or previous versions of PyPy should continue to work on PyPy.</p>
+<p>There is one exception, though.  The iterators of the <tt class="docutils literal">OrderedDict</tt> subclass are now working just like the ones of the <tt class="docutils literal">dict</tt> builtin: they will raise <tt class="docutils literal">RuntimeError</tt> when iterating if the dictionary was modified.  In the CPython design, the class <tt class="docutils literal">OrderedDict</tt> explicitly doesn't worry about that, and instead you get some result that might range from correct to incorrect to crashes (i.e. random Python exceptions).</p>
+</div>
+<div class="section" id="original-pypy-dictionary-design">
+<h3>Original PyPy dictionary design</h3>
+<p>Originally, PyPy dictionaries, as well as CPython dictionaries
+are implemented as follows (simplified view):</p>
+<pre class="literal-block">
+struct dict {
+   long num_items;
+   dict_entry* items;   /* pointer to array */
+}
+
+struct dict_entry {
+   long hash;
+   PyObject* key;
+   PyObject* value;
+}
+</pre>
+<p>Where items is a sparse array, with 1/3 to 1/2 of the items being NULL.
+The average space occupied by a dictionary is <tt class="docutils literal">3 * WORD * 12/7</tt> plus some small constant (the smallest dict has 8 entries, which is
+<tt class="docutils literal">8 * 3 * WORD + 2 * WORD = 26 WORDs</tt>).</p>
+</div>
+<div class="section" id="new-pypy-dictionary-design">
+<h3>New PyPy dictionary design</h3>
+<p>The new PyPy dictionary is split in two arrays:</p>
+<pre class="literal-block">
+struct dict {
+    long num_items;
+    variable_int *sparse_array;
+    dict_entry* compact_array;
+}
+
+struct dict_entry {
+    long hash;
+    PyObject *key;
+    PyObject *value;
+}
+</pre>
+<p>Here, <tt class="docutils literal">compact_array</tt> stores all the items in order of insertion, while <tt class="docutils literal">sparse_array</tt> is a 1/2 to 2/3 full array of integers. The integers themselves are of the smallest size necessary for indexing the <tt class="docutils literal">compact_array</tt>. So if <tt class="docutils literal">compact_array</tt> has less than 256 items, then <tt class="docutils literal">sparse_array</tt> will be made of bytes; if less than 2^16, it'll be two-byte integers; and so on.</p>
+<p>This design saves quite a bit of memory. For example, on 64bit systems we can, but almost never, use indexing of more than 4 billion elements; and for small dicts, the extra <tt class="docutils literal">sparse_array</tt> takes very little space.  For example a 100 element dict, would be on average for the original design on 64bit: 100 * 12/7 * WORD * 3 =~ 4100 bytes, while on new design it's 100 * 12/7 + 3 * WORD * 100 =~ 2600 bytes, quite a significant saving.</p>
+</div>
+<div class="section" id="gc-friendliness">
+<h3>GC friendliness</h3>
+<p>The obvious benefit of having more compact dictionaries is an increased cache friendliness. In modern CPUs cache misses are much more costly than doing additional simple work, like having an additional level of (in-cache) indirection. Additionally, there is a GC benefit coming from it. When doing a minor collection, the GC has to visit all the GC fields in old objects that can point to young objects. In the case of large arrays, this can prove problematic since the array grows and with each minor collection we need to visit more and more GC pointers. In order to avoid it, large arrays in PyPy employ a technique called "card marking" where the GC only visits "cards" or subsets of arrays that were modified between collections. The problem with dictionaries was that by design modifications in a dictionary occur randomly, hence a lot of cards used to get invalidated. In the new design, however, new items are typically appended to the <tt class="docutils literal">compact_array</tt>, hence invalidate much fewer cards --- which improves GC performance.  (The new <tt class="docutils literal">sparse_array</tt> is an array of integers, so it does not suffer from the same problems.)</p>
+</div>
+<div class="section" id="deletion">
+<h3>Deletion</h3>
+<p>Deleting entries from dictionaries is not very common, but important in a few use cases.  To preserve order, when we delete an entry, we mark the entry as removed but don't otherwise shuffle the remaining entries.  If we repeat this operation often enough, there will be a lot of removed entries in the (originally compact) array.  At this point, we need to do a "packing" operation, which moves all live entries to the start of the array (and then reindexes the sparse array, as the positions changed).  This works well, but there are use cases where previously no reindexing was ever needed, so it makes these cases a bit slower (for example when repeatedly adding and removing keys in equal number).</p>
+</div>
+<div class="section" id="benchmarks">
+<h3>Benchmarks</h3>
+<p>The PyPy speed benchmarks show mostly small effect. The microbenchmarks that we did show large improvements on large and very large dictionaries (particularly, building dictionaries of at least a couple 100s of items is now twice faster) and break-even on small ones (between 20% slower and 20% faster depending very much on the usage patterns and sizes of dictionaries). The new dictionaries enable various optimization possibilities which we're going to explore in the near future.</p>
+<p>Cheers,<br>
+fijal, arigo and the PyPy team</p>
+</div>
+<br>
+</div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1891836419877302725">
+        <div class="comment-header">
+          <a name="comment-1891836419877302725"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2015-01-22 16:26</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is outstanding work, PyPy team. Keep on keeping on!</p>
+        </div>
+      </div>
+      <div class="comment comment-4320921419516509607">
+        <div class="comment-header">
+          <a name="comment-4320921419516509607"></a>
+            <span class="author">Wilfred Hughes</span> wrote on <span class="date">2015-01-22 16:41</span>:
+        </div>
+        <div class="comment-content">
+          <p>Fantastic!<br><br>https://pypy.org/performance.html states that large dicts are a weakness of pypy -- is still the case overall, or is this work sufficient to favour pypy over cpython for large dict work in general?</p>
+        </div>
+      </div>
+      <div class="comment comment-4373673796938302900">
+        <div class="comment-header">
+          <a name="comment-4373673796938302900"></a>
+            <span class="author">John M. Camara</span> wrote on <span class="date">2015-01-23 01:35</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wilfred - With the ordered dict changes that bullet item is no longer true.</p>
+        </div>
+      </div>
+      <div class="comment comment-7498804428762440826">
+        <div class="comment-header">
+          <a name="comment-7498804428762440826"></a>
+            <span class="author">EM Lazzarin</span> wrote on <span class="date">2015-01-23 23:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>Awesome work and thanks. Pypy would be ahead of the game if PEP 468 were accepted.</p>
+        </div>
+      </div>
+      <div class="comment comment-1120475895514743974">
+        <div class="comment-header">
+          <a name="comment-1120475895514743974"></a>
+            <span class="author">JSZ</span> wrote on <span class="date">2015-01-24 19:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>How is deleting an element implemented? It sounds like it would take O(n) work to remove an element from the middle of the compact array.</p>
+        </div>
+      </div>
+      <div class="comment comment-7846831096687909796">
+        <div class="comment-header">
+          <a name="comment-7846831096687909796"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2015-01-25 06:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>JSZ: the array gets holes.  If a lot of items are deleted it can no longer be called "compact", but if it becomes too sparse it is recompacted and rehashed.</p>
+        </div>
+      </div>
+      <div class="comment comment-5258266563019598092">
+        <div class="comment-header">
+          <a name="comment-5258266563019598092"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2015-01-28 11:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>There are lots of things to like about this approach!<br><br>Did you find any problems with cache misses? With linear probing, the keys are accessed sequentially (cache friendly), but with this method the keys are accessed in random order.</p>
+        </div>
+      </div>
+      <div class="comment comment-6933695346652786031">
+        <div class="comment-header">
+          <a name="comment-6933695346652786031"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2015-01-28 11:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous: The old approach didn't use linear probing either, so in that regard nothing changed.</p>
+        </div>
+      </div>
+      <div class="comment comment-3853981107061015751">
+        <div class="comment-header">
+          <a name="comment-3853981107061015751"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2015-01-28 11:45</span>:
+        </div>
+        <div class="comment-content">
+          <p>@carl - ah I see, thats interesting.<br><br>Well then, what about storing the hashes with the indices?<br>* Another chunk of memory saved. Only the lowest N bits need be stored that way instead of the full 64 bits. (Big assumption that rehashing on bit size change is ok)<br><br>* The nice thing is that the dense part (cache miss!) need only be accessed if the hash matches.<br><br>I think if I was doing this, I'd skip 8 bit indices and have 16 bit minimum so rehashing would be very rare.</p>
+        </div>
+      </div>
+      <div class="comment comment-4932481408082287637">
+        <div class="comment-header">
+          <a name="comment-4932481408082287637"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2015-01-28 12:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>two problems with that:<br><br>- since the hash functions can be written in python, recomputing a hash from a key is potentially expensive<br><br>- why would you want to throw away bits from the hash? comparing the full hashes as a first check to see whether equality has a chance to succeed is very useful. the equality function can again be written in python, so is potentially very slow.</p>
+        </div>
+      </div>
+      <div class="comment comment-7801112224845080111">
+        <div class="comment-header">
+          <a name="comment-7801112224845080111"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2015-01-28 16:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous: about starting at 16-bit instead of 8-bit: it doesn't give any benefit, because rehashing is needed anyway to grow the sparse table.  As long as its size is at most 256, then there is no point in storing 16-bit numbers instead of 8-bit numbers.  In theory we could store N-bit numbers for the optimal value of N (= 4, 6, 8, 10...) and pay only the cost of additional complexity for individual reads and writes, not for rehashing.</p>
+        </div>
+      </div>
+      <div class="comment comment-4399141062784458775">
+        <div class="comment-header">
+          <a name="comment-4399141062784458775"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2015-01-28 21:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>Ah indeed. I am thinking of implementing this in C++ which has coloured my thoughts somewhat. In my case, key equality checks are for the most part cheap. Thus the size/compute tradeoffs may be a bit different.<br><br>Thanks for your thoughts.</p>
+        </div>
+      </div>
+      <div class="comment comment-7325361872796082065">
+        <div class="comment-header">
+          <a name="comment-7325361872796082065"></a>
+            <span class="author">Dustin Boswell</span> wrote on <span class="date">2015-02-04 23:05</span>:
+        </div>
+        <div class="comment-content">
+          <p>Just curious, was there no slowdown from adding this extra level of indirection? For the case of accessing a random key from a cold dictionary, won't the lookup incur 2 cache misses now (one on each array), compared to just 1 for the original design?</p>
+        </div>
+      </div>
+      <div class="comment comment-3754072720581770556">
+        <div class="comment-header">
+          <a name="comment-3754072720581770556"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2015-02-05 15:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Durtin: there are certainly slow-downs in some cases.  If the dictionary is cold, then indeed there is one extra cache miss. It seems to be quickly compensated, though, by the fact that if then you do a few more accesses to the same dict, you are likely to get less cache misses, simply because of the more compact layout.  Also, the index array is often single bytes, so it can be fully in the cache very quickly.</p>
+        </div>
+      </div>
+      <div class="comment comment-4403399074384655146">
+        <div class="comment-header">
+          <a name="comment-4403399074384655146"></a>
+            <span class="author">Alhabshi3k</span> wrote on <span class="date">2015-02-11 08:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thank you for improving pypy performance and features.  Your project and method  is promising in improvement weakness aspect of dynamic languages.  At the same time, pypy should provide an simplicity of Python rather than diversity , where diversity is the reality but simplicity is the case. <br><br>Making dictionaries ordered by default is part of  simplicity; in this effort I wish integrating the features of "defaultdict" as method and properties of the the default basic dictionary.  <br><br>similar case , integrating "deque" features (as well ,method and properties) as part of pypy list datatype. <br><br>Usually I wonder why python team didn't integrate the features  of these "collections"   ( as they say "High-performance container datatypes" ) within original python basic datatype, as we all know , everything in Python is an Object.  and I don't think it is a pythonic  way to do things in diversity.<br><br>Anyhow , keep on your development and team spirit.</p>
+        </div>
+      </div>
+      <div class="comment comment-3570302623197012495">
+        <div class="comment-header">
+          <a name="comment-3570302623197012495"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2015-02-11 09:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Alhabshi3k: indeed, you're right in that "defaultdict" could be replaced with an alternate constructor of the regular dicts.  I'm not sure why it is not so.  For deques, it is maybe a question of performance, but particularly of underlying C-level memory layout: CPython can't easily add appendleft() and popleft() to regular lists while still keeping the same C API, notably PyList_GET_ITEM() and PySequence_Fast_ITEMS() --- though that is debatable.<br><br>We could support that in PyPy, but that is arguably more of a language change than just making dicts ordered with no new user-visible API.</p>
+        </div>
+      </div>
+      <div class="comment comment-9210320443384874332">
+        <div class="comment-header">
+          <a name="comment-9210320443384874332"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2018-02-06 20:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>You say for 100 elements, the new design's compact array uses 3 * WORD * 100 memory, right? So no extra capacity whatsoever? Then what do you do when I insert another element? Allocate a new array with 3 * WORD * 101 memory and copy all data there (and write the new element at the end)? That would be highly inefficient. So I don't believe you're honest about the memory usage.</p>
+        </div>
+      </div>
+      <div class="comment comment-2562121759679124360">
+        <div class="comment-header">
+          <a name="comment-2562121759679124360"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2018-02-06 21:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>The actual items are stored in a list which, like a list object, is slightly overallocated.  Maybe the text in the blog post missed that and it should add a "k": the average is "100 * 12/7 + 3 * WORD * 100 * k" for an average value of k around 17/16.  That's around 2700 instead of 2600.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2015/01/leysin-winter-sprint-20-28th-february-2590212640945547308.html" class="u-url">Leysin Winter Sprint (20-28th February 2015)</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2015/01/leysin-winter-sprint-20-28th-february-2590212640945547308.html" rel="bookmark">
+            <time class="published dt-published" datetime="2015-01-15T15:09:00Z" itemprop="datePublished" title="2015-01-15 15:09">2015-01-15 15:09</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>The next PyPy sprint will be in Leysin, Switzerland, for the tenth time.
+This is a fully public sprint: newcomers and topics other than those
+proposed below are welcome.</p>
+
+<h2>Goals and topics of the sprint</h2>
+
+<p>The details depend on who is here and ready to work.  We might touch
+topics such as:</p>
+
+<p></p>
+<ul>
+<li>cleaning up the optimization step in the JIT, change the register
+allocation done by the JIT's backend, or improvements to the
+warm-up time
+
+<p></p>
+</li>
+<li>STM (Software Transaction Memory), notably: try to come up with
+benchmarks, and measure them carefully in order to test and improve
+the conflict reporting tools, and more generally to figure out how
+practical it is in large projects to avoid conflicts
+
+<p></p>
+</li>
+<li>vmprof - a statistical profiler for CPython and PyPy work, including
+making it more user friendly.
+
+<p></p>
+</li>
+<li>Py3k (Python 3.x support), NumPyPy (the numpy module)
+
+<p></p>
+</li>
+<li>
+<i>added:</i> cffi 1.0, trying out pygame+cffi on Raspberry Pi devices
+
+</li>
+<li>And as usual, the main side goal is to have fun in winter sports :-)
+We can take a day off for ski.
+</li>
+</ul>
+<br><h2>Exact times</h2>
+
+<p>For a change, and as an attempt to simplify things, I specified the
+dates as 20-28 Februrary 2015, where 20 and 28 are travel days.  We will
+work full days between the 21 and the 27.  You are of course allowed to
+show up for a part of that time only, too.</p>
+
+<h2>Location and Accomodation</h2>
+
+<p>Leysin, Switzerland, "same place as before".  Let me refresh your
+memory: both the sprint venue and the lodging will be in a very spacious
+pair of chalets built specifically for bed &amp; breakfast:
+<a href="https://www.ermina.ch/">Ermina</a>.  The place has a good ADSL Internet connection
+with wireless installed.  You can of course arrange your own lodging
+anywhere (as long as you are in Leysin, you cannot be more than a 15
+minutes walk away from the sprint venue), but I definitely recommend
+lodging there too -- you won't find a better view anywhere else (though
+you probably won't get much worse ones easily, either :-)</p>
+
+<p>Please <b>confirm</b> that you are coming so that we can adjust the
+reservations as appropriate.  In the past, the rates were around 60 CHF a
+night all included in 2-person rooms, with breakfast.  Now, the rooms
+available are either single-person (or couple), or rooms for 3 persons.
+The latter choice is recommended and should be under 60 CHF per person.</p>
+
+<p>Please register <a href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/extradoc/sprintinfo/leysin-winter-2015">by Mercurial</a>, or on the <a href="https://mail.python.org/mailman/listinfo/pypy-dev">pypy-dev mailing list</a> if you do not yet have check-in rights.</p>
+
+<p>You need a Swiss-to-(insert country here) power adapter.  There will be
+some Swiss-to-EU adapters around, and at least one EU-format power strip.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-2261990033108148274">
+        <div class="comment-header">
+          <a name="comment-2261990033108148274"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2015-01-16 21:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi,<br><br>During this sprint, ss it plan to work on yield form syntax, or more generally, Python 3.3 support ?<br><br>I'm very interested to test PyPy with AsyncIO.<br><br>Regards</p>
+        </div>
+      </div>
+      <div class="comment comment-1868666540508153100">
+        <div class="comment-header">
+          <a name="comment-1868666540508153100"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2015-01-17 10:21</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Ludovic, we don't have precise plans.  If there is someone also interested in Python 3, then yes, this kind of work would be nice.  (Note that I see some tests about "yield from" in the py3.3 branch, which may mean that it was implemented already.)</p>
+        </div>
+      </div>
+      <div class="comment comment-6968405616630184891">
+        <div class="comment-header">
+          <a name="comment-6968405616630184891"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2015-01-24 07:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great news. Thanks! PyPy 3</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2014/11/september-donations-and-thank-you-to-4531550307707104017.html" class="u-url">September donations and thank you to the Python Software Foundation!</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2014/11/september-donations-and-thank-you-to-4531550307707104017.html" rel="bookmark">
+            <time class="published dt-published" datetime="2014-11-28T12:49:00Z" itemprop="datePublished" title="2014-11-28 12:49">2014-11-28 12:49</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+
+<p>Hello everyone!</p>
+<p>We would like to show you a short update on the PyPy funding.
+We gathered a total of $15,986 in the month of September and as per
+<a class="reference external" href="../posts/2014/09/python-software-foundation-matching-2230529993193139046.html">earlier agreement</a>, the Python Software Foundation donated $10,000
+to PyPy. We would like to thank everyone participating and the PSF in
+particular for supporting the PyPy project and making our work possible!</p>
+<p>We've been working hard on the goals outlined in the funding proposals.</p>
+<ul class="simple">
+<li>
+<a class="reference external" href="../posts/2014/10/pypy3-240-released-5007750685927360190.html">PyPy Python 3</a> support has been in beta for a while and it's already
+being used by many people, as seen per the number of reported bugs.
+We're currently supporting 3.2, planning on moving towards 3.4 in the
+future.</li>
+<li>Software Transactional Memory has been a successful research project,
+with <a class="reference external" href="../posts/2014/11/tornado-without-gil-on-pypy-stm-7284102716557557428.html">first real world</a> results shown during the Warsaw sprint.</li>
+<li>More detailed update on numpy will be published soon. A little spoiler is
+that we're planning on addressing matplotlib, scipy and the larger ecosystem
+to some extent. Stay tuned!</li>
+</ul>
+<p>Again, thanks to everyone who donated and happy Thanksgiving to everyone
+on that side of the world!</p>
+<p>Cheers,<br>
+fijal and the entire PyPy team</p>
+
+<br>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-5234663796606823196">
+        <div class="comment-header">
+          <a name="comment-5234663796606823196"></a>
+            <span class="author">Alessandro</span> wrote on <span class="date">2014-11-29 02:53</span>:
+        </div>
+        <div class="comment-content">
+          <p>Fantastic work!<br><br>I'm a Python 3 user, as such the PyPy3 was great for me!<br><br>And good news for Numpypy, it would indeed be awesome for supporting the numeric ecosystem.</p>
+        </div>
+      </div>
+      <div class="comment comment-3945515480070493177">
+        <div class="comment-header">
+          <a name="comment-3945515480070493177"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-11-30 08:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>It would be amazing if pypy supported numpy and matplotlib!!</p>
+        </div>
+      </div>
+      <div class="comment comment-328225650312379155">
+        <div class="comment-header">
+          <a name="comment-328225650312379155"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-12-04 12:35</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is great news! I've been waiting for scipy and matplotlib for a while, now it's finally on the roadmap.</p>
+        </div>
+      </div>
+      <div class="comment comment-5979480794168814960">
+        <div class="comment-header">
+          <a name="comment-5979480794168814960"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2015-01-06 12:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Any news on the Numpy update?</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2014/11/tornado-without-gil-on-pypy-stm-7284102716557557428.html" class="u-url">Tornado without a GIL on PyPy STM</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2014/11/tornado-without-gil-on-pypy-stm-7284102716557557428.html" rel="bookmark">
+            <time class="published dt-published" datetime="2014-11-17T14:05:00Z" itemprop="datePublished" title="2014-11-17 14:05">2014-11-17 14:05</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p><em>This post is by Konstantin Lopuhin, who tried PyPy STM during the
+Warsaw sprint.</em></p>
+<p>Python has a GIL, right? Not quite - PyPy STM is a python implementation
+without a GIL, so it can scale CPU-bound work to several cores.
+PyPy STM is developed by Armin Rigo and Remi Meier,
+and supported by community <a class="reference external" href="https://pypy.org/tmdonate2.html">donations</a>.
+You can read more about it in the
+<a class="reference external" href="https://pypy.readthedocs.org/en/latest/stm.html">docs</a>.</p>
+<p>Although PyPy STM is still a work in progress, in many cases it can already
+run CPU-bound code faster than regular PyPy, when using multiple cores.
+Here we will see how to slightly modify Tornado IO loop to use
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch//stmgc-c7/lib_pypy/transaction.py">transaction</a>
+module.
+This module is <a class="reference external" href="https://pypy.readthedocs.org/en/latest/stm.html#atomic-sections-transactions-etc-a-better-way-to-write-parallel-programs">described</a>
+in the docs and is really simple to use - please see an example there.
+An event loop of Tornado, or any other asynchronous
+web server, looks like this (with some simplifications):</p>
+<pre class="literal-block">
+while True:
+    for callback in list(self._callbacks):
+        self._run_callback(callback)
+    event_pairs = self._impl.poll()
+    self._events.update(event_pairs)
+    while self._events:
+        fd, events = self._events.popitem()
+        handler = self._handlers[fd]
+        self._handle_event(fd, handler, events)
+</pre>
+<p>We get IO events, and run handlers for all of them, these handlers can
+also register new callbacks, which we run too. When using such a framework,
+it is very nice to have a guaranty that all handlers are run serially,
+so you do not have to put any locks. This is an ideal case for the
+transaction module - it gives us guaranties that things appear
+to be run serially, so in user code we do not need any locks. We just
+need to change the code above to something like:</p>
+<pre class="literal-block">
+while True:
+    for callback in list(self._callbacks):
+        transaction.add(                # added
+            self._run_callback, callback)
+    transaction.run()                   # added
+    event_pairs = self._impl.poll()
+    self._events.update(event_pairs)
+    while self._events:
+        fd, events = self._events.popitem()
+        handler = self._handlers[fd]
+        transaction.add(                # added
+            self._handle_event, fd, handler, events)
+    transaction.run()                   # added
+</pre>
+<p>The actual commit is
+<a class="reference external" href="https://github.com/lopuhin/tornado/commit/246c5e71ce8792b20c56049cf2e3eff192a01b20">here</a>,
+- we had to extract a little function to run the callback.</p>
+<div class="section" id="part-1-a-simple-benchmark-primes">
+<h1>Part 1: a simple benchmark: primes</h1>
+<p>Now we need a simple benchmark, lets start with
+<a class="reference external" href="https://bitbucket.org/kostialopuhin/tornado-stm-bench/src/a038bf99de718ae97449607f944cecab1a5ae104/primes.py?at=default">this</a>
+- just calculate a list of primes up to the given number, and return it
+as JSON:</p>
+<pre class="literal-block">
+def is_prime(n):
+    for i in xrange(2, n):
+        if n % i == 0:
+            return False
+    return True
+
+class MainHandler(tornado.web.RequestHandler):
+    def get(self, num):
+        num = int(num)
+        primes = [n for n in xrange(2, num + 1) if is_prime(n)]
+        self.write({'primes': primes})
+</pre>
+<p>We can benchmark it with <tt class="docutils literal">siege</tt>:</p>
+<pre class="literal-block">
+siege -c 50 -t 20s https://localhost:8888/10000
+</pre>
+<p>But this does not scale. The CPU load is at 101-104 %, and we handle 30 %
+less request per second. The reason for the slowdown is STM overhead,
+which needs to keep track of all writes and reads in order to detect conflicts.
+And the reason for using only one core is, obviously, conflicts!
+Fortunately, we can see what this conflicts are, if we run code like this
+(here 4 is the number of cores to use):</p>
+<pre class="literal-block">
+PYPYSTM=stm.log ./primes.py 4
+</pre>
+<p>Then we can use <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch//stmgc-c7/pypy/stm/print_stm_log.py">print_stm_log.py</a>
+to analyse this log. It lists the most expensive conflicts:</p>
+<pre class="literal-block">
+14.793s lost in aborts, 0.000s paused (1258x STM_CONTENTION_INEVITABLE)
+File "/home/ubuntu/tornado-stm/tornado/tornado/httpserver.py", line 455, in __init__
+    self._start_time = time.time()
+File "/home/ubuntu/tornado-stm/tornado/tornado/httpserver.py", line 455, in __init__
+    self._start_time = time.time()
+...
+</pre>
+<p>There are only three kinds of conflicts, they are described in
+<a class="reference external" href="https://bitbucket.org/pypy/pypy/src/6355617bf9a2a0fa8b74ae17906e4a591b38e2b5/rpython/translator/stm/src_stm/stm/contention.c?at=stmgc-c7">stm source</a>,
+Here we see that two threads call into external function to get current time,
+and we can not rollback any of them, so one of them must wait till the other
+transaction finishes.
+For now we can hack around this by disabling this timing - this is only
+needed for internal profiling in tornado.</p>
+<p>If we do it, we get the following results (but see caveats below):</p>
+
+<table border="0"><tr>
+<td>
+<table border="1" class="docutils">
+<colgroup>
+<col width="57%">
+<col width="43%">
+</colgroup>
+<thead valign="bottom"><tr>
+<th class="head">Impl.</th>
+<th class="head">req/s</th>
+</tr></thead>
+<tbody valign="top">
+<tr>
+<td>PyPy 2.4</td>
+<td>14.4</td>
+</tr>
+<tr>
+<td>CPython 2.7</td>
+<td>3.2</td>
+</tr>
+<tr>
+<td>PyPy-STM 1</td>
+<td>9.3</td>
+</tr>
+<tr>
+<td>PyPy-STM 2</td>
+<td>16.4</td>
+</tr>
+<tr>
+<td>PyPy-STM 3</td>
+<td>20.4</td>
+</tr>
+<tr>
+<td>PyPy STM 4</td>
+<td>24.2</td>
+</tr>
+</tbody>
+</table>
+</td>
+<td>   </td>
+<td>
+<a href="https://4.bp.blogspot.com/-juukhmXIkWw/VGn6-Lll9FI/AAAAAAAAAJk/0Z-2gqUlm4s/s1600/tornado-stm-results.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://4.bp.blogspot.com/-juukhmXIkWw/VGn6-Lll9FI/AAAAAAAAAJk/0Z-2gqUlm4s/s320/tornado-stm-results.png"></a>
+</td>
+</tr></table>
+<p>As we can see, in this benchmark PyPy STM using just two cores
+can beat regular PyPy!
+This is not linear scaling, there are still conflicts left, and this
+is a very simple example but still, it works!</p>
+<p>But its not that simple yet :)</p>
+<p>First, these are best-case numbers after long (much longer than for regular
+PyPy) warmup. Second, it can sometimes crash (although removing old pyc files
+fixes it). Third, benchmark meta-parameters are also tuned.</p>
+<p>Here we get relatively good results only when there are a lot of concurrent
+clients - as a results, a lot of requests pile up, the server is not keeping
+with the load, and transaction module is busy with work running this piled up
+requests. If we decrease the number of concurrent clients, results get slightly worse.
+Another thing we can tune is how heavy is each request - again, if we ask
+primes up to a lower number, then less time is spent doing calculations,
+more time is spent in tornado, and results get much worse.</p>
+<p>Besides the <tt class="docutils literal">time.time()</tt> conflict described above, there are a lot of others.
+The bulk of time is lost in these two conflicts:</p>
+<pre class="literal-block">
+14.153s lost in aborts, 0.000s paused (270x STM_CONTENTION_INEVITABLE)
+File "/home/ubuntu/tornado-stm/tornado/tornado/web.py", line 1082, in compute_etag
+    hasher = hashlib.sha1()
+File "/home/ubuntu/tornado-stm/tornado/tornado/web.py", line 1082, in compute_etag
+    hasher = hashlib.sha1()
+
+13.484s lost in aborts, 0.000s paused (130x STM_CONTENTION_WRITE_READ)
+File "/home/ubuntu/pypy/lib_pypy/transaction.py", line 164, in _run_thread
+    got_exception)
+</pre>
+<p>The first one is presumably calling into some C function from stdlib, and we get
+the same conflict as for <tt class="docutils literal">time.time()</tt> above, but is can be fixed on PyPy
+side, as we can be sure that computing sha1 is pure.</p>
+<p>It is easy to hack around this one too, just removing etag support, but if
+we do it, performance is much worse, only slightly faster than regular PyPy,
+with the top conflict being:</p>
+<pre class="literal-block">
+83.066s lost in aborts, 0.000s paused (459x STM_CONTENTION_WRITE_WRITE)
+File "/home/arigo/hg/pypy/stmgc-c7/lib-python/2.7/_weakrefset.py", line 70, in __contains__
+File "/home/arigo/hg/pypy/stmgc-c7/lib-python/2.7/_weakrefset.py", line 70, in __contains__
+</pre>
+<p><em>Comment by Armin: It is unclear why this happens so far.  We'll investigate...</em></p>
+<p>The second conflict (without etag tweaks) originates
+in the transaction module, from this piece of code:</p>
+<pre class="literal-block">
+while True:
+    self._do_it(self._grab_next_thing_to_do(tloc_pending),
+                got_exception)
+    counter[0] += 1
+</pre>
+<p><em>Comment by Armin: This is a conflict in the transaction module itself; ideally,
+it shouldn't have any, but in order to do that we might need a little bit
+of support from RPython or C code.  So this is pending improvement.</em></p>
+<p>Tornado modification used in this blog post is based on 3.2.dev2.
+As of now, the latest version is 4.0.2, and if we
+<a class="reference external" href="https://github.com/lopuhin/tornado/commit/04cd7407f8690fd1dc55b686eb78e3795f4363e6">apply</a>
+the same changes to this version, then we no longer get any scaling on this benchmark,
+and there are no conflicts that take any substantial time.</p>
+<p><em>Comment by Armin: There are two possible reactions to a conflict.  We can either
+abort one of the two threads, or (depending on the circumstances) just
+pause the current thread until the other one commits, after which the
+thread will likely be able to continue.  The tool ``print_stm_log.py``
+did not report conflicts that cause pauses.  It has been fixed very
+recently.  Chances are that on this test it would report long pauses and
+point to locations that cause them.</em></p>
+</div>
+<div class="section" id="part-2-a-more-interesting-benchmark-a-star">
+<h1>Part 2: a more interesting benchmark: A-star</h1>
+<p>Although we have seen that PyPy STM is not all moonlight and roses,
+it is interesting to see how it works on a more realistic application.</p>
+<p><a class="reference external" href="https://bitbucket.org/kostialopuhin/tornado-stm-bench/src/a038bf99de718ae97449607f944cecab1a5ae104/astar.py">astar.py</a>
+is a simple game where several players move on a map
+(represented as a list of lists of integers),
+build and destroy walls, and ask server to give them
+shortest paths between two points
+using A-star search, adopted from <a class="reference external" href="https://code.activestate.com/recipes/577519-a-star-shortest-path-algorithm/">ActiveState recipie</a>.</p>
+<p>The benchmark <a class="reference external" href="https://bitbucket.org/kostialopuhin/tornado-stm-bench/src/a038bf99de718ae97449607f944cecab1a5ae104/bench_astar.py">bench_astar.py</a>
+is simulating players, and tries to put the main load on A-star search,
+but also does some wall building and destruction. There are no locks
+around map modifications, as normal tornado is executing all callbacks
+serially, and we can keep this guaranty with atomic blocks of PyPy STM.
+This is also an example of a program that is not trivial
+to scale to multiple cores with separate processes (assuming
+more interesting shared state and logic).</p>
+<p>This benchmark is very noisy due to randomness of client interactions
+(also it could be not linear), so just lower and upper bounds for
+number of requests are reported</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="55%">
+<col width="45%">
+</colgroup>
+<thead valign="bottom"><tr>
+<th class="head">Impl.</th>
+<th class="head">req/s</th>
+</tr></thead>
+<tbody valign="top">
+<tr>
+<td>PyPy 2.4</td>
+<td>5 .. 7</td>
+</tr>
+<tr>
+<td>CPython 2.7</td>
+<td>0.5 .. 0.9</td>
+</tr>
+<tr>
+<td>PyPy-STM 1</td>
+<td>2 .. 4</td>
+</tr>
+<tr>
+<td>PyPy STM 4</td>
+<td>2 .. 6</td>
+</tr>
+</tbody>
+</table>
+<p>Clearly this is a very bad benchmark, but still we can see that scaling is worse
+and STM overhead is sometimes higher.
+The bulk of conflicts come from the transaction module (we have seen it
+above):</p>
+<pre class="literal-block">
+91.655s lost in aborts, 0.000s paused (249x STM_CONTENTION_WRITE_READ)
+File "/home/ubuntu/pypy/lib_pypy/transaction.py", line 164, in _run_thread
+    got_exception)
+</pre>
+<p>Although it is definitely not ready for production use, you can already try
+to run things, report bugs, and see what is missing in user-facing tools
+and libraries.</p>
+<p>Benchmarks setup:</p>
+<ul class="simple">
+<li>Amazon c3.xlarge (4 cores) running Ubuntu 14.04</li>
+<li>pypy-c-r74011-stm-jit for the primes benchmark (but it has more bugs
+than more recent versions), and
+<a class="reference external" href="https://cobra.cs.uni-duesseldorf.de/~buildmaster/misc/pypy-c-r74378-74379-stm-jit.xz">pypy-c-r74378-74379-stm-jit</a>
+for astar benchmark (put it inside pypy source checkout at 38c9afbd253c)</li>
+<li>
+<a class="reference external" href="https://bitbucket.org/kostialopuhin/tornado-stm-bench">https://bitbucket.org/kostialopuhin/tornado-stm-bench</a> at 65144cda7a1f</li>
+</ul>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1575711345805344940">
+        <div class="comment-header">
+          <a name="comment-1575711345805344940"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-11-18 07:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>"Clearly this is a very benchmark" - looks like you've missed a word here ;)</p>
+        </div>
+      </div>
+      <div class="comment comment-2517327115986575422">
+        <div class="comment-header">
+          <a name="comment-2517327115986575422"></a>
+            <span class="author">crusaderky</span> wrote on <span class="date">2014-11-19 00:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>in bench_astar.py, you are doing the following queries:<br>- try to move: 85%<br>- build a wall: 10.5% [(1-.85)*.7]<br>- erase something: 0.45% [(1-.85)*(1-.7)*.1]<br>- show map: 4.05% [(1-.85)*(1-.7)*(1-.1)]<br><br>I doubt that's intentional.... :P</p>
+        </div>
+      </div>
+      <div class="comment comment-7350636623943992876">
+        <div class="comment-header">
+          <a name="comment-7350636623943992876"></a>
+            <span class="author">crusaderky</span> wrote on <span class="date">2014-11-19 01:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>Correct me if I misunderstood the theory of PyPy-STM, but in the A* test there's nothing that prevents a get() to read the game map while MapChangeHandler.put() is running (that is, while the system is in an incoherent status)?<br><br>Shouldn't MapChangeHandler.put() be wrapped in a exclusive write lock, and all the get() handlers be wrapped with a shared read lock?</p>
+        </div>
+      </div>
+      <div class="comment comment-7466019346033391209">
+        <div class="comment-header">
+          <a name="comment-7466019346033391209"></a>
+            <span class="author">Konstantin Lopuhin</span> wrote on <span class="date">2014-11-19 20:45</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; Clearly this is a very benchmark" - looks like you've missed a word here ;)<br><br>Oh, yes, that word is "bad" :)<br><br>&gt; Shouldn't MapChangeHandler.put() be wrapped in a exclusive write lock, and all the get() handlers be wrapped with a shared read lock?<br><br>Here all request handlers are already wrapped inside atomic blocks, but this is hidden from us in (modified) tornado. So we do not need any locks (as in normal tornado too, because normal tornado is single threaded). If request handlers conflict, then we just loose performance, not correctness. This is one of the main points of PyPy STM: it can support multithreaded code without needing to use locks.<br><br>Regarding the probabilities: yes, that's not quite intentional)</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2014/11/pypy-io-improvements-1042070332447047674.html" class="u-url">PyPy IO improvements</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2014/11/pypy-io-improvements-1042070332447047674.html" rel="bookmark">
+            <time class="published dt-published" datetime="2014-11-05T15:14:00Z" itemprop="datePublished" title="2014-11-05 15:14">2014-11-05 15:14</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+
+<br>
+</div>
+<p>Hello everyone!</p>
+<p>We've wrapped up the Warsaw sprint, so I would like to describe some
+branches which have been recently merged and which improved the I/O and the
+GC: <a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/9e2f7a37c1e2">gc_no_cleanup_nursery</a> and <a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/64017d818038">gc-incminimark-pinning</a>.</p>
+<p>The first branch was started by Wenzhu Man for her Google Summer of Code
+and finished by Maciej Fijałkowski and Armin Rigo.
+The PyPy GC works by allocating new objects in the young object
+area (the nursery), simply by incrementing a pointer. After each minor
+collection, the nursery has to be cleaned up. For simplicity, the GC used
+to do it by zeroing the whole nursery.</p>
+<p>This approach has bad effects on the cache, since you zero a large piece of
+memory at once and do unnecessary work for things that don't require zeroing
+like large strings. We mitigated the first problem somewhat with incremental
+nursery zeroing, but this branch removes the zeroing completely, thus
+improving the string handling and recursive code (since jitframes don't
+requires zeroed memory either). I measured the effect on two examples:
+a recursive implementation of  <a class="reference external" href="https://bitbucket.org/pypy/benchmarks/src/69152c2aee7766051aab15735b0b82a46b82b802/own/fib.py?at=default">fibonacci</a> and <a class="reference external" href="https://bitbucket.org/pypy/benchmarks/src/69152c2aee7766051aab15735b0b82a46b82b802/own/gcbench.py?at=default">gcbench</a>,
+to measure GC performance.</p>
+<p>The results for fibonacci and gcbench are below (normalized to cpython
+2.7). Benchmarks were run 50 times each (note that the big standard
+deviation comes mostly from the warmup at the beginning, true figures
+are smaller):</p>
+<p>
+</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="20%">
+<col width="23%">
+<col width="32%">
+<col width="25%">
+</colgroup>
+<tbody valign="top">
+<tr>
+<td>benchmark</td>
+<td>CPython</td>
+<td>PyPy 2.4</td>
+<td>PyPy non-zero</td>
+</tr>
+<tr>
+<td>fibonacci</td>
+<td>4.8+-0.15 (1.0x)</td>
+<td>0.59+-0.07 (8.1x)</td>
+<td>0.45+-0.07 (10.6x)</td>
+</tr>
+<tr>
+<td>gcbench</td>
+<td>22+-0.36 (1.0x)</td>
+<td>1.34+-0.28 (16.4x)</td>
+<td>1.02+-0.15 (21.6x)</td>
+</tr>
+</tbody>
+</table>
+<p>The second branch was done by Gregor Wegberg for his master thesis and finished
+by Maciej Fijałkowski and Armin Rigo. Because of the way it works, the PyPy GC from
+time to time moves the objects in memory, meaning that their address can change.
+Therefore, if you want to pass pointers to some external C function (for
+example, write(2) or read(2)), you need to ensure that the objects they are
+pointing to will not be moved by the GC (e.g. when running a different thread).
+PyPy up to 2.4 solves the problem by copying the data into or from a non-movable buffer, which
+is obviously inefficient.
+The branch introduce the concept of "pinning", which allows us to inform the
+GC that it is not allowed to move a certain object for a short period of time.
+This introduces a bit of extra complexity
+in the garbage collector, but improves the I/O performance quite drastically,
+because we no longer need the extra copy to and from the non-movable buffers.</p>
+<p>In <a class="reference external" href="https://bitbucket.org/pypy/benchmarks/src/69152c2aee7766051aab15735b0b82a46b82b802/io/iobasic.py?at=default">this benchmark</a>, which does I/O in a loop,
+we either write a number of bytes from a freshly allocated string into
+/dev/null or read a number of bytes from /dev/full. I'm showing the results
+for PyPy 2.4, PyPy with non-zero-nursery and PyPy with non-zero-nursery and
+object pinning. Those are wall times for cases using <tt class="docutils literal">os.read/os.write</tt>
+and <tt class="docutils literal">file.read/file.write</tt>, normalized against CPython 2.7.</p>
+<p>Benchmarks were done using PyPy 2.4 and revisions <tt class="docutils literal">85646d1d07fb</tt> for
+non-zero-nursery and <tt class="docutils literal">3d8fe96dc4d9</tt> for non-zero-nursery and pinning.
+The benchmarks were run once, since the standard deviation was small.</p>
+<p>
+
+</p>
+<div class="separator" style="clear: both; text-align: center;"><a href="https://3.bp.blogspot.com/-8ttqMBJIg6g/VFo-YEHAQeI/AAAAAAAAB9c/8UrlDjsIesk/s1600/iobase.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://3.bp.blogspot.com/-8ttqMBJIg6g/VFo-YEHAQeI/AAAAAAAAB9c/8UrlDjsIesk/s640/iobase.png"></a></div>
+<p><b>The Y axis is speed, normalized to CPython, the more the better</b></p>
+
+<p>What we can see is that <tt class="docutils literal">os.read</tt> and <tt class="docutils literal">os.write</tt> both improved greatly
+and outperforms CPython now for each combination. <tt class="docutils literal">file</tt> operations are
+a little more tricky, and while those branches improved the situation a bit,
+the improvement is not as drastic as in <tt class="docutils literal">os</tt> versions.  It really should not
+be the case and it showcases how our <tt class="docutils literal">file</tt> buffering is inferior to CPython.
+We plan on removing our own buffering and using <tt class="docutils literal">FILE*</tt> in C in the near future,
+so we should outperform CPython on those too (since our allocations are cheaper).
+If you look carefully in the benchmark, the write function is copied three times.
+This hack is intended to avoid JIT overspecializing the assembler code, which happens
+because the buffering code was written way before the JIT was done. In fact, our buffering
+is hilariously bad, but if stars align correctly it can be JIT-compiled to something
+that's not half bad. Try removing the hack and seeing how the performance of the last
+benchmark drops :-) Again, this hack should be absolutely unnecessary once we remove
+our own buffering, stay tuned for more.</p>
+<p>Cheers,<br>
+fijal</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-838735827892783383">
+        <div class="comment-header">
+          <a name="comment-838735827892783383"></a>
+            <span class="author">Yichao Yu</span> wrote on <span class="date">2014-11-05 18:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>Sounds great!!!<br><br>Just wondering, will the pin-memory also improves the situation when passing strings/other buffers to c functions (e.g. via cffi)?<br></p>
+        </div>
+      </div>
+      <div class="comment comment-657955520358637135">
+        <div class="comment-header">
+          <a name="comment-657955520358637135"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-11-05 21:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hey,<br><br>In your benchmark, the following loop:<br>    for i in range(num):<br>        os.write(fd, " " * num2)<br><br>Is not hoisted out by CPython (whereas I guess PyPy does hoist it).<br>Which means that the buffer written is basically allocated/freed upon each loop.<br><br>If you want to measure pure I/O performance (so let's say a zero-copy setting), it should be hoisted manually out of the loop for CPython, like this:<br><br>    payload = b" " * num2<br>    for i in range(num):<br>        os.write(fd, payload)<br><br>Then, the results go from:<br><br>fwrite 100 bytes, 1.93us per write<br>fwrite 1000 bytes, 2.57us per write<br>fwrite 10000 bytes, 6.73us per write<br>file_write 100 bytes, 0.99us per write<br>file_write 1000 bytes, 1.68us per write<br>file_write 10000 bytes, 4.71us per write<br><br><br>to<br><br>fwrite 100 bytes, 1.38us per write<br>fwrite 1000 bytes, 1.48us per write<br>fwrite 10000 bytes, 1.38us per write<br>file_write 100 bytes, 0.65us per write<br>file_write 1000 bytes, 0.96us per write<br>file_write 10000 bytes, 2.32us per write<br><br>Also, might be worth trying wth binary mode.<br><br>Anyway, keep up the great work!</p>
+        </div>
+      </div>
+      <div class="comment comment-7777937004692374172">
+        <div class="comment-header">
+          <a name="comment-7777937004692374172"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2014-11-06 06:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>PyPy does not hoist the buffer allocation here. The benchmark specifically allocated/frees the buffer every loop, since we want the object written fresh (otherwise pinning is not needed), but also we think that writing a new object (as opposed to the constant buffer) is really more of a common case. Yes, you get an overhead of allocation measured too, but the case here is that we wanted to measure the IO of fresh objects, not old ones</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2014/10/pypy3-240-released-5007750685927360190.html" class="u-url">PyPy3 2.4.0 released</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/philip-jenvey.html">Philip Jenvey</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2014/10/pypy3-240-released-5007750685927360190.html" rel="bookmark">
+            <time class="published dt-published" datetime="2014-10-21T18:02:00Z" itemprop="datePublished" title="2014-10-21 18:02">2014-10-21 18:02</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">We're pleased to announce the availability of PyPy3 2.4.0!<br><br>
+This release contains several bugfixes and enhancements. Among the user-facing improvements specific to PyPy3:<br><ul>
+<li>Better Windows compatibility, e.g. the nt module functions _getfinalpathname &amp; _getfileinformation are now supported (the former is required for the popular pathlib library for example)</li>
+<li>Various fsencode PEP 383 related fixes to the posix module (readlink, uname, ttyname and ctermid) and improved locale handling</li>
+<li>Switched the default binary name on POSIX distributions from 'pypy' to 'pypy3' (which symlinks to to 'pypy3.2')</li>
+<li>Fixed a couple different crashes related to parsing Python 3 source code</li>
+</ul>
+<br>
+And improvements shared with the recent PyPy 2.4.0 release:<br><ul style="text-align: left;">
+<li>internal refactoring in string and GIL handling which led to significant speedups</li>
+<li>improved handling of multiple objects (like sockets) in long-running  programs. They are collected and released more efficiently, reducing  memory use. In simpler terms - we closed what looked like a memory leak</li>
+<li>Windows builds now link statically to zlib, expat, bzip, and openssl-1.0.1i</li>
+<li>Many issues were <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues?status=resolved">resolved</a> since the 2.3.1 release in June</li>
+</ul>
+<br>
+You can download PyPy3 2.4.0 here <a href="https://pypy.org/download.html">https://pypy.org/download.html.</a><br><br><a href="https://www.pypy.org/">PyPy</a> is a very compliant Python interpreter, almost a drop-in replacement for <a href="https://www.python.org/">CPython</a> 2.7 and 3.2.5. It's fast (<a href="https://speed.pypy.org/">pypy 2.4 and cpython 2.7.x performance comparison</a>) due to its integrated tracing JIT compiler.<br><br>
+This  release supports x86 machines running Linux 32/64, Mac OS X 64,   Windows, and OpenBSD, as well as newer ARM hardware (ARMv6 or ARMv7,   with VFPv3) running Linux.  <br>
+We would like to thank our donors for the continued support of the PyPy project.<br><br>
+The complete release notice is <a href="https://doc.pypy.org/en/latest/release-pypy3-2.4.0.html">here.</a><br><br>
+Please  try it out and let us know what you think. We especially welcome  success stories, please tell us about how it has helped you!<br><br>
+Cheers, The PyPy Team<br><br>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-8248115187049223054">
+        <div class="comment-header">
+          <a name="comment-8248115187049223054"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-10-22 14:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great news. Thanks!</p>
+        </div>
+      </div>
+      <div class="comment comment-6236904729847763816">
+        <div class="comment-header">
+          <a name="comment-6236904729847763816"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-10-28 13:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great work, thanks!</p>
+        </div>
+      </div>
+      <div class="comment comment-3814166033580379845">
+        <div class="comment-header">
+          <a name="comment-3814166033580379845"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-10-30 14:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>That’s great - thanks!<br><br>And the portable release directly works for my keyboard evolution! (it’s roughly 2.5x faster than cPython).</p>
+        </div>
+      </div>
+      <div class="comment comment-8588221093478148056">
+        <div class="comment-header">
+          <a name="comment-8588221093478148056"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-10-30 14:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>Correction: After some warmup time, pypy is more than 2.8x faster than cPython.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2014/10/couchbase-contribution-to-pypy-2360892117372790069.html" class="u-url">Couchbase contribution to PyPy</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2014/10/couchbase-contribution-to-pypy-2360892117372790069.html" rel="bookmark">
+            <time class="published dt-published" datetime="2014-10-14T17:40:00Z" itemprop="datePublished" title="2014-10-14 17:40">2014-10-14 17:40</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+<p>Hello everyone!</p>
+<p>We always offer to put on the blog info about our sponsors who donate substantial amounts of money. So far most people decided to stay anonymous, so this is the first blog post describing our sponsor and his relationship to PyPy, hopefully not the last. We'll also publish a full blog post about the PSF-matched fundraiser soon. This is a guest post by Brent Woodruff from Couchbase.</p>
+<p>
+</p>
+<div class="separator" style="clear: both; text-align: center;"><a href="https://www.couchbase.com/images/logo.svg" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://www.couchbase.com/images/logo.svg" width="300px"></a></div>
+
+<p>
+Couchbase is a leading NoSQL document database that provides a flexible data model, high performance, scalability, and high availability. Couchbase is a commercially supported open source project. Visit us at <a href="https://www.couchbase.com">https://www.couchbase.com</a> and <a href="https://github.com/couchbase">https://github.com/couchbase</a>.
+</p>
+<p>
+Couchbase Inc. donated $2000.00, and employees of Couchbase personally contributed a disclosed additional $230.00, towards Pypy progress during the September funding drive. These funds will see a match from the Python Software Foundation.
+</p>
+<p>
+Pypy is primarily used by Couchbase employees to perform product analysis and troubleshooting using internally developed tools. Every customer of Couchbase benefits from the use of Pypy; both due to the rapid development provided by Python, and the speed of the resulting tools provided by the Pypy JIT interpreter.
+</p>
+<p>
+“PyPy is great - it gave us a 4x speedup in our CPU-intensive internal application over CPython”
+-Dave Rigby and Daniel Owen, Couchbase Engineers
+</p>
+<p>
+Additionally, Couchbase has a preliminary <a href="https://github.com/couchbaselabs/couchbase-python-cffi">CFFI based Couchbase client</a> available for Pypy users.
+</p>
+
+<br>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-3781666043441132366">
+        <div class="comment-header">
+          <a name="comment-3781666043441132366"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-10-14 22:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>Definitely wouldn't have thought to put PyPy and Couchbase in the same sentence, but this is very good of them! Glad to see the support.</p>
+        </div>
+      </div>
+      <div class="comment comment-6727764363792132865">
+        <div class="comment-header">
+          <a name="comment-6727764363792132865"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-10-15 09:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks for the donation. Could you give a bit more detail of how hard it was to make your code compatible with PyPy?</p>
+        </div>
+      </div>
+      <div class="comment comment-4617459279477985126">
+        <div class="comment-header">
+          <a name="comment-4617459279477985126"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-10-15 13:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hello from Couchbase. With regards to making our code compatible with PyPy, I can only comment on our internal tooling. Those are currently all pure Python, so it was trivial. We used modules that work with PyPy already: namely pyparsing, LEPL, and tornado. The tools all run under both CPython and PyPy unmodified.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2014/09/pypy-240-released-9-days-left-in-7722154416024407111.html" class="u-url">PyPy 2.4.0 released, 9 days left in funding drive</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/mattip.html">mattip</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2014/09/pypy-240-released-9-days-left-in-7722154416024407111.html" rel="bookmark">
+            <time class="published dt-published" datetime="2014-09-22T19:12:00Z" itemprop="datePublished" title="2014-09-22 19:12">2014-09-22 19:12</time></a>
+            </p>
+                <p class="commentline">1 comment</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+We're pleased to announce the availability of PyPy 2.4.0; faster, fewer bugs, and updated to the python 2.7.8 stdlib.<br><br>
+This release contains several bugfixes and enhancements. Among the user-facing improvements:<br><ul style="text-align: left;">
+<li>internal refactoring in string and GIL handling which led to significant speedups</li>
+<li>improved handling of multiple objects (like sockets) in long-running  programs. They are collected and released more efficiently, reducing  memory use. In simpler terms - we closed what looked like a memory leak</li>
+<li>Windows builds now link statically to zlib, expat, bzip, and openssl-1.0.1i</li>
+<li>Many issues were <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues?status=resolved">resolved</a> since the 2.3.1 release in June </li>
+</ul>
+<br>
+You can download PyPy 2.4.0 here <a href="https://pypy.org/download.html">https://pypy.org/download.html.</a><br><br>
+We would like to also point out that in September, <a class="reference external" href="https://www.python.org/psf">the Python Software Foundation</a> will <a class="reference external" href="../posts/2014/09/python-software-foundation-matching-2230529993193139046.html">match funds</a> for any donations up to $10k, so head over to our <a href="https://pypy.org/">website</a> and help this mostly-volunteer effort out.<br><br><a href="https://www.pypy.org/">PyPy</a> is a very compliant Python interpreter, almost a drop-in replacement for <a href="https://www.python.org/">CPython</a> 2.7 and 3.2.5. It's fast (<a href="https://speed.pypy.org/">pypy 2.4 and cpython 2.7.x performance comparison</a>) due to its integrated tracing JIT compiler. <br><br>
+This  release supports x86 machines running Linux 32/64, Mac OS X 64,   Windows, and OpenBSD, as well as newer ARM hardware (ARMv6 or ARMv7,   with VFPv3) running Linux.  <br>
+We would like to thank our donors for the continued support of the PyPy project.<br><br>
+The complete release notice is <a href="https://doc.pypy.org/en/latest/release-2.4.0.html">here.</a><br><br>
+Please  try it out and let us know what you think. We especially welcome  success stories, please tell us about how it has helped you!<br><br>
+Cheers, The PyPy Team<br><br>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-3256275046075084902">
+        <div class="comment-header">
+          <a name="comment-3256275046075084902"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-10-13 18:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>How did the funding drive work out?</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2014/09/pypy-24-beta-just-in-time-for-psfs-5956090195665204063.html" class="u-url">PyPy 2.4-beta just in time for PSF's funding drive</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/mattip.html">mattip</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2014/09/pypy-24-beta-just-in-time-for-psfs-5956090195665204063.html" rel="bookmark">
+            <time class="published dt-published" datetime="2014-09-08T20:55:00Z" itemprop="datePublished" title="2014-09-08 20:55">2014-09-08 20:55</time></a>
+            </p>
+                <p class="commentline">5 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+We're pleased to announce the availability of PyPy 2.4-beta1; faster, fewer bugs, and updated to the python 2.7.8 stdlib.<br><br>
+This release contains several bugfixes and enhancements. Among the user-facing improvements:<br><ul style="text-align: left;">
+<li>internal refactoring in string and GIL handling which led to significant speedups</li>
+<li>improved handling of multiple objects (like sockets) in long-running programs. They are collected and released more efficiently, reducing memory use. In simpler terms - we closed what looked like a memory leak</li>
+<li>Windows builds now link statically to zlib, expat, bzip, and openssl-1.0.1i</li>
+<li>Many issues were <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues?status=resolved">resolved</a> since the 2.3.1 release in June </li>
+</ul>
+<br>
+You can download the PyPy 2.4-beta1 release here <a href="https://pypy.org/download.html">https://pypy.org/download.html.</a><br><br>
+We would like to also point out that in
+September, <a class="reference external" href="https://www.python.org/psf">the Python Software Foundation</a> will <a class="reference external" href="../posts/2014/09/python-software-foundation-matching-2230529993193139046.html">match funds</a> for
+any donations up to $10k, so head over to our <a href="https://pypy.org/">website</a> and help this mostly-volunteer effort out.<br><br><a href="https://www.pypy.org/">PyPy</a> is a very compliant Python interpreter, almost a drop-in replacement for <a href="https://www.python.org/">CPython</a> 2.7 and 3.2.5. It's fast (<a href="https://speed.pypy.org/">pypy 2.4 and cpython 2.7.x performance comparison</a>) due to its integrated tracing JIT compiler.<br><br>
+This
+ release supports x86 machines running Linux 32/64, Mac OS X 64,  
+Windows, and OpenBSD, as well as newer ARM hardware (ARMv6 or ARMv7,  
+with VFPv3) running Linux.  <br>
+We would like to thank our donors for the continued support of the PyPy project.<br><br>
+The complete release notice is <a href="https://doc.pypy.org/en/latest/release-2.4.0.html">here.</a><br><br>
+Please
+ try it out and let us know what you think. We especially welcome 
+success stories, please tell us about how it has helped you!<br><br>
+Cheers, The PyPy Team<br><br>
+News Flash from the beta release cycle:<br><ul style="text-align: left;">
+<li>Note that the beta release mistakenly identifies itself in sys.pypy_version_info as releaselevel=='final', please do not mistake this for a final version</li>
+<li>The beta can hit a "Illegal instruction" exception in jitted code on ARMv6 processors like the RaspberryPi. This will be fixed for the release.</li>
+</ul>
+<br><div style="text-align: left;">
+<br>
+</div>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-5697503563167903947">
+        <div class="comment-header">
+          <a name="comment-5697503563167903947"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-09-09 13:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>Short testing note:<br><br>./pypy: error while loading shared libraries: libtinfo.so.5: cannot open shared object file: No such file or directory<br><br>64 bit Linux version tested on Gentoo GNU/Linux.</p>
+        </div>
+      </div>
+      <div class="comment comment-3199926885174871644">
+        <div class="comment-header">
+          <a name="comment-3199926885174871644"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-09-09 13:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>ah, found it: https://github.com/squeaky-pl/portable-pypy</p>
+        </div>
+      </div>
+      <div class="comment comment-5528124292289603586">
+        <div class="comment-header">
+          <a name="comment-5528124292289603586"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-09-12 13:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>Is there a chance to get pylab/matplotlib running with pypy as you showed in 2011?</p>
+        </div>
+      </div>
+      <div class="comment comment-7766488376893110878">
+        <div class="comment-header">
+          <a name="comment-7766488376893110878"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-09-15 22:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>I just had a very, very good experience with pypy:<br><br>https://github.com/ArneBab/freenet-fundraising/blob/master/slides.org#routing-simulation<br><br>with cpython it needs a day for a simulation with 100k nodes. In pypy it needs a few minutes!</p>
+        </div>
+      </div>
+      <div class="comment comment-2170961326604222276">
+        <div class="comment-header">
+          <a name="comment-2170961326604222276"></a>
+            <span class="author">Carlo Pires</span> wrote on <span class="date">2014-09-27 20:41</span>:
+        </div>
+        <div class="comment-content">
+          <p>Still waiting support for Python3.4.1 to test my "big" application.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2014/09/python-software-foundation-matching-2230529993193139046.html" class="u-url">Python Software Foundation Matching Donations this Month</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/alex.html">Alex</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2014/09/python-software-foundation-matching-2230529993193139046.html" rel="bookmark">
+            <time class="published dt-published" datetime="2014-09-01T17:49:00Z" itemprop="datePublished" title="2014-09-01 17:49">2014-09-01 17:49</time></a>
+            </p>
+                <p class="commentline">7 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>We're extremely excited to announce that for the month of September, any amount<br>
+you donate to PyPy will be match (up to $10,000) by the <a class="reference external" href="https://pyfound.blogspot.com/2014/09/matching-donations-to-pypy-in-september.html">Python Software<br>
+Foundation</a>.</p>
+<p>This includes any of our ongoing fundraisers: NumPyPy, STM, Python3, or our<br>
+general fundraising.</p>
+<p>Here are some of the things your previous donations have helped accomplish:</p>
+<ul class="simple">
+<li>Getting PyPy3 completed (currently 3.2, with 3.3 work underway)</li>
+<li>New research and production engineering on STM for PyPy</li>
+<li>Lots of progress on NumPy for PyPy</li>
+<li>Significant performance improvements</li>
+</ul>
+<p>You can see a preview of what's coming in our next 2.4 release in the <a class="reference external" href="https://doc.pypy.org/en/latest/release-2.4.0.html#highlights">draft<br>
+release notes</a>.</p>
+<p>Thank you to all the individuals and companies which have donated so far.</p>
+<p>So please, donate today: <a class="reference external" href="https://pypy.org/">https://pypy.org/</a></p>
+<p>(Please be aware that the donation progress bars are not live updating, so<br>
+don't be afraid if your donation doesn't show up immediately).</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-6525850980728969233">
+        <div class="comment-header">
+          <a name="comment-6525850980728969233"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-09-02 08:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>aaand donated ☺<br><br>Thank you, Python Software Foundation!</p>
+        </div>
+      </div>
+      <div class="comment comment-9129494684730867655">
+        <div class="comment-header">
+          <a name="comment-9129494684730867655"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-09-04 10:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>I think you should be careful about your claims for numpy.  It's a great idea and I am sure lots of people would be very interested in anything you do but I for one see very little progress on it.</p>
+        </div>
+      </div>
+      <div class="comment comment-2170808201808744910">
+        <div class="comment-header">
+          <a name="comment-2170808201808744910"></a>
+            <span class="author">handsomegui</span> wrote on <span class="date">2014-09-05 05:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>It would be nice to have a bitcoin donation address for donation.</p>
+        </div>
+      </div>
+      <div class="comment comment-3626213393320256291">
+        <div class="comment-header">
+          <a name="comment-3626213393320256291"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-09-05 13:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>Donated!</p>
+        </div>
+      </div>
+      <div class="comment comment-8225710770321478117">
+        <div class="comment-header">
+          <a name="comment-8225710770321478117"></a>
+            <span class="author">Canesin</span> wrote on <span class="date">2014-09-05 16:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>+1 on the bitcoin address for donation</p>
+        </div>
+      </div>
+      <div class="comment comment-4639673048866865849">
+        <div class="comment-header">
+          <a name="comment-4639673048866865849"></a>
+            <span class="author">L. Simon</span> wrote on <span class="date">2014-09-05 20:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>Consider me another request for a Bitcoin address. I'm in for a few millibits if you provide one.</p>
+        </div>
+      </div>
+      <div class="comment comment-6203976280742821400">
+        <div class="comment-header">
+          <a name="comment-6203976280742821400"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-09-06 16:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>Sorry for the bitcoin requests... setting up a new payment system just for a few millibits is not worth it at all.</p>
+        </div>
+      </div>
+         </div>
+
+</div>
+</div>
+<div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div></div>
+</main>
+</div>
+<div style="clear: both; width: 75%; margin: 1em auto;">
+        <nav class="postindexpager"><ul class="pager">
+<li class="previous">
+                <a href="index-33.html" rel="prev">Newer posts</a>
+            </li>
+            <li class="next">
+                <a href="index-31.html" rel="next">Older posts</a>
+            </li>
+        </ul></nav>
+</div>
+         
+                 <footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../assets/js/styles.js"></script></footer>
+</body>
+</html>

@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mining JIT traces for missing optimizations with Z3 | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2024/07/mining-jit-traces-missing-optimizations-z3.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="CF Bolz-Tereick">
+<link rel="prev" href="finding-simple-rewrite-rules-jit-z3.html" title="Finding Simple Rewrite Rules for the JIT with Z3" type="text/html">
+<link rel="next" href="toy-abstract-interpretation.html" title="Abstract interpretation in the Toy Optimizer" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Mining JIT traces for missing optimizations with Z3">
+<meta property="og:url" content="https://www.pypy.org/posts/2024/07/mining-jit-traces-missing-optimizations-z3.html">
+<meta property="og:description" content="In my last post I've described how to use Z3 to find simple local peephole
+optimization patterns
+for the integer operations in PyPy's JIT. An example is int_and(x, 0) -&gt;
+0. In this post I want to scal">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2024-07-19T17:01:09Z">
+<meta property="article:tag" content="jit">
+<meta property="article:tag" content="z3">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Mining JIT traces for missing optimizations with Z3</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/cf-bolz-tereick.html">CF Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2024-07-19T17:01:09Z" itemprop="datePublished" title="2024-07-19 17:01">2024-07-19 17:01</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="mining-jit-traces-missing-optimizations-z3.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>In my last post I've described <a href="finding-simple-rewrite-rules-jit-z3.html">how to use Z3 to find simple local peephole
+optimization patterns</a>
+for the integer operations in PyPy's JIT. An example is <code>int_and(x, 0) -&gt;
+0</code>. In this post I want to scale up the problem of identifying possible
+optimizations to much bigger instruction sequences, also using Z3. For that, I
+am starting with the JIT traces of <strong>real benchmarks</strong>, after they have been
+optimized by the optimizer of PyPy's JIT. Then we can ask Z3 to find
+inefficient integer operations in those traces.</p>
+<p>Starting from the optimized traces of real programs has some big
+advantages over the "classical" superoptimization approach of generating and
+then trying all possible sequences of instructions. It avoids the
+combinatorial explosion that happens with the latter approach. Also, starting
+from the traces of benchmarks or (even better) actual programs makes sure that
+we actually care about the missing optimizations
+that are found in this way. And because the traces are analyzed after they have
+been optimized by PyPy's optimizer, we only get reports for <em>missing</em>
+optimizations, that the JIT isn't able to do (yet).</p>
+<p>The techniques and experiments I describe in this post are again the result of
+a bunch of discussions with John Regehr at a conference a few weeks ago, as
+well as reading his blog posts and papers. Thanks John! Also thanks to <a href="https://bernsteinbear.com/">Max
+Bernstein</a> for super helpful feedback on the drafts
+of this blog post (and for poking me to write things in general).</p>
+<h3 id="high-level-approach">High-Level Approach<a href="#high-level-approach" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The approach that I took works as follows:</p>
+<ul>
+<li>Run benchmarks or other interesting programs and then dump the IR of the JIT
+  traces into a file. The traces have at that point been already optimized by
+  the PyPy JIT's optimizer.</li>
+<li>For every trace, ignore all the operations on non-integer variables.</li>
+<li>Translate every integer operation into a Z3 formula.</li>
+<li>For every operation, use Z3 to find out whether the operation is redundant
+  (how that is done is described below).</li>
+<li>If the operation is redundant, the trace is less efficient than it could have
+  been, because the optimizer could also have removed the operation. Report the
+  inefficiency.</li>
+<li>Minimize the inefficient programs by removing as many operations as possible
+  to make the problem easier to understand.</li>
+</ul>
+<p>In the post I will describe the details and show some pseudocode of the
+approach. I'll also make the proper code public eventually (but it needs a
+healthy dose of cleanups first).</p>
+<h3 id="dumping-pypy-traces">Dumping PyPy Traces<a href="#dumping-pypy-traces" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>PyPy will write its JIT traces into the file <code>out</code> if the environment variable
+<a href="https://doc.pypy.org/en/latest/man/pypy.1.html"><code>PYPYLOG</code></a> is set as follows:</p>
+<div class="code"><pre class="code literal-block">PYPYLOG=jit-log-opt:out pypy &lt;program.py&gt;
+</pre></div>
+
+<p>This environment variable works for PyPy, but also for other virtual machines
+built with RPython.</p>
+<p>(This is really a side point for the rest of the blog post, but since the
+question came up I wanted to clarify it: Operations on integers in the Python
+program that the JIT is running don't all correspond 1-to-1 with the <code>int_...</code>
+operations in the traces. The <code>int_...</code> trace operations always operate on
+machine words. The Python <code>int</code> type supports arbitrarily large integers. PyPy
+will optimistically try to lower the operations on Python integers into machine
+word operations, but adds the necessary guards into the trace to make sure that
+overflow outside of the range of machine words is caught. In case one of these
+guards fails the interpreter switches to a big integer heap-allocated
+representation.)</p>
+<h3 id="encoding-traces-as-z3-formulas">Encoding Traces as Z3 formulas<a href="#encoding-traces-as-z3-formulas" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The last blog post already contained the code to encode the results of
+individual trace operations into Z3 formulas, so we don't need to repeat that
+here. To encode traces of operations we introduce a Z3 variable for every
+operation in the trace and then call the <code>z3_expression</code> function for every
+single one of the operations in the trace.</p>
+<p>For example, for the following trace:</p>
+<div class="code"><pre class="code literal-block"><span class="k">[i1]</span>
+<span class="na">i2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">uint_rshift(i1, 32)</span>
+<span class="na">i3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">int_and(i2, 65535)</span>
+<span class="na">i4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">uint_rshift(i1, 48)</span>
+<span class="na">i5</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">int_lshift(i4, 16)</span>
+<span class="na">i6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">int_or(i5, i3)</span>
+<span class="na">jump(i6, i2) # equal</span>
+</pre></div>
+
+<p>We would get the Z3 formula:</p>
+<div class="code"><pre class="code literal-block">z3.And(i2 == LShR(i1, 32),
+       i3 == i2 &amp; 65535,
+       i4 == LShR(i1, 48),
+       i5 == i4 &lt;&lt; 16)
+</pre></div>
+
+<p>Usually we won't ask for the formula of the whole trace at once. Instead we go
+through the trace operation by operation and try to find inefficiencies in the
+current one we are looking at. Roughly like this (pseudo-)code:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">newvar</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">z3</span><span class="o">.</span><span class="n">BitVec</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">INTEGER_WIDTH</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">find_inefficiencies</span><span class="p">(</span><span class="n">trace</span><span class="p">):</span>
+    <span class="n">solver</span> <span class="o">=</span> <span class="n">z3</span><span class="o">.</span><span class="n">Solver</span><span class="p">()</span>
+    <span class="n">var_to_z3var</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">input_argument</span> <span class="ow">in</span> <span class="n">trace</span><span class="o">.</span><span class="n">inputargs</span><span class="p">:</span>
+        <span class="n">var_to_z3var</span><span class="p">[</span><span class="n">input_argument</span><span class="p">]</span> <span class="o">=</span> <span class="n">newz3var</span><span class="p">(</span><span class="n">input_argument</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">trace</span><span class="p">:</span>
+        <span class="n">var_to_z3var</span><span class="p">[</span><span class="n">op</span><span class="p">]</span> <span class="o">=</span> <span class="n">z3resultvar</span> <span class="o">=</span> <span class="n">newz3var</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">resultvarname</span><span class="p">)</span>
+        <span class="n">arg0</span> <span class="o">=</span> <span class="n">op</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">z3arg0</span> <span class="o">=</span> <span class="n">var_to_z3var</span><span class="p">[</span><span class="n">arg0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">arg1</span> <span class="o">=</span> <span class="n">op</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">z3arg1</span> <span class="o">=</span> <span class="n">var_to_z3var</span><span class="p">[</span><span class="n">arg1</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">z3arg1</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">res</span><span class="p">,</span> <span class="n">valid_if</span> <span class="o">=</span> <span class="n">z3_expression</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">z3arg0</span><span class="p">,</span> <span class="n">z3arg1</span><span class="p">)</span>
+        <span class="c1"># checking for inefficiencies, see the next sections</span>
+        <span class="o">...</span>
+        <span class="k">if</span> <span class="o">...</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">"inefficient"</span><span class="p">,</span> <span class="n">op</span>
+
+        <span class="c1"># not inefficient, assert op into the solver and continue with the next op</span>
+        <span class="n">solver</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">z3resultvar</span> <span class="o">==</span> <span class="n">res</span><span class="p">)</span>
+    <span class="k">return</span> <span class="kc">None</span> <span class="c1"># no inefficiency found</span>
+</pre></div>
+
+<h3 id="identifying-constant-booleans-with-z3">Identifying constant booleans with Z3<a href="#identifying-constant-booleans-with-z3" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>To get started finding inefficiencies in a trace, we can
+first focus on boolean variables. For every operation in the trace that
+returns a bool we can ask Z3 to prove that this variable must be always True or
+always False. Most of the time, neither of these proofs will succeed. But if Z3
+manages to prove one of them, we know have found an ineffiency: instead of
+computing the boolean result (eg by executing a comparison) the JIT's optimizer
+could have replaced the operation with the corresponding boolean constant.</p>
+<p>Here's an example of an inefficiency found that way: if <code>x &lt; y</code> and <code>y &lt; z</code> are
+both true, PyPy's JIT could conclude that <code>x &lt; z</code> must also
+be true. However, currently the JIT cannot make that conclusion because it
+only reasons about the concrete ranges (lower and upper bounds) for every
+integer variable, but it has no way to remember anything about relationships
+between different variables. This kind of reasoning would quite often be useful
+to remove list/string bounds checks. Here's a <a href="https://www.youtube.com/watch?app=desktop&amp;v=1hm5ZVmBEvo">talk about how LLVM does
+this</a> (but it might be
+too heavyweight for a JIT setting).</p>
+<p>Here are some more examples found that way:</p>
+<ul>
+<li>
+<code>x - 1 == x</code> is always False</li>
+<li>
+<code>x - (x == -1) == -1</code> is always False. The pattern <code>x - (x == -1)</code> happens a
+  lot in PyPy's hash computations: To be compatible with the CPython hashes we
+  need to make sure that no object's hash is -1 (CPython uses -1 as an error
+  value on the C level).</li>
+</ul>
+<p>Here's pseudo-code for how to implement checking boolean operations for
+inefficiencies:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">find_inefficiencies</span><span class="p">(</span><span class="n">trace</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">trace</span><span class="p">:</span>
+        <span class="o">...</span>
+        <span class="n">res</span><span class="p">,</span> <span class="n">valid_if</span> <span class="o">=</span> <span class="n">z3_expression</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">z3arg0</span><span class="p">,</span> <span class="n">z3arg1</span><span class="p">)</span>
+        <span class="c1"># check for boolean constant result</span>
+        <span class="k">if</span> <span class="n">op</span><span class="o">.</span><span class="n">has_boolean_result</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">prove</span><span class="p">(</span><span class="n">solver</span><span class="p">,</span> <span class="n">res</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
+                <span class="k">return</span> <span class="s2">"inefficient"</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="mi">0</span>
+            <span class="k">if</span> <span class="n">prove</span><span class="p">(</span><span class="n">solver</span><span class="p">,</span> <span class="n">res</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="k">return</span> <span class="s2">"inefficient"</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="mi">1</span>
+        <span class="c1"># checking for other inefficiencies, see the next sections</span>
+        <span class="o">...</span>
+
+        <span class="c1"># not inefficient, add op to the solver and continue with the next op</span>
+        <span class="n">solver</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">z3resultvar</span> <span class="o">==</span> <span class="n">res</span><span class="p">)</span>
+    <span class="k">return</span> <span class="kc">None</span> <span class="c1"># no inefficiency found</span>
+</pre></div>
+
+<h3 id="identifying-redundant-operations">Identifying redundant operations<a href="#identifying-redundant-operations" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>A more interesting class of redundancy is to try to find two operations in a
+trace that compute the same result. We can do that by asking Z3 to prove for
+each pair of different operations in the trace to prove that the result is
+always the same. If a previous operation returns the same result, the JIT could
+have reused that result instead of re-computing it, saving time. Doing this
+search for equivalent operations with Z3 is quadratic in the number of
+operations, but since traces have a maximum length it is not too bad in
+practice.</p>
+<p>This is the real workhorse of my script so far, it's what finds most of the
+inefficiencies. Here's a few examples:</p>
+<ul>
+<li>The very first and super useful example the script found is <code>int_eq(b, 1) ==
+  b</code> if <code>b</code> is known to be a boolean (ie and integer 0 or 1). I have already
+  implemented this optimization in the JIT.</li>
+<li>Similarly, <code>int_and(b, 1) == b</code> for booleans.</li>
+<li><code>(x &lt;&lt; 4) &amp; -0xf == x &lt;&lt; 4</code></li>
+<li>
+<code>((x &gt;&gt; 63) &lt;&lt; 1) &lt;&lt; 2) &gt;&gt; 3 == x &gt;&gt; 63</code>. In general the JIT is quite bad at
+  optimizing repeated shifts (the infrastructure for doing better with that is
+  already in place, so this will be a relatively easy fix).</li>
+<li>
+<code>(x &amp; 0xffffffff) | ((x &gt;&gt; 32) &lt;&lt; 32) == x</code>. Having the JIT optimize this
+  would maybe require first recognizing that <code>(x &gt;&gt; 32) &lt;&lt; 32</code> can be expressed
+  as a mask: <code>(x &amp; 0xffffffff00000000)</code>, and then using <code>(x &amp; c1) | (x &amp; c2) ==
+  x &amp; (c1 | c2)</code>
+</li>
+<li>A commonly occurring pattern is variations of this one:
+  <code>((x &amp; 1345) ^ 2048) - 2048 == x &amp; 1345</code> (with different constants, of
+  course). xor is add without carry, and <code>x &amp; 1345</code> does not have the bit
+  <code>2048</code> set. Therefore the <code>^ 2048</code> is equivalent to <code>+ 2048</code>, which the <code>-
+  2048</code> cancels. More generally, if <code>a &amp; b == 0</code>, then <code>a + b == a | b == a ^ b</code>.
+  I don't understand at all why this appears so often in the traces, but I
+  see variations of it a lot. LLVM can optimize this, but <a href="https://gcc.gnu.org/bugzilla/show_bug.cgi?id=115829">GCC
+  can't</a>, thanks to
+  <a href="https://hachyderm.io/@pinskia/112752641328799157">Andrew Pinski for filing the
+  bug</a>!</li>
+</ul>
+<p>And here's some implementation pseudo-code again:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">find_inefficiencies</span><span class="p">(</span><span class="n">trace</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">trace</span><span class="p">:</span>
+        <span class="o">...</span>
+        <span class="n">res</span><span class="p">,</span> <span class="n">valid_if</span> <span class="o">=</span> <span class="n">z3_expression</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">z3arg0</span><span class="p">,</span> <span class="n">z3arg1</span><span class="p">)</span>
+        <span class="c1"># check for boolean constant result</span>
+        <span class="o">...</span>
+        <span class="c1"># searching for redundant operations</span>
+        <span class="k">for</span> <span class="n">previous_op</span> <span class="ow">in</span> <span class="n">trace</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">previous_op</span> <span class="ow">is</span> <span class="n">op</span><span class="p">:</span>
+                <span class="k">break</span> <span class="c1"># done, reached the current op</span>
+            <span class="n">previous_op_z3var</span> <span class="o">=</span> <span class="n">var_to_z3var</span><span class="p">[</span><span class="n">previous_op</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">prove</span><span class="p">(</span><span class="n">solver</span><span class="p">,</span> <span class="n">previous_op_z3var</span> <span class="o">==</span> <span class="n">res</span><span class="p">):</span>
+                <span class="k">return</span> <span class="s2">"inefficient"</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">previous_op</span>
+        <span class="o">...</span>
+        <span class="c1"># more code here later</span>
+        <span class="o">...</span>
+
+        <span class="c1"># not inefficient, add op to the solver and continue with the next op</span>
+        <span class="n">solver</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">z3resultvar</span> <span class="o">==</span> <span class="n">res</span><span class="p">)</span>
+    <span class="k">return</span> <span class="kc">None</span> <span class="c1"># no inefficiency found</span>
+</pre></div>
+
+<h3 id="synthesizing-more-complicated-constants-with-exists-forall">Synthesizing more complicated constants with exists-forall<a href="#synthesizing-more-complicated-constants-with-exists-forall" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>To find out whether some integer operations always return a constant result, we
+can't simply use the same trick as for those operations that return boolean
+results, because enumerating 2⁶⁴ possible constants and checking them all
+would take too long. Like in the last post, we can use <code>z3.ForAll</code> to find out
+whether Z3 can synthesize a constant for the result of an operation for us.
+If such a constant exists, the JIT could have removed the operation,
+and replaced it with the constant that Z3 provides.</p>
+<p>Here a few examples of inefficiencies found this way:</p>
+<ul>
+<li>
+<code>(x ^ 1) ^ x == 1</code> (or, more generally: <code>(x ^ y) ^ x == y</code>)</li>
+<li>if <code>x | y == 0</code>, it follows that <code>x == 0</code> and <code>y == 0</code>
+</li>
+<li>if <code>x != MAXINT</code>, then <code>x + 1 &gt; x</code>
+</li>
+</ul>
+<p>Implementing this is actually slightly annoying. The <code>solver.add</code> calls for
+non-inefficient ops add assertions to the solver, which are now confusing the
+<code>z3.ForAll</code> query. We could remove all assertion from the solver, then do the
+<code>ForAll</code> query, then add the assertions back. What I ended doing instead was
+instantiating a second solver object that I'm using for the <code>ForAll</code> queries,
+that remains empty the whole time.</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">find_inefficiencies</span><span class="p">(</span><span class="n">trace</span><span class="p">):</span>
+    <span class="n">solver</span> <span class="o">=</span> <span class="n">z3</span><span class="o">.</span><span class="n">Solver</span><span class="p">()</span>
+    <span class="n">empty_solver</span> <span class="o">=</span> <span class="n">z3</span><span class="o">.</span><span class="n">Solver</span><span class="p">()</span>
+    <span class="n">var_to_z3var</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="o">...</span>
+    <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">trace</span><span class="p">:</span>
+        <span class="o">...</span>
+        <span class="n">res</span><span class="p">,</span> <span class="n">valid_if</span> <span class="o">=</span> <span class="n">z3_expression</span><span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">z3arg0</span><span class="p">,</span> <span class="n">z3arg1</span><span class="p">)</span>
+        <span class="c1"># check for boolean constant result</span>
+        <span class="o">...</span>
+        <span class="c1"># searching for redundant operations</span>
+        <span class="o">...</span>
+        <span class="c1"># checking for constant results</span>
+        <span class="n">constvar</span> <span class="o">=</span> <span class="n">z3</span><span class="o">.</span><span class="n">BitVec</span><span class="p">(</span><span class="s1">'find_const'</span><span class="p">,</span> <span class="n">INTEGER_WIDTH</span><span class="p">)</span>
+        <span class="n">condition</span> <span class="o">=</span> <span class="n">z3</span><span class="o">.</span><span class="n">ForAll</span><span class="p">(</span>
+            <span class="n">var_to_z3var</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span>
+            <span class="n">z3</span><span class="o">.</span><span class="n">Implies</span><span class="p">(</span>
+                <span class="o">*</span><span class="n">solver</span><span class="o">.</span><span class="n">assertions</span><span class="p">(),</span>
+                <span class="n">expr</span> <span class="o">==</span> <span class="n">constvar</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">empty_solver</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span> <span class="o">==</span> <span class="n">z3</span><span class="o">.</span><span class="n">sat</span><span class="p">:</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">empty_solver</span><span class="o">.</span><span class="n">model</span><span class="p">()</span>
+            <span class="n">const</span> <span class="o">=</span> <span class="n">model</span><span class="p">[</span><span class="n">constvar</span><span class="p">]</span><span class="o">.</span><span class="n">as_signed_long</span><span class="p">()</span>
+            <span class="k">return</span> <span class="s2">"inefficient"</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">const</span>
+
+        <span class="c1"># not inefficient, add op to the solver and continue with the next op</span>
+        <span class="n">solver</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">z3resultvar</span> <span class="o">==</span> <span class="n">res</span><span class="p">)</span>
+    <span class="k">return</span> <span class="kc">None</span> <span class="c1"># no inefficiency found</span>
+</pre></div>
+
+<h3 id="minimization">Minimization<a href="#minimization" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Analyzing an inefficiency by hand in the context of a larger trace is quite
+tedious. Therefore I've implemented a (super inefficient) script to try to make
+the examples smaller. Here's how that works:</p>
+<ul>
+<li>First throw out all the operations that occur <em>after</em> the inefficient operation
+  in the trace.</li>
+<li>Then we remove all "dead" operations, ie operations that don't have their
+  results used (all the operations that we can analyze with Z3 are without side
+  effects).</li>
+<li>Now we try to remove every guard in the trace one by one and check
+  afterwards, whether the resulting trace still has an inefficiency.</li>
+<li>We also try to replace every single operation with a new argument to the
+  trace, to see whether the inefficiency is still present.</li>
+</ul>
+<p>The minimization process is sort of inefficient and I should probably be using
+ <a href="https://github.com/DRMacIver/shrinkray">shrinkray</a> or
+ <a href="https://github.com/csmith-project/creduce">C-Reduce</a> instead. However, it
+ seems to work well in practice and the runtime isn't too bad.</p>
+<h3 id="results">Results<a href="#results" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>So far I am using the JIT traces of three programs: 1) Booting Linux on the
+<a href="https://docs.pydrofoil.org">Pydrofoil</a> RISC-V emulator, 2) booting Linux on the Pydrofoil ARM emulator, and 3)
+running the PyPy bootstrap process on top of PyPy.</p>
+<p>I picked these programs because most Python programs don't contain interesting
+amounts of integer operations, and the traces of the emulators
+contain a lot of them. I also used the bootstrap process because I still wanted
+to try a big Python program and personally care about the runtime of this
+program a lot.</p>
+<p>The script identifies 94
+inefficiencies in the traces, a lot of them come from repeating
+patterns. My next steps will be to manually inspect them all, categorize them, and
+implement easy optimizations identified that way. I also want a way to sort the
+examples by execution count in the benchmarks, to get a feeling for which of
+them are most important.</p>
+<p>I didn't investigate the full set of <a href="https://speed.pypy.org">Python
+benchmarks</a> that PyPy uses yet, because I don't expect
+them to contain interesting amounts of integer operations, but maybe I am wrong
+about that? Will have to try eventually.</p>
+<h3 id="conclusion">Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>This was again much easier to do than I would have expected! Given that I had
+the translation of trace ops to Z3 already in place, it was a matter of about a
+day's of programming to use this infrastructure to find the first problems and
+minimizing them.</p>
+<p>Reusing the results of existing operations or replacing operations by constants
+can be seen as "zero-instruction superoptimization". I'll probably be rather
+busy for a while to add the missing optimizations identified by my simple
+script. But later extensions to actually synthesize one or several operations
+in the attempt to optimize the traces more and find more opportunities should
+be possible.</p>
+<p>Finding inefficiencies in traces with Z3 is significantly less
+annoying and also less error-prone than just manually inspecting traces and
+trying to spot optimization opportunities.</p>
+<h3 id="random-notes-and-sources">Random Notes and Sources<a href="#random-notes-and-sources" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Again, John's blog posts:</p>
+<ul>
+<li><a href="https://blog.regehr.org/archives/1109">Let’s Work on an LLVM Superoptimizer</a></li>
+<li><a href="https://blog.regehr.org/archives/1146">Early Superoptimizer Results</a></li>
+<li><a href="https://blog.regehr.org/archives/1252">A Few Synthesizing Superoptimizer Results</a></li>
+<li><a href="https://blog.regehr.org/archives/1636">Synthesizing Constants</a></li>
+</ul>
+<p>and papers:</p>
+<ul>
+<li><a href="https://arxiv.org/pdf/1711.04422">A Synthesizing Superoptimizer</a></li>
+<li><a href="https://dl.acm.org/doi/pdf/10.1145/3649837">Hydra: Generalizing Peephole Optimizations with Program Synthesis</a></li>
+</ul>
+<p>I remembered recently that I had seen the approach of optimizing the traces of
+a tracing JIT with Z3 a long time ago, as part of the (now long dead, I think)
+<a href="https://web.archive.org/web/20160304055149/http://research.microsoft.com/en-us/projects/spur/">SPUR
+project</a>.
+There's a <a href="https://web.archive.org/web/20161029162737/http://csl.stanford.edu/~christos/pldi2010.fit/tillmann.provers4jit.pdf">workshop
+paper</a>
+from 2010 about this. SPUR was trying to use Z3 built into the actual JIT (as
+opposed to using Z3 only to find places where the regular optimizers could be
+improved). In addition to bitvectors, SPUR also used the Z3 support for arrays
+to model the C# heap and remove redundant stores. This is still another future
+extension for all the Z3 work I've been doing in the context of the PyPy JIT.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/jit.html" rel="tag">jit</a></li>
+            <li><a class="tag p-category" href="../../../categories/z3.html" rel="tag">z3</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="finding-simple-rewrite-rules-jit-z3.html" rel="prev" title="Finding Simple Rewrite Rules for the JIT with Z3">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="toy-abstract-interpretation.html" rel="next" title="Abstract interpretation in the Toy Optimizer">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="Mining JIT traces for missing optimizations with Z3" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

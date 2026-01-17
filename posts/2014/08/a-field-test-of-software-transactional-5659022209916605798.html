@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Field Test of Software Transactional Memory Using the RSqueak Smalltalk VM | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2014/08/a-field-test-of-software-transactional-5659022209916605798.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="../07/pypy-stm-first-interesting-release-8684276541915333814.html" title='PyPy-STM: first "interesting" release' type="text/html">
+<link rel="next" href="../09/python-software-foundation-matching-2230529993193139046.html" title="Python Software Foundation Matching Donations this Month" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="A Field Test of Software Transactional Memory Using the RSqueak Smallt">
+<meta property="og:url" content="https://www.pypy.org/posts/2014/08/a-field-test-of-software-transactional-5659022209916605798.html">
+<meta property="og:description" content="Extending the Smalltalk RSqueakVM with STM
+by Conrad Calmez, Hubert Hesse, Patrick Rein and Malte Swart supervised by Tim Felgentreff and Tobias Pape
+
+Introduction
+After pypy-stm we can announce that ">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2014-08-09T13:15:00Z">
+<meta property="article:tag" content="Smalltalk">
+<meta property="article:tag" content="Squeak">
+<meta property="article:tag" content="stm">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">A Field Test of Software Transactional Memory Using the RSqueak Smalltalk VM</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2014-08-09T13:15:00Z" itemprop="datePublished" title="2014-08-09 13:15">2014-08-09 13:15</time></a>
+            </p>
+                <p class="commentline">5 comments</p>
+
+                <p class="commentline">            <a href="a-field-test-of-software-transactional-5659022209916605798.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <h2 id="extending-the-smalltalk-rsqueakvm-with-stm">
+Extending the Smalltalk RSqueakVM with STM<a href="#extending-the-smalltalk-rsqueakvm-with-stm" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>by Conrad Calmez, Hubert Hesse, Patrick Rein and Malte Swart supervised by Tim Felgentreff and Tobias Pape</p>
+<h2 id="introduction">
+Introduction<a href="#introduction" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>After pypy-stm we can announce that through the <a href="https://bitbucket.org/pypy/lang-smalltalk">RSqueakVM</a> (which used to be called <em>SPyVM</em>) a second VM implementation supports software transactional memory. RSqueakVM is a Smalltalk implementation based on the RPython toolchain. We have added STM support based on the <a href="../07/pypy-stm-first-interesting-release-8684276541915333814.html">STM tools from RPython (rstm)</a>. The benchmarks indicate that linear scale up is possible, however in some situations the STM overhead limits speedup.</p>
+<p>The work was done as a master's project at the <a href="https://www.hpi.uni-potsdam.de/hirschfeld/">Software Architechture Group</a> of Professor Robert Hirschfeld at at the <a href="https://hpi.de/">Hasso Plattner Institut</a> at the <a href="https://www.uni-potsdam.de/">University of Potsdam</a>. We - four students - worked about one and a half days per week for four months on the topic. The RSqueakVM was <a href="https://pypysqueak.blogspot.de/2007/10/first-day-discussions.html">originally developped during a sprint at the University of Bern</a>. When we started the project we were new to the topic of building VMs / interpreters.</p>
+<p>We would like to thank  Armin, Remi and the #pypy IRC channel who supported us over the course of our project. We also like to thank Toni Mattis and Eric Seckler, who have provided us with an <a href="https://bitbucket.org/amintos/lang-smalltalk">initial code base</a>.</p>
+<h2 id="introduction-to-rsqueakvm">
+Introduction to RSqueakVM<a href="#introduction-to-rsqueakvm" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>As the original Smalltalk implementation, the RSqueakVM executes a given Squeak Smalltalk image, containing the Smalltalk code and a snapshot of formerly created objects and active execution contexts. These execution contexts are scheduled inside the image (greenlets) and not mapped to OS threads. Thereby the non-STM RSqueakVM runs on only one OS thread.</p>
+<h2 id="changes-to-rsqueakvm">
+Changes to RSqueakVM<a href="#changes-to-rsqueakvm" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>The core adjustments to support STM were inside the VM and transparent from the view of a Smalltalk user. Additionally we added Smalltalk code to influence the behavior of the STM. As the RSqueakVM has run in one OS thread so far, we added the capability to start OS threads. Essentially, we added an additional way to launch a new Smalltalk execution context (thread). But in contrast to the original one this one creates a new native OS thread, not a Smalltalk internal green thread.</p>
+
+<p>STM (with automatic transaction boundaries) already solves the problem of concurrent access on one value as this is protected by the STM transactions (to be more precise one instruction). But there are cases were the application relies on the fact that a bigger group of changes is executed either completely or not at all (atomic). Without further information transaction borders could be in the middle of such a set of atomic statements. rstm allows to aggregate multiple statements into one higher level transaction. To let the application mark the beginning and the end of these atomic blocks (high-level transactions), we added two more STM specific extensions to Smalltalk.</p>
+
+<h2 id="benchmarks">
+Benchmarks<a href="#benchmarks" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>RSqueak was executed in a single OS thread so far. rstm enables us to execute the VM using several OS threads. Using OS threads we expected a speed-up in benchmarks which use multiple threads. We measured this speed-up by using two benchmarks: a simple parallel summation where each thread sums up a predefined interval and an implementation of Mandelbrot where each thread computes a range of predefined lines.</p>
+
+<p>To assess the speed-up, we used one RSqueakVM compiled with rstm enabled, but once running the benchmarks with OS threads and once with Smalltalk green threads. The workload always remained the same and only the number of threads increased. To assess the overhead imposed by the STM transformation we also ran the green threads version on an unmodified RSqueakVM. All VMs were translated with the JIT optimization and all benchmarks were run once before the measurement to warm up the JIT. As the JIT optimization is working it is likely to be adoped by VM creators (the baseline RSqueakVM did that) so that results with this optimization are more relevant in practice than those without it. We measured the execution time by getting the system time in Squeak. The results are:</p>
+<h4 id="parallel-sum-ten-million">
+Parallel Sum Ten Million<a href="#parallel-sum-ten-million" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="margin-left: auto; margin-right: auto; text-align: center;"><tbody>
+<tr><td style="text-align: center;">
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://1.bp.blogspot.com/-7J05whp07m8/U-iEdb3Ce0I/AAAAAAAAAVw/91sD_1KEiGc/s1600/parallelSum10MioChart.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://1.bp.blogspot.com/-7J05whp07m8/U-iEdb3Ce0I/AAAAAAAAAVw/91sD_1KEiGc/s320/parallelSum10MioChart.png"></a></div>
+
+</td></tr>
+<tr><td class="tr-caption" style="text-align: center;"><span style="font-size: small; text-align: start;">Benchmark Parallel Sum 10,000,000</span></td></tr>
+</tbody></table>
+<table>
+<thead><tr>
+<th>Thread Count</th> <th>RSqueak green threads</th> <th>RSqueak/STM green threads</th> <th>RSqueak/STM OS threads</th> <th>Slow down from  RSqueak green threads to RSqueak/STM green threads</th> <th>Speed up from RSqueak/STM green threads to RSQueak/STM OS Threads</th> </tr></thead>
+<tbody>
+<tr>
+<td>1</td>   <td>168.0 ms</td>   <td>240.0 ms</td>   <td>290.9 ms</td>   <td>0.70</td>   <td>0.83</td>  </tr>
+<tr>
+<td>2</td>   <td>167.0 ms</td>   <td>244.0 ms</td>   <td>246.1 ms</td>   <td>0.68</td>   <td>0.99</td>  </tr>
+<tr>
+<td>4</td>   <td>167.8 ms</td>   <td>240.7 ms</td>   <td>366.7 ms</td>   <td>0.70</td>   <td>0.66</td>  </tr>
+<tr>
+<td>8</td>   <td>168.1 ms</td>   <td>241.1 ms</td>   <td>757.0 ms</td>   <td>0.70</td>   <td>0.32</td>  </tr>
+<tr>
+<td>16</td>   <td>168.5 ms</td>   <td>244.5 ms</td>   <td>1460.0 ms</td>   <td>0.69</td>   <td>0.17</td>  </tr>
+</tbody>
+</table>
+<br><h4 id="parallel-sum-one-billion">
+Parallel Sum One Billion<a href="#parallel-sum-one-billion" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="margin-left: auto; margin-right: auto; text-align: center;"><tbody>
+<tr><td style="text-align: center;">
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://3.bp.blogspot.com/-wN-Bad8Pnd8/U-iE43ZtHcI/AAAAAAAAAV4/dii8NU0rseE/s1600/parallelSum1BioChart.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://3.bp.blogspot.com/-wN-Bad8Pnd8/U-iE43ZtHcI/AAAAAAAAAV4/dii8NU0rseE/s320/parallelSum1BioChart.png"></a></div>
+
+</td></tr>
+<tr><td class="tr-caption" style="text-align: center;">Benchmark Parallel Sum 1,000,000,000</td></tr>
+</tbody></table>
+<br><table>
+<thead><tr>
+<th>Thread Count</th>
+<th>RSqueak green threads</th>
+<th>RSqueak/STM green threads</th>
+<th>RSqueak/STM OS threads</th>
+<th>Slow down from  RSqueak green threads to RSqueak/STM green threads</th>
+<th>Speed up from RSqueak/STM green threads to RSQueak/STM OS Threads</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1</td>   <td>16831.0 ms</td>   <td>24111.0 ms</td>   <td>23346.0 ms</td>   <td>0.70</td>   <td>1.03</td>  </tr>
+<tr>
+<td>2</td>   <td>17059.9 ms</td>   <td>24229.4 ms</td>   <td>16102.1 ms</td>   <td>0.70</td>   <td>1.50</td>  </tr>
+<tr>
+<td>4</td>   <td>16959.9 ms</td>   <td>24365.6 ms</td>   <td>12099.5 ms</td>   <td>0.70</td>   <td>2.01</td>  </tr>
+<tr>
+<td>8</td>   <td>16758.4 ms</td>   <td>24228.1 ms</td>   <td>14076.9 ms</td>   <td>0.69</td>   <td>1.72</td>  </tr>
+<tr>
+<td>16</td>   <td>16748.7 ms</td>   <td>24266.6 ms</td>   <td>55502.9 ms</td>   <td>0.69</td>   <td>0.44</td>  </tr>
+</tbody>
+</table>
+<br><h4 id="mandelbrot-iterative">
+Mandelbrot Iterative<a href="#mandelbrot-iterative" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="margin-left: auto; margin-right: auto; text-align: center;"><tbody>
+<tr><td style="text-align: center;">
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-_wLcNRFGkQc/U-iFOB3wDmI/AAAAAAAAAWA/He1oxb0hEpc/s1600/mandelbrotChart.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://2.bp.blogspot.com/-_wLcNRFGkQc/U-iFOB3wDmI/AAAAAAAAAWA/He1oxb0hEpc/s320/mandelbrotChart.png"></a></div>
+
+</td></tr>
+<tr><td class="tr-caption" style="text-align: center;">Benchmark Mandelbrot</td></tr>
+</tbody></table>
+<table>
+<thead><tr>
+<th>Thread Count</th> <th>RSqueak green threads</th> <th>RSqueak/STM green threads</th> <th>RSqueak/STM OS threads</th> <th>Slow down from  RSqueak green threads to RSqueak/STM green threads</th> <th>Speed up from RSqueak/STM green threads to RSqueak/STM OS Threads</th> </tr></thead>
+<tbody>
+<tr>
+<td>1</td>   <td>724.0 ms</td>   <td>983.0 ms</td>   <td>1565.5 ms</td>   <td>0.74</td>   <td>0.63</td>  </tr>
+<tr>
+<td>2</td>   <td>780.5 ms</td>   <td>973.5 ms</td>   <td>5555.0 ms</td>   <td>0.80</td>   <td>0.18</td>  </tr>
+<tr>
+<td>4</td>   <td>781.0 ms</td>   <td>982.5 ms</td>   <td>20107.5 ms</td>   <td>0.79</td>   <td>0.05</td>  </tr>
+<tr>
+<td>8</td>   <td>779.5 ms</td>   <td>980.0 ms</td>   <td>113067.0 ms</td>   <td>0.80</td>   <td>0.01</td>
+</tr>
+</tbody>
+</table>
+<br><h2 id="discussion-of-benchmark-results">
+Discussion of benchmark results<a href="#discussion-of-benchmark-results" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>First of all, the ParallelSum benchmarks show that the parallelism is actually paying off, at least for sufficiently large embarrassingly parallel problems. Thus RSqueak can also benefit from rstm.</p>
+<p>On the other hand, our Mandelbrot implementation shows the limits of our current rstm integration. We implemented two versions of the algorithm one using one low-level array and one using two nested collections. In both versions, one job only calculates a distinct range of rows and both lead to a slowdown. The summary of the state of rstm transactions shows that there are a lot of inevitable transactions (transactions which must be completed). One reason might be the interactions between the VM and its low-level extensions, so called plugins. We have to investigate this further.</p>
+<h2 id="limitations">
+Limitations<a href="#limitations" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Although the current VM setup is working well enough to support our benchmarks, the VM still has limitations. First of all, as it is based on rstm, it has the current limitation of only running on 64-bit Linux.</p>
+<p>Besides this, we also have two major limitations regarding the VM itself. First, the atomic interface exposed in Smalltalk is currently not working, when the VM is compiled using the just-in-time compiler transformation. Simple examples such as concurrent parallel sum work fine while more complex benchmarks such as <a href="https://benchmarksgame.alioth.debian.org/u32/performance.php?test=chameneosredux#about">chameneos</a> fail. The reasons for this are currently beyond our understanding. Second, Smalltalk supports green threads, which are threads which are managed by the VM and are not mapped to OS threads. We currently support starting new Smalltalk threads as OS threads instead of starting them as green threads. However, existing threads in a Smalltalk image are not migrated to OS threads, but remain running as green threads.</p>
+<h2 id="future-work-for-stm-in-rsqueak">
+Future work for STM in RSqueak<a href="#future-work-for-stm-in-rsqueak" class="headerlink" title="Permalink to this heading">¶</a></h2>
+The work we presented showed interesting problems, we propose the following problem statements for further analysis:<br><ul>
+<li>
+<strong>Inevitable transactions</strong> in benchmarks. This looks like it could limit other applications too so it should be solved.</li>
+<li>
+<strong>Collection implementation aware of STM</strong>: The current implementation of collections can cause a lot of STM collisions due to their internal memory structure. We believe it could bear potential for performance improvements,  if we replace these collections in an STM enabled interpreter with implementations with less STM collisions. As already proposed by Remi Meier, bags, sets and lists are of particular interest.</li>
+<li>Finally, we exposed <strong>STM through languages features</strong> such as the atomic method, which is provided through the VM. Originally, it was possible to model STM transactions barriers implicitly by using clever locks, now its exposed via the atomic keyword. From a language design point of view, the question arises whether this is a good solution and what features an stm-enabled interpreter must provide to the user in general? Of particular interest are for example, access to the transaction length and hints for transaction borders to and their  performance impact.</li>
+</ul>
+<ul></ul>
+<h2 id="details-for-the-technically-inclined">
+Details for the technically inclined<a href="#details-for-the-technically-inclined" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<ul>
+<li>
+<a href="https://bitbucket.org/pypy/lang-smalltalk/diff/spyvm/interpreter.py?diff1=7a217be69118&amp;diff2=a772ee2447d96041e7db6550e160e90251d0dd85&amp;at=stmgc-c7#Lspyvm/interpreter.pyT233">Adjustments to the interpreter loop were minimal</a>.</li>
+<li>STM works on bytecode granularity that means, there is a implicit transaction border after every bytecode executed. Possible alternatives: only break transactions after certain  bytecodes, break transactions on one abstraction layer above, e.g. object methods (setter, getter).</li>
+<li>rstm calls were exposed using primtives (a way to expose native code in Smalltalk), this was mainly used for atomic.</li>
+<li>Starting and stopping OS threads is exposed via primitives as well. Threads are started from within the interpreter.</li>
+<li>For Smalltalk enabled STM code we currently have different image versions. However another way to add, load and replace code to the Smalltalk code base is required to make a switch between STM and non-STM code simple.</li>
+</ul>
+<ul></ul>
+<h2 id="details-on-the-project-setup">
+Details on the project setup<a href="#details-on-the-project-setup" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>From a non-technical perspective, a problem we encountered was the huge roundtrip times (on our machines up to 600s, 900s with JIT enabled). This led to a tendency of bigger code changes ("Before we compile, let's also add this"), lost flow ("What where we doing before?") and different compiled interpreters in parallel testing ("How is this version different from the others?") As a consequence it was harder to test and correct errors. While this is not as much of a problem for other RPython VMs, RSqueakVM needs to execute the entire image, which makes running it untranslated even slower.</p>
+<h2 id="summary">
+Summary<a href="#summary" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>The benchmarks show that speed up is possible, but also that the STM overhead in some situations can eat up the speedup. The  resulting STM-enabled VM still has some limitations: As rstm is  currently only running on 64-bit Linux the RSqueakVM is doing so as  well. Eventhough it is possible for us now to create new threads that  map to OS threads within the VM, the migration of exiting Smalltalk threads keeps being problematic.</p>
+<p>We showed that an existing VM code base can benefit of STM in terms of scaling up. Further it was relatively easy to enable STM support. This may also be valuable to VM developers considering to get STM support for their VMs.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/smalltalk.html" rel="tag">Smalltalk</a></li>
+            <li><a class="tag p-category" href="../../../categories/squeak.html" rel="tag">Squeak</a></li>
+            <li><a class="tag p-category" href="../../../categories/stm.html" rel="tag">stm</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="../07/pypy-stm-first-interesting-release-8684276541915333814.html" rel="prev" title='PyPy-STM: first "interesting" release'>Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../09/python-software-foundation-matching-2230529993193139046.html" rel="next" title="Python Software Foundation Matching Donations this Month">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-1134013810206557754">
+        <div class="comment-header">
+          <a name="comment-1134013810206557754"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-08-09 14:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>"We showed that an existing VM code base can benefit of STM in terms of scaling up."  I dispute this conclusion: in the benchmarks, it seems that the non-STM version is scaling up well, even better than the STM+OS-threads version.  But how can the non-STM version scale at all?  It shouldn't: that's a property of RPython.  And why is the STM+OS-threads version faster even with just 1 thread?  I think you need to answer these questions first.  Right now it screams "you are running buggy benchmarks" to me.</p>
+        </div>
+      </div>
+      <div class="comment comment-5924716782062654109">
+        <div class="comment-header">
+          <a name="comment-5924716782062654109"></a>
+            <span class="author">Stefan Marr</span> wrote on <span class="date">2014-08-10 09:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>I concur with Armin, the conclusions are problematic in the light of the current numbers.<br><br>Could you give some more details on the benchmarks? Can I find the Smalltalk code somewhere?<br><br>Things that come to mind are details about the scheduler. In the RoarVM, that was also one of the issues (which we did not solve). The standard Squeak scheduling data structure remains unchanged I suppose? How does that interact with the STM, is it problematic that each STM thread updates this shared data structure during every scheduling operation?<br><br>Also, more basic, are you making sure that the benchmark processes are running with highest priority (80, IIRC), to avoid interference with other processes in the image?<br><br>On the language level, something that could also have an impact on the results is closures. How are they implemented? I suppose similar to the way the CogVM implements them? I suppose, you make sure that closures are not shared between processes?<br><br>And finally, what kind of benchmark harness are you using? Did you have a look at SMark? (https://smalltalkhub.com/#!/~StefanMarr/SMark)<br>We used that one for the RoarVM, and it provides various options to do different kind of benchmarks, including weak-scaling benchmarks, which I would find more appropriate for scalability tests. Weak-scaling means, you increase the problem size with the number of cores. That replicates the scenario where the problem itself is not really parallelizable, but you can solve more problems at the same time in parallel. It also makes sure that each process/thread does the identical operations (if setup correctly).<br><br>Well, all those questions aside, interesting work :) Hope to read more soon ;)</p>
+        </div>
+      </div>
+      <div class="comment comment-5483563096834838698">
+        <div class="comment-header">
+          <a name="comment-5483563096834838698"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-08-10 20:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>You definitely hit a really weak spot in our report... Today we investigated the ParallelSum benchmark again. So far, we've found out that it was indeed partially a problem with the priority of the benchmark process. The preliminary benchmark results make more sense now and as soon as we have stable ones we will update them.<br><br>I'll still try to address some of your questions right now. :)<br><br>1. Benchmark code<br>I've just wrapped up the current version of our benchmarks and put them in our repository. You can find the two Squeak4.5 images at the <a href="https://bitbucket.org/pypy/lang-smalltalk/src/627db53859875ea0120a4dbf3f21e244174f1618/images/benchmark-images/?at=stmgc-c7" rel="nofollow">stmgc-c7 branch of the RSqueak Repository</a> . You can find the benchmarks in the CPB package. The Squeak4.5stm image needs the RSqueak/STM VM.<br><br>2. Scheduler data structures<br>Yes, the  scheduling data structure is completely unchanged. We have only added a new subclass of Process which overwrites fork and calls a different primitive. However, these Processes are not managed by the Smalltalk scheduler, so there should be no synchronization issues here.<br><br>3. Interference of other processes:<br>This is probably the source of the "speed-up" we observe on the normal RSqueakVM. With more threads we might get a bigger portion of the total runtime. So far, the benchmarks already ran in a VM mode which disables the Smalltalk GUI thread, however in the traces we found that the event handler is still scheduled every now and then. We've done it as you suggested, Stefan, and set the priority to 80 (or 79 to not mess up the timer interrupt handler).<br><br>4. Benchmark harness<br>We actually use SMark and also made sure the timing operations of RSqueak do their job correctly. However we are probably not using SMark at its full potential.</p>
+        </div>
+      </div>
+      <div class="comment comment-5673200995509471022">
+        <div class="comment-header">
+          <a name="comment-5673200995509471022"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-08-11 10:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>I've just updated the benchmarks. All benchmark processes are now running with the Smalltalk process priority of 79 (80 is the highest). The single-threaded VMs now show the expected behavior.</p>
+        </div>
+      </div>
+      <div class="comment comment-3527177116588518292">
+        <div class="comment-header">
+          <a name="comment-3527177116588518292"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-08-11 14:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>To further clarify on the Mandelbrot benchmarks: After a discussion with Stefan, I have changed the Mandelbrot implementation. Each job now only has private data and does not read or write in any shared data structure. Still the benchmark results remain the same and we can still observe a high proportion of inevitable transactions.<br><br>As Armin pointed out, and which would be a next step, we would need to figure out which parts of the interpreter might cause systematic conflicts.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

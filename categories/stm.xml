@@ -1,0 +1,895 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about stm)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/stm.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:36 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>A Field Test of Software Transactional Memory Using the RSqueak Smalltalk VM</title><link>https://www.pypy.org/posts/2014/08/a-field-test-of-software-transactional-5659022209916605798.html</link><dc:creator>Carl Friedrich Bolz-Tereick</dc:creator><description>&lt;h2&gt;
+Extending the Smalltalk RSqueakVM with STM&lt;/h2&gt;
+&lt;p&gt;by Conrad Calmez, Hubert Hesse, Patrick Rein and Malte Swart supervised by Tim Felgentreff and Tobias Pape&lt;/p&gt;
+&lt;h2&gt;
+Introduction&lt;/h2&gt;
+&lt;p&gt;After pypy-stm we can announce that through the &lt;a href="https://bitbucket.org/pypy/lang-smalltalk"&gt;RSqueakVM&lt;/a&gt; (which used to be called &lt;em&gt;SPyVM&lt;/em&gt;) a second VM implementation supports software transactional memory. RSqueakVM is a Smalltalk implementation based on the RPython toolchain. We have added STM support based on the &lt;a href="https://www.pypy.org/posts/2014/07/pypy-stm-first-interesting-release-8684276541915333814.html"&gt;STM tools from RPython (rstm)&lt;/a&gt;. The benchmarks indicate that linear scale up is possible, however in some situations the STM overhead limits speedup.&lt;/p&gt;
+&lt;p&gt;The work was done as a master's project at the &lt;a href="https://www.hpi.uni-potsdam.de/hirschfeld/"&gt;Software Architechture Group&lt;/a&gt; of Professor Robert Hirschfeld at at the &lt;a href="https://hpi.de/"&gt;Hasso Plattner Institut&lt;/a&gt; at the &lt;a href="https://www.uni-potsdam.de/"&gt;University of Potsdam&lt;/a&gt;. We - four students - worked about one and a half days per week for four months on the topic. The RSqueakVM was &lt;a href="https://pypysqueak.blogspot.de/2007/10/first-day-discussions.html"&gt;originally developped during a sprint at the University of Bern&lt;/a&gt;. When we started the project we were new to the topic of building VMs / interpreters.&lt;/p&gt;
+&lt;p&gt;We would like to thank  Armin, Remi and the #pypy IRC channel who supported us over the course of our project. We also like to thank Toni Mattis and Eric Seckler, who have provided us with an &lt;a href="https://bitbucket.org/amintos/lang-smalltalk"&gt;initial code base&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="introduction-to-rsqueakvm"&gt;
+Introduction to RSqueakVM&lt;/h2&gt;
+&lt;p&gt;As the original Smalltalk implementation, the RSqueakVM executes a given Squeak Smalltalk image, containing the Smalltalk code and a snapshot of formerly created objects and active execution contexts. These execution contexts are scheduled inside the image (greenlets) and not mapped to OS threads. Thereby the non-STM RSqueakVM runs on only one OS thread.&lt;/p&gt;
+&lt;h2 id="changes-to-rsqueakvm"&gt;
+Changes to RSqueakVM&lt;/h2&gt;
+&lt;p&gt;The core adjustments to support STM were inside the VM and transparent from the view of a Smalltalk user. Additionally we added Smalltalk code to influence the behavior of the STM. As the RSqueakVM has run in one OS thread so far, we added the capability to start OS threads. Essentially, we added an additional way to launch a new Smalltalk execution context (thread). But in contrast to the original one this one creates a new native OS thread, not a Smalltalk internal green thread.&lt;/p&gt;
+
+&lt;p&gt;STM (with automatic transaction boundaries) already solves the problem of concurrent access on one value as this is protected by the STM transactions (to be more precise one instruction). But there are cases were the application relies on the fact that a bigger group of changes is executed either completely or not at all (atomic). Without further information transaction borders could be in the middle of such a set of atomic statements. rstm allows to aggregate multiple statements into one higher level transaction. To let the application mark the beginning and the end of these atomic blocks (high-level transactions), we added two more STM specific extensions to Smalltalk.&lt;/p&gt;
+
+&lt;h2 id="benchmarks"&gt;
+Benchmarks&lt;/h2&gt;
+&lt;p&gt;RSqueak was executed in a single OS thread so far. rstm enables us to execute the VM using several OS threads. Using OS threads we expected a speed-up in benchmarks which use multiple threads. We measured this speed-up by using two benchmarks: a simple parallel summation where each thread sums up a predefined interval and an implementation of Mandelbrot where each thread computes a range of predefined lines.&lt;/p&gt;
+
+&lt;p&gt;To assess the speed-up, we used one RSqueakVM compiled with rstm enabled, but once running the benchmarks with OS threads and once with Smalltalk green threads. The workload always remained the same and only the number of threads increased. To assess the overhead imposed by the STM transformation we also ran the green threads version on an unmodified RSqueakVM. All VMs were translated with the JIT optimization and all benchmarks were run once before the measurement to warm up the JIT. As the JIT optimization is working it is likely to be adoped by VM creators (the baseline RSqueakVM did that) so that results with this optimization are more relevant in practice than those without it. We measured the execution time by getting the system time in Squeak. The results are:&lt;/p&gt;
+&lt;h4&gt;
+Parallel Sum Ten Million&lt;/h4&gt;
+&lt;table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="margin-left: auto; margin-right: auto; text-align: center;"&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td style="text-align: center;"&gt;
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://1.bp.blogspot.com/-7J05whp07m8/U-iEdb3Ce0I/AAAAAAAAAVw/91sD_1KEiGc/s1600/parallelSum10MioChart.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://1.bp.blogspot.com/-7J05whp07m8/U-iEdb3Ce0I/AAAAAAAAAVw/91sD_1KEiGc/s320/parallelSum10MioChart.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class="tr-caption" style="text-align: center;"&gt;&lt;span style="font-size: small; text-align: start;"&gt;Benchmark Parallel Sum 10,000,000&lt;/span&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;table&gt;&lt;thead&gt;
+&lt;tr&gt; &lt;th&gt;Thread Count&lt;/th&gt; &lt;th&gt;RSqueak green threads&lt;/th&gt; &lt;th&gt;RSqueak/STM green threads&lt;/th&gt; &lt;th&gt;RSqueak/STM OS threads&lt;/th&gt; &lt;th&gt;Slow down from  RSqueak green threads to RSqueak/STM green threads&lt;/th&gt; &lt;th&gt;Speed up from RSqueak/STM green threads to RSQueak/STM OS Threads&lt;/th&gt; &lt;/tr&gt;
+&lt;/thead&gt; &lt;tbody&gt;
+&lt;tr&gt;   &lt;td&gt;1&lt;/td&gt;   &lt;td&gt;168.0 ms&lt;/td&gt;   &lt;td&gt;240.0 ms&lt;/td&gt;   &lt;td&gt;290.9 ms&lt;/td&gt;   &lt;td&gt;0.70&lt;/td&gt;   &lt;td&gt;0.83&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;2&lt;/td&gt;   &lt;td&gt;167.0 ms&lt;/td&gt;   &lt;td&gt;244.0 ms&lt;/td&gt;   &lt;td&gt;246.1 ms&lt;/td&gt;   &lt;td&gt;0.68&lt;/td&gt;   &lt;td&gt;0.99&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;4&lt;/td&gt;   &lt;td&gt;167.8 ms&lt;/td&gt;   &lt;td&gt;240.7 ms&lt;/td&gt;   &lt;td&gt;366.7 ms&lt;/td&gt;   &lt;td&gt;0.70&lt;/td&gt;   &lt;td&gt;0.66&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;8&lt;/td&gt;   &lt;td&gt;168.1 ms&lt;/td&gt;   &lt;td&gt;241.1 ms&lt;/td&gt;   &lt;td&gt;757.0 ms&lt;/td&gt;   &lt;td&gt;0.70&lt;/td&gt;   &lt;td&gt;0.32&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;16&lt;/td&gt;   &lt;td&gt;168.5 ms&lt;/td&gt;   &lt;td&gt;244.5 ms&lt;/td&gt;   &lt;td&gt;1460.0 ms&lt;/td&gt;   &lt;td&gt;0.69&lt;/td&gt;   &lt;td&gt;0.17&lt;/td&gt;  &lt;/tr&gt;
+&lt;/tbody&gt; &lt;/table&gt;
+&lt;br&gt;
+
+&lt;h4&gt;
+Parallel Sum One Billion&lt;/h4&gt;
+&lt;table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="margin-left: auto; margin-right: auto; text-align: center;"&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td style="text-align: center;"&gt;
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://3.bp.blogspot.com/-wN-Bad8Pnd8/U-iE43ZtHcI/AAAAAAAAAV4/dii8NU0rseE/s1600/parallelSum1BioChart.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://3.bp.blogspot.com/-wN-Bad8Pnd8/U-iE43ZtHcI/AAAAAAAAAV4/dii8NU0rseE/s320/parallelSum1BioChart.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class="tr-caption" style="text-align: center;"&gt;Benchmark Parallel Sum 1,000,000,000&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;br&gt;
+&lt;table&gt;&lt;thead&gt;
+&lt;tr&gt;&lt;th&gt;Thread Count&lt;/th&gt;&lt;th&gt;RSqueak green threads&lt;/th&gt;&lt;th&gt;RSqueak/STM green threads&lt;/th&gt;&lt;th&gt;RSqueak/STM OS threads&lt;/th&gt;&lt;th&gt;Slow down from  RSqueak green threads to RSqueak/STM green threads&lt;/th&gt;&lt;th&gt;Speed up from RSqueak/STM green threads to RSQueak/STM OS Threads&lt;/th&gt;&lt;/tr&gt;
+&lt;/thead&gt;&lt;tbody&gt;
+&lt;tr&gt;   &lt;td&gt;1&lt;/td&gt;   &lt;td&gt;16831.0 ms&lt;/td&gt;   &lt;td&gt;24111.0 ms&lt;/td&gt;   &lt;td&gt;23346.0 ms&lt;/td&gt;   &lt;td&gt;0.70&lt;/td&gt;   &lt;td&gt;1.03&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;2&lt;/td&gt;   &lt;td&gt;17059.9 ms&lt;/td&gt;   &lt;td&gt;24229.4 ms&lt;/td&gt;   &lt;td&gt;16102.1 ms&lt;/td&gt;   &lt;td&gt;0.70&lt;/td&gt;   &lt;td&gt;1.50&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;4&lt;/td&gt;   &lt;td&gt;16959.9 ms&lt;/td&gt;   &lt;td&gt;24365.6 ms&lt;/td&gt;   &lt;td&gt;12099.5 ms&lt;/td&gt;   &lt;td&gt;0.70&lt;/td&gt;   &lt;td&gt;2.01&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;8&lt;/td&gt;   &lt;td&gt;16758.4 ms&lt;/td&gt;   &lt;td&gt;24228.1 ms&lt;/td&gt;   &lt;td&gt;14076.9 ms&lt;/td&gt;   &lt;td&gt;0.69&lt;/td&gt;   &lt;td&gt;1.72&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;16&lt;/td&gt;   &lt;td&gt;16748.7 ms&lt;/td&gt;   &lt;td&gt;24266.6 ms&lt;/td&gt;   &lt;td&gt;55502.9 ms&lt;/td&gt;   &lt;td&gt;0.69&lt;/td&gt;   &lt;td&gt;0.44&lt;/td&gt;  &lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+
+&lt;br&gt;
+
+&lt;h4&gt;
+Mandelbrot Iterative&lt;/h4&gt;
+&lt;table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="margin-left: auto; margin-right: auto; text-align: center;"&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td style="text-align: center;"&gt;
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://2.bp.blogspot.com/-_wLcNRFGkQc/U-iFOB3wDmI/AAAAAAAAAWA/He1oxb0hEpc/s1600/mandelbrotChart.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://2.bp.blogspot.com/-_wLcNRFGkQc/U-iFOB3wDmI/AAAAAAAAAWA/He1oxb0hEpc/s320/mandelbrotChart.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class="tr-caption" style="text-align: center;"&gt;Benchmark Mandelbrot&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;table&gt;&lt;thead&gt;
+&lt;tr&gt; &lt;th&gt;Thread Count&lt;/th&gt; &lt;th&gt;RSqueak green threads&lt;/th&gt; &lt;th&gt;RSqueak/STM green threads&lt;/th&gt; &lt;th&gt;RSqueak/STM OS threads&lt;/th&gt; &lt;th&gt;Slow down from  RSqueak green threads to RSqueak/STM green threads&lt;/th&gt; &lt;th&gt;Speed up from RSqueak/STM green threads to RSqueak/STM OS Threads&lt;/th&gt; &lt;/tr&gt;
+&lt;/thead&gt; &lt;tbody&gt;
+&lt;tr&gt;   &lt;td&gt;1&lt;/td&gt;   &lt;td&gt;724.0 ms&lt;/td&gt;   &lt;td&gt;983.0 ms&lt;/td&gt;   &lt;td&gt;1565.5 ms&lt;/td&gt;   &lt;td&gt;0.74&lt;/td&gt;   &lt;td&gt;0.63&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;2&lt;/td&gt;   &lt;td&gt;780.5 ms&lt;/td&gt;   &lt;td&gt;973.5 ms&lt;/td&gt;   &lt;td&gt;5555.0 ms&lt;/td&gt;   &lt;td&gt;0.80&lt;/td&gt;   &lt;td&gt;0.18&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;4&lt;/td&gt;   &lt;td&gt;781.0 ms&lt;/td&gt;   &lt;td&gt;982.5 ms&lt;/td&gt;   &lt;td&gt;20107.5 ms&lt;/td&gt;   &lt;td&gt;0.79&lt;/td&gt;   &lt;td&gt;0.05&lt;/td&gt;  &lt;/tr&gt;
+&lt;tr&gt;   &lt;td&gt;8&lt;/td&gt;   &lt;td&gt;779.5 ms&lt;/td&gt;   &lt;td&gt;980.0 ms&lt;/td&gt;   &lt;td&gt;113067.0 ms&lt;/td&gt;   &lt;td&gt;0.80&lt;/td&gt;   &lt;td&gt;0.01&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+
+&lt;br&gt;
+
+&lt;h2&gt;
+Discussion of benchmark results&lt;/h2&gt;
+&lt;p&gt;First of all, the ParallelSum benchmarks show that the parallelism is actually paying off, at least for sufficiently large embarrassingly parallel problems. Thus RSqueak can also benefit from rstm.&lt;/p&gt;
+&lt;p&gt;On the other hand, our Mandelbrot implementation shows the limits of our current rstm integration. We implemented two versions of the algorithm one using one low-level array and one using two nested collections. In both versions, one job only calculates a distinct range of rows and both lead to a slowdown. The summary of the state of rstm transactions shows that there are a lot of inevitable transactions (transactions which must be completed). One reason might be the interactions between the VM and its low-level extensions, so called plugins. We have to investigate this further.&lt;/p&gt;
+&lt;h2 id="limitations"&gt;
+Limitations&lt;/h2&gt;
+&lt;p&gt;Although the current VM setup is working well enough to support our benchmarks, the VM still has limitations. First of all, as it is based on rstm, it has the current limitation of only running on 64-bit Linux.&lt;/p&gt;
+&lt;p&gt;Besides this, we also have two major limitations regarding the VM itself. First, the atomic interface exposed in Smalltalk is currently not working, when the VM is compiled using the just-in-time compiler transformation. Simple examples such as concurrent parallel sum work fine while more complex benchmarks such as &lt;a href="https://benchmarksgame.alioth.debian.org/u32/performance.php?test=chameneosredux#about"&gt;chameneos&lt;/a&gt; fail. The reasons for this are currently beyond our understanding. Second, Smalltalk supports green threads, which are threads which are managed by the VM and are not mapped to OS threads. We currently support starting new Smalltalk threads as OS threads instead of starting them as green threads. However, existing threads in a Smalltalk image are not migrated to OS threads, but remain running as green threads.&lt;/p&gt;
+&lt;h2 id="future-work-for-stm-in-rsqueak"&gt;
+Future work for STM in RSqueak&lt;/h2&gt;
+The work we presented showed interesting problems, we propose the following problem statements for further analysis:&lt;br&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Inevitable transactions&lt;/strong&gt; in benchmarks. This looks like it could limit other applications too so it should be solved.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Collection implementation aware of STM&lt;/strong&gt;: The current implementation of collections can cause a lot of STM collisions due to their internal memory structure. We believe it could bear potential for performance improvements,  if we replace these collections in an STM enabled interpreter with implementations with less STM collisions. As already proposed by Remi Meier, bags, sets and lists are of particular interest.&lt;/li&gt;
+&lt;li&gt;Finally, we exposed &lt;strong&gt;STM through languages features&lt;/strong&gt; such as the atomic method, which is provided through the VM. Originally, it was possible to model STM transactions barriers implicitly by using clever locks, now its exposed via the atomic keyword. From a language design point of view, the question arises whether this is a good solution and what features an stm-enabled interpreter must provide to the user in general? Of particular interest are for example, access to the transaction length and hints for transaction borders to and their  performance impact.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ul&gt;&lt;/ul&gt;
+&lt;h2 id="details-for-the-technically-inclined"&gt;
+Details for the technically inclined&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://bitbucket.org/pypy/lang-smalltalk/diff/spyvm/interpreter.py?diff1=7a217be69118&amp;amp;diff2=a772ee2447d96041e7db6550e160e90251d0dd85&amp;amp;at=stmgc-c7#Lspyvm/interpreter.pyT233"&gt;Adjustments to the interpreter loop were minimal&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;STM works on bytecode granularity that means, there is a implicit transaction border after every bytecode executed. Possible alternatives: only break transactions after certain  bytecodes, break transactions on one abstraction layer above, e.g. object methods (setter, getter).&lt;/li&gt;
+&lt;li&gt;rstm calls were exposed using primtives (a way to expose native code in Smalltalk), this was mainly used for atomic.&lt;/li&gt;
+&lt;li&gt;Starting and stopping OS threads is exposed via primitives as well. Threads are started from within the interpreter.&lt;/li&gt;
+&lt;li&gt;For Smalltalk enabled STM code we currently have different image versions. However another way to add, load and replace code to the Smalltalk code base is required to make a switch between STM and non-STM code simple.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ul&gt;&lt;/ul&gt;
+&lt;h2 id="details-on-the-project-setup"&gt;
+Details on the project setup&lt;/h2&gt;
+&lt;p&gt;From a non-technical perspective, a problem we encountered was the huge roundtrip times (on our machines up to 600s, 900s with JIT enabled). This led to a tendency of bigger code changes ("Before we compile, let's also add this"), lost flow ("What where we doing before?") and different compiled interpreters in parallel testing ("How is this version different from the others?") As a consequence it was harder to test and correct errors. While this is not as much of a problem for other RPython VMs, RSqueakVM needs to execute the entire image, which makes running it untranslated even slower.&lt;/p&gt;
+&lt;h2 id="summary"&gt;
+Summary&lt;/h2&gt;
+&lt;p&gt;The benchmarks show that speed up is possible, but also that the STM overhead in some situations can eat up the speedup. The  resulting STM-enabled VM still has some limitations: As rstm is  currently only running on 64-bit Linux the RSqueakVM is doing so as  well. Eventhough it is possible for us now to create new threads that  map to OS threads within the VM, the migration of exiting Smalltalk threads keeps being problematic.&lt;/p&gt;
+&lt;p&gt;We showed that an existing VM code base can benefit of STM in terms of scaling up. Further it was relatively easy to enable STM support. This may also be valuable to VM developers considering to get STM support for their VMs.&lt;/p&gt;</description><category>Smalltalk</category><category>Squeak</category><category>stm</category><guid>https://www.pypy.org/posts/2014/08/a-field-test-of-software-transactional-5659022209916605798.html</guid><pubDate>Sat, 09 Aug 2014 13:15:00 GMT</pubDate></item><item><title>STM results and Second Call for Donations</title><link>https://www.pypy.org/posts/2014/04/stm-results-and-second-call-for-1767845182888902777.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;p&gt;Hi all,&lt;/p&gt;
+
+&lt;p&gt;We now have a preliminary version of &lt;a href="https://pypy.readthedocs.org/en/latest/stm.html#current-status"&gt;PyPy-STM
+with the JIT&lt;/a&gt;, from the new &lt;a href="https://pypy.readthedocs.org/en/latest/stm.html"&gt;STM documentation
+page.&lt;/a&gt;  This PyPy-STM is still not quite useful, failing to top the
+performance of a regular PyPy by a small margin on most benchmarks, but
+it's definitely getting there :-)  The overheads with the JIT are still
+a bit too high.  (I've been tracking an obscure bug since days.
+It turned out to be a simple buffer overflow.  But if anybody has
+a clue about why a hardware watchpoint in gdb, set on one of the garbled
+memory locations, fails to trigger but the memory ends up being modified
+anyway... and, it turns out, by just a regular pointer write... ideas
+welcome.)&lt;/p&gt;
+
+&lt;p&gt;But I go off-topic :-)  The main point of this post is to announce the
+&lt;a href="https://pypy.org/tmdonate2.html"&gt;2nd Call for Donation about
+STM&lt;/a&gt;.  We achieved most of the goals laid out in the first call.  We
+even largely overachieved them in terms of raw performance, even if
+there are many cases that are unreasonably slow for now.  So, after the
+successful research, we are launching a second proposal about the
+development part of the project:&lt;/p&gt;
+
+&lt;ol&gt;&lt;li&gt;&lt;p&gt;Polish PyPy-STM to get a consistently reasonable speed, 25%-40%
+slower than a regular JITted PyPy when running single-threaded code.  Of
+course it is supposed to scale nicely as long as there are no
+user-visible conflicts.&lt;/p&gt;
+
+&lt;/li&gt;&lt;li&gt;&lt;p&gt;Focus on developing the Python-facing interface: both internal things
+(e.g. do dictionaries need to be more TM-friendly in general?) as well
+as directly visible things (e.g. some profiler-like interface to explore
+common conflicts in a program).&lt;/p&gt;
+
+&lt;/li&gt;&lt;li&gt;&lt;p&gt;Regular multithreaded code should benefit out of the box, but the
+final goal is to explore and tweak some existing non-multithreaded
+frameworks and improve their TM-friendliness.  So existing programs
+using Twisted or Stackless, for example, should run on multiple cores
+without any major change.&lt;/p&gt;&lt;/li&gt;&lt;/ol&gt;
+
+&lt;p&gt;See the &lt;a href="https://pypy.org/tmdonate2.html"&gt;full call&lt;/a&gt; for more
+details!  I'd like to thank Remi Meier for getting involved.  And a big
+thank you to everybody who contributed money on the first call.  It
+took more time than anticipated, but it's there in good but rough shape.
+Now it needs a lot of polishing :-)&lt;/p&gt;
+
+&lt;p&gt;Armin&lt;/p&gt;</description><category>stm</category><guid>https://www.pypy.org/posts/2014/04/stm-results-and-second-call-for-1767845182888902777.html</guid><pubDate>Wed, 09 Apr 2014 09:33:00 GMT</pubDate></item><item><title>STMGC-C7 with PyPy</title><link>https://www.pypy.org/posts/2014/03/hi-all-here-is-one-of-first-full-pypys-8725931424559481728.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;p&gt;Hi all,&lt;/p&gt;
+
+&lt;p&gt;Here is one of the first full PyPy's
+(edit: it was r69967+, but the general list of versions is currently &lt;a href="https://cobra.cs.uni-duesseldorf.de/~buildmaster/misc/"&gt;here&lt;/a&gt;)
+compiled with the new &lt;a href="https://www.pypy.org/posts/2014/02/rewrites-of-stm-core-model-again-633249729751034512.html"&gt;StmGC-c7
+library&lt;/a&gt;.  It has no JIT so far, but it runs some small
+single-threaded benchmarks by taking around 40% more time than a
+corresponding non-STM, no-JIT version of PyPy.  It scales --- up to two
+threads only, which is the hard-coded maximum so far in the c7 code.
+But the scaling looks perfect in these small benchmarks without
+conflict: starting two threads each running a copy of the benchmark
+takes almost exactly the same amount of total time, simply using two
+cores.&lt;/p&gt;
+
+&lt;p&gt;Feel free to try it!  It is not actually useful so far, because it is
+limited to two cores and CPython is something like 2.5x faster.  One of
+the important next steps is to re-enable the JIT.  Based on our &lt;a href="https://foss.heptapod.net/pypy/pypy/-/tree/branch//stmgc-c7/TODO"&gt;current
+understanding&lt;/a&gt; of the "40%" figure, we can probably reduce it with
+enough efforts; but also, the JIT should be able to easily produce
+machine code that suffers a bit less than the interpreter from these
+effects.  This seems to mean that we're looking at 20%-ish slow-downs
+for the future PyPy-STM-JIT.&lt;/p&gt;
+
+&lt;p&gt;Interesting times :-)&lt;/p&gt;
+
+&lt;p&gt;For reference, this is what you get by downloading &lt;a href="https://cobra.cs.uni-duesseldorf.de/~buildmaster/misc/pypy-c-r69967+-stm-1d0b870195e7.tbz2"&gt;the
+PyPy binary linked above&lt;/a&gt;: a Linux 64 binary (Ubuntu 12.04) that
+should behave mostly like a regular PyPy.  (One main missing feature is
+that destructors are never called.)  It uses two cores, but obviously
+only if the Python program you run is multithreaded.  The only new
+built-in feature is &lt;code&gt;with __pypy__.thread.atomic:&lt;/code&gt; this gives
+you a way to enforce that a block of code runs "atomically", which means
+without any operation from any other thread randomly interleaved.&lt;/p&gt;
+
+&lt;p&gt;If you want to translate it yourself, you need a trunk version of clang
+with &lt;a href="https://bitbucket.org/pypy/stmgc/raw/default/c7/llvmfix"&gt;three patches&lt;/a&gt; applied.  That's the number of bugs that we couldn't
+find workarounds for, not the total number of bugs we found by (ab)using
+the &lt;a href="https://clang.llvm.org/docs/LanguageExtensions.html#target-specific-extensions"&gt;address_space&lt;/a&gt; feature...&lt;/p&gt;
+
+&lt;p&gt;Stay tuned for more!&lt;/p&gt;
+
+&lt;p&gt;Armin &amp;amp; Remi&lt;/p&gt;</description><category>stm</category><guid>https://www.pypy.org/posts/2014/03/hi-all-here-is-one-of-first-full-pypys-8725931424559481728.html</guid><pubDate>Sat, 15 Mar 2014 17:00:00 GMT</pubDate></item><item><title>Rewrites of the STM core model -- again</title><link>https://www.pypy.org/posts/2014/02/rewrites-of-stm-core-model-again-633249729751034512.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;p&gt;Hi all,&lt;/p&gt;
+
+&lt;p&gt;A quick note about the Software Transactional Memory (STM) front.&lt;/p&gt;
+
+&lt;p&gt;Since the &lt;a href="https://www.pypy.org/posts/2013/10/update-on-stm-7145890443443707910.html"&gt;previous
+post&lt;/a&gt;, we believe we progressed a lot by discovering an alternative
+core model for software transactions.  Why do I say "believe"?  It's
+because it means &lt;i&gt;again&lt;/i&gt; that we have to rewrite from scratch the C
+library handling STM.  This is currently work in progress.  Once this is
+done, we should be able to adapt the existing pypy-stm to run on top of
+it without much rewriting efforts; in fact it should simplify the
+difficult issues we ran into for the JIT.  So while this is basically
+yet another restart similar to &lt;a href="https://www.pypy.org/posts/2013/06/stm-on-drawing-board-1028082727566254104.html"&gt;last
+June's&lt;/a&gt;, the difference is that the work that we have already put in the PyPy
+part (as opposed to the C library) remains.&lt;/p&gt;
+
+&lt;p&gt;You can read about the basic ideas of this new C library &lt;a href="https://bitbucket.org/pypy/stmgc/raw/c7/c7/README.txt"&gt;here&lt;/a&gt;.
+It is still STM-only, not HTM, but because it doesn't constantly move
+objects around in memory, it would be easier to adapt an HTM version.
+There are even potential ideas about a hybrid TM, like using HTM but
+only to speed up the commits.  It is based on a &lt;a href="https://bpaste.net/show/177186/"&gt;Linux-only&lt;/a&gt; system call, &lt;a href="https://man7.org/linux/man-pages/man2/remap_file_pages.2.html"&gt;remap_file_pages()&lt;/a&gt;
+(poll: who heard about it before? :-).  As previously, the work is done
+by Remi Meier and myself.&lt;/p&gt;
+
+&lt;p&gt;Currently, the C library is incomplete, but early experiments show good
+results in running &lt;a href="https://www.pypy.org/posts/2013/07/software-transactional-memory-lisp-7777576128992250197.html"&gt;duhton&lt;/a&gt;,
+the interpreter for a minimal language created for the purpose of
+testing STM.  Good results means we brought down the slow-downs from
+60-80% (previous version) to around 15% (current version).  This number
+measures the slow-down from the non-STM-enabled to the STM-enabled
+version, on one CPU core; of course, the idea is that the STM version
+scales up when using more than one core.&lt;/p&gt;
+
+&lt;p&gt;This means that we are looking forward to a result that is much better
+than originally predicted.  The pypy-stm has chances to run at a
+one-thread speed that is only "n%" slower than the regular pypy-jit, for
+a value of "n" that is optimistically 15 --- but more likely some number
+around 25 or 50.  This is seriously better than the original estimate,
+which was "between 2x and 5x".  It would mean that using pypy-stm is
+quite worthwhile even with just two cores.&lt;/p&gt;
+
+&lt;p&gt;More updates later...&lt;/p&gt;
+
+&lt;p&gt;Armin&lt;/p&gt;</description><category>stm</category><guid>https://www.pypy.org/posts/2014/02/rewrites-of-stm-core-model-again-633249729751034512.html</guid><pubDate>Sun, 09 Feb 2014 22:16:00 GMT</pubDate></item><item><title>Update on STM</title><link>https://www.pypy.org/posts/2013/10/update-on-stm-7145890443443707910.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;p&gt;Hi all,&lt;/p&gt;
+&lt;p&gt;The sprint in London was a lot of fun and very fruitful. In the last
+update on STM, Armin was working on improving and specializing the
+automatic barrier placement. There is still a lot to do in that area,
+but that work is merged now. Specializing and improving barrier placement
+is still to be done for the JIT.&lt;/p&gt;
+&lt;p&gt;But that is not all. Right after the sprint, we were able to squeeze
+the last obvious bugs in the STM-JIT combination. However, the performance
+was nowhere near to what we want. So until now, we fixed some of the most
+obvious issues. Many come from RPython erring on the side of caution
+and e.g. making a transaction inevitable even if that is not strictly
+necessary, thereby limiting parallelism. Another problem came from
+increasing counters everytime a guard fails, which caused transactions
+to conflict on these counter updates. Since these counters do not have
+to be completely accurate, we update them non-transactionally now with
+a chance of small errors.&lt;/p&gt;
+&lt;p&gt;There are still many such performance issues of various complexity left
+to tackle: we are nowhere near done. So stay tuned or contribute :)&lt;/p&gt;
+
+&lt;h2&gt;Performance&lt;/h2&gt;
+&lt;p&gt;Now, since the JIT is all about performance, we want to at least
+show you some numbers that are indicative of things to come.
+Our set of STM benchmarks is very small unfortunately
+(something you can help us out with), so this is
+not representative of real-world performance. We tried to
+minimize the effect of JIT warm-up in the benchmark results.&lt;/p&gt;
+&lt;p&gt;The machine these benchmarks were executed on has 4 physical
+cores with Hyper-Threading (8 hardware threads).&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Raytracer&lt;/strong&gt; from &lt;a class="reference external" href="https://bitbucket.org/Raemi/stm-benchmarks/src"&gt;stm-benchmarks&lt;/a&gt;:
+Render times in seconds for a 1024x1024 image:&lt;/p&gt;
+&lt;table border="1" class="docutils"&gt;
+&lt;colgroup&gt;
+&lt;col width="23%"&gt;
+&lt;col width="39%"&gt;
+&lt;col width="38%"&gt;
+&lt;/colgroup&gt;
+&lt;thead valign="bottom"&gt;
+&lt;tr&gt;&lt;th class="head"&gt;Interpreter&lt;/th&gt;
+&lt;th class="head"&gt;Base time: 1 thread&lt;/th&gt;
+&lt;th class="head"&gt;8 threads (speedup)&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;PyPy-2.1&lt;/td&gt;
+&lt;td&gt;2.47&lt;/td&gt;
+&lt;td&gt;2.56 (0.96x)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;CPython&lt;/td&gt;
+&lt;td&gt;81.1&lt;/td&gt;
+&lt;td&gt;73.4 (1.1x)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;PyPy-STM&lt;/td&gt;
+&lt;td&gt;50.2&lt;/td&gt;
+&lt;td&gt;10.8 (4.6x)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;For comparison, disabling the JIT gives 148s on PyPy-2.1 and 87s on
+PyPy-STM (with 8 threads).&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Richards&lt;/strong&gt; from &lt;a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/branch/stmgc-c4"&gt;PyPy repository on the stmgc-c4
+branch&lt;/a&gt;:
+Average time per iteration in milliseconds:&lt;/p&gt;
+&lt;table border="1" class="docutils"&gt;
+&lt;colgroup&gt;
+&lt;col width="23%"&gt;
+&lt;col width="39%"&gt;
+&lt;col width="38%"&gt;
+&lt;/colgroup&gt;
+&lt;thead valign="bottom"&gt;
+&lt;tr&gt;&lt;th class="head"&gt;Interpreter&lt;/th&gt;
+&lt;th class="head"&gt;Base time: 1 thread&lt;/th&gt;
+&lt;th class="head"&gt;8 threads (speedup)&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;PyPy-2.1&lt;/td&gt;
+&lt;td&gt;15.6&lt;/td&gt;
+&lt;td&gt;15.4 (1.01x)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;CPython&lt;/td&gt;
+&lt;td&gt;239&lt;/td&gt;
+&lt;td&gt;237 (1.01x)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;PyPy-STM&lt;/td&gt;
+&lt;td&gt;371&lt;/td&gt;
+&lt;td&gt;116 (3.2x)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;For comparison, disabling the JIT gives 492ms on PyPy-2.1 and 538ms on
+PyPy-STM.&lt;/p&gt;
+
+&lt;h2&gt;Try it!&lt;/h2&gt;
+&lt;p&gt;All this can be found in the &lt;a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/branch/stmgc-c4"&gt;PyPy repository on the stmgc-c4
+branch&lt;/a&gt;.
+Try it for yourself, but keep in mind that this is still experimental
+with a lot of things yet to come. Only Linux x64 is supported right
+now, but contributions are welcome.&lt;/p&gt;
+&lt;p&gt;You can download a prebuilt binary from here:
+&lt;a class="reference external" href="https://bitbucket.org/pypy/pypy/downloads/pypy-oct13-stm.tar.bz2"&gt;https://bitbucket.org/pypy/pypy/downloads/pypy-oct13-stm.tar.bz2&lt;/a&gt;
+(Linux x64 Ubuntu &amp;gt;= 12.04).  This was made at revision bafcb0cdff48.&lt;/p&gt;
+
+&lt;h2&gt;Summary&lt;/h2&gt;
+&lt;p&gt;What the numbers tell us is that PyPy-STM is, as expected,
+the only of the three interpreters where multithreading gives a large
+improvement in speed.  What they also tell us is that, obviously, the
+result is not good enough &lt;em&gt;yet:&lt;/em&gt; it still takes longer on a 8-threaded
+PyPy-STM than on a regular single-threaded PyPy-2.1.  However, as you
+should know by now, we are good at promising speed and delivering it...
+years later &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;:-)&lt;/span&gt;&lt;/tt&gt;&lt;/p&gt;
+&lt;p&gt;But it has been two years already since PyPy-STM started, and this is
+our first preview of the JIT integration.  Expect major improvements
+soon: with STM, the JIT generates code that is completely suboptimal in
+many cases (barriers, allocation, and more).  Once we improve this, the
+performance of the STM-JITted code should come much closer to PyPy 2.1.&lt;/p&gt;
+&lt;p&gt;Cheers&lt;/p&gt;
+&lt;p&gt;Remi &amp;amp; Armin&lt;/p&gt;</description><category>stm</category><guid>https://www.pypy.org/posts/2013/10/update-on-stm-7145890443443707910.html</guid><pubDate>Wed, 16 Oct 2013 17:01:00 GMT</pubDate></item><item><title>Update on STM</title><link>https://www.pypy.org/posts/2013/08/update-on-stm-8705514488940872802.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;p&gt;Hi all,&lt;/p&gt;
+
+&lt;p&gt;A quick update on Software Transactional Memory.  We are
+working on two fronts.&lt;/p&gt;
+
+&lt;p&gt;On the one hand, the integration of the "c4" C library with PyPy is done
+and works well, but is still subject to improvements.  The "PyPy-STM"
+executable (without the JIT)
+seems to be stable, as far as it has been tested.  It runs a simple
+benchmark like Richards with a 3.2x slow-down over a regular JIT-less
+PyPy.&lt;/p&gt;
+
+&lt;p&gt;The main factor of this slow-down: the numerous "barriers" in
+the code --- checks that are needed a bit everywhere to verify that a
+pointer to an object points to a recent enough version, and if not, to
+go to the most recent version.  These barriers are inserted automatically
+during the translation; there is no need for us to manually put 42 million
+barriers in the source code of PyPy.  But this automatic insertion uses a
+primitive algorithm right now, which usually ends up putting more barriers than the
+theoretical optimum.  I (Armin) am trying to improve that --- and progressing:
+last week the slow-down was around 4.5x.  This is done in the branch
+&lt;a href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/stmgc-static-barrier"&gt;stmgc-static-barrier&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;On the other hand, Remi is progressing on the JIT integration in
+the branch &lt;a href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/stmgc-c4"&gt;stmgc-c4&lt;/a&gt;. 
+This has been working in simple cases since a couple of weeks by now, but the
+resulting "PyPy-JIT-STM" often crashes.  This is because while the
+basics are not really hard, we keep hitting new issues that must be
+resolved.&lt;/p&gt;
+
+&lt;p&gt;The basics are that whenever the JIT is about to generate
+assembler corresponding to a load or a store in a GC object, it must
+first generate a bit of extra assembler that corresponds to the barrier
+that we need.  This works fine by now (but could benefit from the same
+kind of optimizations described above, to reduce the number of barriers).
+The additional issues are all more subtle.  I will describe the current
+one as an example: it is how to write constant pointers inside the assembler.&lt;/p&gt;
+
+&lt;p&gt;Remember that the STM library classifies objects as either
+"public" or "protected/private".  A "protected/private" object
+is one which has not been seen by another thread so far.
+This is essential as an optimization, because we know that no
+other thread will access our protected or private objects in parallel,
+and thus we are free to modify their content in place.  By contrast,
+public objects are frozen, and to do any change, we first need to
+build a different (protected) copy of the object.  See this
+&lt;a href="https://www.pypy.org/posts/2013/06/stm-on-drawing-board-1028082727566254104.html"&gt;blog
+post&lt;/a&gt; for more details.&lt;/p&gt;
+
+&lt;p&gt;So far so good, but the JIT will sometimes (actually often) hard-code
+constant pointers into the assembler it produces.  For example, this is the
+case when the Python code being JITted creates an instance of a known class;
+the corresponding assembler produced by the JIT will reserve the memory for
+the instance and then write the constant type pointer in it.  This type
+pointer is a GC object (in the simple model, it's the Python class object;
+in PyPy it's actually the "map" object, which is
+&lt;a href="https://www.pypy.org/posts/2011/03/controlling-tracing-of-interpreter-with_21-6524148550848694588.html"&gt;a different story&lt;/a&gt;).&lt;/p&gt;
+
+&lt;p&gt;The problem right now is that this constant pointer may point to a
+protected object.  This is a problem because the same piece of assembler
+can later be executed by a different thread.  If it does, then this
+different thread will create instances whose type pointer is bogus: looking
+like a protected object, but actually protected by a different thread.
+Any attempt to use this type pointer to change anything on the class
+itself will likely crash: the threads will all think they can safely change it
+in-place.  To fix this, we need to make sure we only write pointers to
+public objects in the assembler.  This is a bit involved because we need
+to ensure that there &lt;i&gt;is&lt;/i&gt; a public version of the object to start with.&lt;/p&gt;
+
+&lt;p&gt;When this is done, we will likely hit the next problem, and the next one;
+but at some point it should converge (hopefully!) and we'll give you our first
+PyPy-JIT-STM ready to try.  Stay tuned :-)&lt;/p&gt;
+
+&lt;p&gt;A bientôt,&lt;/p&gt;
+
+&lt;p&gt;Armin.&lt;/p&gt;</description><category>stm</category><guid>https://www.pypy.org/posts/2013/08/update-on-stm-8705514488940872802.html</guid><pubDate>Sun, 18 Aug 2013 18:54:00 GMT</pubDate></item><item><title>Software Transactional Memory lisp experiments</title><link>https://www.pypy.org/posts/2013/07/software-transactional-memory-lisp-7777576128992250197.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+&lt;p&gt;As covered in &lt;a class="reference external" href="https://www.pypy.org/posts/2013/06/stm-on-drawing-board-1028082727566254104.html"&gt;the previous blog post&lt;/a&gt;, the STM subproject of PyPy has been
+back on the drawing board. The result of this experiment is an STM-aware
+garbage collector written in C. This is finished by now, thanks to Armin's
+and Remi's work, we have a fully functional garbage collector and a STM system
+that can be used from any C program with enough effort. Using it is more than
+a little mundane, since you have to inserts write and read barriers by hand
+everywhere in your code that reads or writes to garbage collector controlled
+memory. In the PyPy integration, this manual work is done automatically
+by the STM transformation in the interpreter.&lt;/p&gt;
+&lt;p&gt;However, to experiment some more, we created a minimal
+&lt;a class="reference external" href="https://bitbucket.org/arigo/duhton"&gt;lisp-like/scheme-like interpreter&lt;/a&gt;
+(called Duhton), that follows closely CPython's implementation strategy.
+For anyone familiar with CPython's source code, it should be pretty
+readable. This interpreter works like a normal and very basic lisp variant,
+however it comes with a &lt;tt class="docutils literal"&gt;transaction&lt;/tt&gt; builtin, that lets you spawn transactions
+using the STM system. We implemented a few demos that let you play with the
+transaction system. All the demos are running without conflicts, which means
+there are no conflicting writes to global memory and hence the demos are very
+amenable to parallelization. They exercise:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;arithmetics - &lt;tt class="docutils literal"&gt;demo/many_sqare_roots.duh&lt;/tt&gt;&lt;/li&gt;
+&lt;li&gt;read-only access to globals - &lt;tt class="docutils literal"&gt;demo/trees.duh&lt;/tt&gt;&lt;/li&gt;
+&lt;li&gt;read-write access to local objects - &lt;tt class="docutils literal"&gt;demo/trees2.duh&lt;/tt&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;With the latter ones being very similar to the classic gcbench. STM-aware
+Duhton can be found in &lt;a class="reference external" href="https://bitbucket.org/pypy/stmgc"&gt;the stmgc repo&lt;/a&gt;, while the STM-less Duhton,
+that uses refcounting, can be found in &lt;a class="reference external" href="https://bitbucket.org/arigo/duhton"&gt;the duhton repo&lt;/a&gt; under the &lt;tt class="docutils literal"&gt;base&lt;/tt&gt;
+branch.&lt;/p&gt;
+&lt;p&gt;Below are some benchmarks. Note that this is a little comparing apples to
+oranges since the single-threaded duhton uses refcounting GC vs generational
+GC for STM version. Future pypy benchmarks will compare more apples to apples.
+Moreover none of the benchmarks has any conflicts. Time is the total time
+that the benchmark took (not the CPU time) and there was very little variation
+in the consecutive runs (definitely below 5%).&lt;/p&gt;
+&lt;table border="1" class="docutils"&gt;
+&lt;colgroup&gt;
+&lt;col width="16%"&gt;
+&lt;col width="30%"&gt;
+&lt;col width="23%"&gt;
+&lt;col width="16%"&gt;
+&lt;col width="16%"&gt;
+&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;benchmark&lt;/td&gt;
+&lt;td&gt;1 thread (refcount)&lt;/td&gt;
+&lt;td&gt;1 thread (stm)&lt;/td&gt;
+&lt;td&gt;2 threads&lt;/td&gt;
+&lt;td&gt;4 threads&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;square&lt;/td&gt;
+&lt;td&gt;1.9s&lt;/td&gt;
+&lt;td&gt;3.5s&lt;/td&gt;
+&lt;td&gt;1.8s&lt;/td&gt;
+&lt;td&gt;0.9s&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;trees&lt;/td&gt;
+&lt;td&gt;0.6s&lt;/td&gt;
+&lt;td&gt;1.0s&lt;/td&gt;
+&lt;td&gt;0.54s&lt;/td&gt;
+&lt;td&gt;0.28s&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;trees2&lt;/td&gt;
+&lt;td&gt;1.4s&lt;/td&gt;
+&lt;td&gt;2.2s&lt;/td&gt;
+&lt;td&gt;1.1s&lt;/td&gt;
+&lt;td&gt;0.57s&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;As you can see, the slowdown for STM vs single thread is significant
+(1.8x, 1.7x, 1.6x respectively), but still lower than 2x. However the speedup
+from running on multiple threads parallelizes the problem almost perfectly.&lt;/p&gt;
+&lt;p&gt;While a significant milestone, we hope the next blog post will cover
+STM-enabled pypy that's fully working with JIT work ongoing.&lt;/p&gt;
+&lt;p&gt;Cheers,&lt;br&gt;
+fijal on behalf of Remi Meier and Armin Rigo&lt;/p&gt;&lt;br&gt;
+&lt;br&gt;&lt;/div&gt;</description><category>stm</category><guid>https://www.pypy.org/posts/2013/07/software-transactional-memory-lisp-7777576128992250197.html</guid><pubDate>Fri, 12 Jul 2013 10:07:00 GMT</pubDate></item><item><title>STM on the drawing board</title><link>https://www.pypy.org/posts/2013/06/stm-on-drawing-board-1028082727566254104.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;p&gt;Hi all!&lt;/p&gt;
+
+&lt;p&gt;This is an update about the Software Transactional Memory subproject of
+PyPy.  I have some good news of progress.  Also,
+&lt;a href="https://bitbucket.org/Raemi"&gt;Remi Meier&lt;/a&gt; will
+likely help me this summer.  He did various
+investigations with PyPy-STM for his Master's Thesis and contributed back
+a lot of ideas and some code.  Welcome again Remi!&lt;/p&gt;
+
+&lt;p&gt;I am also sorry that it seems to advance so slowly.  Beyond the usual
+excuses --- I was busy with other things, e.g. releasing PyPy 2.0 --- I
+would like to reassure people: I'm again working on it, and the financial
+contributions are still there and reserved for STM (almost half the money is
+left, a big thank you again if you contributed!).&lt;/p&gt;
+
+&lt;p&gt;The real reason for the apparent slowness, though, is that it is really
+a research project.  It's possible to either have hard deadlines, or to
+follow various tracks and keep improving the basics, but not both at the
+same time.&lt;/p&gt;
+
+&lt;p&gt;During the past month where I have worked again on STM, I worked still on
+the second option; and I believe it was worth every second of it.  Let me try
+to convince you :-)&lt;/p&gt;
+
+&lt;p&gt;The main blocker was that the STM subsystem, written in C, and the
+Garbage Collection (GC) subsystem, written in RPython, were getting
+harder and harder to coordinate.  So what I did instead is to give up
+using RPython in favor of using only C for both.  C is a good language
+for some things, which includes low-level programming where we must take
+care of delicate multithreading issues; RPython is not a good fit in
+that case, and wasn't designed to be.&lt;/p&gt;
+
+&lt;p&gt;I started a fresh &lt;a href="https://bitbucket.org/pypy/stmgc"&gt;Mercurial repo&lt;/a&gt;
+which is basically a stand-alone C library.  This library (in heavy development
+right now!) gives any C
+program some functions to allocate and track GC-managed objects, and
+gives an actual STM+GC combination on these objects.  It's possible
+(though rather verbose) to use it directly in C programs, like in a
+small example interpreter.  Of course the eventual purpose is to link it
+with PyPy during translation to C, with all the verbose calls
+automatically generated.&lt;/p&gt;
+
+&lt;p&gt;Since I started this, bringing the GC closer to the STM, I kept finding
+new ways that the two might interact to improve the performance, maybe
+radically.  Here is a summary of the current ideas.&lt;/p&gt;
+
+&lt;p&gt;When we run
+multiple threads, there are two common cases: one is to access (read and write)
+objects that have only been seen by the current thread; the other is to read
+objects seen by all threads, like in Python the modules/functions/classes,
+but not to write to them.  Of course, writing to the same object from
+multiple threads occurs too, and it is handled correctly (that's the whole
+point), but it is a relatively rare case.&lt;/p&gt;
+
+&lt;p&gt;So each object is classified as "public" or "protected" (or "private",
+when they belong to the current transaction).  Newly created objects, once
+they are no longer private, remain protected until
+they are read by a different thread.  Now, the point is to use very
+different mechanisms for public and for protected objects.  Public
+objects are visible by all threads, but read-only in memory; to change
+them, a copy must be made, and the changes are written to the copy (the
+"redolog" approach to STM).  Protected objects, on the other hand, are
+modified in-place, with (if necessary) a copy of them being made
+for the sole purpose of a possible abort of the transaction (the "undolog"
+approach).&lt;/p&gt;
+
+&lt;p&gt;This is combined with a generational GC similar to PyPy's --- but here,
+each thread gets its own nursery and does its own "minor collections",
+independently of the others.&lt;/p&gt;
+
+&lt;p&gt;So objects are by default protected; when another thread tries to follow a
+pointer to them, then it is that other thread's job to carefully "steal"
+the object and turn it public (possibly making a copy of it if needed,
+e.g. if it was still a young object living in the original nursery).&lt;/p&gt;
+
+&lt;p&gt;The same object can exist temporarily in multiple versions: any number
+of public copies; at most one active protected copy; and optionally one
+private copy per thread (this is the copy as currently seen by the
+transaction in progress on that thread).  The GC cleans up the
+unnecessary copies.&lt;/p&gt;
+
+&lt;p&gt;These ideas are variants and extensions of the same basic idea
+of keeping multiple copies with revision numbers to track them.
+Moreover, "read barriers" and "write barriers" are used by the C program
+calling into this library in order to be sure that it is accessing the
+right version of the object.  In the currently investigated variant
+I believe it should be possible to have rather cheap
+read barriers, which would definitely be a major speed improvement over
+the previous variants.  Actually, as far as I know, it would be a major
+improvement over most of the other existing STMs: in them, the typical read barrier
+involves following chains of pointers, and checking some dictionary to see if this
+thread has a modified local copy of the object.  The difference with a
+read barrier that can resolve most cases in a few CPU cycles should be
+huge.&lt;/p&gt;
+
+&lt;p&gt;So, this is research :-)  It is progressing, and at some point I'll be
+satisfied with it and stop rewriting everything; and then the actual
+integration into PyPy should be straightforward (there is already code
+to detect where the read and write barriers need to be inserted, where
+transactions can be split, etc.).  Then there is support for the
+JIT to be written, and so on.  But more about it later.&lt;/p&gt;
+
+&lt;p&gt;The purpose of this post was to give you some glimpses into what I'm
+working on right now.  As usual, no plan for release yet.  But you can
+look forward to seeing the C library progress.  I'll probably also start
+soon some sample interpreter in C, to test the waters (likely a
+revival of &lt;a href="https://bitbucket.org/arigo/duhton"&gt;duhton&lt;/a&gt;).
+If you know nothing about Python but all about the C-level
+multithreading issues, now is a good time to get involved :-)&lt;/p&gt;
+
+&lt;p&gt;Thanks for reading!&lt;/p&gt;
+
+&lt;p&gt;Armin&lt;/p&gt;</description><category>stm</category><guid>https://www.pypy.org/posts/2013/06/stm-on-drawing-board-1028082727566254104.html</guid><pubDate>Wed, 05 Jun 2013 15:31:00 GMT</pubDate></item><item><title>Multicore Programming in PyPy and CPython</title><link>https://www.pypy.org/posts/2012/08/multicore-programming-in-pypy-and-6595343388141556320.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;p&gt;Hi all,&lt;/p&gt;
+&lt;p&gt;This is a short "position paper" kind of post about my view (Armin
+Rigo's) on the future of multicore programming in high-level languages.
+It is a summary of the
+keynote presentation at EuroPython.  As I learned by talking with people
+afterwards, I am not a good enough speaker to manage to convey a deeper
+message in a 20-minutes talk.  I will try instead to convey it in a
+250-lines post...&lt;/p&gt;
+&lt;p&gt;This is about three points:&lt;/p&gt;
+&lt;ol class="arabic simple"&gt;
+&lt;li&gt;We often hear about people wanting a version of Python running without
+the Global Interpreter Lock (GIL): a "GIL-less Python".  But what we
+programmers really need is not just a GIL-less Python --- we need a
+higher-level way to write multithreaded programs than using directly
+threads and locks.  One way is Automatic Mutual Exclusion (AME), which
+would give us an "AME Python".&lt;/li&gt;
+&lt;li&gt;A good enough Software Transactional Memory (STM) system can be used
+as an internal tool to do that.
+This is what we are building into an "AME PyPy".&lt;/li&gt;
+&lt;li&gt;The picture is darker for CPython, though there is a way too.  The
+problem is that when we say STM, we think about either GCC 4.7's STM
+support, or Hardware Transactional Memory (HTM).  However, both
+solutions are enough for a "GIL-less CPython", but not
+for "AME CPython", due to capacity limitations.  For the latter, we
+need somehow to add some large-scale STM into the compiler.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Let me explain these points in more details.&lt;/p&gt;
+&lt;div class="section"&gt;
+&lt;h3&gt;&lt;a id="gil-less-versus-ame" name="gil-less-versus-ame"&gt;GIL-less versus AME&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The first point is in favor of the so-called Automatic Mutual Exclusion
+approach.  The issue with using threads (in any language with or without
+a GIL) is that threads are fundamentally non-deterministic.  In other
+words, the programs' behaviors are not reproductible at all, and worse,
+we cannot even reason about it --- it becomes quickly messy.  We would
+have to consider all possible combinations of code paths and timings,
+and we cannot hope to write tests that cover all combinations.  This
+fact is often documented as one of the main blockers towards writing
+successful multithreaded applications.&lt;/p&gt;
+&lt;p&gt;We need to solve this issue with a higher-level solution.  Such
+solutions exist theoretically, and Automatic Mutual Exclusion (AME) is
+one of them.  The idea of AME is that we divide the execution of each
+thread into a number of "atomic blocks".  Each block is well-delimited
+and typically large.  Each block runs atomically, as if it acquired a
+GIL for its whole duration.  The trick is that internally we use
+Transactional Memory, which is a technique that lets the system run the
+atomic blocks from each thread in parallel, while giving the programmer
+the illusion that the blocks have been run in some global serialized
+order.&lt;/p&gt;
+&lt;p&gt;This doesn't magically solve all possible issues, but it helps a lot: it
+is far easier to reason in terms of a random ordering of large atomic
+blocks than in terms of a random ordering of lines of code --- not to
+mention the mess that multithreaded C is, where even a random ordering
+of instructions is not a sufficient model any more.&lt;/p&gt;
+&lt;p&gt;How do such atomic blocks look like?  For example, a program might
+contain a loop over all keys of a dictionary, performing some
+"mostly-independent" work on each value.  This is a typical example:
+each atomic block is one iteration through the loop.  By using the
+technique described here, we can run the iterations in parallel
+(e.g. using a thread pool) but using AME to ensure that they appear to
+run serially.&lt;/p&gt;
+&lt;p&gt;In Python, we don't care about the order in which the loop iterations
+are done, because we are anyway iterating over the keys of a dictionary.
+So we get exactly the same effect as before: the iterations still run in
+some random order, but --- and that's the important point --- they
+appear to run in a
+global serialized order.  In other words, we introduced parallelism, but
+only under the hood: from the programmer's point of view, his program
+still appears to run completely serially.  Parallelisation as a
+theoretically invisible optimization...  more about the "theoretically"
+in the next paragraph.&lt;/p&gt;
+&lt;p&gt;Note that randomness of order is not fundamental: they are techniques
+building on top of AME that can be used to force the order of the
+atomic blocks, if needed.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section"&gt;
+&lt;h3&gt;&lt;a id="pypy-and-stm-ame" name="pypy-and-stm-ame"&gt;PyPy and STM/AME&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Talking more precisely about PyPy: the current prototype &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-stm&lt;/span&gt;&lt;/tt&gt; is
+doing precisely this.  In &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-stm&lt;/span&gt;&lt;/tt&gt;, the length of the atomic blocks is
+selected in one of two ways: either explicitly or automatically.&lt;/p&gt;
+&lt;p&gt;The automatic selection gives blocks corresponding to some small number
+of bytecodes, in which case we have merely a GIL-less Python: multiple
+threads will appear to run serially, with the execution randomly
+switching from one thread to another at bytecode boundaries, just like
+in CPython.&lt;/p&gt;
+&lt;p&gt;The explicit selection is closer to what was described in the previous
+section: someone --- the programmer or the author of some library that
+the programmer uses --- will explicitly put &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;with&lt;/span&gt; &lt;span class="pre"&gt;thread.atomic:&lt;/span&gt;&lt;/tt&gt; in
+the source, which delimitates an atomic block.  For example, we can use
+it to build a library that can be used to iterate over the keys of a
+dictionary: instead of iterating over the dictionary directly, we would
+use some custom utility which gives the elements "in parallel".  It
+would give them by using internally a pool of threads, but enclosing
+every handling of an element into such a &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;with&lt;/span&gt; &lt;span class="pre"&gt;thread.atomic&lt;/span&gt;&lt;/tt&gt; block.&lt;/p&gt;
+&lt;p&gt;This gives the nice illusion of a global serialized order, and thus
+gives us a well-behaving model of the program's behavior.&lt;/p&gt;
+&lt;p&gt;Restating this differently,
+the &lt;em&gt;only&lt;/em&gt; semantical difference between &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-stm&lt;/span&gt;&lt;/tt&gt; and
+a regular PyPy or CPython is that it has &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;thread.atomic&lt;/span&gt;&lt;/tt&gt;, which is a
+context manager that gives the illusion of forcing the GIL to not be
+released during the execution of the corresponding block of code.  Apart
+from this addition, they are apparently identical.&lt;/p&gt;
+&lt;p&gt;Of course they are only semantically identical if we ignore performance:
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-stm&lt;/span&gt;&lt;/tt&gt; uses multiple threads and can potentially benefit from that
+on multicore machines.  The drawback is: when does it benefit, and how
+much?  The answer to this question is not immediate.  The programmer
+will usually have to detect and locate places that cause too many
+"conflicts" in the Transactional Memory sense.  A conflict occurs when
+two atomic blocks write to the same location, or when &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;A&lt;/span&gt;&lt;/tt&gt; reads it,
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;B&lt;/span&gt;&lt;/tt&gt; writes it, but &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;B&lt;/span&gt;&lt;/tt&gt; finishes first and commits.  A conflict
+causes the execution of one atomic block to be aborted and restarted,
+due to another block committing.  Although the process is transparent,
+if it occurs more than occasionally, then it has a negative impact on
+performance.&lt;/p&gt;
+&lt;p&gt;There is no out-of-the-box perfect solution for solving all conflicts.
+What we will need is more tools to detect them and deal with them, data
+structures that are made aware of the risks of "internal" conflicts when
+externally there shouldn't be one, and so on.  There is some work ahead.&lt;/p&gt;
+&lt;p&gt;The point here is that from the point of view of the final programmer,
+we gets conflicts that we should resolve --- but at any point, our
+program is &lt;em&gt;correct&lt;/em&gt;, even if it may not be yet as efficient as it could
+be.  This is the opposite of regular multithreading, where programs are
+efficient but not as correct as they could be.  In other words, as we
+all know, we only have resources to do the easy 80% of the work and not
+the remaining hard 20%.  So in this model we get a program that has 80%
+of the theoretical maximum of performance and it's fine.  In the regular
+multithreading model we would instead only manage to remove 80% of the
+bugs, and we are left with obscure rare crashes.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section"&gt;
+&lt;h3&gt;&lt;a id="cpython-and-htm" name="cpython-and-htm"&gt;CPython and HTM&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Couldn't we do the same for CPython?  The problem here is that
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-stm&lt;/span&gt;&lt;/tt&gt; is implemented as a transformation step during translation,
+which is not directly possible in CPython.  Here are our options:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;We could review and change the C code everywhere in CPython.&lt;/li&gt;
+&lt;li&gt;We use GCC 4.7, which supports some form of STM.&lt;/li&gt;
+&lt;li&gt;We wait until Intel's next generation of CPUs comes out ("Haswell")
+and use HTM.&lt;/li&gt;
+&lt;li&gt;We write our own C code transformation within a compiler (e.g. LLVM).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;I will personally file the first solution in the "thanks but no thanks"
+category.  If anything, it will give us another fork of CPython that
+will painfully struggle to keep not more than 3-4 versions behind, and
+then eventually die.  It is very unlikely to be ever merged into the
+CPython trunk, because it would need changes &lt;em&gt;everywhere&lt;/em&gt;.  Not to
+mention that these changes would be very experimental: tomorrow we might
+figure out that different changes would have been better, and have to
+start from scratch again.&lt;/p&gt;
+&lt;p&gt;Let us turn instead to the next two solutions.  Both of these solutions
+are geared toward small-scale transactions, but not long-running ones.
+For example, I have no clue how to give GCC rules about performing I/O
+in a transaction --- this seems not supported at all; and moreover
+looking at the STM library that is available so far to be linked with
+the compiled program, it assumes short transactions only.  By contrast,
+when I say "long transaction" I mean transactions that can run for 0.1
+seconds or more.  To give you an idea, in 0.1 seconds a PyPy program
+allocates and frees on the order of ~50MB of memory.&lt;/p&gt;
+&lt;p&gt;Intel's Hardware Transactional Memory solution is both more flexible and
+comes with a stricter limit.  In one word, the transaction boundaries
+are given by a pair of special CPU instructions that make the CPU enter
+or leave "transactional" mode.  If the transaction aborts, the CPU
+cancels any change, rolls back to the "enter" instruction and causes
+this instruction to return an error code instead of re-entering
+transactional mode (a bit like a &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;fork()&lt;/span&gt;&lt;/tt&gt;).  The software then detects
+the error code.  Typically, if transactions are rarely cancelled, it is
+fine to fall back to a GIL-like solution just to redo these cancelled
+transactions.&lt;/p&gt;
+&lt;p&gt;About the implementation: this is done by recording all the changes that
+a transaction wants to do to the main memory, and keeping them invisible
+to other CPUs.  This is "easily" achieved by keeping them inside this
+CPU's local cache; rolling back is then just a matter of discarding a
+part of this cache without committing it to memory.  From this point of
+view, &lt;a class="reference" href="https://arstechnica.com/business/2012/02/transactional-memory-going-mainstream-with-intel-haswell/"&gt;there is a lot to bet&lt;/a&gt; that we are actually talking about the
+regular per-core Level 1 and Level 2 caches --- so any transaction that
+cannot fully store its read and written data in the 64+256KB of the L1+L2
+caches will abort.&lt;/p&gt;
+&lt;p&gt;So what does it mean?  A Python interpreter overflows the L1 cache of
+the CPU very quickly: just creating new Python function frames takes a
+lot of memory (on the order of magnitude of 1/100 of the whole L1
+cache).  Adding a 256KB L2 cache into the picture helps, particularly
+because it is highly associative and thus avoids a lot of fake conflicts.
+However, as long as the HTM support is limited to L1+L2 caches,
+it is not going to be enough to run an "AME Python" with any sort of
+medium-to-long transaction.  It can
+run a "GIL-less Python", though: just running a few hundred or even
+thousand bytecodes at a time should fit in the L1+L2 caches, for most
+bytecodes.&lt;/p&gt;
+&lt;p&gt;I would vaguely guess that it will take on the order of 10 years until
+CPU cache sizes grow enough for a CPU in HTM mode to actually be able to
+run 0.1-second transactions.  (Of course in 10 years' time a lot of other
+things may occur too, including the whole Transactional Memory model
+being displaced by something else.)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section"&gt;
+&lt;h3&gt;&lt;a id="write-your-own-stm-for-c" name="write-your-own-stm-for-c"&gt;Write your own STM for C&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Let's discuss now the last option: if neither GCC 4.7 nor HTM are
+sufficient for an "AME CPython", then we might want to
+write our own C compiler patch (as either extra work on GCC 4.7, or an
+extra pass to LLVM, for example).&lt;/p&gt;
+&lt;p&gt;We would have to deal with the fact that we get low-level information,
+and somehow need to preserve interesting high-level bits through the
+compiler up to the point at which our pass runs: for example, whether
+the field we read is immutable or not.  (This is important because some
+common objects are immutable, e.g. PyIntObject.  Immutable reads don't
+need to be recorded, whereas reads of mutable data must be protected
+against other threads modifying them.)  We can also have custom code to
+handle the reference counters: e.g. not consider it a conflict if
+multiple transactions have changed the same reference counter, but just
+resolve it automatically at commit time.  We are also free to handle I/O
+in the way we want.&lt;/p&gt;
+&lt;p&gt;More generally, the advantage of this approach over both the current GCC
+4.7 and over HTM is that we control the whole process.  While this still
+looks like a lot of work, it looks doable.  It would be possible to come
+up with a minimal patch of CPython that can be accepted into core
+without too much troubles (e.g. to mark immutable fields and tweak the
+refcounting macros), and keep all the cleverness inside the compiler
+extension.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section"&gt;
+&lt;h3&gt;&lt;a id="conclusion" name="conclusion"&gt;Conclusion&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;I would assume that a programming model specific to PyPy and not
+applicable to CPython has little chances to catch on, as long as PyPy is
+not the main Python interpreter (which looks unlikely to change anytime
+soon).  Thus as long as only PyPy has AME, it looks like it will not
+become the main model of multicore usage in Python.  However, I can
+conclude with a more positive note than during the EuroPython
+conference: it is a lot of work, but there is a more-or-less reasonable
+way forward to have an AME version of CPython too.&lt;/p&gt;
+&lt;p&gt;In the meantime, &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-stm&lt;/span&gt;&lt;/tt&gt; is around the corner, and together with
+tools developed on top of it, it might become really useful and used.  I
+hope that in the next few years this work will trigger enough motivation
+for CPython to follow the ideas.&lt;/p&gt;
+&lt;/div&gt;</description><category>stm</category><guid>https://www.pypy.org/posts/2012/08/multicore-programming-in-pypy-and-6595343388141556320.html</guid><pubDate>Thu, 09 Aug 2012 09:27:00 GMT</pubDate></item><item><title>STM with threads</title><link>https://www.pypy.org/posts/2012/06/stm-with-threads-7818875111634541910.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;p&gt;Hi all,&lt;/p&gt;&lt;p&gt;A quick update.  The first version of pypy-stm &lt;a class="reference" href="https://www.pypy.org/posts/2012/05/stm-update-back-to-threads-6622746581767639355.html"&gt;based on regular&lt;br&gt;
+threads&lt;/a&gt; is ready.  Still having no JIT and a 4-or-5-times performance&lt;br&gt;
+hit, it is not particularly fast, but I am happy that it turns out not&lt;br&gt;
+to be much slower than the previous thread-less attempts.  It is at&lt;br&gt;
+least fast enough to run faster (in real time) than an equivalent no-STM&lt;br&gt;
+PyPy, if fed with an eight-threaded program on an eight-core machine&lt;br&gt;
+(provided, of course, you don't mind it eating all 8 cores' CPU power&lt;br&gt;
+instead of just one :-).&lt;/p&gt;&lt;p&gt;You can download and play around with &lt;a class="reference" href="https://cobra.cs.uni-duesseldorf.de/~buildmaster/misc/pypy-stm-38eb1fbc3c8d.bz2"&gt;this binary&lt;/a&gt; for Linux 64.  It&lt;br&gt;
+was made from the &lt;a class="reference" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/stm-thread"&gt;stm-thread&lt;/a&gt; branch of the PyPy repository (&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;translate.py --stm -O2 targetpypystandalone.py&lt;/span&gt;&lt;/tt&gt;).  (Be sure&lt;br&gt;
+to put it where it can find its stdlib, e.g. by putting it inside the&lt;br&gt;
+directory from the official &lt;a class="reference" href="https://bitbucket.org/pypy/pypy/downloads/pypy-1.9-linux64.tar.bz2"&gt;1.9 release&lt;/a&gt;.)&lt;/p&gt;&lt;p&gt;This binary supports the &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;thread&lt;/span&gt;&lt;/tt&gt; module and runs without the GIL.&lt;br&gt;
+So, despite the factor-of-4 slow-down issue, it should be the &lt;em&gt;fourth&lt;/em&gt;&lt;br&gt;
+complete Python interpreter in which we can reasonably claim to have&lt;br&gt;
+resolved the problem of the GIL.  (The first one was Greg Stein's Python&lt;br&gt;
+1.4, re-explored &lt;a class="reference" href="https://dabeaz.blogspot.ch/2011/08/inside-look-at-gil-removal-patch-of.html"&gt;here&lt;/a&gt;; the second one is &lt;a class="reference" href="https://jython.org/"&gt;Jython&lt;/a&gt;; the third one is&lt;br&gt;
+&lt;a class="reference" href="https://ironpython.net/"&gt;IronPython&lt;/a&gt;.)  Unlike the previous three, it is also the first one to&lt;br&gt;
+offer full GIL semantics to the programmer, and additionally&lt;br&gt;
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;thread.atomic&lt;/span&gt;&lt;/tt&gt; (see below).  I should also add that we're likely to&lt;br&gt;
+see in the next year a 5th such interpreter, too, based on Hardware&lt;br&gt;
+Transactional Memory (same approach as with STM, but using e.g.&lt;br&gt;
+&lt;a class="reference" href="https://software.intel.com/en-us/blogs/2012/02/07/transactional-synchronization-in-haswell/"&gt;Intel's HTM&lt;/a&gt;).&lt;/p&gt;&lt;p&gt;The binary I linked to above supports all built-in modules from PyPy,&lt;br&gt;
+apart from &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;signal&lt;/span&gt;&lt;/tt&gt;, still being worked on (which can be a bit&lt;br&gt;
+annoying because standard library modules like &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;subprocess&lt;/span&gt;&lt;/tt&gt; depend on&lt;br&gt;
+it).  The &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;sys.get/setcheckinterval()&lt;/span&gt;&lt;/tt&gt; functions can be used to tweak&lt;br&gt;
+the frequency of the automatic commits.  Additionally, it offers&lt;br&gt;
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;thread.atomic&lt;/span&gt;&lt;/tt&gt;, described in the &lt;a class="reference" href="https://www.pypy.org/posts/2012/05/stm-update-back-to-threads-6622746581767639355.html"&gt;previous blog post&lt;/a&gt; as a way to&lt;br&gt;
+create longer atomic sections (with the observable effect of preventing&lt;br&gt;
+the "GIL" to be released during that time).  A complete&lt;br&gt;
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;transaction.py&lt;/span&gt;&lt;/tt&gt; module based on it is available &lt;a class="reference" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/stm-thread/lib_pypy/transaction.py"&gt;from the sources&lt;/a&gt;.&lt;/p&gt;&lt;p&gt;The main missing features are:&lt;/p&gt;&lt;ul class="simple"&gt;&lt;li&gt;the &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;signal&lt;/span&gt;&lt;/tt&gt; module;&lt;/li&gt;
+&lt;li&gt;the Garbage Collector, which does not do major collections so far, only&lt;br&gt;
+minor ones;&lt;/li&gt;
+&lt;li&gt;and finally, the JIT, which needs some amount of integration to generate&lt;br&gt;
+the correctly-tweaked assembler.&lt;/li&gt;
+&lt;/ul&gt;&lt;p&gt;Have fun!&lt;/p&gt;&lt;p&gt;Armin.&lt;/p&gt;</description><category>stm</category><guid>https://www.pypy.org/posts/2012/06/stm-with-threads-7818875111634541910.html</guid><pubDate>Sun, 10 Jun 2012 19:02:00 GMT</pubDate></item></channel></rss>

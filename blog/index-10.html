@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="A Faster Python">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy (old posts, page 10) | PyPy</title>
+<link href="../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/blog/index-10.html">
+<link rel="icon" href="../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../favicon32x32.ico" sizes="32x32">
+<link rel="prev" href="index-11.html" type="text/html">
+<link rel="next" href="index-9.html" type="text/html">
+<!--[if lt IE 9]><script src="../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../assets/css/tipuesearch.css">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../index.html">
+                    <image id="toplogo" src="../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href=".">Index</a> </li>  
+                    <li> <a href="../categories/">Tags</a> </li>  
+                    <li> <a href="../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><div class="post">
+<div class="postindex">
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2009/06/jit-progress-7289127796450840053.html" class="u-url">JIT progress</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2009/06/jit-progress-7289127796450840053.html" rel="bookmark">
+            <time class="published dt-published" datetime="2009-06-23T20:56:00Z" itemprop="datePublished" title="2009-06-23 20:56">2009-06-23 20:56</time></a>
+            </p>
+                <p class="commentline">7 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>In the last days I finally understood how to do virtualizables.  Now the frame overhead is gone. This was done with the help of discussion with Samuele, porting ideas from PyPy's first JIT attempt.
+</p>
+<p>
+This is of course work in progress, but it works in PyPy (modulo a few XXXs, but no bugs so far).  The performance of the resulting code is quite good: even with Boehm (the GC that is easy to compile to but gives a slowish pypy-c), a long-running loop typically runs 50% faster than CPython.  That's "baseline" speed, moreover: we will get better speed-ups by applying optimizations on the generated code.  Doing so is in progress, but it suddenly became easier because that optimization phase no longer has to consider virtualizables -- they are now handled earlier.
+</p>
+<p><b>Update:</b>Virtualizables is basically a way to avoid frame overhead. The frame object
+is allocated and has a pointer, but the JIT is free to unpack it's fields (for example python
+level locals) and store them somewhere else (stack or registers). Each external (out of jit) access
+to frame managed by jit, needs to go via special accessors that can ask jit where those variables
+are.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-6313572876033870642">
+        <div class="comment-header">
+          <a name="comment-6313572876033870642"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2009-06-23 22:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>I have no clue of what you're talking about, bit it sounds great! Keep it up!!</p>
+        </div>
+      </div>
+      <div class="comment comment-3034462500237859312">
+        <div class="comment-header">
+          <a name="comment-3034462500237859312"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-06-23 23:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>What are virtualizables?</p>
+        </div>
+      </div>
+      <div class="comment comment-5110414389666362932">
+        <div class="comment-header">
+          <a name="comment-5110414389666362932"></a>
+            <span class="author">Leonardo Santagada</span> wrote on <span class="date">2009-06-24 00:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>From what I understand virtualizables are objects that you use to represent objects that are expensive to construct. For example frame objects in python are very expensive so they are virtualizables and if a function is executed and it doesn't try to access its frame object it is never created.<br><br>Probably armin can give a more precise answer.<br><br>What I want to know, couldn't CPython have virtualizables for frame objects? I guess the answer is that it could but would involve a lot of C code.</p>
+        </div>
+      </div>
+      <div class="comment comment-5789943289319252828">
+        <div class="comment-header">
+          <a name="comment-5789943289319252828"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2009-06-24 00:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>Ok, I updated the post with quick explanation of what actually virtualizables are. Leonardo: you need compiler in the first place for that :-) Psyco has some kind of virtualizables (but psyco frames are read only).<br><br>Cheers,<br>fijal</p>
+        </div>
+      </div>
+      <div class="comment comment-9001349336567493555">
+        <div class="comment-header">
+          <a name="comment-9001349336567493555"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2009-06-24 10:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>Could you use virtualizables to avoid constructing the frame at all, and then only allocate it if it is accessed?</p>
+        </div>
+      </div>
+      <div class="comment comment-649639246872908068">
+        <div class="comment-header">
+          <a name="comment-649639246872908068"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-06-24 14:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Leonardo:<br><br>I'm guessing that yes, CPython COULD have virtualizables. However, the people who built CPython a) didn't know about them, b) didn't know how to code that in "C", or c) didn't consider it a priority item.<br><br>Either way, these are the types of advantages I would imagine coding python using python would expose. Optimize what you need to, and then start to see the real ROI of PyPy!</p>
+        </div>
+      </div>
+      <div class="comment comment-8385264665531022428">
+        <div class="comment-header">
+          <a name="comment-8385264665531022428"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2009-06-24 14:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Ben: no. In the current incarnation, the JITs generated by PyPy optimize only hot loops, when they are executed more than N times.  At that point, the frame object has already been allocated.<br><br>The real advantage of virtualizables is that they allows to:<br><br>  1) produce very fast code, as if the frame weren't allocated at all (e.g. by storing local variables on the stack or in the registers)<br><br>  2) they don't compromise the compatibility with CPython; in particular, sys._getframe() &amp; co. still works fine, because the JIT knows how and when to synchronize the virtualizable (i.e., the frame) with the values that are on the stack.<br><br><br>@gregturn: I don't see how you can implement something similar to virtualizables without writing a compiler, and CPython is not such a thing :-)</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2009/06/news-from-jit-front-367552118380842303.html" class="u-url">News from the jit front</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2009/06/news-from-jit-front-367552118380842303.html" rel="bookmark">
+            <time class="published dt-published" datetime="2009-06-15T23:59:00Z" itemprop="datePublished" title="2009-06-15 23:59">2009-06-15 23:59</time></a>
+            </p>
+                <p class="commentline">14 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>
+As usual, progress is going <a href="https://en.wikipedia.org/wiki/Hofstadter's_law">slower then predicted</a>,
+but nevertheless, we're working hard to make some progress.
+</p>
+<p>
+We recently managed to make our nice GCs cooperate with our JIT. This is
+one point from our detailed plan. As of now, we have a JIT with GCs and
+no optimizations. It already speeds up some things, while slowing down
+others. The main reason for this is that the JIT generates assembler which is kind
+of ok, but it does not do the same level of optimizations gcc would do.
+</p>
+<p>
+So the current status of the JIT is that it can produce assembler out
+of executed python code (or any interpreter written in RPython actually),
+but the results are not high quality enough since we're missing optimizations.
+</p>
+<p>
+The current plan, as of now, looks as follows:
+</p>
+<ul>
+<li>
+Improve the handling of GCs in JIT with inlining of malloc-fast
+  paths, that should speed up things by a constant, not too big factor.
+</li>
+<li>
+Write a simplified python interpreter, which will be a base for experiments
+  and to make sure that our JIT does correct things with regard to
+  optimizations. That would work as mid-level integration test.
+</li>
+<li>
+Think about ways to inline loop-less python functions into their parent's loop.
+</li>
+<li>
+Get rid of frame overhead (by virtualizables)
+</li>
+<li>
+Measure, write benchmarks, publish
+</li>
+<li>
+Profit
+</li>
+</ul>
+
+Cheers,<br>
+fijal
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-5119993810052132127">
+        <div class="comment-header">
+          <a name="comment-5119993810052132127"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-06-16 08:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>nice to see the progresses on pypy jit!!</p>
+        </div>
+      </div>
+      <div class="comment comment-3263449096064129706">
+        <div class="comment-header">
+          <a name="comment-3263449096064129706"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-06-16 09:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>Do you expect to produce jit faster, then Unladen-Swallow's LLVM based ?</p>
+        </div>
+      </div>
+      <div class="comment comment-7643555307102726849">
+        <div class="comment-header">
+          <a name="comment-7643555307102726849"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-06-16 13:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks for all the hard work, guys.  Keep it up!</p>
+        </div>
+      </div>
+      <div class="comment comment-6360808917213991360">
+        <div class="comment-header">
+          <a name="comment-6360808917213991360"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-06-16 13:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>ah, this jit business is so exciting!</p>
+        </div>
+      </div>
+      <div class="comment comment-6816995438778985864">
+        <div class="comment-header">
+          <a name="comment-6816995438778985864"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-06-16 17:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>I am not really shure how this plan relates to the roadmap that was presented in April.</p>
+        </div>
+      </div>
+      <div class="comment comment-3692321634995120128">
+        <div class="comment-header">
+          <a name="comment-3692321634995120128"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2009-06-16 18:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>How this plan relates: it does not.  Fijal's style is to give the current idea of the plans.  Don't believe him too much :-)  This and April's plan need somehow to be added to each other, or something :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-7239598848619851105">
+        <div class="comment-header">
+          <a name="comment-7239598848619851105"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2009-06-16 18:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>Unladen-Swallow's LLVM JIT is a very different beast: it compiles each Python function as a unit.  You can only get a uniform bit of speedup this way (maybe 2-3x).  By contrast, what we are doing gives a non-uniform speedup: like Psyco, we will probably obtain speedups between 2x and 100x depending on the use case.<br><br>(Of course the plan is to be faster than Psyco in the common case :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-7935841834062618035">
+        <div class="comment-header">
+          <a name="comment-7935841834062618035"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2009-06-17 00:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>Armin: regarding Unladen-Swallow, does this approach prevent coming up later with a tracing jit? Or it could be done on top of it?</p>
+        </div>
+      </div>
+      <div class="comment comment-119278132587546768">
+        <div class="comment-header">
+          <a name="comment-119278132587546768"></a>
+            <span class="author">Nighteh3</span> wrote on <span class="date">2009-06-17 05:45</span>:
+        </div>
+        <div class="comment-content">
+          <p>Sweet !! Good luck guys :)</p>
+        </div>
+      </div>
+      <div class="comment comment-8091909971162021156">
+        <div class="comment-header">
+          <a name="comment-8091909971162021156"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2009-06-17 05:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>No no no no, trust me :-)<br><br>The thing is that I'm trying to present "current plan"<br>as live as it can be. Which means we might change<br>our mind completely. But otherwise, the whole blog<br>would be mostly empty and boring...<br><br>Cheers,<br>fijal</p>
+        </div>
+      </div>
+      <div class="comment comment-2732821344096422287">
+        <div class="comment-header">
+          <a name="comment-2732821344096422287"></a>
+            <span class="author">tobami</span> wrote on <span class="date">2009-06-17 11:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>Could you please, elaborate on the second point about a simplified python interpreter?</p>
+        </div>
+      </div>
+      <div class="comment comment-3576595543165694620">
+        <div class="comment-header">
+          <a name="comment-3576595543165694620"></a>
+            <span class="author">tobami</span> wrote on <span class="date">2009-06-17 11:26</span>:
+        </div>
+        <div class="comment-content">
+          <p>Also, wouldn't it be better to refactor the plan as follows?:<br><br>- Improve the handling of GCs in JIT with inlining of malloc-fast paths, that should speed up things by a constant, not too big factor.<br>- Measure, write benchmarks<br>- Write a simplified python interpreter, which will be a base for experiments and to make sure that our JIT does correct things with regard to optimizations. That would work as mid-level integration test.<br>- Think about ways to inline loop-less python functions into their parent's loop.<br>- Measure, publish benchmarks, RELEASE 1.2<br>- Get rid of frame overhead (by virtualizables)<br>- Measure, publish benchmarks<br>- Iterate...</p>
+        </div>
+      </div>
+      <div class="comment comment-7609917601204836534">
+        <div class="comment-header">
+          <a name="comment-7609917601204836534"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-06-17 14:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>Concerning current ideas vs April's roadmap: I understand that plans change and that's ok of course. But as April's roadmap isn't mentioned at all, I have no idea how the current ideas relate to the previous roadmap (like the current ideas replace the old road map or parts of it / they are additional ideas and the old roadmap is postponed / they are a detailing of (parts of) April's roadmap). Maybe that's obvious to people with better pypy-knowledge than me. I understand Armin's comment that they are additional ideas.<br><br>Keep up the good work!<br><br>Branko</p>
+        </div>
+      </div>
+      <div class="comment comment-1411853283485378791">
+        <div class="comment-header">
+          <a name="comment-1411853283485378791"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-06-18 14:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>What about threading? Will we have a GIL-less interpreter in the end (assuming the GCs support that)?</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2009/05/icooolps-submissions-6705901656116873587.html" class="u-url">ICOOOLPS Submissions</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2009/05/icooolps-submissions-6705901656116873587.html" rel="bookmark">
+            <time class="published dt-published" datetime="2009-05-16T10:24:00Z" itemprop="datePublished" title="2009-05-16 10:24">2009-05-16 10:24</time></a>
+            </p>
+                <p class="commentline">2 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p><em>Both</em> of the papers that people from the PyPy team submitted to <a class="reference external" href="https://www.icooolps.info/">ICOOOLPS</a> have
+been accepted. They are:</p>
+<blockquote>
+<ul class="simple">
+<li>"Faster than C#: efficient implementation of dynamic languages on .NET"
+(<a class="reference external" href="https://codespeak.net/svn/pypy/extradoc/talk/icooolps2009-dotnet/cli-jit.pdf">pdf1</a>) by Armin, Anto and Davide Ancona, who is Anto's Ph.D. advisor</li>
+<li>"Tracing the Meta-Level: PyPy’s Tracing JIT Compiler" (<a class="reference external" href="https://codespeak.net/svn/pypy/extradoc/talk/icooolps2009/bolz-tracing-jit.pdf">pdf2</a>) by Carl
+Friedrich, Armin, Anto and Maciek</li>
+</ul>
+</blockquote>
+<p>(the pdfs are obviously the submitted versions, not the final ones).</p>
+<p>This year ICOOOLPS (Implementation, Compilation, Optimization of
+Object-Oriented Languages, Programs and Systems) is being held on July the 6th
+at <a class="reference external" href="https://ecoop09.disi.unige.it/">ECOOP 2009</a> in Genova, Italy.  Other than these two papers, Anto and Carl
+Friedrich will also present a <a class="reference external" href="https://ecoop09.disi.unige.it/summer-school.html#pypy">PyPy tutorial</a>, on July the 7th.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-6032733874718030028">
+        <div class="comment-header">
+          <a name="comment-6032733874718030028"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2009-05-16 11:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>It does seem like an odd idea to trace the bytecode of an interpreter of the bytecode of a language, rather than just tracing the bytecode for a language. For example, it requires that you annotate the interpreter to retain information that you would otherwise naturally have, and it requires that you trace lots of extra bookkeeping code in the interpreter.<br><br>Given that you're writing a JIT that traces the execution of some bytecode, what advantages does tracing the outer bytecode have over tracing the inner bytecode? Is it that the outer bytecode is simpler than the inner bytecode; if so, is there no way to (inefficiently) compile the inner bytecode to the outer bytecode?</p>
+        </div>
+      </div>
+      <div class="comment comment-1650720061150809719">
+        <div class="comment-header">
+          <a name="comment-1650720061150809719"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2009-05-16 12:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>John: The main reason for writing a JIT that traces the bytecode of the "outer" interpreter (which we call language interpreter in the paper) is that then we need to write only one tracing JIT in PyPy, and can use it for a variety of languages.<br><br>The tracing of the extra bookkeeping code is not a problem is not such a large problem, as the paper shows. None of these opcodes are actually part of the final trace.<br><br>If you want to discuss this more, I would suggest that we move this discussion to pypy-dev@codespeak.net which is the project mailing list. Not everybody is reading comments here :).</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2009/04/4-weeks-of-gdb-522864241041643529.html" class="u-url">4 weeks of GDB</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2009/04/4-weeks-of-gdb-522864241041643529.html" rel="bookmark">
+            <time class="published dt-published" datetime="2009-04-30T22:40:00Z" itemprop="datePublished" title="2009-04-30 22:40">2009-04-30 22:40</time></a>
+            </p>
+                <p class="commentline">15 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hello.</p>
+<p>
+So, according to our <a href="../posts/2009/04/roadmap-for-jit-377358891902851723.html">jit
+plan</a> we're mostly done with point 1, that is to provide a JIT that compiles
+python code to assembler in the most horrible manner possible but doesn't
+break. That meant mostly 4 weeks of glaring at GDB and megabytess of assembler
+generated by C code generated from python code. The figure of 4 weeks proves
+that our approach is by far superior to the one of psyco, since Armin says it's
+"only 4 weeks" :-)
+</p>
+<p>
+Right now, pypy compiled with JIT can run the whole CPython test suite
+without crashing, which means we're done with obvious bugs and the only
+ones waiting for us are really horrible.  (Or they really don't exist.
+At least they should never be about obscure Python corner cases: they can
+only be in the 10'000 lines of relatively clear code that is our JIT
+generator.)
+</p>
+<p>
+But... the fun thing is that we can actually concentrate on optimizations!
+So the next step is to provide a JIT that is correct *and* actually speeds
+up python. Stay tuned for more :-)
+</p>
+Cheers,<br>
+fijal, armin &amp; benjamin
+<p>
+UPDATE: for those of you blessed with no knowledge of C, gdb stands for GNU debugger, a classic debugger for C. (It's also much more powerful than python debugger, pdb, which is kind of surprising).</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-5353377453977507406">
+        <div class="comment-header">
+          <a name="comment-5353377453977507406"></a>
+            <span class="author">Alexander Kellett</span> wrote on <span class="date">2009-04-30 23:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>*bow*</p>
+        </div>
+      </div>
+      <div class="comment comment-8404974353637616951">
+        <div class="comment-header">
+          <a name="comment-8404974353637616951"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2009-05-01 00:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>I love this kind of posts. Keep'em coming!</p>
+        </div>
+      </div>
+      <div class="comment comment-4779320757680320045">
+        <div class="comment-header">
+          <a name="comment-4779320757680320045"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2009-05-01 01:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is probably the most exciting thing I've heard since I started tracking PyPy.  Can't wait to see how fast JIT Python flies. :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-4204455989486202485">
+        <div class="comment-header">
+          <a name="comment-4204455989486202485"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2009-05-01 01:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>nice one!  Really looking forward to it.<br><br>Is this for just i386?  Or is this for amd64/ppc etc?</p>
+        </div>
+      </div>
+      <div class="comment comment-8073634432519818143">
+        <div class="comment-header">
+          <a name="comment-8073634432519818143"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2009-05-01 02:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>amd64 and ppc are only available in enterprise version :-)<br><br>We cannot really solve all problems at once, it's one-by-one approach.</p>
+        </div>
+      </div>
+      <div class="comment comment-5055028994496761509">
+        <div class="comment-header">
+          <a name="comment-5055028994496761509"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2009-05-01 09:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>illume: if you are comparing with Psyco, then it's definitely "any platform provided someone writes a backend for it".  Writing a backend is really much easier than porting the whole of Psyco...<br><br>Our vague plans include an AMD64 backend and an LLVM-JIT one, the latter being able to target any platform that LLVM targets.</p>
+        </div>
+      </div>
+      <div class="comment comment-4079944831693387184">
+        <div class="comment-header">
+          <a name="comment-4079944831693387184"></a>
+            <span class="author">DSM</span> wrote on <span class="date">2009-05-01 10:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>Nice!<br><br>I assume that it would be (relatively, as these things go) straightforward for those us interested to turn the x86 assembly backend into a C backend?<br><br>I know that even mentioning number-crunching applications gets certain members of the pypy team beating their heads against the wall (lurkers can read the grumbling on irc too!).  But with a delegate-to-C backend, those of us who have unimplemented architectures and are in the happy regime where we don't care about compilation overhead can get the benefits of icc's excellent optimizations without having to do any of the work.  We'd just need to make sure that the generated C is code that icc can handle.  (There are unfortunately idioms that gcc and icc don't do very well with.)<br><br>To be clear, I'm not suggesting that the pypy team itself go this route: at the moment it feels like the rest of us should stay out of your way.. laissez les bon temps roulez! :^)<br><br>I'm asking instead if there are any obvious gotchas involved in doing so.</p>
+        </div>
+      </div>
+      <div class="comment comment-6740436511664957748">
+        <div class="comment-header">
+          <a name="comment-6740436511664957748"></a>
+            <span class="author">Tim Parkin</span> wrote on <span class="date">2009-05-01 11:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>Congrats for stage one... exciting times for python..</p>
+        </div>
+      </div>
+      <div class="comment comment-6579999646328129025">
+        <div class="comment-header">
+          <a name="comment-6579999646328129025"></a>
+            <span class="author">proteusguy</span> wrote on <span class="date">2009-05-02 11:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>Nice job guys! Once you announce that PyPy is pretty much of comparable (90% or better) speed to that of CPython then we will be happy to start running capacity tests of our web services environment on top of it and report back our results. <br><br>Given the growing number of python implementations has there ever been a discussion of PyPy replacing CPython as the canonical implementation of python once it consistently breaks performance &amp; reliability issues? I don't know enough of the details to advocate such a position - just curious if there's been any official thought to the possibility.</p>
+        </div>
+      </div>
+      <div class="comment comment-4802088114610827885">
+        <div class="comment-header">
+          <a name="comment-4802088114610827885"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2009-05-04 13:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>DSM, Proteusguy: I'd be happy to answer your questions on the pypy-dev mailing list.  I think that there is no answer short enough to fit a blog post comment.</p>
+        </div>
+      </div>
+      <div class="comment comment-560371118698548217">
+        <div class="comment-header">
+          <a name="comment-560371118698548217"></a>
+            <span class="author">Jacob Hallén</span> wrote on <span class="date">2009-05-04 14:45</span>:
+        </div>
+        <div class="comment-content">
+          <p>proteusguy: It is our hope that PyPy can one day replace CPython as the reference implementation, but this depends on many factors. Most of them are way out of our control. It will depend very much on the level of PyPy uptake in the community, but this is just a first step. With enough adoption, the Python developers (the people actually making new versions of CPython) need to be convinced that working from PyPy as a base to develop the language makes sense. If they are convinced, Guido may decide that it is a good idea and make the switch, but not before then.</p>
+        </div>
+      </div>
+      <div class="comment comment-8406129627478217573">
+        <div class="comment-header">
+          <a name="comment-8406129627478217573"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-05-08 15:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>See https://moderator.appspot.com/#9/e=c9&amp;t=pypy for Guido's opinion about PyPy.</p>
+        </div>
+      </div>
+      <div class="comment comment-4483587119306645916">
+        <div class="comment-header">
+          <a name="comment-4483587119306645916"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-05-10 11:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>Surely gdb is more powerful than pdb because many more people are forced to used gdb. c code is much harder to debug than python code, and needs debugging more often than python code.</p>
+        </div>
+      </div>
+      <div class="comment comment-1858472523071638106">
+        <div class="comment-header">
+          <a name="comment-1858472523071638106"></a>
+            <span class="author">Cacas Macas</span> wrote on <span class="date">2009-05-14 08:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>Good day.<br>I use Python for about 3 years and i am following your blog almost every day to see news.<br>I am very excited to see more Pypy, though i don't understand how to use it (?!?!) and i never managed to install it!<br>Wikipedia says "PyPy is a followup to the Psyco project" and i use Psyco, so Pypy must be a very good thing. I use Psyco very intense, in all my applications, but it's very easy to use.<br>I have Windows and Windows document is incomplete "https://codespeak.net/pypy/dist/pypy/doc/windows.html". I have MinGW compiler.<br>Pypy is not very friendly with users. I think more help documents would be very useful. When i will understand how to install Pypy, i will use it.<br>Keep up the good work!</p>
+        </div>
+      </div>
+      <div class="comment comment-5187436503560838481">
+        <div class="comment-header">
+          <a name="comment-5187436503560838481"></a>
+            <span class="author">stracin</span> wrote on <span class="date">2009-06-13 14:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>"""Rumors have it that the secret goal is being faster-than-C which is nonsense, isn't it?"""<br><br>what does this statement from the pypy homepage mean?<br><br>that c-pypy will be faster than cpython?<br><br>or that code run in c-pypy will be faster than compiled C code? :o<br><br>because of the "nonsense" i think you mean the latter? but isn't it nonsense? :) would be awesome though.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2009/04/11-final-released-225813777919757859.html" class="u-url">1.1 final released</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2009/04/11-final-released-225813777919757859.html" rel="bookmark">
+            <time class="published dt-published" datetime="2009-04-28T15:39:00Z" itemprop="datePublished" title="2009-04-28 15:39">2009-04-28 15:39</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>We <a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/release-1.1.0.html">just released</a> PyPy 1.1 final. Not much changed since <a class="reference external" href="../posts/2009/04/beta-for-110-released-4604559533184706699.html">the beta</a>, apart
+from some more fixed bugs. Have fun with it!</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-3186432089256371684">
+        <div class="comment-header">
+          <a name="comment-3186432089256371684"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-04-28 17:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>Congratulations on the new release!</p>
+        </div>
+      </div>
+      <div class="comment comment-14732249868554062">
+        <div class="comment-header">
+          <a name="comment-14732249868554062"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-04-28 19:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>Congrats! This is a great project :)</p>
+        </div>
+      </div>
+      <div class="comment comment-8385223209916581517">
+        <div class="comment-header">
+          <a name="comment-8385223209916581517"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-04-29 11:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>Any chance of prebuilt binaries? I tried to compile but had to give up after 2 hours (I guess my laptop is not up to the task).<br><br>By the way, you should put the release note somewhere on the main page of the PyPy site. Currently this page gives no indication that a release of PyPy exists at all.</p>
+        </div>
+      </div>
+      <div class="comment comment-6005157747420243021">
+        <div class="comment-header">
+          <a name="comment-6005157747420243021"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2009-04-30 11:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks, added a link from the main page to release-1.1.0.html.<br><br>About binaries: there are just too many possible combinations, not only of platforms but of kinds of pypy-c.  I suppose that we can list other people's pages with some of them, if they mention them to us.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2009/04/roadmap-for-jit-377358891902851723.html" class="u-url">Roadmap for JIT</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2009/04/roadmap-for-jit-377358891902851723.html" rel="bookmark">
+            <time class="published dt-published" datetime="2009-04-21T19:38:00Z" itemprop="datePublished" title="2009-04-21 19:38">2009-04-21 19:38</time></a>
+            </p>
+                <p class="commentline">19 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hello.
+</p>
+<p>
+First a disclaimer. This post is more about plans for future than current
+status. We usually try to write about things that we have done, because
+it's much much easier to promise things than to actually make it happen,
+but I think it's important enough to have some sort of roadmap.
+</p>
+<p>
+In recent months we came to the point where the 5th generation of
+JIT prototype was working as <a href="../posts/2009/03/good-news-everyone-421421336094214242.html">nice</a>
+or even a bit nicer than 1st one back in 2007. Someone might ask "so why
+did you spend all this time without going forward?". And indeed, we spend
+a lot of time moving sideways, but as posted, we also spent a lot of time
+doing <a href="../posts/2009/04/beta-for-110-released-4604559533184706699.html">some other things</a>, which are important as well.
+The main advantage of current JIT incarnation is much much simpler than
+the first one. Even I can comprehend it, which is much of an improvement :-)
+</p>
+<p>
+So, the prototype is working and gives very nice speedups in range of 20-30x
+over CPython. We're pretty confident this prototype will work and will
+produce fast python interpreter eventually. So we decided that now we'll
+work towards changing prototype into something stable and solid. This
+might sound easy, but in fact it's not. Having stable assembler backend
+and optimizations that keep semantics is not as easy as it might sound.
+</p>
+<p>
+The current roadmap, as I see it, looks like as following:
+</p>
+<ul>
+<li> Provide a JIT that does not speedup things, but produce assembler without
+  optimizations turned on, that is correct and able to run CPython's library
+  tests on a nightly basis.
+</li>
+<li>
+ Introduce simple optimizations, that should make above JIT a bit faster than
+  CPython. With optimizations disabled JIT is producing incredibly dumb
+  assembler, which is slower than correspoding C code, even with removal
+  of interpretation overhead (which is not very surprising).
+</li>
+<li>
+ Backport optimizations from JIT prototype, one by one, keeping an eye
+  on how they perform and making sure they don't break anything.
+</li>
+<li>
+ Create new optimizations, like speeding up attribute access.
+</li>
+<li>
+ Profit.
+</li>
+</ul>
+<p>
+This way, we can hopefully provide a working JIT, which gives fast python
+interpreter, which is a bit harder than just a nice prototype.
+</p>
+<p>
+Tell us what you think about this plan.
+</p>
+Cheers,<br>
+fijal &amp; others.
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1892839582827608344">
+        <div class="comment-header">
+          <a name="comment-1892839582827608344"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-04-21 20:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>I think it's a great idea. If the test suite succeeds on the basic JIT, it's much easier to spot regressions when you start adding the cool stuff. It also gives you a solid foundation to build on.<br><br>Good luck, this project is amazing :)</p>
+        </div>
+      </div>
+      <div class="comment comment-2131589875677523609">
+        <div class="comment-header">
+          <a name="comment-2131589875677523609"></a>
+            <span class="author">rjw</span> wrote on <span class="date">2009-04-21 21:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>Its not obvious from this post what would actually be the difference between the prototype and the final jit with all the prototypes optimisations. So ... it sounds like a lot of work for zero gain. I'm sure there is missing information, like what is actually missing from or wrong with the prototype ( is it in a different language? Prolog?)  Without this information its impossible to judge this plan.</p>
+        </div>
+      </div>
+      <div class="comment comment-808704728122239203">
+        <div class="comment-header">
+          <a name="comment-808704728122239203"></a>
+            <span class="author">Michael Foord</span> wrote on <span class="date">2009-04-21 22:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>This sounds like a very pragmatic approach and is very encouraging. Nice work guys - very much looking forward to what the future has to offer.</p>
+        </div>
+      </div>
+      <div class="comment comment-5976348838717554263">
+        <div class="comment-header">
+          <a name="comment-5976348838717554263"></a>
+            <span class="author">Tim Parkin</span> wrote on <span class="date">2009-04-21 23:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>I'm extremely excited about seeing this happen. It is an unfortunate fact that the majority of people won't get PyPy until they see a 'big win'. Once they've noticed the big win they will start to see the 'hidden genius'. I'm glad that you are taking such a professional approach to this next phase and look forward to the day when people will start to look give PyPy the attention it deserves (if not for quite the right reason).</p>
+        </div>
+      </div>
+      <div class="comment comment-2330265594909180997">
+        <div class="comment-header">
+          <a name="comment-2330265594909180997"></a>
+            <span class="author">Alex</span> wrote on <span class="date">2009-04-22 00:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>I agree with Michael, one of the hallmarks of Python philosophy has always been "make it right, and then make it fast", sounds like you guys have taken this to heart.</p>
+        </div>
+      </div>
+      <div class="comment comment-7048219823754965101">
+        <div class="comment-header">
+          <a name="comment-7048219823754965101"></a>
+            <span class="author">Leonardo Santagada</span> wrote on <span class="date">2009-04-22 02:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great guys, the plan seems very solid and reasonable!<br><br>responding to rjw: I think the problem was that the prototype was really incomplete, putting all the complexity needed for the rest of the language could be done without removing the optimizations but would make bug finding way harder.<br><br>I hope that this could be the only new feature for the next pypy release. Focusing on the JIT might be the best way to attract many more eyes and hands to the project.</p>
+        </div>
+      </div>
+      <div class="comment comment-832999915852294500">
+        <div class="comment-header">
+          <a name="comment-832999915852294500"></a>
+            <span class="author">Michael Hudson-Doyle</span> wrote on <span class="date">2009-04-22 04:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>This sounds like a very sane plan.  Good luck with it!</p>
+        </div>
+      </div>
+      <div class="comment comment-5097395730128028366">
+        <div class="comment-header">
+          <a name="comment-5097395730128028366"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-04-22 07:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>I like how for once step 2 isn't "???", but a well thought out plan =).</p>
+        </div>
+      </div>
+      <div class="comment comment-5530801494009850549">
+        <div class="comment-header">
+          <a name="comment-5530801494009850549"></a>
+            <span class="author">Zemantic dreams</span> wrote on <span class="date">2009-04-22 10:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>guys, you rock! I can't wait to see the results! <br><br>bye<br>Andraz Tori, Zemanta</p>
+        </div>
+      </div>
+      <div class="comment comment-7336714094851885781">
+        <div class="comment-header">
+          <a name="comment-7336714094851885781"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-04-22 13:21</span>:
+        </div>
+        <div class="comment-content">
+          <p>Very sensible plan! Good luck guys. Here's to pypy taking over the world (-:</p>
+        </div>
+      </div>
+      <div class="comment comment-4938789148284235740">
+        <div class="comment-header">
+          <a name="comment-4938789148284235740"></a>
+            <span class="author">herse</span> wrote on <span class="date">2009-04-22 19:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>"It's super easy to provide 95% of python in a reasonable speed, just the last 5% gets tricky."<br><br>i often come across this statement.<br><br>wouldn't it make sense then to offer a pypy compile option for producing an interpreter which leaves away those 5% in favor of speed for people who don't need those 5%?<br><br>or isn't this feasible or wanted for some reason?<br><br>i am just curious... :) pypy is an awesome project and i am looking forward to the jit!</p>
+        </div>
+      </div>
+      <div class="comment comment-7861675972879780421">
+        <div class="comment-header">
+          <a name="comment-7861675972879780421"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-04-24 09:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>The roadmap is okay. The only thing I miss is a rough timeline.</p>
+        </div>
+      </div>
+      <div class="comment comment-8013379815478283117">
+        <div class="comment-header">
+          <a name="comment-8013379815478283117"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-04-24 22:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>Tenretn hör eviece ne Pypy tan cafretn anretx. Lbisi programma o oitcenno ih ecafretn cabpöo, anretn 'retupmo ih nis secorpbut pypy eka LD oitcenno huob raa rawtfo laweri anosre Python code?</p>
+        </div>
+      </div>
+      <div class="comment comment-6093846253917889108">
+        <div class="comment-header">
+          <a name="comment-6093846253917889108"></a>
+            <span class="author">René Leonhardt</span> wrote on <span class="date">2009-04-24 23:26</span>:
+        </div>
+        <div class="comment-content">
+          <p>Congratulations, the LLVM backend for JIT has been accepted, I am eager to see the results :)</p>
+        </div>
+      </div>
+      <div class="comment comment-2068640080463216572">
+        <div class="comment-header">
+          <a name="comment-2068640080463216572"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2009-04-28 20:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>herse: that's an approach which is often mentioned, but which does not make sense in PyPy.  The JIT is generated from the language spec; whether this spec covers 95% or 100% of Python doesn't change anything.  The 95%-versus-100% debate only makes sense at another level, e.g. if we wanted to make PyPy faster without a JIT at all.</p>
+        </div>
+      </div>
+      <div class="comment comment-3703523994814477409">
+        <div class="comment-header">
+          <a name="comment-3703523994814477409"></a>
+            <span class="author">Richard Emslie</span> wrote on <span class="date">2009-04-29 23:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>Awesome work thus far &amp; congratulations guys.  Sounds like a good strategy to having something that works.  Best of luck and I'm looking forward to see how things pan out. :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-6108624398837926405">
+        <div class="comment-header">
+          <a name="comment-6108624398837926405"></a>
+            <span class="author">herse</span> wrote on <span class="date">2009-04-30 05:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>"""The JIT is generated from the language spec; whether this spec covers 95% or 100% of Python doesn't change anything."""<br><br>i see. the whole pypy idea really sounds awesome to me.<br><br>i have another question. your python interpeter is written in rpython so it is supposed to be simpler to work with than the c implementation. but i could imagine that it is incredibly hard to debug problems in pypy-c? doesn't this counterbalance the advantage again?</p>
+        </div>
+      </div>
+      <div class="comment comment-2331438287170279241">
+        <div class="comment-header">
+          <a name="comment-2331438287170279241"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2009-04-30 05:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>We're usually not debugging problems in pypy-c. It turns out that 99% of the problems you can debug by running on top of CPython, so you can test things really deeply, without compilation.</p>
+        </div>
+      </div>
+      <div class="comment comment-4762628224929612174">
+        <div class="comment-header">
+          <a name="comment-4762628224929612174"></a>
+            <span class="author">Collin Winter</span> wrote on <span class="date">2009-06-08 23:21</span>:
+        </div>
+        <div class="comment-content">
+          <p>This looks like a good plan. I look forward to sharing ideas with you in the future :)<br><br>When you say, "So, the prototype is working and gives very nice speedups in range of 20-30x over CPython", what benchmarks is that on? Can you be more specific?</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2009/04/leysin-sprint-report-1416905818217912359.html" class="u-url">Leysin Sprint Report</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2009/04/leysin-sprint-report-1416905818217912359.html" rel="bookmark">
+            <time class="published dt-published" datetime="2009-04-21T15:47:00Z" itemprop="datePublished" title="2009-04-21 15:47">2009-04-21 15:47</time></a>
+            </p>
+                <p class="commentline">2 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>The Leysin sprint is nearing its end, as usual here is an attempt at a summary
+</p>
+<p>of what we did.</p>
+<a href="https://4.bp.blogspot.com/_zICyAWqZbLA/Se3dHMjUvrI/AAAAAAAAAHk/ZwGu2owTSok/s1600-h/landscape.jpg"><img alt="Beautiful Leysin Landscape" border="0" id="BLOGGER_PHOTO_ID_5327157049947373234" src="https://4.bp.blogspot.com/_zICyAWqZbLA/Se3dHMjUvrI/AAAAAAAAAHk/ZwGu2owTSok/s320/landscape.jpg" style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer; width: 320px; height: 213px;"></a><div class="section" id="release-work">
+<h2>Release Work</h2>
+<p>Large parts of the sprint were dedicated to fixing bugs. Since the easy bugs
+seem to have been fixed long ago, those were mostly very annoying and hard bugs.
+This work was supported by our <a class="reference external" href="https://codespeak.net:8099/">buildbots</a>, which we tried to get free of
+test-failures. This was worked on by nearly all participants of the sprint
+(Samuele, Armin, Anto, Niko, Anders, Christian, Carl Friedrich). One
+particularly annoying bug was the differences in the tracing events that PyPy
+produces (fixed by Anders, Samuele and Christian). Some details about larger
+tasks are in the sections below.</p>
+<p>The work culminated in the <a class="reference external" href="../posts/2009/04/beta-for-110-released-4604559533184706699.html">beta</a> released on Sunday.</p>
+<div class="section" id="stackless">
+<h3>Stackless</h3>
+<p>A large number of problems came from our <a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/stackless.html">stackless features</a>, which do some
+advanced things and thus seem to contain advanced bugs. Samuele and Carl
+Friedrich spent some time fixing tasklet pickling and unpickling. This was
+achieved by supporting the (un)pickling of builtin code objects. In addition
+they fixed some bugs in the finalization of tasklets. This needs some care
+because the <tt class="docutils literal"><span class="pre">__del__</span></tt> of a tasklet cannot run at arbitrary points in time, but
+only at safe points. This problem was a bit subtle to get right, and popped up
+nearly every morning of the sprint in form of a test failure.</p>
+<p>Armin and Niko added a way to restrict the stack depth of the RPython-level
+stack. This can useful when using stackless, because if this is not there it is
+possible that you fill your whole heap with stack frames in the case of an
+infinite recursion. Then they went on to make stackless not segfault when
+threads are used at the same time, or if a callback from C library code is in
+progress. Instead you get a <tt class="docutils literal"><span class="pre">RuntimeError</span></tt> now, which is not good but better
+than a segfault.</p>
+</div>
+<a href="https://2.bp.blogspot.com/_zICyAWqZbLA/Se3dbHpy8xI/AAAAAAAAAH0/7rgKpUQhFVA/s1600-h/pair2.jpg"><img alt="Anto and Armin working on the JIT" border="0" id="BLOGGER_PHOTO_ID_5327157392229724946" src="https://2.bp.blogspot.com/_zICyAWqZbLA/Se3dbHpy8xI/AAAAAAAAAH0/7rgKpUQhFVA/s320/pair2.jpg" style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer; width: 320px; height: 213px;"></a>
+<a href="https://1.bp.blogspot.com/_zICyAWqZbLA/Se3dazWieiI/AAAAAAAAAHs/JeahZb31xyg/s1600-h/pair1.jpg">
+</a><div class="section" id="killing-features">
+<h3>Killing Features</h3>
+<p>During the sprint we discussed the fate of the LLVM and the JS backends. Both
+have not really been maintained for some time, and even partially untested
+(their tests were skipped). Also their usefulness appears to be limited. The JS
+backend is cool in principle, but has some serious limitations due to the fact
+that JavaScript is really a dynamic language, while RPython is rather static.
+This made it hard to use some features of JS from RPython, e.g. RPython does not
+support closures of any kind.</p>
+<p>The LLVM backend had its own set of problems. For
+a long time it produced the fastest form of PyPy's Python interpreter, by first
+using the LLVM backend, applying the LLVM optimizations to the result, then
+using LLVM's C backend to produce C code, then apply GCC to the result :-).
+However, it is not clear that it is still useful to directly produce LLVM
+bitcode, since LLVM has rather good C frontends nowadays, with <a class="reference external" href="https://llvm.org/cmds/llvmgcc.html">llvm-gcc</a> and
+<a class="reference external" href="https://clang.llvm.org/">clang</a>. It is likely that we will use LLVM in the future in our JIT (but that's
+another story, based on different code).</p>
+<p>Therefore we decided to remove these two backends from SVN, which Samuele and
+Carl Friedrich did. They are not dead, only resting until somebody who is
+interested in maintaining them steps up.</p>
+</div>
+<div class="section" id="windows">
+<h3>Windows</h3>
+<p>One goal of the release is good Windows-support. Anders and Samuele set up a new
+<a class="reference external" href="https://codespeak.net:8099/builders/pypy-c-lib-python-win-32">windows buildbot</a> which revealed a number of failures. Those were attacked by
+Anders, Samuele and Christian as well as by Amaury (who was not at the sprint,
+but thankfully did a lot of Windows work in the last months).</p>
+</div>
+<div class="section" id="os-x">
+<h3>OS X</h3>
+<p>Christian with some help by Samuele tried to get translation working again under
+Mac OS X. This was a large mess, because of different behaviours of some POSIX
+functionality in Leopard. It is still possible to get the old behaviour back,
+but whether that was enabled or not depended on a number of factors such as
+which Python is used. Eventually they managed to successfully navigate that maze
+and produce something that almost works (there is still a problem remaining
+about OpenSSL).</p>
+</div>
+<a href="https://1.bp.blogspot.com/_zICyAWqZbLA/Se3dazWieiI/AAAAAAAAAHs/JeahZb31xyg/s1600-h/pair1.jpg"><img alt="Samuele and Carl Friedrich pretending to work on something" border="0" id="BLOGGER_PHOTO_ID_5327157386780244514" src="https://1.bp.blogspot.com/_zICyAWqZbLA/Se3dazWieiI/AAAAAAAAAHs/JeahZb31xyg/s320/pair1.jpg" style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer; width: 320px; height: 213px;"></a>
+<div class="section" id="documentation">
+<h3>Documentation</h3>
+<p>The Friday of the sprint was declared to be a documentation day, where (nearly)
+no coding was allowed. This resulted in a newly structured and improved <a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/getting-started.html">getting
+started</a> document (done by Carl Friedrich, Samuele and some help of Niko) and
+a new document describing <a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/cpython_differences.html">differences to CPython</a> (Armin, Carl Friedrich) as
+well as various improvements to existing documents (everybody else). Armin
+undertook the Sisyphean task of <a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/extradoc.html">listing all talks, paper and related stuff</a>
+of the PyPy project.</p>
+</div>
+</div>
+<div class="section" id="various-stuff">
+<h2>Various Stuff</h2>
+<div class="section" id="java-backend-work">
+<h3>Java Backend Work</h3>
+<p>Niko and Anto worked on the JVM backend for a while. First they had to fix
+translation of the Python interpreter to Java. Then they tried to improve the
+performance of the Python interpreter when translated to Java. Mostly they did a
+lot of profiling to find performance bottlenecks. They managed to improve
+performance by 40% by overriding <tt class="docutils literal"><span class="pre">fillInStackTrace</span></tt> of the generated exception
+classes. Apart from that they found no simple-to-fix performance problems.</p>
+</div>
+<div class="section" id="jit-work">
+<h3>JIT Work</h3>
+<p>Armin gave a presentation about the current state of the JIT to the sprinters as
+well as Adrian Kuhn, Toon Verwaest and Camillo Bruni of the University of Bern
+who came to visit for one day. There was a bit of work on the JIT going on too;
+Armin and Anto tried to get closer to having a working JIT on top of the CLI.</p>
+</div>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-4120489951991164265">
+        <div class="comment-header">
+          <a name="comment-4120489951991164265"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2009-04-22 07:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>Guys, are you going to make a new release with the things done during the sprint? Thanks.<br><br>(pypy is a great work; Keep it up!)</p>
+        </div>
+      </div>
+      <div class="comment comment-8300696998408449990">
+        <div class="comment-header">
+          <a name="comment-8300696998408449990"></a>
+            <span class="author">vak</span> wrote on <span class="date">2009-11-03 12:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>hi, <br>could you please make a new blog-post and tell us about news regarding LLVM and PyPy, please?<br><br>thanks in advance!</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2009/04/beta-for-110-released-4604559533184706699.html" class="u-url">Beta for 1.1.0 released</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2009/04/beta-for-110-released-4604559533184706699.html" rel="bookmark">
+            <time class="published dt-published" datetime="2009-04-19T22:33:00Z" itemprop="datePublished" title="2009-04-19 22:33">2009-04-19 22:33</time></a>
+            </p>
+                <p class="commentline">7 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Today we are releasing a beta of the upcoming PyPy 1.1 release. There
+are some Windows and OS X issues left that we would like to address
+between now and the final release but apart from this things should be
+working. We would appreciate feedback.</p>
+<p>The PyPy development team.</p>
+<div class="section" id="pypy-1-1-compatibility-consolidation">
+<h2>PyPy 1.1: Compatibility &amp; Consolidation</h2>
+<p>Welcome to the PyPy 1.1 release - the first release after the end of EU
+funding. This release focuses on making PyPy's Python interpreter more
+compatible with CPython (currently CPython 2.5) and on making the
+interpreter more stable and bug-free.</p>
+<p>PyPy's Getting Started lives at:</p>
+<blockquote>
+<a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/getting-started.html">https://codespeak.net/pypy/dist/pypy/doc/getting-started.html</a>
+</blockquote>
+<div class="section" id="highlights-of-this-release">
+<h2>Highlights of This Release</h2>
+<blockquote>
+<ul>
+<li>
+<p class="first">More of CPython's standard library extension modules are supported,
+among them ctypes, sqlite3, csv, and many more. Most of these extension modules
+are fully supported under Windows as well.</p>
+<p><a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/cpython_differences.html">https://codespeak.net/pypy/dist/pypy/doc/cpython_differences.html</a>
+<a class="reference external" href="../posts/2008/06/pypy-improvements-5272963843122158791.html">https://morepypy.blogspot.com/2008/06/pypy-improvements.html</a></p>
+</li>
+<li>
+<p class="first">Through a large number of tweaks, performance has been improved by
+10%-50% since the 1.0 release. The Python interpreter is now between
+0.8-2x (and in some corner case 3-4x) slower than CPython. A large
+part of these speed-ups come from our new generational garbage
+collectors.</p>
+<p><a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/garbage_collection.html">https://codespeak.net/pypy/dist/pypy/doc/garbage_collection.html</a></p>
+</li>
+<li>
+<p class="first">Our Python interpreter now supports distutils as well as
+easy_install for pure-Python modules.</p>
+</li>
+<li>
+<p class="first">We have tested PyPy with a number of third-party libraries. PyPy can
+run now: Django, Pylons, BitTorrent, Twisted, SymPy, Pyglet, Nevow,
+Pinax:</p>
+<p><a class="reference external" href="../posts/2008/08/pypy-runs-unmodified-django-10-beta-7105507436425430319.html">https://morepypy.blogspot.com/2008/08/pypy-runs-unmodified-django-10-beta.html</a>
+<a class="reference external" href="../posts/2008/07/pypys-python-runs-pinax-django-1265543049596913506.html">https://morepypy.blogspot.com/2008/07/pypys-python-runs-pinax-django.html</a>
+<a class="reference external" href="../posts/2008/06/running-nevow-on-top-of-pypy-58891137802412513.html">https://morepypy.blogspot.com/2008/06/running-nevow-on-top-of-pypy.html</a></p>
+</li>
+<li>
+<p class="first">A buildbot was set up to run the various tests that PyPy is using
+nightly on Windows and Linux machines:</p>
+<p><a class="reference external" href="https://codespeak.net:8099/">https://codespeak.net:8099/</a></p>
+</li>
+<li>
+<p class="first">Sandboxing support: It is possible to translate the Python
+interpreter in a special way so that the result is fully sandboxed.</p>
+<p><a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/sandbox.html">https://codespeak.net/pypy/dist/pypy/doc/sandbox.html</a>
+<a class="reference external" href="https://blog.sandbox.lt/en/WSGI%20and%20PyPy%20sandbox">https://blog.sandbox.lt/en/WSGI%20and%20PyPy%20sandbox</a></p>
+</li>
+</ul>
+</blockquote>
+</div>
+<div class="section" id="other-changes">
+<h2>Other Changes</h2>
+<blockquote>
+<ul>
+<li>
+<p class="first">The <tt class="docutils literal"><span class="pre">clr</span></tt> module was greatly improved. This module is used to
+interface with .NET libraries when translating the Python
+interpreter to the CLI.</p>
+<p><a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/clr-module.html">https://codespeak.net/pypy/dist/pypy/doc/clr-module.html</a>
+<a class="reference external" href="../posts/2008/01/pypynet-goes-windows-forms-7031406830502864570.html">https://morepypy.blogspot.com/2008/01/pypynet-goes-windows-forms.html</a>
+<a class="reference external" href="../posts/2008/01/improve-net-integration-2239651503641931440.html">https://morepypy.blogspot.com/2008/01/improve-net-integration.html</a></p>
+</li>
+<li>
+<p class="first">Stackless improvements: PyPy's <tt class="docutils literal"><span class="pre">stackless</span></tt> module is now more
+complete. We added channel preferences which change details of the
+scheduling semantics. In addition, the pickling of tasklets has been
+improved to work in more cases.</p>
+</li>
+<li>
+<p class="first">Classic classes are enabled by default now. In addition, they have
+been greatly optimized and debugged:</p>
+<p><a class="reference external" href="../posts/2007/12/faster-implementation-of-classic-1021557618590043616.html">https://morepypy.blogspot.com/2007/12/faster-implementation-of-classic.html</a></p>
+</li>
+<li>
+<p class="first">PyPy's Python interpreter can be translated to Java bytecode now to
+produce a pypy-jvm. At the moment there is no integration with
+Java libraries yet, so this is not really useful.</p>
+</li>
+<li>
+<p class="first">We added cross-compilation machinery to our translation toolchain to
+make it possible to cross-compile our Python interpreter to Nokia's
+Maemo platform:</p>
+<p><a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/maemo.html">https://codespeak.net/pypy/dist/pypy/doc/maemo.html</a></p>
+</li>
+<li>
+<p class="first">Some effort was spent to make the Python interpreter more
+memory-efficient. This includes the implementation of a mark-compact
+GC which uses less memory than other GCs during collection.
+Additionally there were various optimizations that make Python
+objects smaller, e.g. class instances are often only 50% of the size
+of CPython.</p>
+<p><a class="reference external" href="../posts/2008/10/dsseldorf-sprint-report-days-1-3-5256639868851086032.html">https://morepypy.blogspot.com/2008/10/dsseldorf-sprint-report-days-1-3.html</a></p>
+</li>
+<li>
+<p class="first">The support for the trace hook in the Python interpreter was
+improved to be able to trace the execution of builtin functions and
+methods. With this, we implemented the <tt class="docutils literal"><span class="pre">_lsprof</span></tt> module, which is
+the core of the <tt class="docutils literal"><span class="pre">cProfile</span></tt> module.</p>
+</li>
+<li>
+<p class="first">A number of rarely used features of PyPy were removed since the previous
+release because they were unmaintained and/or buggy. Those are: The
+LLVM and the JS backends, the aspect-oriented programming features,
+the logic object space, the extension compiler and the first
+incarnation of the JIT generator. The new JIT generator is in active
+development, but not included in the release.</p>
+<p><a class="reference external" href="https://codespeak.net/pipermail/pypy-dev/2009q2/005143.html">https://codespeak.net/pipermail/pypy-dev/2009q2/005143.html</a>
+<a class="reference external" href="../posts/2009/03/good-news-everyone-421421336094214242.html">https://morepypy.blogspot.com/2009/03/good-news-everyone.html</a>
+<a class="reference external" href="../posts/2009/03/jit-bit-of-look-inside-7472130507462677287.html">https://morepypy.blogspot.com/2009/03/jit-bit-of-look-inside.html</a></p>
+</li>
+</ul>
+</blockquote>
+</div>
+<div class="section" id="what-is-pypy">
+<h2>What is PyPy?</h2>
+<p>Technically, PyPy is both a Python interpreter implementation and an
+advanced compiler, or more precisely a framework for implementing dynamic
+languages and generating virtual machines for them.</p>
+<p>The framework allows for alternative frontends and for alternative
+backends, currently C, Java and .NET.  For our main target "C", we can
+"mix in" different garbage collectors and threading models,
+including micro-threads aka "Stackless".  The inherent complexity that
+arises from this ambitious approach is mostly kept away from the Python
+interpreter implementation, our main frontend.</p>
+<p>Socially, PyPy is a collaborative effort of many individuals working
+together in a distributed and sprint-driven way since 2003.  PyPy would
+not have gotten as far as it has without the coding, feedback and
+general support from numerous people.</p>
+<p>Have fun,</p>
+<blockquote>
+<p>the PyPy release team, [in alphabetical order]</p>
+<p>Amaury Forgeot d'Arc, Anders Hammerquist, Antonio Cuni, Armin Rigo,
+Carl Friedrich Bolz, Christian Tismer, Holger Krekel,
+Maciek Fijalkowski, Samuele Pedroni</p>
+<p>and many others:
+<a class="reference external" href="https://codespeak.net/pypy/dist/pypy/doc/contributor.html">https://codespeak.net/pypy/dist/pypy/doc/contributor.html</a></p>
+</blockquote>
+</div>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-7088120085073220233">
+        <div class="comment-header">
+          <a name="comment-7088120085073220233"></a>
+            <span class="author">Benjamin Peterson</span> wrote on <span class="date">2009-04-20 01:21</span>:
+        </div>
+        <div class="comment-content">
+          <p>Congratulations! PyPy is becoming more and more viable every day. I hope I can continue to become more involved in this awesome project.</p>
+        </div>
+      </div>
+      <div class="comment comment-610160530526678345">
+        <div class="comment-header">
+          <a name="comment-610160530526678345"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-04-21 01:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>pypy is a very interesting project!<br><br>i have a question. do you think pypy-c without jit can ever reach the speed of c-python? why is it slower?<br><br>or will you put all the optimization efforts into the jit now? doesn't the performance difference matter because the jit will make it up anyway?</p>
+        </div>
+      </div>
+      <div class="comment comment-5324635535584516521">
+        <div class="comment-header">
+          <a name="comment-5324635535584516521"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2009-04-21 04:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>PyPy without jit can (and is sometimes) be faster than cpython, for various reasons, including garbage collector.<br><br>On the other hand, we rather won't sacrifice simplicity for speed and we hope that jit will go that part. Also the funny thing is that since we generate our jit, it gets better as interpreter gets simpler, because jit generator is able to find out more on it's own. So in fact we might give up on some optimizations in favor of simplicity, because jit will be happier.<br><br>Cheers,<br>fijal</p>
+        </div>
+      </div>
+      <div class="comment comment-4161414871181752415">
+        <div class="comment-header">
+          <a name="comment-4161414871181752415"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2009-04-21 14:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>Sorry for my anxiety, but is there any rough estimation on when the jit will be in a usable state?</p>
+        </div>
+      </div>
+      <div class="comment comment-2119972860618190066">
+        <div class="comment-header">
+          <a name="comment-2119972860618190066"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2009-04-21 22:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>Personally, I'm doing it in my free time. That means I'm giving no estimates, because it makes no sense. If you wish to go into some contractual obligations on our sides, we're up to discuss I suppose :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-8991789843466541651">
+        <div class="comment-header">
+          <a name="comment-8991789843466541651"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2009-04-21 22:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>Maciej, I know how hard you are working on this. I didn't mean to sound disrespectful and I don't want to bother you... It's just that as everyone else, I'm anxoiusly looking forward to seeing pypy's magic in action. By the way, the new post is very much appreciated. Thanks!</p>
+        </div>
+      </div>
+      <div class="comment comment-5220080699173009059">
+        <div class="comment-header">
+          <a name="comment-5220080699173009059"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-06-29 07:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>I am desperately looking for some help building PyPy.  I have posted a an Issue (#443) about my issues in the PyPy site.  <br><br>If anyone from the release/Dev. team can give me a hand, I would seriously appreciate this!<br><br>I can be reached at wnyrodeo@yahoo.com <br><br>Thanks.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2009/04/leysin-sprint-started-4551365436232104640.html" class="u-url">Leysin Sprint Started</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2009/04/leysin-sprint-started-4551365436232104640.html" rel="bookmark">
+            <time class="published dt-published" datetime="2009-04-15T17:52:00Z" itemprop="datePublished" title="2009-04-15 17:52">2009-04-15 17:52</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>The Leysin Sprint started today. The weather is great and the view is wonderful, as usual. Technically we are working on the <a href="https://codespeak.net:8099/summary">remaining test failures</a> of the nightly test runs and are generally trying to fix various long-postponed bugs. I will try to give more detailed reports as the sprint progresses.</p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2009/04/pycon-videos-are-online-909873128878039557.html" class="u-url">Pycon videos are online</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2009/04/pycon-videos-are-online-909873128878039557.html" rel="bookmark">
+            <time class="published dt-published" datetime="2009-04-07T00:51:00Z" itemprop="datePublished" title="2009-04-07 00:51">2009-04-07 00:51</time></a>
+            </p>
+                <p class="commentline">1 comment</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hi.
+</p>
+<p>
+We didn't yet write full pycon summary, but both of our talks are now online: <a href="https://blip.tv/file/1957282">PyPy status talk</a> and <a href="https://blip.tv/file/1956957">python in a sandbox</a>.</p>
+<p><b>Update:</b></p>
+<p>Slides are also available: <a href="https://codespeak.net/svn/pypy/extradoc/talk/pycon2009/status/status.pdf">PyPy status talk</a> and <a href="https://codespeak.net/svn/pypy/extradoc/talk/pycon2009/pypy-sandbox/sandbox.pdf">Python in a sandbox</a>.</p>
+
+
+Enjoy!<br>
+fijal &amp; holger
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-8867053351159184852">
+        <div class="comment-header">
+          <a name="comment-8867053351159184852"></a>
+            <span class="author">larsr</span> wrote on <span class="date">2009-04-08 15:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>I found the slides to the <a href="https://us.pycon.org/media/2009/talkdata/PyCon2009/027/sandbox.pdf" rel="nofollow">python in a sandbox</a> to be useful too.</p>
+        </div>
+      </div>
+         </div>
+
+</div>
+</div>
+<div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div></div>
+</main>
+</div>
+<div style="clear: both; width: 75%; margin: 1em auto;">
+        <nav class="postindexpager"><ul class="pager">
+<li class="previous">
+                <a href="index-11.html" rel="prev">Newer posts</a>
+            </li>
+            <li class="next">
+                <a href="index-9.html" rel="next">Older posts</a>
+            </li>
+        </ul></nav>
+</div>
+         
+                 <footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../assets/js/styles.js"></script></footer>
+</body>
+</html>

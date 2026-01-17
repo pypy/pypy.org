@@ -1,0 +1,2258 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="A Faster Python">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy (old posts, page 21) | PyPy</title>
+<link href="../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/blog/index-21.html">
+<link rel="icon" href="../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../favicon32x32.ico" sizes="32x32">
+<link rel="prev" href="index-22.html" type="text/html">
+<link rel="next" href="index-20.html" type="text/html">
+<!--[if lt IE 9]><script src="../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../assets/css/tipuesearch.css">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../index.html">
+                    <image id="toplogo" src="../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href=".">Index</a> </li>  
+                    <li> <a href="../categories/">Tags</a> </li>  
+                    <li> <a href="../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><div class="post">
+<div class="postindex">
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2012/01/comparing-partial-evaluation-and-7255412724168990164.html" class="u-url">Comparing Partial Evaluation and Tracing, Part 1</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2012/01/comparing-partial-evaluation-and-7255412724168990164.html" rel="bookmark">
+            <time class="published dt-published" datetime="2012-01-26T12:44:00Z" itemprop="datePublished" title="2012-01-26 12:44">2012-01-26 12:44</time></a>
+            </p>
+                <p class="commentline">5 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>As part of writing my PhD I am currently thinking about the relationship
+between PyPy's meta-tracing approach with various previous ideas to
+automatically get a (JIT-)compiler from only an interpreter of a language. One
+of the most-researched ideas along these lines is that of <a class="reference external" href="https://en.wikipedia.org/wiki/Partial_evaluation">partial evaluation</a>.
+Partial evaluation has basically the same goals as PyPy when it comes to
+compilers: Write an interpreter, and get a compiler for free. The methods for
+reaching that goal are a bit different. In this series of blog posts, I am
+trying to explore the similarities and differences of partial evaluation and
+PyPy's meta-tracing.</p>
+<h2>A Flowgraph Language</h2>
+<p>To be able to clearly understand what "partial evaluation" is and what
+"meta-tracing" is I will show an "executable model" of both. To that end, I am
+defining a small imperative language and will then show what a partial evaluator
+and a tracer for that language look like. All this code will be
+implemented in Prolog. (Any pattern-matching functional language would do, but I
+happen to know Prolog best. Backtracking is not used, so you can read things
+simply as functional programs.) In this post I will start with
+the definition of the language, and a partial evaluator for it. The code
+written in this blog post can be found fully here: <a class="reference external" href="https://paste.pocoo.org/show/541004/">https://paste.pocoo.org/show/541004/</a></p>
+<p>The language is conceptionally similar to PyPy's flow graphs, but a bit more
+restricted. It does not have function calls, only labelled basic blocks
+that consist of a series of linearly executed operations, followed by a
+conditional or an unconditional jump. Every operation is assigning a value to a
+variable, which is computed by applying some operation to some arguments.</p>
+<p>A simple program to raise <tt class="docutils literal">x</tt> to the <tt class="docutils literal">yth</tt> power in that language looks like
+this:</p>
+<pre class="literal-block">
+power:
+    res = 1
+    if y goto power_rec else goto power_done
+
+power_rec:
+    res = res * x
+    y = y - 1
+    if y goto power_rec else goto power_done
+
+power_done:
+    print_and_stop(res)
+</pre>
+<p>To represent the same program as Prolog data structures, we use the
+following Prolog code:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power</span>, <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+             <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">y</span>, <span style="color: #CC3300;">power_rec</span>, <span style="color: #CC3300;">power_done</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),
+                 <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">y</span>, <span style="color: #CC3300;">sub</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">y</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+                 <span style="color: #CC00FF;">if</span>(<span style="color: #CC3300;">y</span>, <span style="color: #CC3300;">power_rec</span>, <span style="color: #CC3300;">power_done</span>)))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_done</span>, <span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>))).
+</pre></div>
+<p>Every rule of <tt class="docutils literal">block</tt> declares one block by first giving the label of the
+block, followed by the code. Code is a series of <tt class="docutils literal">op1</tt> or <tt class="docutils literal">op2</tt> statements
+terminated by a <tt class="docutils literal">jump</tt>, an <tt class="docutils literal">if</tt> or a <tt class="docutils literal">print_and_stop</tt>. <tt class="docutils literal">op1</tt> statements
+are operations with one argument of the form <tt class="docutils literal">op1(res_variable,
+operation_name, argument, next_statement)</tt>. Arguments can be either variables
+in the form <tt class="docutils literal">var(name)</tt> or constants in the form <tt class="docutils literal">const(value)</tt>.</p>
+<p>To run programs in this flowgraph language, we first need some helper
+functionality. The first few helper functions are concerned with the handling of
+environments, the data structures the interpreter uses to map variable
+names occuring in the program to the variables' current values. In Python
+dictionaries would be used for this purpose, but in Prolog we have to emulate
+these by lists of key/value pairs (not very efficient, but good enough):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">X</span>, [], <span style="color: #006699; font-weight: bold;">_</span>) :- <span style="color: #CC00FF;">throw</span>(<span style="color: #CC00FF;">key_not_found</span>(<span style="color: #003333;">X</span>)).
+<span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">Key</span>, [<span style="color: #003333;">Key</span><span style="color: #555555;">/</span><span style="color: #003333;">Value</span> | <span style="color: #006699; font-weight: bold;">_</span>], <span style="color: #003333;">Value</span>) :- !.
+<span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">Key</span>, [<span style="color: #006699; font-weight: bold;">_</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Value</span>) :- <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">Key</span>, <span style="color: #003333;">Rest</span>, <span style="color: #003333;">Value</span>).
+
+<span style="color: #CC00FF;">write_env</span>([], <span style="color: #003333;">X</span>, <span style="color: #003333;">V</span>, [<span style="color: #003333;">X</span><span style="color: #555555;">/</span><span style="color: #003333;">V</span>]).
+<span style="color: #CC00FF;">write_env</span>([<span style="color: #003333;">Key</span><span style="color: #CC3300;">/</span><span style="color: #006699; font-weight: bold;">_</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Key</span>, <span style="color: #003333;">Value</span>, [<span style="color: #003333;">Key</span><span style="color: #555555;">/</span><span style="color: #003333;">Value</span> | <span style="color: #003333;">Rest</span>]) :- !.
+<span style="color: #CC00FF;">write_env</span>([<span style="color: #003333;">Pair</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Key</span>, <span style="color: #003333;">Value</span>, [<span style="color: #003333;">Pair</span> | <span style="color: #003333;">NewRest</span>]) :- <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">Key</span>, <span style="color: #003333;">Value</span>, <span style="color: #003333;">NewRest</span>).
+
+<span style="color: #CC00FF;">remove_env</span>([], <span style="color: #006699; font-weight: bold;">_</span>, []).
+<span style="color: #CC00FF;">remove_env</span>([<span style="color: #003333;">Key</span><span style="color: #CC3300;">/</span><span style="color: #006699; font-weight: bold;">_</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Key</span>, <span style="color: #003333;">Rest</span>) :- !.
+<span style="color: #CC00FF;">remove_env</span>([<span style="color: #003333;">Pair</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Key</span>, [<span style="color: #003333;">Pair</span> | <span style="color: #003333;">NewRest</span>]) :- <span style="color: #CC00FF;">remove_env</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">Key</span>, <span style="color: #003333;">NewRest</span>).
+
+<span style="color: #CC00FF;">resolve</span>(<span style="color: #CC00FF;">const</span>(<span style="color: #003333;">X</span>), <span style="color: #006699; font-weight: bold;">_</span>, <span style="color: #003333;">X</span>).
+<span style="color: #CC00FF;">resolve</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #003333;">X</span>), <span style="color: #003333;">Env</span>, <span style="color: #003333;">Y</span>) :- <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">X</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Y</span>).
+</pre></div>
+<p>The implementation of these functions is not too important. The <tt class="docutils literal">lookup</tt>
+function finds a key in an environment list, the <tt class="docutils literal">write_env</tt> function adds a
+new key/value pair to an environment, <tt class="docutils literal">remove_env</tt> removes a key. The
+<tt class="docutils literal">resolve</tt> function is used to take either a constant or a variable and return
+a value. If it's a constant, the value of that constant is returned, if it's a
+variable it is looked up in the environment. Note how the last argument of
+<tt class="docutils literal">lookup</tt> and <tt class="docutils literal">resolve</tt> is actually a return value, which is the typical
+approach in Prolog.</p>
+<p>So far we have not specified what the primitive operations that can occur in the
+program actually mean. For that we define a <tt class="docutils literal">do_op</tt> function which
+executes primitive operations:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">same</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">X</span>).
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">mul</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">Y</span>, <span style="color: #003333;">Z</span>) :- <span style="color: #003333;">Z</span> <span style="color: #555555;">is</span> <span style="color: #003333;">X</span> <span style="color: #555555;">*</span> <span style="color: #003333;">Y</span>.
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">add</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">Y</span>, <span style="color: #003333;">Z</span>) :- <span style="color: #003333;">Z</span> <span style="color: #555555;">is</span> <span style="color: #003333;">X</span> <span style="color: #555555;">+</span> <span style="color: #003333;">Y</span>.
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">sub</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">Y</span>, <span style="color: #003333;">Z</span>) :- <span style="color: #003333;">Z</span> <span style="color: #555555;">is</span> <span style="color: #003333;">X</span> <span style="color: #555555;">-</span> <span style="color: #003333;">Y</span>.
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">eq</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">Y</span>, <span style="color: #003333;">Z</span>) :- <span style="color: #003333;">X</span> <span style="color: #555555;">==</span> <span style="color: #003333;">Y</span> <span style="color: #CC3300;">-&gt;</span> <span style="color: #003333;">Z</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">1</span>; <span style="color: #003333;">Z</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>.
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">ge</span>, <span style="color: #003333;">X</span>, <span style="color: #003333;">Y</span>, <span style="color: #003333;">Z</span>) :- <span style="color: #003333;">X</span> <span style="color: #555555;">&gt;=</span> <span style="color: #003333;">Y</span> <span style="color: #CC3300;">-&gt;</span> <span style="color: #003333;">Z</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">1</span>; <span style="color: #003333;">Z</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>.
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #CC3300;">readlist</span>, <span style="color: #003333;">L</span>, <span style="color: #003333;">I</span>, <span style="color: #003333;">X</span>) :- <span style="color: #CC00FF;">nth0</span>(<span style="color: #003333;">I</span>, <span style="color: #003333;">L</span>, <span style="color: #003333;">X</span>).
+<span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #006699; font-weight: bold;">_</span>, <span style="color: #006699; font-weight: bold;">_</span>, <span style="color: #006699; font-weight: bold;">_</span>) :- <span style="color: #CC00FF;">throw</span>(<span style="color: #CC00FF;">missing_op</span>(<span style="color: #003333;">Op</span>)).
+</pre></div>
+<p>Again the last argument is an output variable.</p>
+<p>Now we can start executing simple operations. For that an <tt class="docutils literal">interp</tt> predicate
+is defined. It takes as its first argument the current environment and as the
+second argument the operation to execute. E.g. to execute primitive operations
+with one or two arguments:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg</span>),
+    <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg</span>, <span style="color: #003333;">Res</span>),
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>).
+
+<span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg1</span>),
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg2</span>),
+    <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg1</span>, <span style="color: #003333;">RArg2</span>, <span style="color: #003333;">Res</span>),
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>).
+</pre></div>
+<p>First the arguments are resolved into values. Afterwards the operation is executed,
+and the result is written back into the environment. Then <tt class="docutils literal">interp</tt> is called on
+the rest of the program. Similarly easy are the unconditional jump and
+<tt class="docutils literal">print_and_stop</tt>:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">L</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">Block</span>),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Block</span>, <span style="color: #003333;">Env</span>).
+
+
+<span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #003333;">Arg</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">resolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Val</span>),
+    <span style="color: #CC00FF;">print</span>(<span style="color: #003333;">Val</span>), <span style="color: #CC3300;">nl</span>.
+</pre></div>
+<p>In the unconditional jump we simply get the target block and continue executing
+that. To execute <tt class="docutils literal">print_and_stop</tt> we resolve the argument, print the value and
+then are done.</p>
+<p>The conditional jump is only slightly more difficult:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">interp</span>(<span style="color: #CC00FF;">if</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">L1</span>, <span style="color: #003333;">L2</span>), <span style="color: #003333;">Env</span>) :-
+    <span style="color: #CC00FF;">lookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">==</span> <span style="color: #FF6600;">0</span> <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L2</span>, <span style="color: #003333;">Block</span>)
+    ;
+        <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L1</span>, <span style="color: #003333;">Block</span>)
+    ),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Block</span>, <span style="color: #003333;">Env</span>).
+</pre></div>
+<p>First the variable is looked up in the environment. If the variable is zero,
+execution continues at the second block, otherwise it continues at the first
+block.</p>
+<p>Given this interpreter, we can execute the above example program like this, on a
+Prolog console:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #AA0000; background-color: #FFAAAA;">$</span> <span style="color: #CC3300;">swipl</span> <span style="color: #555555;">-</span><span style="color: #CC3300;">s</span> <span style="color: #CC3300;">cfglang</span>.<span style="color: #CC3300;">pl</span>
+<span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power</span>, <span style="color: #003333;">Block</span>), <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Block</span>, [<span style="color: #CC3300;">x</span><span style="color: #555555;">/</span><span style="color: #FF6600;">10</span>, <span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">10</span>]).
+<span style="color: #FF6600;">10000000000</span>
+</pre></div>
+<h2>Partial Evaluation of the Flowgraph Language</h2>
+<p>Let's look at what a partial evaluator for this simple flowgraph language would
+look like. Partial evaluation (PE), also called specialization, is a program
+manipuation technique. PE takes an input program and transforms it into a
+(hopefully) simpler and faster output program. It does this by assuming that
+some variables in the input program are constants. All operations that act only
+on such constants can be folded away. All other operations need to remain in the
+output program (called residual program). Thus the partial evaluator proceeds
+much like an interpreter, just that it cannot actually execute some operations.
+Also, its output is not just a value, but also list of remaining operations that
+could not be optimized away.</p>
+<p>The partial evaluator cannot use normal environments, because unlike the
+interpreter not all variables' values are known to it. It will therefore work on
+partial environments, which store just the know variables. For these partial
+environments, some new helper functions are needed:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">Key</span>, [], <span style="color: #CC00FF;">var</span>(<span style="color: #003333;">Key</span>)).
+<span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">Key</span>, [<span style="color: #003333;">Key</span><span style="color: #555555;">/</span><span style="color: #003333;">Value</span> | <span style="color: #006699; font-weight: bold;">_</span>], <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">Value</span>)) :- !.
+<span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">Key</span>, [<span style="color: #006699; font-weight: bold;">_</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Value</span>) :- <span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">Key</span>, <span style="color: #003333;">Rest</span>, <span style="color: #003333;">Value</span>).
+
+<span style="color: #CC00FF;">presolve</span>(<span style="color: #CC00FF;">const</span>(<span style="color: #003333;">X</span>), <span style="color: #006699; font-weight: bold;">_</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">X</span>)).
+<span style="color: #CC00FF;">presolve</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #003333;">V</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">X</span>) :- <span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">X</span>).
+</pre></div>
+<p>The function <tt class="docutils literal">plookup</tt> takes a variable and a partial environment and returns
+either <tt class="docutils literal">const(Value)</tt> if the variable is found in the partial environment or
+<tt class="docutils literal">var(Key)</tt> if it is not. Equivalently, <tt class="docutils literal">presolve</tt> is like <tt class="docutils literal">resolve</tt>,
+except that it uses <tt class="docutils literal">plookup</tt> instead of <tt class="docutils literal">lookup</tt>.</p>
+<p>With these helpers we can start writing a partial evaluator. The following two
+rules are where the main optimization in the form of constant folding happens.
+The idea is that when the partial evaluator sees an operation that involves
+only constant arguments, it can constant-fold the operation, otherwise it
+can't:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">pe</span>(<span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">RArg</span>),
+    (<span style="color: #003333;">RArg</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">C</span>, <span style="color: #003333;">Res</span>),
+        <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">RestResidual</span> <span style="color: #555555;">=</span> <span style="color: #003333;">NewOp</span>
+    ;
+        <span style="color: #CC00FF;">remove_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg</span>, <span style="color: #003333;">RestResidual</span>)
+    ),
+    <span style="color: #CC00FF;">pe</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">RestResidual</span>).
+
+<span style="color: #CC00FF;">pe</span>(<span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg1</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">RArg1</span>),
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg2</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">RArg2</span>),
+    (<span style="color: #003333;">RArg1</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C1</span>), <span style="color: #003333;">RArg2</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C2</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">C1</span>, <span style="color: #003333;">C2</span>, <span style="color: #003333;">Res</span>),
+        <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">RestResidual</span> <span style="color: #555555;">=</span> <span style="color: #003333;">NewOp</span>
+
+    ;
+        <span style="color: #CC00FF;">remove_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg1</span>, <span style="color: #003333;">RArg2</span>, <span style="color: #003333;">RestResidual</span>)
+    ),
+    <span style="color: #CC00FF;">pe</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">RestResidual</span>).
+</pre></div>
+<p>The <tt class="docutils literal">pe</tt> predicate takes a partial environment, the current operations and
+potentially returns a new operation. To partially evaluate a simple operation, its arguments are
+looked up in the partial environment. If all the arguments are constants, the
+operation can be executed, and no new operation is produced. Otherwise, we need
+to produce a new residual operation which is exactly like the one currently
+looked at. Also, the result variable needs to be removed from the partial
+environment, because it was just overwritten by an unknown value.</p>
+<p>The potentially generated residual operation is stored into the output argument
+<tt class="docutils literal">NewOp</tt>. The output argument of the recursive call is the last argument of
+the newly created residual operation, which will then be filled by the
+recursive call. This is a typical approach in Prolog, but may look strange if
+you are not familiar with it.</p>
+<p>Note how the first case of these two rules is just like interpretation. The
+second case doesn't really do anything, it just produces a residual operation.
+This relationship between normal evaluation and partial evaluation is very
+typical.</p>
+<p>The unconditional jump and <tt class="docutils literal">print_and_stop</tt> are not much more complex:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">pe</span>(<span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">L</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">LR</span>)) :-
+    <span style="color: #CC00FF;">do_pe</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">LR</span>).
+
+<span style="color: #CC00FF;">pe</span>(<span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #003333;">Arg</span>), <span style="color: #003333;">Env</span>, <span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #003333;">RArg</span>)) :-
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">RArg</span>).
+</pre></div>
+<p>To partially evaluate an unconditional jump we again produce a jump. The target
+label of that residual jump is computed by asking the partial evaluator to
+produce residual code for the label <tt class="docutils literal">L</tt> with the given partial environment.
+<tt class="docutils literal">print_and_stop</tt> is simply turned into a <tt class="docutils literal">print_and_stop</tt>. We will see the
+code for <tt class="docutils literal">do_pe</tt> soon.</p>
+<p>Conditional jumps are more interesting:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">pe</span>(<span style="color: #CC00FF;">if</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">L1</span>, <span style="color: #003333;">L2</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C</span>) <span style="color: #CC3300;">-&gt;</span>
+        (<span style="color: #003333;">C</span> <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span> <span style="color: #CC3300;">-&gt;</span>
+            <span style="color: #003333;">L</span> <span style="color: #555555;">=</span> <span style="color: #003333;">L2</span>
+        ;
+            <span style="color: #003333;">L</span> <span style="color: #555555;">=</span> <span style="color: #003333;">L1</span>
+        ),
+        <span style="color: #CC00FF;">do_pe</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">LR</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">jump</span>(<span style="color: #003333;">LR</span>)
+    ;
+        <span style="color: #CC00FF;">do_pe</span>(<span style="color: #003333;">L1</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">L1R</span>),
+        <span style="color: #CC00FF;">do_pe</span>(<span style="color: #003333;">L2</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">L2R</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">if</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">L1R</span>, <span style="color: #003333;">L2R</span>)
+    ).
+</pre></div>
+<p>First we look up the value of the condition variable. If it is a constant, we
+can produce better code, because we know statically that only one path is
+reachable. Thus we produce code for that path, and then emit an unconditional
+jump there. If the condition variable is not known at partial evaluation time,
+we need to partially evaluate both paths and produce a conditional jump in the
+residual code.</p>
+<p>This rule is the one that causes the partial evaluator to potentially do much
+more work than the interpreter, because after an <tt class="docutils literal">if</tt> sometimes both paths
+need to be explored. In the worst case this process never stops, so a real
+partial evaluator would need to ensure somehow that it terminates. There are
+many algorithms for doing that, but I will ignore this problem here.</p>
+<p>Now we need to understand what the <tt class="docutils literal">do_pe</tt> predicate is doing. Its most
+important task is to make sure that we don't do the same work twice by
+memoizing code that was already partially evaluated in the past. For that it
+keeps a mapping of <tt class="docutils literal">Label, Partial Environment</tt> to <tt class="docutils literal">Label of the residual
+code</tt>:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">do_pe</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">LR</span>) :-
+    (<span style="color: #CC00FF;">code_cache</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">LR</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC3300;">true</span>
+    ;
+        <span style="color: #CC00FF;">gensym</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">LR</span>),
+        <span style="color: #CC00FF;">assert</span>(<span style="color: #CC00FF;">code_cache</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">LR</span>)),
+        <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">Code</span>),
+        <span style="color: #CC00FF;">pe</span>(<span style="color: #003333;">Code</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">Residual</span>),
+        <span style="color: #CC00FF;">assert</span>(<span style="color: #CC00FF;">block</span>(<span style="color: #003333;">LR</span>, <span style="color: #003333;">Residual</span>))
+    ).
+</pre></div>
+<p>If the code cache indicates that label <tt class="docutils literal">L</tt> was already partially evaluated
+with partial environment <tt class="docutils literal">PEnv</tt>, then the previous residual code label
+<tt class="docutils literal">LPrevious</tt>
+is returned. Otherwise, a new label is generated with <tt class="docutils literal">gensym</tt>, the code cache
+is informed of that new label with <tt class="docutils literal">assert</tt>, then the block is partially
+evaluated and the residual code is added to the database.</p>
+<p>For those who know partial evaluation terminology: This partial evaluator is a
+polyvariant online partial evaluator. "Polyvariant" means that for every label,
+several specialized version of the block can be generated. "Online" means that
+no preprocessing is done before the partial evaluator runs.</p>
+
+<h2>Partial Evaluation Example</h2>
+<p>With this code we can look at the classical example of partial evaluation (it's
+probably the "Hello World" of partial evaluation). We
+can ask the partial evaluator to compute a power function, where the exponent
+<tt class="docutils literal">y</tt> is a fixed number, e.g. 5, and the base <tt class="docutils literal">x</tt> is unknown:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">do_pe</span>(<span style="color: #CC3300;">power</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">5</span>], <span style="color: #003333;">LR</span>).
+<span style="color: #003333;">LR</span> <span style="color: #555555;">=</span> <span style="color: #CC3300;">power1</span>.
+</pre></div>
+<p>To find out which code was produced, we can use <tt class="docutils literal">listing</tt>:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">listing</span>(<span style="color: #CC3300;">code_cache</span>)
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">5</span>], <span style="color: #CC3300;">power1</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">5</span>, <span style="color: #CC3300;">res</span><span style="color: #555555;">/</span><span style="color: #FF6600;">1</span>], <span style="color: #CC3300;">power_rec1</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">4</span>], <span style="color: #CC3300;">power_rec2</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">3</span>], <span style="color: #CC3300;">power_rec3</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">2</span>], <span style="color: #CC3300;">power_rec4</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_rec</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">1</span>], <span style="color: #CC3300;">power_rec5</span>).
+<span style="color: #CC00FF;">code_cache</span>(<span style="color: #CC3300;">power_done</span>, [<span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">0</span>], <span style="color: #CC3300;">power_done1</span>).
+
+<span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">listing</span>(<span style="color: #CC3300;">block</span>)
+.... <span style="color: #CC3300;">the</span> <span style="color: #CC3300;">block</span> <span style="color: #CC3300;">definition</span> <span style="color: #CC3300;">of</span> <span style="color: #CC3300;">the</span> <span style="color: #CC3300;">user</span> <span style="color: #CC3300;">program</span> ....
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_done1</span>, <span style="color: #CC00FF;">print_and_stop</span>(<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec5</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_done1</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec4</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_rec5</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec3</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_rec4</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec2</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">res</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_rec3</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power_rec1</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">res</span>, <span style="color: #CC3300;">mul</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>), <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>), <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_rec2</span>))).
+<span style="color: #CC00FF;">block</span>(<span style="color: #CC3300;">power1</span>, <span style="color: #CC00FF;">jump</span>(<span style="color: #CC3300;">power_rec1</span>)).
+</pre></div>
+<p>The <tt class="docutils literal">code_cache</tt> tells which residual labels correspond to which original
+labels under which partial environments. Thus, <tt class="docutils literal">power1</tt> contains the code of
+<tt class="docutils literal">power</tt> under the assumption that <tt class="docutils literal">y</tt> is 5. Looking at the block listing,
+the label <tt class="docutils literal">power1</tt> corresponds to code that simply multiplies <tt class="docutils literal">res</tt> by <tt class="docutils literal">x</tt>
+five times without using the variable <tt class="docutils literal">x</tt> at all. The loop that was present
+in the original program has been fully unrolled, the loop variable <tt class="docutils literal">y</tt> has
+disappeared. Hopefully this is faster than the original program.</p>
+
+<h2>Conclusion</h2>
+<p>In this blog post we saw an interpreter for a simple flow graph language in
+Prolog, together with a partial evaluator for it. The partial evaluator
+essentially duplicates every rule of the interpreter. If all the arguments of
+the current operation are known, it acts like the interpreter, otherwise it
+simply copies the operation into the residual code.</p>
+<p>Partial evaluation can be used for a variety of applications, but the most
+commonly cited one is that of applying it to an interpreter. To do that, the
+program that the interpreter runs is assumed to be constant by the partial
+evaluator. Thus a specialized version of the interpreter is produced that does
+not use the input program at all. That residual code can be seen as a compiled
+version of the input program.</p>
+<p>In the <a href="../posts/2012/01/simple-tracer-for-flow-graph-language-6930951890987229484.html">next blog post in this series</a> we will look at writing a simple tracer for
+the same flowgraph language.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-8407116276352887741">
+        <div class="comment-header">
+          <a name="comment-8407116276352887741"></a>
+            <span class="author">單中杰</span> wrote on <span class="date">2012-01-26 16:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>Excellent example and explanation! I look forward to the next installment!<br><br>But down with gensym! Instead, you can just let LR=pair(L,PEnv).</p>
+        </div>
+      </div>
+      <div class="comment comment-6693368907976342033">
+        <div class="comment-header">
+          <a name="comment-6693368907976342033"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-26 17:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>For those not too familiar with Prolog: assert(foo(..)) is not at all like the "assert" of Python or C code.  Instead, it adds the rule 'foo(..)' in the database of rules.  In other words, it is as if 'foo(..)' was added to the currently running program, as an extra rule.</p>
+        </div>
+      </div>
+      <div class="comment comment-8265620344712355617">
+        <div class="comment-header">
+          <a name="comment-8265620344712355617"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2012-01-27 10:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>單中杰: Thanks for the compliments.<br><br>I really like the idea of getting rid of gensym that way. It had never occurred to me to simply use a non-atomic term as a label, very nice.</p>
+        </div>
+      </div>
+      <div class="comment comment-9217681289544218266">
+        <div class="comment-header">
+          <a name="comment-9217681289544218266"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-27 13:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>Very interesting, but I'm a bit confused - what does block(X, Y) do? It isn't defined anywhere.</p>
+        </div>
+      </div>
+      <div class="comment comment-5579418960498488560">
+        <div class="comment-header">
+          <a name="comment-5579418960498488560"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2012-01-27 13:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous: block(L, O) lists all the labels and operations corresponding to the labels that exist in the user program. See the very beginning of the post. Also, when partial evaluation creates new code it adds new cases to block(L, O), with the statement assert(block(..., ...)).</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2012/01/pypy-internship-at-ncar-2244162842744077724.html" class="u-url">PyPy internship at NCAR</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2012/01/pypy-internship-at-ncar-2244162842744077724.html" rel="bookmark">
+            <time class="published dt-published" datetime="2012-01-15T22:38:00Z" itemprop="datePublished" title="2012-01-15 22:38">2012-01-15 22:38</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hello, everyone</p>
+<p>I would like to inform you that there is a very interesting opportunity
+for doing an internship at <a class="reference external" href="https://ncar.ucar.edu/">NCAR</a> in the lovely town of <a class="reference external" href="https://en.wikipedia.org/wiki/Boulder,_Colorado">Boulder</a>, situated
+on the foothils of Rocky Mountains. Before you read on, make sure you:</p>
+<ul class="simple">
+<li>are a student of a US University, who is legally eligible to work in the US</li>
+<li>are at least finishing second year this year</li>
+<li>apply before February 3rd.</li>
+</ul>
+<p>The internship itself will focus on using PyPy (in some way) to provide
+a high performance numeric kernel for an atmospheric model, and measuring how
+fast we can go. This is very much in line with what the current effort on
+NumPy in PyPy is about. The internship will be mentored by <a class="reference external" href="https://www.linkedin.com/in/delvento">Davide del Vento</a>
+and I hope to have some influence over where it goes myself :-)</p>
+<p>A few interesting links:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://www2.cisl.ucar.edu/siparcs/">program website</a></li>
+<li>
+<a class="reference external" href="https://www2.cisl.ucar.edu/siparcs/opportunities/ad">internship proposal</a> - note that the actual roadmap is very flexible, as
+long as it's a numeric kernel of an atmospheric model using PyPy.</li>
+</ul>
+<p>Feel free to contact Davide for details about the proposal and <a class="reference external" href="https://mail.python.org/mailman/listinfo/pypy-dev">pypy-dev</a> or
+me directly for details about PyPy.</p>
+<p>Cheers,
+fijal</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-8202862050962790915">
+        <div class="comment-header">
+          <a name="comment-8202862050962790915"></a>
+            <span class="author">Rahul</span> wrote on <span class="date">2012-01-16 05:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>It looks good opportunity for a student. You can also post it on https://jobs.pythonweekly.com/</p>
+        </div>
+      </div>
+      <div class="comment comment-3775767053163490127">
+        <div class="comment-header">
+          <a name="comment-3775767053163490127"></a>
+            <span class="author">Cameron Sparr</span> wrote on <span class="date">2012-02-01 22:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>I've applied for the internship already but was hoping to get some more details so I could make some last-minute edits to my application! Do you have Davide Del Vento's contact info?</p>
+        </div>
+      </div>
+      <div class="comment comment-5736952066796946357">
+        <div class="comment-header">
+          <a name="comment-5736952066796946357"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-02-02 08:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>send me a mail</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2012/01/transactional-memory-ii-7225309560970774590.html" class="u-url">Transactional Memory (II)</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2012/01/transactional-memory-ii-7225309560970774590.html" rel="bookmark">
+            <time class="published dt-published" datetime="2012-01-14T13:21:00Z" itemprop="datePublished" title="2012-01-14 13:21">2012-01-14 13:21</time></a>
+            </p>
+                <p class="commentline">22 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Here is an update about the <a class="reference" href="../posts/2011/06/global-interpreter-lock-or-how-to-kill-8270246310848099963.html">previous blog post</a> about the
+Global Interpreter Lock (GIL).  In 5 months, the point of view
+changed quite a bit.</p>
+<p>Let me remind you that the GIL is the technique used in both CPython and
+PyPy to safely run multi-threaded programs: it is a global lock that
+prevents multiple threads from actually running at the same time.  The
+reason to do that is that it would have disastrous effects in the
+interpreter if several threads access the same object concurrently --- to
+the point that in CPython even just manipulating the object's reference
+counter needs to be protected by the lock.</p>
+<p>So far, the ultimate goal to enable true multi-CPU usage has been to
+remove the infamous GIL from the interpreter, so that multiple threads
+could actually run in parallel.  It's a lot of work, but this has been
+done in Jython.  The reason that it has not been done in CPython so far
+is that it's even more work: we would need to care not only about
+carefully adding fine-grained locks everywhere, but also about reference
+counting; and there are a lot more C extension modules that would need
+care, too.  And we don't have locking primitives as performant as
+Java's, which have been hand-tuned since ages (e.g. to use help from the
+JIT compiler).</p>
+<p>But we think we have a plan to implement a different model for using
+multiple cores.  Believe it or not, this is <em>better</em> than just removing
+the GIL from PyPy.  You might get to use all your cores <em>without ever
+writing threads.</em></p>
+<p>You would instead just use some event dispatcher, say from Twisted, from
+Stackless, or from your favorite GUI; or just write your own.  From
+there, you (or someone else) would add some minimal extra code to the
+event dispatcher's source code, to exploit the new transactional features
+offered by PyPy.  Then you would run your program on a
+special version of PyPy, and voilà: you get some form of automatic parallelization.
+Sounds magic, but the basic idea is simple: start handling multiple
+events in parallel, giving each one its own <em>transaction.</em>  More about
+it later.</p>
+
+<h2><a id="threads-or-events" name="threads-or-events">Threads or Events?</a></h2>
+<p>First, why would this be better than "just" removing the GIL?  Because
+using threads can be a mess in any complex program.  Some authors (e.g.
+<a class="reference" href="https://www.eecs.berkeley.edu/Pubs/TechRpts/2006/EECS-2006-1.pdf">Lee</a>) have argued that the reason is that threads are fundamentally
+non-deterministic.  This makes it very hard to reason about them.
+Basically the programmer needs to "trim" down the non-determinism (e.g.
+by adding locks, semaphores, etc.), and it's hard to be sure when he's
+got a sufficiently deterministic result, if only because he can't write
+exhaustive tests for it.</p>
+<p>By contrast, consider a Twisted program.  It's not a multi-threaded
+program, which means that it handles the "events" one after the other.
+The exact ordering of the events is not really deterministic, because
+they often correspond to external events; but that's the only source of
+non-determinism.  The actual handling of each event occurs in a nicely
+deterministic way, and most importantly, not in parallel with the
+handling of other events.  The same is true about other libraries like
+GUI toolkits, gevent, or Stackless.</p>
+<p>(Of course the Twisted and the Stackless models, to cite only these two,
+are quite different from each other; but they have in common the fact
+that they are not multi-threaded, and based instead on "events" ---
+which in the Stackless case means running a tasklet from one switch()
+point to the next one.)</p>
+<p>These two models --- threads or events --- are the two main models we
+have right now.  The latter is more used in Python, because it is much
+simpler to use than the former, and the former doesn't give any benefit
+because of the GIL.  A third model, which is the only one that gives
+multi-core benefits, is to use multiple processes, and do inter-process
+communication.</p>
+
+<h2><a id="the-problem" name="the-problem">The problem</a></h2>
+<p>Consider the case of a big program that has arbitrary complicated
+dependencies.  Even assuming a GIL-less Python, this is likely enough to
+prevent the programmer from even starting a multi-threaded rewrite,
+because it would require a huge mess of locks.  He could also consider
+using multiple processes instead, but the result is annoying as well:
+the complicated dependencies translate into a huge mess of inter-process
+synchronization.</p>
+<p>The problem can also be down-sized to very small programs, like the kind
+of hacks that you do and forget about.  In this case, the dependencies
+might be simpler, but you still have to learn and use subtle locking
+patterns or a complex inter-process library, which is overkill for the
+purpose.</p>
+<p>(This is similar to how explicit memory management is not very hard for
+small programs --- but still, nowadays a lot of people agree that
+automatic memory management is easier for programs of all sizes.  I
+think the same will eventually be true for using multiple CPUs, but the
+correct solution will take time to mature, like garbage collectors did.
+This post is a step in hopefully the right direction <tt class="docutils literal"><span class="pre">:-)</span></tt>)</p>
+
+<h2><a id="events-in-transactions" name="events-in-transactions">Events in Transactions</a></h2>
+<p>Let me introduce the notion of <em>independent events</em>: two events are
+independent if they don't touch the same set of objects. In a multi-threaded
+world, it means that they can be executed in parallel without needing any lock
+to ensure correctness.</p>
+<p>Events might also be <em>mostly independent</em>, i.e. they rarely access the same
+object concurrently.  Of course, in a multi-threaded world we would still need
+locks to ensure correctness, but the point is that the locks are rarely causing
+pauses: <a class="reference" href="https://en.wikipedia.org/wiki/Lock_%28computer_science%29">lock contention</a> is low.</p>
+<p>Consider again the Twisted example I gave above.  There are often several
+events pending in the dispatch queue (assuming the program is using 100%
+of our single usable CPU, otherwise the whole discussion is moot).  The case I am
+interested in is the case in which these events are <em>generally mostly
+independent</em>, i.e. we expect few conflicts between them.  However
+they don't <em>have</em> to be proved independent.  In fact it is fine if
+they have arbitrary complicated dependencies as described above.  The
+point is the expected common case.  Imagine that you have a GIL-less
+Python and that you can, by a wave of your hand, have all the careful
+locking mess magically done.  Then what I mean here is the case in which
+such a theoretical program would run mostly in parallel on multiple
+core, without waiting too often on the locks.</p>
+<p>In this case, the solution I'm proposing is that with minimal tweaks
+in the event dispatch loop, we can
+handle multiple events on multiple threads, each in its own transaction.
+A <a class="reference" href="https://en.wikipedia.org/wiki/Transactional_memory">transaction</a> is basically a tentative execution of the corresponding
+piece of code: if we detect conflicts with other concurrently executing
+transactions, we abort the whole transaction and restart it from
+scratch.</p>
+<p>By now, the fact that it can basically work should be clear: multiple
+transactions will only get into conflict when modifying the same data
+structures, which is the case where the magical wand above would have
+put locks.  If the magical program could progress without too many
+locks, then the transactional program can progress without too many
+conflicts.  In a way, you get even more than what the magical program
+can give you: each event is dispatched in its own transaction, which
+means that from each event's point of view, we have the illusion that
+nobody else is running concurrently.  This is exactly what all existing
+Twisted-/Stackless-/etc.-based programs are assuming.</p>
+<p>Note that this solution, without transactions, already exists in some
+other languages: for example, Erlang is all about independent events.
+This is the simple case where we can just run them on multiple cores,
+knowing by construction of the language that you can't get conflicts.
+Of course, it doesn't work for Python or for a lot of other languages.
+From that point of view, what I'm suggesting is merely that
+transactional memory could be a good model to cope with the risks of
+conflicts that come from not having a special-made language.</p>
+
+<h2><a id="not-a-perfect-solution" name="not-a-perfect-solution">Not a perfect solution</a></h2>
+<p>Of course, transactional memory
+(TM) is not a perfect solution either.  Right now, the biggest issue is
+the performance hit that comes from the software implementation (STM).
+In time, hardware support (HTM) is <a class="reference" href="https://en.wikipedia.org/wiki/Haswell_%28microarchitecture%29">likely to show up</a> and help
+mitigate the problem; but I won't deny the fact that in some cases,
+because it's simple enough and/or because you really need the top
+performance, TM is not the best solution.</p>
+<p>Also, the explanations above are silent on what is a hard point for TM,
+namely system calls.  The basic general solution is to suspend other
+transactions as soon as a transaction does its first system call, so
+that we are sure that the transaction will succeed.  Of course this
+solution is far from optimal.  Interestingly, it's possible to do better
+on a case-by-case basis: for example, by adding in-process buffers, we
+can improve the situation for sockets, by having recv() store in a
+buffer what is received so that it can be re-recv()-ed later if the
+transaction is aborted; similarly, send() or writes to log files can be
+delayed until we are sure that the transaction will commit.</p>
+<p>From my point of view, the most important point is that the TM solution
+comes from the correct side of the "determinism" scale.  With threads,
+you have to prune down non-determinism.  With TM, you start from a
+mostly deterministic point, and if needed, you add non-determinism.  The
+reason you would want to do so is to make the transactions shorter:
+shorter transactions have less risks of conflicts, and when there are
+conflicts, less things to redo.  So making transactions shorter
+increases the parallelism that your program can achieve, while at the
+same time requiring more care.</p>
+<p>In terms of an event-driven model, the equivalent would be to divide the
+response of a big processing event into several events that are handled
+one after the other: for example, the first event sets things up and fires the second
+event, which does the actual computation; and afterwards a third event
+writes the results back.  As a result, the second event's transaction
+has little risks of getting aborted.  On the other hand, the writing
+back needs to be aware of the fact that it's not in the same transaction
+as the original setting up, which means that other unrelated
+transactions may have run in-between.</p>
+
+<h2><a id="one-step-towards-the-future" name="one-step-towards-the-future">One step towards the future?</a></h2>
+<p>These, and others, are the problems of the TM approach.  They are "new"
+problems, too, in the sense that the existing ways of programming don't
+have these problems.</p>
+<p>Still, as you have guessed, I think that it is overall a win, and
+possibly a big win --- a win that might be on the same scale for the age
+of multiple CPUs as automatic garbage collection was 20 years ago for
+the age of RAM size explosion.</p>
+<p>Stay tuned for more!</p>
+<p>--- Armin (and reviews by Antonio and Fijal)</p>
+
+<br><b>UPDATE:</b> please look at the tiny <a href="https://bitbucket.org/arigo/arigo/raw/default/hack/stm/transactionmodule/">transaction module</a> I wrote as an example.  The idea is to have the same interface as this module, but implemented differently.  By making use of transactional memory internally, it should be possible to safely run on multiple CPUs while keeping the very same programmer interface.
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1318986761862693600">
+        <div class="comment-header">
+          <a name="comment-1318986761862693600"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-01-14 15:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great article, great solution to a big problem...<br><br>I am really looking forward to this :-) <br><br>As an experiment I have developed Pyworks, which makes objects concurrent and methods asynchronious. But it makes little sense to do performance test on an multicore CPU because of the GIL.<br><br>The code for Pyworks can be found at https://bitbucket.org/raindog/pyworks</p>
+        </div>
+      </div>
+      <div class="comment comment-1477286392193343717">
+        <div class="comment-header">
+          <a name="comment-1477286392193343717"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-14 15:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; These two models --- threads or events --- are the two main models we have right now.<br><br>Where does Go-style concurrency fit in?</p>
+        </div>
+      </div>
+      <div class="comment comment-6088752932582739680">
+        <div class="comment-header">
+          <a name="comment-6088752932582739680"></a>
+            <span class="author">gasche</span> wrote on <span class="date">2012-01-14 16:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>If you go that road, you will certainly find out that Transactional Memory is much, much harder to get right than it looks like in today effectful/imperative languages. Sure, it looks wonderful on paper, but if your language doesn't help you control side-effects it will give you a very hard time.<br><br>Currently, there is satisfying STM support <a href="https://www.haskell.org/haskellwiki/Software_transactional_memory" rel="nofollow">in Haskell</a> (because of its tight type-based control of side-effects) <a href="https://clojure.org/refs" rel="nofollow">and Clojure</a> (beacuse of its tight control on mutability), and it might be getting <a href="https://nbronson.github.com/scala-stm/index.html" rel="nofollow">into Scala</a>.<br><br>I doubt Python can easily get such control, at least without an important reorganization of idiomatic practices and frameworks, that go beyond the "let's be event-driven" decision. Which makes your "this is going to work magically" story a bit hard to believe.<br><br>There has been intense research on this topic for some decades now, and several attempts at getting it to work in current mainstream languages have mostly failed.<br><br>See for example this long retrospective of the STM.NET effort at Microsoft Research, by Joe Duffy:<br><a href="https://www.bluebytesoftware.com/blog/2010/01/03/ABriefRetrospectiveOnTransactionalMemory.aspx" rel="nofollow">A (brief) retrospective on transactional memory</a><br>or this shorter blog post by Brian Hurt:<br><a href="https://enfranchisedmind.com/blog/posts/the-problem-with-stm-your-languages-still-suck/" rel="nofollow">The problem with STM: your languages still suck</a>.<br><br>I was a bit disappointed that you didn't cite any of the relevant literature in your post. It made me suspicious of "reiventing the wheel"...</p>
+        </div>
+      </div>
+      <div class="comment comment-8152331298676961160">
+        <div class="comment-header">
+          <a name="comment-8152331298676961160"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-14 16:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>One major use-case for multithreading involves a large, unchanging data structure which many threads access. I.e., the data structure is loaded by a parent task, then not modified again; a number of threads are then spawned to use it for calculations.<br><br>In CPython, the GIL makes this impossible if only because the reference counters need to be protected. With Cython in threads, however, you can turn off the GIL and do some work on C-style data structures.<br><br>I'm wondering whether the STM PyPy effort could have a very useful, and very early, benefit: simply enabling an unchanging data structure to be accessed by a number of processors via the kinds of events you describe. There wouldn't be a need for transactions, because the programmer would take responsibility for only sharing unchanging structures between simultaneously-executing events. <br><br>But it seems like the basic requirements for this kind of facility might be met in in early stage of STM development. And a solution that allowed multiple processors to access large, unchanging structures would be very useful in certain applications. I know I have one in mind that I'm looking at CPython/Cython for, but I'd rather see if I could get the performance I need from PyPy.<br><br>Just thought it was worth mentioning.</p>
+        </div>
+      </div>
+      <div class="comment comment-5089221139241070034">
+        <div class="comment-header">
+          <a name="comment-5089221139241070034"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-14 19:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous: in the extract you cite I meant "the two main models in Python".  As far as I can tell, Go does concurrency by enforcing all communications to go via channels, so I would classify it as a "special-made" language.  This solution might be nice and usable, but it does not really work at all in languages like Python.</p>
+        </div>
+      </div>
+      <div class="comment comment-2382784834088449417">
+        <div class="comment-header">
+          <a name="comment-2382784834088449417"></a>
+            <span class="author">Daniel Waterworth</span> wrote on <span class="date">2012-01-14 20:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin, CSP may be built into Go, but IMO this was a mistake, there is no requirement for it to be a language feature; it fits nicer as library. See [python-csp] for a python implementation.<br><br>[python-csp] https://code.google.com/p/python-csp/wiki/Tutorial</p>
+        </div>
+      </div>
+      <div class="comment comment-6845472824706739410">
+        <div class="comment-header">
+          <a name="comment-6845472824706739410"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-14 21:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>@gasche: I know about Haskell, Clojure and Scala, and I just read the two blog posts you pointed to.<br><br>I'm not talking about giving explicit TM to the end programmers.  I'm instead considering TM as an internal, implementation-only feature.  That makes it very similar to GCs.<br><br>I know the points and issues of traditional TM systems, which are nicely reported by Joe Duffy in "A (brief) retrospective on transactional memory".  These are of course perfectly valid issues, but I think they do not apply (or "not that much") in the particular context I'm talking about.  For example, this includes the large sections about nested transactions, and about consistency between the transactional and non-transactional worlds (Weak or Strong Atomicity, The Privatization Problem).  Even "Where is the Killer App?" is obvious in this case: any existing Twisted App is potentially a Killer App.<br><br>Sorry for not including references to papers.  I must admit I don't know any paper that describes a similar use case for TM.</p>
+        </div>
+      </div>
+      <div class="comment comment-472626244581189589">
+        <div class="comment-header">
+          <a name="comment-472626244581189589"></a>
+            <span class="author">Simon Weber</span> wrote on <span class="date">2012-01-14 21:45</span>:
+        </div>
+        <div class="comment-content">
+          <p>The link to the previous blog post is broken. It should be: https://morepypy.blogspot.com/2011/06/global-interpreter-lock-or-how-to-kill.html</p>
+        </div>
+      </div>
+      <div class="comment comment-1707200339142844939">
+        <div class="comment-header">
+          <a name="comment-1707200339142844939"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-15 07:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; @Armin, CSP may be built into Go, but IMO this was a mistake, there is no requirement for it to be a language feature; it fits nicer as library. See [python-csp] for a python implementation.<br><br>Stackless (which PyPy enables) supports Go-style channels as well, no?<br><br>https://www.stackless.com/wiki/Channels</p>
+        </div>
+      </div>
+      <div class="comment comment-1484927910338553671">
+        <div class="comment-header">
+          <a name="comment-1484927910338553671"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2012-01-15 08:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>Your idea could work for other easy to inject into points, such as loops, and comprehensions.  Especially with much of the work in pypy already done for identifying information about loops.<br><br>How does this compare to grand central dispatch and blocks?  https://en.wikipedia.org/wiki/Grand_Central_Dispatch<br><br>Events are a very good way to model concurrency, and are widely used.  It is a great place to dispatch concurrency into parallelism.<br><br>Closures/blocks provide a fairly decent way to get some of the protection of STM - and in many programs give you the 80% solution.  For code that plays nicely and avoids mutable, or global data - this works.  Luckily, a lot of event based code is already written in this way.  As you say, they are "generally mostly independent".<br><br>Making the bad cases a quick fail, like in JavaScript worker threads could be an ok option.  As soon as someone tries to access global data(do a system call, access the DOM, or access data outside the closure even), the program would fail there.  Then you could fix those cases, or "add non-determinism" as you say.  I think I'd prefer fail fast here, rather than have to detect these problems, and have them silently pass by.<br><br>You still have scheduling problems, and trying to figure out task size.  As well, this does not solve lots of other problems.  However, it is cool that it could be applied automatically, and probably 'safely'.<br><br>Another random thought... you could probably mark chunks of code as 'pure' as your run through them, and if they do a system call or mutate global data mark them as 'unpure' and don't try them again.<br><br>I very much look forward to reading your results as you implement more.</p>
+        </div>
+      </div>
+      <div class="comment comment-1930769890566757486">
+        <div class="comment-header">
+          <a name="comment-1930769890566757486"></a>
+            <span class="author">Eric van Riet Paap</span> wrote on <span class="date">2012-01-15 08:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>When Armin gets this excited I'd fasten my seatbelt and put my goggles on.<br><br>Thank you for letting me be an (otherwise mostly silent) observer.<br><br>Please keep shifting boundaries!<br><br>- Eric</p>
+        </div>
+      </div>
+      <div class="comment comment-6428686435032752939">
+        <div class="comment-header">
+          <a name="comment-6428686435032752939"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-16 10:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>Update: please look at the tiny transaction module I wrote as an example. The idea is to have the same interface as this module, but implemented differently. By making use of transactional memory internally, it should be possible to safely run on multiple CPUs while keeping the very same programmer interface.<br><br>https://bitbucket.org/arigo/arigo/raw/default/hack/stm/transactionmodule/</p>
+        </div>
+      </div>
+      <div class="comment comment-4122617787896398035">
+        <div class="comment-header">
+          <a name="comment-4122617787896398035"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2012-01-16 12:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin: That transaction code looks very simple.  It seems trivial to implement a map/mapReduce style function on top of your transaction module.<br><br>It is a very similar API to worker pool APIs which many thread using programs use.  The main difference is that you combine the join() in the run method.  It seems that a threaded web server for example could use this?  What would happen if each incoming request comes in, and is put into the transaction (and say the 10th request has an error)?  Would it be better to use multiple transactions?<br><br>Have you thought how thread local storage would work?</p>
+        </div>
+      </div>
+      <div class="comment comment-2487460185736501677">
+        <div class="comment-header">
+          <a name="comment-2487460185736501677"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-16 12:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>@notme: yes, a web server or anything can use this instead of using threads.  It's of course missing a convincing select() or poll() version for that.<br><br>The details haven't been thought out; right now an exception interrupts everything.  In an STM model it's unclear if concurrent transactions should still be allowed to complete or not.  Anyway the point is that exceptions should not really occur because precisely they interrupt everything --- you would typically add instead in every transaction code like "try: .. except: traceback.print_exc()".<br><br>Thread local storage: what would be the point?</p>
+        </div>
+      </div>
+      <div class="comment comment-3484891071069135359">
+        <div class="comment-header">
+          <a name="comment-3484891071069135359"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-01-18 10:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>I also see no reason for Thread local memory.<br><br>I like the idea of thinking about TM in the same line as GC. When you have GC the changes to the language is that you don't need to write free/dealloc. <br><br>Having TM would mean that you don't have to write acquire_GIL</p>
+        </div>
+      </div>
+      <div class="comment comment-1145104452833260266">
+        <div class="comment-header">
+          <a name="comment-1145104452833260266"></a>
+            <span class="author">headius</span> wrote on <span class="date">2012-01-24 04:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>The devil's in the details.<br><br>I'm not sure I buy your conclusions here. STM is not a panacea for solving concurrency issues, and it has some key limitations that limit its general applicability.<br><br>On what granularity do you plan to have transactions? How do you know? Perhaps the VM will have enough knowledge of a given thread's activities to limit transactional overhead to only those structures in memory that are shared, but there still needs to be some indirection in case another thread hops in and starts making changes.<br><br>Where do transactions start and end? In STMs I know, the in-transaction overhead for reading and writing data is *much* higher, since it needs to know if someone else has committed a transaction first and be able to roll back.<br><br>Perhaps this is all intended to be hidden, and you never actually have "threads" that the user can see. But if you're going to parallelize, you'll have threads *somewhere* that are going to contend for resources. If they're going to contend for resources, even in an STM, they're going to have to check for contention, register their interest, and then you're back to the indirection overhead.<br><br>Perhaps I'm not understand what your end goal is. You can't simply turn the world into a series of transactions unless you want every read and write to have transaction overhead or you have some clear way of limiting transaction overhead to only where it's needed. You cite Erlang...but Erlang deals with immutable objects, and there's far less need for anything like an STM. Others have mentioned Clojure...but again, Clojure is mostly immutable structures, and transactional overhead is limited to Refs, where you'll make single coarse-grained reads and writes.<br><br>Am I missing the point? Are you not suggesting VM-wide STM, with the resulting transactional overhead for every read and write?</p>
+        </div>
+      </div>
+      <div class="comment comment-5704534779473103775">
+        <div class="comment-header">
+          <a name="comment-5704534779473103775"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-24 10:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Charles: Indeed, I am suggesting VM-wide STM, with the resulting transactional overhead for every read and write.  I actually got such a VM yesterday (with no GC): it seems to be about 10x slower on a single thread.<br><br>Note that even 10x slower is a plus if it scales to dozens of processors.  But of course, a better point of view is that some years ago the regular pypy *was* 10x slower than CPython.  It was a lot of efforts but we managed to make it only 1.5-2x slower.  And this is all without counting the JIT.  If STM bogs down to a generally-not-triggered read barrier before every read, then the performance impact could be well under 2x.<br><br>Please note also that I don't care about Java-like performance where even loosing 10% of performance would be a disaster.  If we end up with a pypy-tm that is 2x slower than a regular pypy, I would be quite happy, and I believe that there is a non-negligible fraction of the Python users that would be, too.<br><br>On granularity: for now I'm going with the idea that the granularity is defined "naturally" in the source program as the amount of work done every time some central dispatch loop calls some code.  There might be several dispatch loops in total, too.  This is true in the cases I can think of: typical Twisted or Stackless programs, pypy's "translate.py", the richards benchmark, etc.<br><br>Please look at https://paste.pocoo.org/show/539822/ for an example of what I'm talking about.  It's a diff against the standard <a href="https://foss.heptapod.net/pypy/pypy/-/tree/branch//default/pypy/translator/goal/richards.py" rel="nofollow">richards.py</a>: it is a pure Python user program in which I added calls to the new 'transaction' module.  At this level there is no hint of Transactional Memory.</p>
+        </div>
+      </div>
+      <div class="comment comment-5557967065974700000">
+        <div class="comment-header">
+          <a name="comment-5557967065974700000"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-31 17:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Gary Robinson: (off-topic:) for this kind of use case, you can use os.fork() after the immutable data is ready.  It "kind of works" both in pypy and in cpython, although not really --- in cpython the reference counts are modified, causing the pages to get unshared between processes; and in pypy the garbage collector (GC) has the same effect, so far.  It could be solved in pypy by more tweaks the GC.</p>
+        </div>
+      </div>
+      <div class="comment comment-7410558668406857782">
+        <div class="comment-header">
+          <a name="comment-7410558668406857782"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-01 18:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>@armin: <i>@Anonymous: in the extract you cite I meant "the two main models in Python". As far as I can tell, Go does concurrency by enforcing all communications to go via channels, so I would classify it as a "special-made" language. This solution might be nice and usable, but it does not really work at all in languages like Python. </i><br><br>Armin, Stackless Python uses a model that at the API level is very similar to Go. Go borrows from the Bell Labs family of languages (i.e. Newsqueak). The fundamental idea is that message pasing is used to share information between threads/processes/coroutines. In this regard, Go is in the same camp as say, Erlang (although the messaging systems are different).<br><br><br>What I think is interesting and workable for Python are efforts in languages like Polyphonic C# (see the paper "Scalable Join Patterns") and Concurrent/Parallel ML, where lock-free libraries and STM techniques are used under the hood to improve the efficiency of the messaging/synchronisation system. In this fashion, the programmer has a conceptually clean concurrency model and still can make the important decisions about how to partition the problem. <br><br>Cheers,<br>Andrew</p>
+        </div>
+      </div>
+      <div class="comment comment-3231132041235268174">
+        <div class="comment-header">
+          <a name="comment-3231132041235268174"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-01 18:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>@daniel<i>@Armin, CSP may be built into Go, but IMO this was a mistake, there is no requirement for it to be a language feature; it fits nicer as library. See [python-csp] for a python library </i><br><br>I have looked at Python-CSP a long time ago. I recall it being verbose. However I use Stackless Python. And using PyPy's stackless.py, I implemented select() and join patterns. Sometimes I wish I had language support: they cut down on silly mistakes and make the code less verbose for simple cases. However what I have found is that the language can get in the way. For instance, in Go, one has to come up with hacks to do some simple like do a select on an arbitrary number of channels. Perhaps I am wrong but I suspect stuff like select()'s design was influenced by the fact Newsqueak was originally designed to make a windowing system easier to write. So one is monitoring only a handful of channels. In constrast, this is not the way Stackless Python programmes are written.<br><br>Cheers,<br>Andrew</p>
+        </div>
+      </div>
+      <div class="comment comment-6616530454489575665">
+        <div class="comment-header">
+          <a name="comment-6616530454489575665"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-02-01 20:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>A link to a group that did the same thing (thanks a lot Andrew for this link!):<br><br>https://research.microsoft.com/en-us/projects/ame/<br><br>In particular the May 2007 paper (HotOS) nicely summarizes exactly what I'm trying to say, and I think it is clearer than me, if I have to jugde from feedback :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-1515389083772199299">
+        <div class="comment-header">
+          <a name="comment-1515389083772199299"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-27 17:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>Speaking as someone maintaining a large application that uses Twisted, this sounds great.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2012/01/numpypy-progress-report-running-3336055571122066974.html" class="u-url">NumPyPy progress report - running benchmarks</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2012/01/numpypy-progress-report-running-3336055571122066974.html" rel="bookmark">
+            <time class="published dt-published" datetime="2012-01-10T19:21:00Z" itemprop="datePublished" title="2012-01-10 19:21">2012-01-10 19:21</time></a>
+            </p>
+                <p class="commentline">17 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hello.</p>
+<p>We're excited to let you know about some of the great progress we've made on
+NumPyPy: both completeness and performance. In this blog entry we mostly
+will talk about performance and how much progress we have made so far.
+</p>
+<p><strong>Word of warning:</strong> this
+work is in progress -- we're maybe half way to where we want to be and there are
+many trivial and not so trivial optimizations to be written. (For example, we
+haven't even started to implement important optimizations, like vectorization.)</p>
+<div class="section" id="benchmark">
+<h1>Benchmark</h1>
+<p>We chose a laplace equation solver, based on SciPy's <a class="reference external" href="https://www.scipy.org/PerformancePython">PerformancePython</a> wiki.
+Unfortunately, the different implementations on the wiki page accidentally use
+two different algorithms, which have different convergences, and very different
+performance characteristics on modern computers. As a result, we implemented
+our own versions in both C and Python (with and without NumPy). The full source
+can be found in <a class="reference external" href="https://bitbucket.org/fijal/hack2/src/default/bench/laplace">fijal's hack</a> repo, all these benchmarks were performed at
+revision 18502dbbcdb3.</p>
+<p>First, let me describe various algorithms used. Note that some of them contain
+PyPy-specific hacks to work around limitations in the current implementation.
+These hacks will go away eventually and the performance will improve.
+Numerically the algorithms used are identical, however exact data layout in
+memory differs between them.</p>
+<p><strong>A note about all the benchmarks:</strong> they each were run once, but the
+performance is very stable across runs.</p>
+<p>Starting with the C version, it implements a trivial laplace transform
+using two loops and double-reference memory (array of <tt class="docutils literal">int*</tt>). The double
+reference does not matter for performance and the two algorithms are
+implemented in <tt class="docutils literal"><span class="pre">inline-laplace.c</span></tt> and <tt class="docutils literal">laplace.c</tt>. They were both compiled
+with <tt class="docutils literal">gcc 4.4.5</tt> at <tt class="docutils literal"><span class="pre">-O3</span></tt>. The inline version modifies array in-place while the non-inline version stores results in a copy. That makes them converge at different rate, hence different number of iterations</p>
+<p>A straightforward version of those in Python is implemented in <tt class="docutils literal">laplace.py</tt>
+using, respectively, <tt class="docutils literal">inline_slow_time_step</tt> and <tt class="docutils literal">slow_time_step</tt>.
+<tt class="docutils literal">slow_2_time_step</tt> does the same thing, except it copies arrays in-place
+instead of creating new copies. Table below compares running PyPy against C:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="35%">
+<col width="34%">
+<col width="31%">
+</colgroup>
+<tbody valign="top">
+<tr>
+<td>bench</td>
+<td>number of iterations</td>
+<td>time per iteration</td>
+</tr>
+<tr>
+<td>laplace C</td>
+<td>219</td>
+<td>6.3ms</td>
+</tr>
+<tr>
+<td>inline-laplace C</td>
+<td>278</td>
+<td>20ms</td>
+</tr>
+<tr>
+<td>slow python</td>
+<td>219</td>
+<td>17ms</td>
+</tr>
+<tr>
+<td>slow 2 python</td>
+<td>219</td>
+<td>14ms</td>
+</tr>
+<tr>
+<td>inline_slow python</td>
+<td>278</td>
+<td>23.7ms</td>
+</tr>
+</tbody>
+</table>
+<p>An important thing to notice is the data dependency of the inline
+version causes a huge slowdown for the C versions. This is not a severe
+disadvantage for us though -- the brain-dead Python version takes longer
+and PyPy is not able to take advantage of the knowledge that the data is
+independent. The results are in the same ballpark as the C versions --
+<strong>15% - 170%</strong> slower, but the algorithm
+one chooses matters more than the language. By comparison, the slow versions
+take about <strong>5.75s</strong> each on CPython 2.6 per iteration and, by estimation,
+are about <strong>200x</strong> slower than the PyPy equivalent, if I had the patience to
+measure the full run.</p>
+<p>The next step is to use NumPy expressions. The first problem we run into is
+that computing the error requires walking the entire array a second time. This
+is fairly inefficient in terms of cache access, so I took the liberty of
+computing the errors every 15 steps. This results in the convergence being
+rounded to the nearest 15 iterations, but speeds things up considerably.
+<tt class="docutils literal">numeric_time_step</tt> takes the most braindead approach of replacing the array
+with itself, like this:</p>
+<pre class="literal-block">
+u[1:-1, 1:-1] = ((u[0:-2, 1:-1] + u[2:, 1:-1])*dy2 +
+                       (u[1:-1,0:-2] + u[1:-1, 2:])*dx2)*dnr_inv
+</pre>
+<p>We need 3 arrays here -- one is an intermediate (PyPy only needs one, for all of
+those subexpressions), one is a copy for computing the error, and one is the
+result. This works automatically because in NumPy <tt class="docutils literal">+</tt> or <tt class="docutils literal">*</tt> creates an
+intermediate, while NumPyPy avoids allocating the intermediate if possible.</p>
+<p><tt class="docutils literal">numeric_2_time_step</tt> works in pretty much the same way:</p>
+<pre class="literal-block">
+src = self.u
+self.u = src.copy()
+self.u[1:-1, 1:-1] = ((src[0:-2, 1:-1] + src[2:, 1:-1])*dy2 +
+                      (src[1:-1,0:-2] + src[1:-1, 2:])*dx2)*dnr_inv
+</pre>
+<p>except the copy is now explicit rather than implicit.</p>
+<p><tt class="docutils literal">numeric_3_time_step</tt> does the same thing, but notice one doesn't have to copy
+the entire array, it's enough to copy the border pieces and fill rest with
+zeros:</p>
+<pre class="literal-block">
+src = self.u
+self.u = numpy.zeros((self.nx, self.ny), 'd')
+self.u[0] = src[0]
+self.u[-1] = src[-1]
+self.u[:, 0] = src[:, 0]
+self.u[:, -1] = src[:, -1]
+self.u[1:-1, 1:-1] = ((src[0:-2, 1:-1] + src[2:, 1:-1])*dy2 +
+                      (src[1:-1,0:-2] + src[1:-1, 2:])*dx2)*dnr_inv
+</pre>
+<p><tt class="docutils literal">numeric_4_time_step</tt> is the one that tries hardest to resemble the C version.
+Instead of doing an array copy, it actually notices that one can alternate
+between two arrays. This is exactly what the C version does. The
+<tt class="docutils literal">remove_invalidates</tt> call is a PyPy specific hack - we hope to remove this
+call in the near future, but, in short, it promises "I don't have any unbuilt
+intermediates that depend on the value of the argument", which means one doesn't
+have to compute sub-expressions one is not actually using:</p>
+<pre class="literal-block">
+remove_invalidates(self.old_u)
+remove_invalidates(self.u)
+self.old_u[:,:] = self.u
+src = self.old_u
+self.u[1:-1, 1:-1] = ((src[0:-2, 1:-1] + src[2:, 1:-1])*dy2 +
+                      (src[1:-1,0:-2] + src[1:-1, 2:])*dx2)*dnr_inv
+</pre>
+<p>This one is the most comparable to the C version.</p>
+<p><tt class="docutils literal">numeric_5_time_step</tt> does the same thing, but notices one doesn't have to copy
+the entire array, it's enough to just copy the edges. This is an optimization
+that was not done in the C version:</p>
+<pre class="literal-block">
+remove_invalidates(self.old_u)
+remove_invalidates(self.u)
+src = self.u
+self.old_u, self.u = self.u, self.old_u
+self.u[0] = src[0]
+self.u[-1] = src[-1]
+self.u[:, 0] = src[:, 0]
+self.u[:, -1] = src[:, -1]
+self.u[1:-1, 1:-1] = ((src[0:-2, 1:-1] + src[2:, 1:-1])*dy2 +
+                      (src[1:-1,0:-2] + src[1:-1, 2:])*dx2)*dnr_inv
+</pre>
+<p>Let's look at the table of runs. As before, <tt class="docutils literal">gcc 4.4.5</tt>, compiled at <tt class="docutils literal"><span class="pre">-O3</span></tt>,
+and PyPy nightly 7bb8b38d8563, on an x86-64 machine. All of the numeric methods
+run for 226 steps, slightly more than the 219, rounding to the next 15 when the
+error is computed.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="44%">
+<col width="25%">
+<col width="31%">
+</colgroup>
+<tbody valign="top">
+<tr>
+<td>benchmark</td>
+<td>PyPy</td>
+<td>CPython</td>
+</tr>
+<tr>
+<td>numeric</td>
+<td>21ms</td>
+<td>35ms</td>
+</tr>
+<tr>
+<td>numeric 2</td>
+<td>14ms</td>
+<td>37ms</td>
+</tr>
+<tr>
+<td>numeric 3</td>
+<td>13ms</td>
+<td>29ms</td>
+</tr>
+<tr>
+<td>numeric 4</td>
+<td>11ms</td>
+<td>31ms</td>
+</tr>
+<tr>
+<td>numeric 5</td>
+<td>9.3ms</td>
+<td>21ms</td>
+</tr>
+</tbody>
+</table>
+<p>We think that these preliminary results are pretty good. They're not as fast as
+the C version (or as fast as we'd like them to be), but we're already much
+faster than NumPy on CPython -- almost always by more than 2x on this relatively
+real-world example. This is not the end, though. In fact, it's hardly the
+beginning! As we continue work, we hope to make even more use of the
+high level information that we have. Looking at the assembler generated by
+gcc for this example, it's pretty clear we can outperform it thanks to better
+aliasing information and hence better possibilities for vectorization.
+Stay tuned.</p>
+<p>EDIT: fixed the benchmark name
+</p>
+<p>EDIT2: added info that first table is about PyPy</p>
+<p>Cheers,
+fijal</p>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1188377558012418143">
+        <div class="comment-header">
+          <a name="comment-1188377558012418143"></a>
+            <span class="author">D</span> wrote on <span class="date">2012-01-10 20:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>Nice to hear, but what we (numpy users) really need is  2-dimensional matrices with basic arithmetic operations (+, -, /, *, sin, cos, pow etc) and other related methods, e.g. min(array,axis), nanmax(array, axis), argmax(array,axis), nanargmin(array, axis) etc. While CPython soft dependent on these operations works more or less fast, with PyPy it mere doesn't work at all. I hope first of all you'll focus on it instead of speed improvement for single-dimensional arrays.<br>Regards, D.</p>
+        </div>
+      </div>
+      <div class="comment comment-7372676427534170441">
+        <div class="comment-header">
+          <a name="comment-7372676427534170441"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-01-10 20:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>It would be really cool if you try before complaining. I think all of it works on a nightly build, except the axis argument which is on a branch being worked on.</p>
+        </div>
+      </div>
+      <div class="comment comment-1538858779373952442">
+        <div class="comment-header">
+          <a name="comment-1538858779373952442"></a>
+            <span class="author">D</span> wrote on <span class="date">2012-01-10 20:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>Also, IIRC NumPyPy still misses linalg.solve method for solving systems of linear equations, that is highly important for lots of soft. Connecting sparse SLE solver (like umfpack or superlu from scipy.sparse) also would be very essential.</p>
+        </div>
+      </div>
+      <div class="comment comment-5056955499318633287">
+        <div class="comment-header">
+          <a name="comment-5056955499318633287"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-01-10 20:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>We're working on it. Stay tuned</p>
+        </div>
+      </div>
+      <div class="comment comment-6500111447520928974">
+        <div class="comment-header">
+          <a name="comment-6500111447520928974"></a>
+            <span class="author">D</span> wrote on <span class="date">2012-01-10 20:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>Maciej, anything about 2-dimensional matrix implementations with related operations haven't been mentioned in blog, so why I have to know about it? I only installed and tried stable PyPy 1.7, because I had tried building PyPy from sources and found it damned hard, especially for my limited hardware (2 GB RAM).</p>
+        </div>
+      </div>
+      <div class="comment comment-281969238585943039">
+        <div class="comment-header">
+          <a name="comment-281969238585943039"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-01-10 20:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>Good point, we'll write a blog post what has been implemented as well. Try nightly</p>
+        </div>
+      </div>
+      <div class="comment comment-7454320042799726348">
+        <div class="comment-header">
+          <a name="comment-7454320042799726348"></a>
+            <span class="author">Adam</span> wrote on <span class="date">2012-01-10 21:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>A Laplace transform is something quite different to solving Laplace's equation with finite differences...</p>
+        </div>
+      </div>
+      <div class="comment comment-8973949752169352820">
+        <div class="comment-header">
+          <a name="comment-8973949752169352820"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-01-10 21:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>fixed, thanks</p>
+        </div>
+      </div>
+      <div class="comment comment-5984582330669802036">
+        <div class="comment-header">
+          <a name="comment-5984582330669802036"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-10 21:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>It may be nice to link to the nightly builds so that people can try this out :)</p>
+        </div>
+      </div>
+      <div class="comment comment-8269859433271547904">
+        <div class="comment-header">
+          <a name="comment-8269859433271547904"></a>
+            <span class="author">Chris LeBlanc</span> wrote on <span class="date">2012-01-10 23:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is excellent!  Great work, the potential of this project is very exciting.  I was quietly wishing for this since pypy first started.<br><br>I use NumPy all the time, and any increase in performance makes a big difference.  This is one of the main advantages of NumPyPy over NumPy, so it makes sense to focus on it.<br><br>There seems to be lots of complaining about missing features and such, but having a solid foundation to work from seems to be the most important thing.  Missing features can be added down the line.<br><br>I remember reading a blog post last year about using transactional memory as a way of removing the GIL.  If you could combine that with NumPyPy to run numerical tasks in parallel, that would make a lot of scientific programmers very happy.  I don't know if this is feasible, but it sure would be nice.<br><br>Keep up the good work.</p>
+        </div>
+      </div>
+      <div class="comment comment-799872722095602198">
+        <div class="comment-header">
+          <a name="comment-799872722095602198"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-01-10 23:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi Chris.<br><br>We have vague plans how to parallelize numpy expressions without even having to remove the GIL. That way you'll have workers that are able to perform (or help perform) numeric tasks, but the interpreter itself will still run in a single thread. The same goes for GPUs and MIC.</p>
+        </div>
+      </div>
+      <div class="comment comment-4552761757648315834">
+        <div class="comment-header">
+          <a name="comment-4552761757648315834"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-11 10:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>Nightly builds<br>https://buildbot.pypy.org/nightly/trunk</p>
+        </div>
+      </div>
+      <div class="comment comment-5785288463906262054">
+        <div class="comment-header">
+          <a name="comment-5785288463906262054"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-11 13:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>Please when you consider parallelizing things, do remember about leaving an explicit switch to turn it off!<br><br>I run my Python stuff on clusters through a queuing system and it will be VERY unhappy if single processes use more than one thread without informing the scheduler.</p>
+        </div>
+      </div>
+      <div class="comment comment-2841211413323420488">
+        <div class="comment-header">
+          <a name="comment-2841211413323420488"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-11 13:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hey, by the way, your progress on NumPy is amazing and highly appreciated.</p>
+        </div>
+      </div>
+      <div class="comment comment-5550547527532749251">
+        <div class="comment-header">
+          <a name="comment-5550547527532749251"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-01-11 15:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous of course, this is a given that we'll leave the switch to turn it off. It might be not even on by default, that's up for discussion</p>
+        </div>
+      </div>
+      <div class="comment comment-5221312434321314752">
+        <div class="comment-header">
+          <a name="comment-5221312434321314752"></a>
+            <span class="author">Paul Harrison</span> wrote on <span class="date">2012-01-12 02:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>Chris, if you haven't considered this already, it's sometimes possible to achieve parallelism with multiple processes using memory mapped files as numpy arrays. It's a bit awkward, but it can also make for an easier path to a computation that is resumable or can be run on a cluster.<br><br>GIL removal would be wonderful, but it's a pretty ambitious idea. Then again, these pypy folk seem able to deliver on some pretty amazing stuff.</p>
+        </div>
+      </div>
+      <div class="comment comment-8727644430107264382">
+        <div class="comment-header">
+          <a name="comment-8727644430107264382"></a>
+            <span class="author">Peter S</span> wrote on <span class="date">2012-01-16 10:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>I am closely following these developments with numpypy and I just succesfully tested the last nightly build, which I find very impressive!<br><br>For research purposes, the main thing we need is scipy.stats.ttest_1samp to work on pypy. Is there an estimation on when scipypy will be available?</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2011/12/leysin-winter-sprint-6862532189897876336.html" class="u-url">Leysin Winter Sprint</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2011/12/leysin-winter-sprint-6862532189897876336.html" rel="bookmark">
+            <time class="published dt-published" datetime="2011-12-27T16:57:00Z" itemprop="datePublished" title="2011-12-27 16:57">2011-12-27 16:57</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <h2>PyPy Leysin Winter Sprint: 15-22nd January 2012</h2>
+
+<p>
+The next PyPy sprint will be in Leysin, Switzerland, for the
+eighth time.  This is a fully public sprint: newcomers and topics
+other than those proposed below are welcome.</p>
+
+<h3>Goals and topics of the sprint</h3>
+
+<ul>
+<li>Py3k: work towards supporting Python 3 in PyPy
+
+</li>
+<li>NumPyPy: work towards supporting the numpy module in PyPy
+
+</li>
+<li>JIT backends: integrate tests for ARM; look at the PowerPC 64;
+  maybe try again to write an LLVM- or GCC-based one
+
+</li>
+<li>STM and STM-related topics; or the Concurrent Mark-n-Sweep GC
+
+</li>
+<li>And as usual, the main side goal is to have fun in winter sports :-)
+  We can take a day off for ski.
+</li>
+</ul>
+<h3>Exact times</h3>
+
+<p>The work days should be 15-21 January 2011 (Sunday-Saturday).  The
+official plans are for people to arrive on the 14th or the 15th, and to
+leave on the 22nd.</p>
+
+<p>Interested? <a href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/extradoc/sprintinfo/leysin-winter-2012/announcement.txt">Read more...</a></p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-771040054134408504">
+        <div class="comment-header">
+          <a name="comment-771040054134408504"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-12-28 01:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>How is the STM work going, btw?<br><br>Do you have any indications yet on whether it'll be workable in an imperative VM?</p>
+        </div>
+      </div>
+      <div class="comment comment-2200568348982536928">
+        <div class="comment-header">
+          <a name="comment-2200568348982536928"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-02 11:49</span>:
+        </div>
+        <div class="comment-content">
+          <p>any news on the win64 port?</p>
+        </div>
+      </div>
+      <div class="comment comment-319807740624342362">
+        <div class="comment-header">
+          <a name="comment-319807740624342362"></a>
+            <span class="author">Klaus Ramelow</span> wrote on <span class="date">2012-01-07 12:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>Leysin Winter Sprint<br>Exact times<br><br>The work days should be 15-21 January 2011 (Sunday-Saturday).<br><br>I assume it will be January 2012</p>
+        </div>
+      </div>
+      <div class="comment comment-7894248555485756346">
+        <div class="comment-header">
+          <a name="comment-7894248555485756346"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-09 19:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>STM work is slowly progressing, as you must have noticed in pypy-dev.<br><br>The Win64 port's progress is unknown, sorry.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2011/12/come-see-us-at-pycon-2012-610420698450130659.html" class="u-url">Come see us at PyCon 2012</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/alex.html">Alex</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2011/12/come-see-us-at-pycon-2012-610420698450130659.html" rel="bookmark">
+            <time class="published dt-published" datetime="2011-12-22T22:27:00Z" itemprop="datePublished" title="2011-12-22 22:27">2011-12-22 22:27</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p><a class="reference external" href="https://us.pycon.org/2012/">PyCon 2012</a> is coming up in just a few short months, and PyPy will be well<br>
+represented there.  We'll be delivering a tutorial, two talks, plus we'll be<br>
+around for the sprints.</p>
+<p>Here are the abstracts for the tutorials and talks:</p>
+<ul class="simple">
+<li>
+<strong>How to get the most out of your PyPy</strong>, by Maciej Fijalkowski, Alex Gaynor<br>
+and Armin Rigo: For many applications PyPy can provide performance benefits<br>
+right out of the box. However, little details can push your application to<br>
+perform much better. In this tutorial we'll give you insights on how to push<br>
+PyPy to its limits. We'll focus on understanding the performance<br>
+characteristics of PyPy, and learning the analysis tools in order to maximize<br>
+your applications' performance. <em>This is the tutorial.</em>
+</li>
+<li>
+<strong>Why PyPy by example</strong>, by Maciej Fijalkowski, Alex Gaynor and Armin Rigo:<br>
+One of the goals of PyPy is to make existing Python code faster; however an<br>
+even broader goal was to make it possible to write things in Python that<br>
+previously would needed to be written in C or other low-level language. This<br>
+talk will show examples of this, and describe how they represent the<br>
+tremendous progress PyPy has made, and what it means for people looking at<br>
+using PyPy.</li>
+<li>
+<strong>How the PyPy JIT works</strong>, by Benjamin Peterson: The Python community is<br>
+abuzz about the major speed gains PyPy can offer for pure Python code. But how<br>
+does the PyPy JIT actually work? This talk will discuss how the PyPy JIT is<br>
+implemented. It will include descriptions of the tracing, optimization, and<br>
+assembly generation phases. I will demonstrate each step with an example loop.</li>
+</ul>
+<p>If you have any questions let us know!  We look forward to seeing people at<br>
+PyCon and chatting about PyPy and the entire Python ecosystem.</p>
+<p>See you there,<br>
+Maciej Fijalkowski, Alex Gaynor, Benjamin Peterson, Armin Rigo, and the entire PyPy team</p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2011/12/plotting-using-matplotlib-from-pypy-6389240123679375092.html" class="u-url">Plotting using matplotlib from PyPy</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2011/12/plotting-using-matplotlib-from-pypy-6389240123679375092.html" rel="bookmark">
+            <time class="published dt-published" datetime="2011-12-08T22:29:00Z" itemprop="datePublished" title="2011-12-08 22:29">2011-12-08 22:29</time></a>
+            </p>
+                <p class="commentline">8 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p><strong>Big fat warning</strong> This is just a proof of concept. It barely works. There are
+missing pieces left and right, which were replaced with hacks so I can get this
+to run and prove it's possible. Don't try this at home, especially your home.
+You have been warned.</p>
+<p>There has been a lot of talking about PyPy not integrating well with the
+current scientific Python ecosystem, and <tt class="docutils literal">numpypy</tt> (a NumPy reimplementation
+on top of pypy) was dubbed "a fancy array library". I'm going to show that
+integration with this ecosystem is possible with our design.</p>
+<p>First, <a class="reference external" href="https://bitbucket.org/fijal/hack2/src/default/embed/embed/matplotwrapper.py">the demo</a>:</p>
+<pre class="literal-block">
+#!/usr/bin/env pypy
+
+# numpy, pypy version
+import numpypy as numpy
+# DRAGONS LIVE THERE (fortunately hidden)
+from embed.emb import import_mod
+
+pylab = import_mod('matplotlib.pylab')
+
+if __name__ == '__main__':
+    a = numpy.arange(100, dtype=int)
+    b = numpy.sin(a)
+    pylab.plot(a, b)
+    pylab.show()
+</pre>
+<p>And you get:</p>
+
+<a href="https://3.bp.blogspot.com/-4WFlo06T9AQ/TuE6jWWCdXI/AAAAAAAABiY/g4gZPlWg0-U/s1600/screen0.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5683888583686124914" src="https://3.bp.blogspot.com/-4WFlo06T9AQ/TuE6jWWCdXI/AAAAAAAABiY/g4gZPlWg0-U/s320/screen0.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 320px; height: 258px;"></a>
+
+<p>Now, how to reproduce it:</p>
+<ul>
+<li>
+<p class="first">You need a PyPy without cpyext, I did not find a linker that would support
+overriding symbols. Right now there are no nightlies like this, so you have
+to compile it yourself, like:</p>
+<pre class="literal-block">
+./translate.py -Ojit targetpypystandalone.py --withoutmod-cpyext
+</pre>
+<p>That would give you a PyPy that's unable to load some libraries like PIL, but
+perfectly working otherwise.</p>
+</li>
+<li>
+<p class="first">Speaking of which, you need a reasonably recent PyPy.</p>
+</li>
+<li>
+<p class="first">The approach is generally portable, however the implementation has been
+tested only on 64bit linux. Few tweaks might be required.</p>
+</li>
+<li>
+<p class="first">You need to install python2.6, the python2.6 development headers, and have
+numpy and matplotlib installed on that python.</p>
+</li>
+<li>
+<p class="first">You need a checkout of my <a class="reference external" href="https://bitbucket.org/fijal/hack2">hacks directory</a> and put embedded on your
+<tt class="docutils literal">PYTHONPATH</tt>, your pypy checkout also has to be on the <tt class="docutils literal">PYTHONPATH</tt>.</p>
+</li>
+</ul>
+<div class="section" id="er-wait-what-happened">
+<h3>Er wait, what happened?</h3>
+<p>What didn't happen is we did not reimplement matplotlib on top of PyPy. What
+did happen is we embed CPython inside of PyPy using ctypes. We instantiate it.
+and follow the <a class="reference external" href="https://docs.python.org/extending/embedding.html">embedding</a> tutorial for CPython. Since numpy arrays are not
+movable, we're able to pass around an integer that's represents the memory
+address of the array data and reconstruct it in the embedded interpreter. Hence
+with a relatively little effort we managed to reuse the same array data on both
+sides to plot at array. Easy, no?</p>
+<p>This approach can be extended to support anything that's not too tied with
+python objects. SciPy and matplotlib both fall into the same category
+but probably the same strategy can be applied to anything, like GTK or QT.
+It's just a matter of extending a hack into a working library.</p>
+<p>To summarize, while we're busy making numpypy better and faster, it seems
+that all external libraries on the C side can be done using an embedded Python
+interpreter with relatively little effort. To get to that point, I spent
+a day and a half to learn how to embed CPython, with very little prior
+experience in the CPython APIs. Of course you should still keep as much as
+possible in PyPy to make it nice and fast :)</p>
+<p>Cheers,
+fijal</p>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1863514987395451037">
+        <div class="comment-header">
+          <a name="comment-1863514987395451037"></a>
+            <span class="author">Kumo</span> wrote on <span class="date">2011-12-09 04:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>Pretty cool!</p>
+        </div>
+      </div>
+      <div class="comment comment-2694652453802549623">
+        <div class="comment-header">
+          <a name="comment-2694652453802549623"></a>
+            <span class="author">Eli Bressert</span> wrote on <span class="date">2011-12-09 20:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>Two thumbs up! This is quite exciting! Looking forward to further followup from this. <br><br>How does Scipy look in terms of implementation, e.g. wrapping fortran code with f2py? Could it become achieved?</p>
+        </div>
+      </div>
+      <div class="comment comment-4430456833892145936">
+        <div class="comment-header">
+          <a name="comment-4430456833892145936"></a>
+            <span class="author">Pankaj</span> wrote on <span class="date">2011-12-10 06:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>freaking awesome :)</p>
+        </div>
+      </div>
+      <div class="comment comment-6451464361407716662">
+        <div class="comment-header">
+          <a name="comment-6451464361407716662"></a>
+            <span class="author">Laptop repair</span> wrote on <span class="date">2011-12-10 13:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>PyPy Version is showing best result, it is giving extra protection to program.</p>
+        </div>
+      </div>
+      <div class="comment comment-1397263081550740103">
+        <div class="comment-header">
+          <a name="comment-1397263081550740103"></a>
+            <span class="author">dac</span> wrote on <span class="date">2011-12-13 20:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>Good work.  Is this approach your long term plan for supporting scientific python libraries or just a stop-gap solution until "proper" support can be added to pypy (or to the library)?</p>
+        </div>
+      </div>
+      <div class="comment comment-418928583555686443">
+        <div class="comment-header">
+          <a name="comment-418928583555686443"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-12-13 23:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>@dac this can scale to the entire matplotlib/scipy fully. Whether scientific community people will take up a gargantuan task of moving SciPy/matplotlib out of using CPython C API is beyond my knowledge, but even if it'll happen, it won't happen in short-to-mid-term.<br><br>So overall I think it's a good midterm solution, that might just stay forever.</p>
+        </div>
+      </div>
+      <div class="comment comment-7161589684987721431">
+        <div class="comment-header">
+          <a name="comment-7161589684987721431"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-01-04 09:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>Another solution <b>containing dragons</b>, that someone might find useful:<br>1) create new python file, that would print diagrams<br>2) send data from main program running in pypy to the second python file using <b>call</b> from subprocess<br>eg. <i>call(["python", "pythondiagrams.py", "-data", str(my_data).replace(" ", ";")])</i>, data should be be text type and contain separator other than space<br>3) parse input data using <b>argparse</b> and convert them using <b>ast</b></p>
+        </div>
+      </div>
+      <div class="comment comment-6259877649796576422">
+        <div class="comment-header">
+          <a name="comment-6259877649796576422"></a>
+            <span class="author">Konstantin Lopuhin</span> wrote on <span class="date">2014-02-02 12:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>Also, seems that embed must live below the root of pypy source tree (else it fails to create proper paths to ".o" output files in rpython.translator.platform.Platform._make_o_file).</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2011/11/pypy-17-on-win32-4962523601794245248.html" class="u-url">PyPy 1.7 on Win32</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2011/11/pypy-17-on-win32-4962523601794245248.html" rel="bookmark">
+            <time class="published dt-published" datetime="2011-11-29T15:24:00Z" itemprop="datePublished" title="2011-11-29 15:24">2011-11-29 15:24</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hi all,</p>
+
+<p>We have fixed <a href="https://doc.pypy.org/en/latest/stackless.html">_continuation</a> on Win32 (thanks Stakkars), and so we have now a Win32 version of <a href="https://pypy.org/download.html">PyPy 1.7.</a></p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2011/11/pypy-17-widening-sweet-spot-4260962828394182017.html" class="u-url">PyPy 1.7 - widening the sweet spot</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2011/11/pypy-17-widening-sweet-spot-4260962828394182017.html" rel="bookmark">
+            <time class="published dt-published" datetime="2011-11-21T10:34:00Z" itemprop="datePublished" title="2011-11-21 10:34">2011-11-21 10:34</time></a>
+            </p>
+                <p class="commentline">26 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>We're pleased to announce the 1.7 release of PyPy. As became a habit, this
+release brings a lot of bugfixes and performance improvements over the 1.6
+release. However, unlike the previous releases, the focus has been on widening
+the "sweet spot" of PyPy. That is, classes of Python code that PyPy can greatly
+speed up should be vastly improved with this release. You can download the 1.7
+release here:</p>
+<blockquote>
+<a class="reference external" href="https://pypy.org/download.html">https://pypy.org/download.html</a>
+</blockquote>
+<div class="section" id="what-is-pypy">
+<h3>What is PyPy?</h3>
+<p>PyPy is a very compliant Python interpreter, almost a drop-in replacement for
+CPython 2.7. It's fast (<a class="reference external" href="https://speed.pypy.org">pypy 1.7 and cpython 2.7.1</a> performance comparison)
+due to its integrated tracing JIT compiler.</p>
+<p>This release supports x86 machines running Linux 32/64, Mac OS X 32/64 or
+Windows 32. Windows 64 work is ongoing, but not yet natively supported.</p>
+<p>The main topic of this release is widening the range of code which PyPy
+can greatly speed up. On average on
+our benchmark suite, PyPy 1.7 is around <strong>30%</strong> faster than PyPy 1.6 and up
+to <strong>20 times</strong> faster on some benchmarks.</p>
+</div>
+<div class="section" id="highlights">
+<h3>Highlights</h3>
+<ul>
+<li>
+<p class="first">Numerous performance improvements. There are too many examples which python
+constructs now should behave faster to list them.</p>
+</li>
+<li>
+<p class="first">Bugfixes and compatibility fixes with CPython.</p>
+</li>
+<li>
+<p class="first">Windows fixes.</p>
+</li>
+<li>
+<p class="first">PyPy now comes with stackless features enabled by default. However,
+any loop using stackless features will interrupt the JIT for now, so no real
+performance improvement for stackless-based programs. Contact pypy-dev for
+info how to help on removing this restriction.</p>
+</li>
+<li>
+<p class="first">NumPy effort in PyPy was renamed numpypy. In order to try using it, simply
+write:</p>
+<pre class="literal-block">
+import numpypy as numpy
+</pre>
+<p>at the beginning of your program. There is a huge progress on numpy in PyPy
+since 1.6, the main feature being implementation of dtypes.</p>
+</li>
+<li>
+<p class="first">JSON encoder (but not decoder) has been replaced with a new one. This one
+is written in pure Python, but is known to outperform CPython's C extension
+up to <strong>2 times</strong> in some cases. It's about <strong>20 times</strong> faster than
+the one that we had in 1.6.</p>
+</li>
+<li>
+<p class="first">The memory footprint of some of our RPython modules has been drastically
+improved. This should impact any applications using for example cryptography,
+like tornado.</p>
+</li>
+<li>
+<p class="first">There was some progress in exposing even more CPython C API via cpyext.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="things-that-didn-t-make-it-expect-in-1-8-soon">
+<h3>Things that didn't make it, expect in 1.8 soon</h3>
+<p>There is an ongoing work, which while didn't make it to the release, is
+probably worth mentioning here. This is what you should probably expect in
+1.8 some time soon:</p>
+<ul class="simple">
+<li>Specialized list implementation. There is a branch that implements lists of
+integers/floats/strings as compactly as array.array. This should drastically
+improve performance/memory impact of some applications</li>
+<li>NumPy effort is progressing forward, with multi-dimensional arrays coming
+soon.</li>
+<li>There are two brand new JIT assembler backends, notably for the PowerPC and
+ARM processors.</li>
+</ul>
+</div>
+<div class="section" id="fundraising">
+<h3>Fundraising</h3>
+<p>It's maybe worth mentioning that we're running fundraising campaigns for
+NumPy effort in PyPy and for Python 3 in PyPy. In case you want to see any
+of those happen faster, we urge you to donate to <a class="reference external" href="https://pypy.org/numpydonate.html">numpy proposal</a> or
+<a class="reference external" href="https://pypy.org/py3donate.html">py3k proposal</a>. In case you want PyPy to progress, but you trust us with
+the general direction, you can always donate to the <a class="reference external" href="https://pypy.org">general pot</a>.</p>
+</div>
+<p>Cheers,<br>Maciej Fijałkowki, Armin Rigo and the entire PyPy team</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-9117470844996917576">
+        <div class="comment-header">
+          <a name="comment-9117470844996917576"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2011-11-21 12:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>Could you put a link to some sort of NEWS file, a list of issue tracker tickets, or at least the relevant span of the revision control tool so that I could browse what sorts of changes have gone into trunk since 1.6?</p>
+        </div>
+      </div>
+      <div class="comment comment-8310379754701654153">
+        <div class="comment-header">
+          <a name="comment-8310379754701654153"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-21 12:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>"PyPy now comes with stackless features enabled by default"<br><br>Could you please tell a bit more about it? Is it just sort of internal optimizations, something under the hood? Or does it mean tail recursion optimization? Or cooperative multitasking with greenlets? What's the API for stackless features?</p>
+        </div>
+      </div>
+      <div class="comment comment-7090193342321633061">
+        <div class="comment-header">
+          <a name="comment-7090193342321633061"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-21 14:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>Is it so hard to wait until you have a Windows build before announcing a release?<br><br>Or not telling in the release that the Windows binary is available?</p>
+        </div>
+      </div>
+      <div class="comment comment-7919120164897393816">
+        <div class="comment-header">
+          <a name="comment-7919120164897393816"></a>
+            <span class="author">Benjamin Peterson</span> wrote on <span class="date">2011-11-21 15:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Zooko<br><br>hg log -rrelease-1.6:release-1.7</p>
+        </div>
+      </div>
+      <div class="comment comment-6093304950312331776">
+        <div class="comment-header">
+          <a name="comment-6093304950312331776"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2011-11-21 16:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>I am getting a segmentation fault.</p>
+        </div>
+      </div>
+      <div class="comment comment-2167397478577572055">
+        <div class="comment-header">
+          <a name="comment-2167397478577572055"></a>
+            <span class="author">D</span> wrote on <span class="date">2011-11-21 18:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>So if I want to run PyPy on my code with numpy I have to replace in each file "import numpy" by "import numpypy", "from numpy import ..." by "from numpypy import ...". And each time I want to switch beween PyPy and CPython, I have to search and replace all those occurrences backward. Well done...</p>
+        </div>
+      </div>
+      <div class="comment comment-6460756391564324604">
+        <div class="comment-header">
+          <a name="comment-6460756391564324604"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-21 19:35</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thank you for all your work, it's nice to see how far you have come in so little time! Keep raising the bar.</p>
+        </div>
+      </div>
+      <div class="comment comment-4976039791666312395">
+        <div class="comment-header">
+          <a name="comment-4976039791666312395"></a>
+            <span class="author">Amaury</span> wrote on <span class="date">2011-11-21 21:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>@D: Please take it the easy way and add "sys.modules['numpy'] = numpypy" at the start of your program.</p>
+        </div>
+      </div>
+      <div class="comment comment-3586710820867398688">
+        <div class="comment-header">
+          <a name="comment-3586710820867398688"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-11-21 21:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>@⚛ report a bug to bugs.pypy.org<br><br>@D it's gonna stay like this until it's finished. The problem is that most programs won't run out of the box anyway as of now, because of some missing functionality. We'll probably rename it back once it's finished.</p>
+        </div>
+      </div>
+      <div class="comment comment-5005362154532697176">
+        <div class="comment-header">
+          <a name="comment-5005362154532697176"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-11-21 21:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>@D: all you need is to create a file "numpy.py" that contains "from numpypy import *".  (The real reason we did this temporary renaming is because numpy developers asked us to.)<br><br>More likely, though, you are probably going to hit some unimplemented feature anyway, as our numpy(py) is still incomplete.</p>
+        </div>
+      </div>
+      <div class="comment comment-1593826142736389632">
+        <div class="comment-header">
+          <a name="comment-1593826142736389632"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-21 22:49</span>:
+        </div>
+        <div class="comment-content">
+          <p>Re: numpypy. The standard in the bad old days with three different and subtly incompatible array libraries was "try: import ...; except: ..."</p>
+        </div>
+      </div>
+      <div class="comment comment-4139864603261281280">
+        <div class="comment-header">
+          <a name="comment-4139864603261281280"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2011-11-22 07:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Maciej: I am *not* going to submit a bug report, on purpose. When developing software for the masses, there are always two sets of users. One set comprises the users who report bugs, the other set comprises the users who are experiencing issues but do not report bugs.<br><br>The ideal state would be that there are no bugs, but this is only theoretical of course.<br><br>As an experiment, I have decided not to tell you any information about the segmentation fault. Nothing. Absolutely nothing.<br><br>The question is what measures are you going to take to solve this PyPy issue.<br><br>Good luck ...</p>
+        </div>
+      </div>
+      <div class="comment comment-4504606300102904210">
+        <div class="comment-header">
+          <a name="comment-4504606300102904210"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-11-22 08:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>@⚛ we're going to do nothing with that. Most probably you're using a CPython C extension or some illegal ctypes invocation or older version of jinja that did that or something... Besides, there is absolutely no point in trying to fix a bug that noone can potentially provide any information for.<br><br>Cheers,<br>fijal</p>
+        </div>
+      </div>
+      <div class="comment comment-2575437558355165964">
+        <div class="comment-header">
+          <a name="comment-2575437558355165964"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2011-11-22 09:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Maciej:<br><br>PyPy 1.6 worked OK (but it was slower than CPython).<br><br>"we're going to do nothing with that."<br><br>OK<br><br>"Most probably you're using a CPython C extension or some illegal ctypes invocation or older version of jinja that did that or something..."<br><br>I don't think so. GDB says that the EIP register stops at an address which does not seem to belong to the PyPy executable nor to any dynamically loaded library. This leads me to the conclusion that the issue is in the x86 code generated by PyPy.<br><br>"Besides, there is absolutely no point in trying to fix a bug that noone can potentially provide any information for."<br><br>I am not saying you have to fix it. I am just saying that PyPy 1.7 generates code that segfaults.<br><br>Does PyPy employ partial verification when generating x86 code?</p>
+        </div>
+      </div>
+      <div class="comment comment-2118423421740723779">
+        <div class="comment-header">
+          <a name="comment-2118423421740723779"></a>
+            <span class="author">Jorgen</span> wrote on <span class="date">2011-11-22 09:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Flower<br><br>"As an experiment, I have decided not to tell you any information about the segmentation fault. Nothing. Absolutely nothing."<br><br>So you want to conduct an experiment into 'How to help out an open source project by withholding crucial information'? And I thought the ideas of my PhD-advisor were bad ...</p>
+        </div>
+      </div>
+      <div class="comment comment-5435075791006510310">
+        <div class="comment-header">
+          <a name="comment-5435075791006510310"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-22 09:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>The point he, she, or it is making is that PyPy should contain a theorem prover to verify the code it generates so it is possible to prove mathematically that it never generates bad code—and that anything else is beneath the contempt of a serious computer scientist. If you need information about a segfault in order to debug it, you obviously have not thought it through thoroughly enough.</p>
+        </div>
+      </div>
+      <div class="comment comment-7577471496029449526">
+        <div class="comment-header">
+          <a name="comment-7577471496029449526"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2011-11-22 10:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Jorgen and @Maciej:<br><br>Well, I previously wrote here that "The question is what measures are you (=the PyPy team) going to take to solve this PyPy issue."<br><br>This sentence of mine contained the additional information that: I believe that it is a PyPy issue.<br><br>Maciej then wrote: "Most probably you're using a CPython C extension or ... that did that or something". This means he was trying to put the blame on others (C extensions or whatever) rather than admitting that it might be an issue attributable to PyPy and PyPy alone.<br><br>Then you (Jorgen) wrote "So you want to conduct an experiment into 'How to help out an open source project by withholding crucial information'?". And that is exactly what I intend to do: to help the PyPy project by withholding crucial information.<br><br>It will work.</p>
+        </div>
+      </div>
+      <div class="comment comment-3561758601775841474">
+        <div class="comment-header">
+          <a name="comment-3561758601775841474"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2011-11-22 10:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Damian:<br><br>"... PyPy should contain a theorem prover to verify the code it generates so it is possible to prove mathematically that it never generates bad code"<br><br>I believe such a thing is impossible.</p>
+        </div>
+      </div>
+      <div class="comment comment-624563531811933096">
+        <div class="comment-header">
+          <a name="comment-624563531811933096"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-22 11:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>It's possible if you let the verifier reject legal code. It's probably not realistic though, RPython (or is that the JIT-annotation language?) would have to be designed to be verifiable for whatever property you want to verify.</p>
+        </div>
+      </div>
+      <div class="comment comment-4953786231443780321">
+        <div class="comment-header">
+          <a name="comment-4953786231443780321"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-11-22 14:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>@⚛: you're sitting in your own corner of the world thinking that we will try hard to figure out which segfault you could possibly mean, and that it will help the PyPy project :-)  I've heard many misconceptions of how Open Source works, but I've never heard this one.<br><br>How it really works is: you think you have a genuine segfault and want to report it, in which case you file a bug to https://bugs.pypy.org, and maybe we have to discuss more to figure out why, for example, it appears on your machine and not ours, or which configuration you need to reproduce it; sometimes it can take efforts on both parties to even reproduce the problem.<br><br>You are free to not play this game, but then just like Maciej said, you will be fully ignored.  Even if it's a real bug, it's likely that over time someone else will report or fix it.  I'm not trying to force you to "reveal" it to us; feel free to ignore me.  I'm just explaining how I believe Open Source works.<br><br>The difference for us is small, because a real bug will be seen and reported by others too.  The difference for you is whether you would like to contribute and get our thanks, or don't care about it.</p>
+        </div>
+      </div>
+      <div class="comment comment-6257175508532369603">
+        <div class="comment-header">
+          <a name="comment-6257175508532369603"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-22 23:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>The pypy team "could" solve it. But it would be a massive waste of time, and of cource the changes are that they are unable to because of problems in your setup. I most certainly hope no open source team really spend their time on such ghost hunts.</p>
+        </div>
+      </div>
+      <div class="comment comment-7657452999770974389">
+        <div class="comment-header">
+          <a name="comment-7657452999770974389"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-23 04:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>https://democreatorreview.blogspot.com/</p>
+        </div>
+      </div>
+      <div class="comment comment-372419793793669753">
+        <div class="comment-header">
+          <a name="comment-372419793793669753"></a>
+            <span class="author">Winston Ewert</span> wrote on <span class="date">2011-11-23 04:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>Somewhat off the topic of this post, but I'm wondering what the special optimization of string lists would be. I can see obvious benefits to storing ints/floats directly in the list rather then as boxed numbers, but not so much for strings since they have be stored using an indirection anyways.</p>
+        </div>
+      </div>
+      <div class="comment comment-5638912292841897653">
+        <div class="comment-header">
+          <a name="comment-5638912292841897653"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2011-11-23 09:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Winston:<br><br>astutely observed (as always). There are two points to string lists: <br><br>1) PyPy's strings have one extra indirection, e.g. the data is not stored in the string box. This is due to RPython restrictions. With string lists, one indirection can be removed.<br><br>2) If the JIT knows that the full list stores only strings, it can actually generate better code, because it does not need to check the type of the item that was just read out of the list.</p>
+        </div>
+      </div>
+      <div class="comment comment-3632583859363821724">
+        <div class="comment-header">
+          <a name="comment-3632583859363821724"></a>
+            <span class="author">vacation homes in kissimmee florida</span> wrote on <span class="date">2011-11-25 09:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>This means he was trying to put the blame on others....</p>
+        </div>
+      </div>
+      <div class="comment comment-6078213404798265994">
+        <div class="comment-header">
+          <a name="comment-6078213404798265994"></a>
+            <span class="author">wholesale electronics</span> wrote on <span class="date">2011-12-17 01:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>omething under the hood? Or does it mean tail recursion optimization?</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2011/11/gothenburg-sprint-report-8371395613874909242.html" class="u-url">Gothenburg sprint report</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2011/11/gothenburg-sprint-report-8371395613874909242.html" rel="bookmark">
+            <time class="published dt-published" datetime="2011-11-14T11:42:00Z" itemprop="datePublished" title="2011-11-14 11:42">2011-11-14 11:42</time></a>
+            </p>
+                <p class="commentline">7 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>In the past week, we have been busy hacking on PyPy at the Gothenburg sprint, the second of this 2011.  The sprint was hold at Laura's and Jacob's place, and here is a brief report of what happened.<br><br><br>
+In the first day we welcomed Mark Pearse, who was new to PyPy and at his first sprint.  Mark worked the whole sprint in the new <a class="reference external" href="https://bitbucket.org/pypy/pypy/changesets/tip/branch%28%22SpecialisedTuples%22%29">SpecialisedTuple</a> branch, whose aim is to have a special implementation for small 2-items and 3-items tuples of primitive types (e.g., ints or floats) to save memory.  Mark paired with Antonio for a couple of days, then he continued alone and did an amazing job.  He even learned how to properly do Test Driven Development :-).<br><br>
+Antonio spent a couple of days investigating whether it is possible to use <cite>application checkpoint</cite> libraries such as <a class="reference external" href="https://ftg.lbl.gov/projects/CheckpointRestart/">BLCR</a> and <a class="reference external" href="https://dmtcp.sourceforge.net/">DMTCP</a> to save the state of the PyPy interpreter between subsequent runs, thus saving also the JIT-compiled code to reduce the warmup time.  The conclusion is that these are interesting technologies, but more work would be needed (either on the PyPy side or on the checkpoint library side) before it can have a practical usage for PyPy users.<br><br>
+Then, Antonio spent most of the rest of the sprint working on his <a class="reference external" href="https://bitbucket.org/pypy/pypy/changesets/tip/branch%28%22ffistruct%22%29">ffistruct</a> branch, whose aim is to provide a very JIT-friendly way to interact with C structures, and eventually implement <tt class="docutils literal">ctypes.Structure</tt> on top of that.  The "cool part" of the branch is already done, and the JIT already can compile set/get of fields into a single fast assembly instruction, about 400 times faster than the corresponding ctypes code.  What is still left to do is to add a nicer syntax (which is easy) and to implement all the ctypes peculiarities (which is tedious, at best :-)).<br><br>
+As usual, Armin did tons of different stuff, including fixing a JIT bug, improving the performance of <tt class="docutils literal">file.readlines()</tt> and working on the <a class="reference external" href="https://bitbucket.org/pypy/pypy/changesets/tip/branch%28%22stm%22%29">STM</a> branch (for Software Transactional Memory), which is now able to run RPython multithreaded programs using software transaction (as long as they don't fill up all the memory, because support for the GC is still missing :-)).  Finally, he worked on improving the Windows version of PyPy. While doing so he discovered together with Anto a terrible bug which lead to a continuous leak of stack space because the JIT called some functions using the wrong calling convention.<br><br>
+Håkan, with some help from Armin, worked on the <a class="reference external" href="https://bitbucket.org/pypy/pypy/changesets/tip/branch%28%22stm%22%29">jit-targets</a> branch, whose goal is to heavily refactor the way the traces are internally represented by the JIT, so that in the end we can produce (even :-)) better code than what we do nowadays.  More details in this <a class="reference external" href="https://mail.python.org/pipermail/pypy-dev/2011-November/008728.html">mail</a>.<br><br>
+Andrew Dalke worked on a way to integrate PyPy with FORTRAN libraries, and in particular the ones which are wrapped by Numpy and Scipy: in doing so, he wrote <a class="reference external" href="https://bitbucket.org/pypy/f2pypy">f2pypy</a>, which is similar to the existing <tt class="docutils literal">f2py</tt> but instead of producing a CPython extension module it produces a pure python modules based on <tt class="docutils literal">ctypes</tt>.  More work is needed before it can be considered complete, but <tt class="docutils literal">f2pypy</tt> is already able to produce a wrapper for BLAS which passes most of the tests under CPython, although there's still work left to get it working for PyPy.<br><br></p>
+<table cellpadding="0" cellspacing="0" class="tr-caption-container" style="float: right; text-align: right;"><tbody>
+<tr><td style="text-align: center;"><a href="https://1.bp.blogspot.com/-VSYa9zxkn_Y/TsD-Dera4zI/AAAAAAAAAPE/Yoea-XAY0Kg/s1600/5x-cake.jpg" style="clear: right; margin-bottom: 1em; margin-left: auto; margin-right: auto;"><img border="0" height="240" src="https://1.bp.blogspot.com/-VSYa9zxkn_Y/TsD-Dera4zI/AAAAAAAAAPE/Yoea-XAY0Kg/s320/5x-cake.jpg" width="320"></a></td></tr>
+<tr><td class="tr-caption" style="text-align: center;">Armin and Håkan with Laura's "5x faster" cake</td></tr>
+</tbody></table>Christian Tismer worked the whole sprint on the branch to make PyPy compatible with Windows 64 bit.  This needs a lot of work because a lot of PyPy is written under the assumption that the <tt class="docutils literal">long</tt> type in C has the same bit size than <tt class="docutils literal">void*</tt>, which is not true on Win64.  Christian says that in the past Genova-Pegli sprint he completed 90% of the work, and in this sprint he did the other 90% of the work.  Obviously, what is left to complete the task is the third 90% :-).  More seriously, he estimated a total of 2-4 person-weeks of work to finish it.<br><br>
+But, all in all, the best part of the sprint has been the cake that Laura baked to celebrate the "5x faster than CPython" achievement. Well, actually our <a class="reference external" href="https://speed.pypy.org/">speed</a> page reports "only" 4.7x, but that's because in the meantime we switched from comparing against CPython 2.6 to comparing against CPython 2.7, which is slightly faster.  We are confident that we will reach the 5x goal again, and that will be the perfect excuse to eat another cake :-)
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-2329255347667542586">
+        <div class="comment-header">
+          <a name="comment-2329255347667542586"></a>
+            <span class="author">Albien</span> wrote on <span class="date">2011-11-15 00:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>Freaking amazing guys together!!!</p>
+        </div>
+      </div>
+      <div class="comment comment-6312063754162441472">
+        <div class="comment-header">
+          <a name="comment-6312063754162441472"></a>
+            <span class="author">Kumo</span> wrote on <span class="date">2011-11-15 03:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>"5x faster than CPython cake".  Sounds delicious.</p>
+        </div>
+      </div>
+      <div class="comment comment-4176626005766141859">
+        <div class="comment-header">
+          <a name="comment-4176626005766141859"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-15 10:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>awesome! what do you think? how much room for improvement is there? is 10x possible? :)</p>
+        </div>
+      </div>
+      <div class="comment comment-982068076876035811">
+        <div class="comment-header">
+          <a name="comment-982068076876035811"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2011-11-15 13:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>Congratulations! I guess that 5x faster (Unladen Swallow's performance goal) means that pypy is now "officially" fast.<br><br>As Anonymous asked above, I also wonder how much room for improvement there is from now on.<br>Have all the low hanging fruits been picked already? Can we expect this pace of improvement to go on for a while? Or you are close to hit the limit?<br><br>Well, I know it's hard to predict... I'd just like to know what your heart tells you :-)<br><br>Thank you guys for all the hard work!</p>
+        </div>
+      </div>
+      <div class="comment comment-5574261138628736194">
+        <div class="comment-header">
+          <a name="comment-5574261138628736194"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-18 15:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>does pygame work with pypy? would be awesome... what about pyopengl?</p>
+        </div>
+      </div>
+      <div class="comment comment-4756520750353874099">
+        <div class="comment-header">
+          <a name="comment-4756520750353874099"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-11-19 00:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>Sorry, but pyopengl require either numpy or Numeric, which unfortunatly ain't supported yet.</p>
+        </div>
+      </div>
+      <div class="comment comment-2412372888357824035">
+        <div class="comment-header">
+          <a name="comment-2412372888357824035"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-12-17 01:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>Five times faster than CPython. Great! How does it compare to C?</p>
+        </div>
+      </div>
+         </div>
+
+</div>
+</div>
+<div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div></div>
+</main>
+</div>
+<div style="clear: both; width: 75%; margin: 1em auto;">
+        <nav class="postindexpager"><ul class="pager">
+<li class="previous">
+                <a href="index-22.html" rel="prev">Newer posts</a>
+            </li>
+            <li class="next">
+                <a href="index-20.html" rel="next">Older posts</a>
+            </li>
+        </ul></nav>
+</div>
+         
+                 <footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../assets/js/styles.js"></script></footer>
+</body>
+</html>

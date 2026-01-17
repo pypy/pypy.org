@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Using CFFI for embedding | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2016/01/using-cffi-for-embedding-8493496761738752124.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="leysin-winter-sprint-20-27th-february-1737200016169608469.html" title="Leysin Winter Sprint (20-27th February 2016)" type="text/html">
+<link rel="next" href="../02/c-api-support-update-8582726091670983181.html" title="C-API Support update" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Using CFFI for embedding">
+<meta property="og:url" content="https://www.pypy.org/posts/2016/01/using-cffi-for-embedding-8493496761738752124.html">
+<meta property="og:description" content="Introduction
+
+CFFI has been a great success so far to call C libraries in your
+Python programs, in a way that is both simple and that works across
+CPython 2.x and 3.x and PyPy.
+
+This post assumes that">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2016-01-06T11:17:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Using CFFI for embedding</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2016-01-06T11:17:00Z" itemprop="datePublished" title="2016-01-06 11:17">2016-01-06 11:17</time></a>
+            </p>
+                <p class="commentline">7 comments</p>
+
+                <p class="commentline">            <a href="using-cffi-for-embedding-8493496761738752124.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <h3 id="introduction">Introduction<a href="#introduction" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p><a href="https://cffi.readthedocs.org/">CFFI</a> has been a great success so far to call C libraries in your
+Python programs, in a way that is both simple and that works across
+CPython 2.x and 3.x and PyPy.</p>
+
+<p>This post assumes that you know what CFFI is and how to use it in
+API mode (<tt class="docutils literal">ffi.cdef()</tt>, <tt class="docutils literal">ffi.set_source()</tt>, <tt class="docutils literal">ffi.compile()</tt>).
+A quick overview can be found <a href="https://cffi.readthedocs.org/en/latest/overview.html#real-example-api-level-out-of-line">in this paragraph.</a></p>
+
+<p>The major news of CFFI 1.4, released last december, was that you can
+now declare C functions with <tt class="docutils literal">extern "Python"</tt> in the <tt class="docutils literal">cdef()</tt>.
+These magic keywords make the function callable from C (where it is
+defined automatically), but calling it will call some Python code
+(which you attach with the <tt class="docutils literal">@ffi.def_extern()</tt> decorator).  This is
+useful because it gives a more straightforward, faster and
+libffi-independent way to write callbacks.  For more details, see <a href="https://cffi.readthedocs.org/en/latest/using.html#extern-python-new-style-callbacks">the
+documentation.</a></p>
+
+<p>You are, in effect, declaring a static family of C functions which
+call Python code.  The idea is to take pointers to them, and pass them
+around to other C functions, as callbacks.  However, the idea of a set
+of C functions which call Python code opens another path: <em>embedding</em>
+Python code inside non-Python programs.</p>
+
+<h3 id="embedding">Embedding<a href="#embedding" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p>Embedding is traditionally done using the CPython C API: from C code,
+you call <tt class="docutils literal">Py_Initialize()</tt> and then some other functions like
+<tt class="docutils literal">PyRun_SimpleString()</tt>.  In the simple cases it is, indeed, simple
+enough; but it can become a complicated story if you throw in
+supporting application-dependent object types; and a messy story if
+you add correctly running on multiple threads, for example.</p>
+<p>Moreover, this approach is specific to CPython (2.x or 3.x).  It does
+not work at all on PyPy, which has its own very different, minimal
+<a href="https://pypy.readthedocs.org/en/latest/embedding.html">embedding API.</a></p>
+
+<p>The new-and-coming thing about CFFI 1.5, meant as replacement of the
+above solutions, is direct embedding support---with no fixed API at
+all.  The idea is to write some Python script with a <tt class="docutils literal">cdef()</tt> which
+declares a number of <tt class="docutils literal">extern "Python"</tt> functions.  When running the
+script, it creates the C source code and compiles it to a
+dynamically-linked library (<tt class="docutils literal">.so</tt> on Linux).  This is the same as in
+the regular API-mode usage.  What is new is that these <tt class="docutils literal">extern
+"Python"</tt> can now also be <em>exported</em> from the <tt class="docutils literal">.so</tt>, in the C
+sense.  You also give a bit of initialization-time Python code
+directly in the script, which will be compiled into the <tt class="docutils literal">.so</tt> too.</p>
+<p>This library can now be used directly from any C program (and it is
+still importable in Python).  It exposes the C API of your choice,
+which you specified with the <tt class="docutils literal">extern "Python"</tt> declarations.  You
+can use it to make whatever custom API makes sense in your particular
+case.  You can even directly make a "plug-in" for any program that
+supports them, just by exporting the API expected for such plugins.</p>
+
+<h3 id="trying-it-out-on-cpython">Trying it out on CPython<a href="#trying-it-out-on-cpython" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p>This is still being finalized, but please try it out.  You can
+see <a href="https://foss.heptapod.net/cffi/cffi/src/static-callback-embedding/demo/embedding.py">embedding.py</a> directly online for a quick glance.  Or
+see below the instructions on Linux with CPython 2.7 (CPython 3.x and
+non-Linux platforms are still a work in progress right now, but this
+should be quickly fixed):</p>
+<ul>
+<li>
+<p class="first">get the branch <tt class="docutils literal"><span class="pre">static-callback-embedding</span></tt> of CFFI:</p>
+<pre class="literal-block">
+hg clone https://foss.heptapod.net/cffi/cffi
+hg up static-callback-embedding
+</pre>
+</li>
+<li>
+<p class="first">make the <tt class="docutils literal">_cffi_backend.so</tt>:</p>
+<pre class="literal-block">
+python setup_base.py build_ext -f -i
+</pre>
+</li>
+<li>
+<p class="first">run <tt class="docutils literal">embedding.py</tt> in the <tt class="docutils literal">demo</tt> directory:</p>
+<pre class="literal-block">
+cd demo
+PYTHONPATH=.. python embedding.py
+</pre>
+</li>
+<li>
+<p class="first">this produces <tt class="docutils literal">_embedding_cffi.c</tt>.  Run <tt class="docutils literal">gcc</tt> to build it.  On Linux:</p>
+<pre class="literal-block">
+gcc -shared -fPIC _embedding_cffi.c -o _embedding_cffi.so  \
+    -lpython2.7 -I/usr/include/python2.7
+</pre>
+</li>
+<li>
+<p class="first">try out the demo C program in <tt class="docutils literal">embedding_test.c</tt>:</p>
+<pre class="literal-block">
+gcc embedding_test.c _embedding_cffi.so
+PYTHONPATH=.. LD_LIBRARY_PATH=. ./a.out
+</pre>
+</li>
+</ul>
+<p>Note that if you get <tt class="docutils literal">ImportError: cffi extension module
+'_embedding_cffi' has unknown version 0x2701</tt>, it means that the
+<tt class="docutils literal">_cffi_backend</tt> module loaded is a pre-installed one instead of the
+more recent one in "<tt class="docutils literal">..</tt>".  Be sure to use <tt class="docutils literal"><span class="pre">PYTHONPATH=..</span></tt> for now.  (Some installations manage to be confused enough to load the system-wide cffi even if another version is in the PYTHONPATH.  I think a virtualenv can be used to work around this issue.)</p>
+
+<h3 id="try-it-out-on-pypy">Try it out on PyPy<a href="#try-it-out-on-pypy" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p>Very similar steps can be followed on PyPy, but it requires the
+<tt class="docutils literal"><span class="pre">cffi-static-callback-embedding</span></tt> branch of PyPy, which you must
+first translate from sources.  The difference is then that you need to
+adapt the first <tt class="docutils literal">gcc</tt> command line: replace <tt class="docutils literal"><span class="pre">-lpython2.7</span></tt> with
+<tt class="docutils literal"><span class="pre">-lpypy-c</span></tt> and to fix the <tt class="docutils literal"><span class="pre">-I</span></tt> path (and possibly add a <tt class="docutils literal"><span class="pre">-L</span></tt>
+path).</p>
+
+<h3 id="more-details">More details<a href="#more-details" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p>How it works, more precisely, is by automatically initializing CPython/PyPy
+the first time any of the <tt class="docutils literal">extern "Python"</tt>
+functions is called from the C program.  This is done using locks in case of multi-threading,
+so several threads can concurrently do this "first call".  This should work even if two
+different threads call the first time a function from two <em>different</em>
+embedded CFFI extensions that happen to be linked with the same program.  Explicit initialization is
+never needed.</p>
+
+<p>The custom initialization-time Python code you put in
+<tt class="docutils literal">ffi.embedding_init_code()</tt> is executed at that time.  If this code
+starts to be big, you can move it to independent modules or packages.
+Then the initialization-time Python code only needs to import them.  In
+that case, you have to carefully set up <tt class="docutils literal">sys.path</tt> if the modules are
+not installed in the usual Python way.</p>
+<p>If the Python code is big and full of dependencies, a better alternative
+would be to use virtualenv.  How to do that is not fully fleshed out so
+far.  You can certainly run the whole program with the environment
+variables set up by the virtualenv's <tt class="docutils literal">activate</tt> script first.  There
+are probably other solutions that involve using gcc's
+<tt class="docutils literal"><span class="pre">-Wl,-rpath=\$ORIGIN/</span></tt> or <tt class="docutils literal"><span class="pre">-Wl,-rpath=/fixed/path/</span></tt> options to load
+a specific libpython or libypypy-c library.  If you try it out and it
+doesn't work the way you would like, please complain <tt class="docutils literal"><span class="pre">:-)</span></tt></p>
+<p>Another point: right now this does not support CPython's notion of
+multiple subinterpreters.  The logic creates a single global Python
+interpreter, and runs everything in that context.  Maybe a future
+version would have an explicit API to do that — or maybe it should be
+the job of a 3rd-party extension module to provide a Python interface
+over the notion of subinterpreters...</p>
+<p>More generally, any feedback is appreciated.</p>
+<p>Have fun,</p>
+<p>Armin</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="leysin-winter-sprint-20-27th-february-1737200016169608469.html" rel="prev" title="Leysin Winter Sprint (20-27th February 2016)">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../02/c-api-support-update-8582726091670983181.html" rel="next" title="C-API Support update">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-5103785936625763314">
+        <div class="comment-header">
+          <a name="comment-5103785936625763314"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2016-01-07 13:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks to apollo13 on irc for early feedback.  Main change: the code put in embedded_init_code() should now start with "from xx import ffi", where "xx" is the name of the module (first argument to set_source()).  The goal is to clearly say that you need the same line in other modules imported from there.</p>
+        </div>
+      </div>
+      <div class="comment comment-380956674313874528">
+        <div class="comment-header">
+          <a name="comment-380956674313874528"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2016-01-11 14:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is very exciting! Just waiting for Python 3.x support now. :)</p>
+        </div>
+      </div>
+      <div class="comment comment-425643661807624631">
+        <div class="comment-header">
+          <a name="comment-425643661807624631"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2016-01-12 07:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>Python 3 is implemented and tested now.</p>
+        </div>
+      </div>
+      <div class="comment comment-5603874434597101470">
+        <div class="comment-header">
+          <a name="comment-5603874434597101470"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2016-01-12 18:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>Windows support is now done (tested on Python 2.7).  Expect a release soon :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-1526418882178615002">
+        <div class="comment-header">
+          <a name="comment-1526418882178615002"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2016-01-16 18:02</span>:
+        </div>
+        <div class="comment-content">
+          <a href="https://pypi.python.org/pypi/cffi" rel="nofollow">CFFI 1.5 is released.</a>
+        </div>
+      </div>
+      <div class="comment comment-7006588583534092283">
+        <div class="comment-header">
+          <a name="comment-7006588583534092283"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2016-02-08 00:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>Excelent feature!!<br><br>CFFI rocks, and the documentation keeps improving :)<br></p>
+        </div>
+      </div>
+      <div class="comment comment-582089255001051786">
+        <div class="comment-header">
+          <a name="comment-582089255001051786"></a>
+            <span class="author">d.q.</span> wrote on <span class="date">2016-03-10 10:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>Awesome, pypyInstaller in cross-hairs!</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

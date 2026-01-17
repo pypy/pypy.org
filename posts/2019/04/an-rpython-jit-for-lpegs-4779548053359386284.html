@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>An RPython JIT for LPegs | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2019/04/an-rpython-jit-for-lpegs-4779548053359386284.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="../03/pypy-v71-released-now-uses-utf-8-451324088028792912.html" title="PyPy v7.1 released; now uses utf-8 internally for unicode strings" type="text/html">
+<link rel="next" href="pypy-711-bug-fix-release-6539023630991217367.html" title="PyPy 7.1.1 Bug Fix Release" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="An RPython JIT for LPegs">
+<meta property="og:url" content="https://www.pypy.org/posts/2019/04/an-rpython-jit-for-lpegs-4779548053359386284.html">
+<meta property="og:description" content="The following is a guest post by Stefan Troost, he describes the work he did in his bachelor thesis:
+
+In this project we have used the RPython infrastructure to generate an RPython
+JIT for a
+less-typi">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2019-04-04T21:26:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">An RPython JIT for LPegs</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2019-04-04T21:26:00Z" itemprop="datePublished" title="2019-04-04 21:26">2019-04-04 21:26</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="an-rpython-jit-for-lpegs-4779548053359386284.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>The following is a guest post by Stefan Troost, he describes the work he did in his bachelor thesis:</p>
+
+<p>In this project we have used the RPython infrastructure to generate an RPython
+JIT for a
+less-typical use-case: string pattern matching. The work in this project is
+based on <a href="bford.info/pub/lang/peg.pdf">Parsing Expression Grammars</a> and
+<a href="www.inf.puc-rio.br/~roberto/docs/peg.pdf">LPeg</a>, an implementation of PEGs
+designed to be used in Lua. In this post I will showcase some of the work that
+went into this project, explain PEGs in general and LPeg in particular, and
+show some benchmarking results.</p>
+<h1 id="parsing-expression-grammars">
+<a id="Parsing_Expression_Grammars_12"></a>Parsing Expression Grammars<a href="#parsing-expression-grammars" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>Parsing Expression Grammas (PEGs) are a type of formal grammar similar to
+context-free grammars, with the main difference being that they are unambiguous.
+This is achieved by redefining the ambiguous choice operator of CFGs (usually
+noted as <code>|</code>) as an <em>ordered</em> choice operator. In practice this means that if a
+rule in a PEG presents a choice, a PEG parser should prioritize the leftmost
+choice. Practical uses include parsing and pattern-searching. In comparison to
+regular expressions PEGs stand out as being able to be parsed in linear time,
+being strictly more powerful than REs, as well as being arguably more readable.</p>
+<h1 id="lpeg">
+<a id="LPeg_24"></a>LPeg<a href="#lpeg" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>LPeg is an implementation of PEGs written in C to be used in the Lua
+programming language. A crucial detail of this implementation is that it parses
+high level function calls, translating them to bytecode, and interpreting that
+bytecode. Therefore, we are able to improve that implementation by replacing
+LPegs C-interpreter with an RPython JIT. I use a modified version of LPeg to
+parse PEGs and pass the generated Intermediate Representation, the LPeg
+bytecode, to my VM.</p>
+<h1 id="the-lpeg-library">
+<a id="The_LPeg_Library_35"></a>The LPeg Library<a href="#the-lpeg-library" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>The LPeg Interpreter executes bytecodes created by parsing a string of commands
+using the LPeg library. Our JIT supports a subset of the LPeg library, with
+some of the more advanced or obscure features being left out. Note that this
+subset is still powerful enough to do things like parse JSON.</p>
+<table class="table table-striped table-bordered">
+<thead><tr>
+<th>Operator</th>
+<th>Description</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>lpeg.P(string)</td>
+<td>Matches string literally</td>
+</tr>
+<tr>
+<td>lpeg.P(n)</td>
+<td>Matches exactly n characters</td>
+</tr>
+<tr>
+<td>lpeg.P(-n)</td>
+<td>Matches at most n characters</td>
+</tr>
+<tr>
+<td>lpeg.S(string)</td>
+<td>Matches any character in string (Set)</td>
+</tr>
+<tr>
+<td>lpeg.R(“xy”)</td>
+<td>Matches any character between x and y (Range)</td>
+</tr>
+<tr>
+<td>pattern^n</td>
+<td>Matches at least n repetitions of pattern</td>
+</tr>
+<tr>
+<td>pattern^-n</td>
+<td>Matches at most n repetitions of pattern</td>
+</tr>
+<tr>
+<td>pattern1 * pattern2</td>
+<td>Matches pattern1 followed by pattern2</td>
+</tr>
+<tr>
+<td>pattern1 + pattern2</td>
+<td>Matches pattern1 or pattern2 (ordered choice)</td>
+</tr>
+<tr>
+<td>pattern1 - pattern2</td>
+<td>Matches pattern1 if pattern2 does not match</td>
+</tr>
+<tr>
+<td>-pattern</td>
+<td>Equivalent to ("" - pattern)</td>
+</tr>
+</tbody>
+</table>
+<p>As a simple example, the pattern <code>lpeg.P"ab"+lpeg.P"cd"</code> would match either the
+string <code>ab</code> or the string <code>cd</code>.</p>
+<p>To extract semantic information from a pattern, captures are needed. These are
+the following operations supported for capture creation.</p>
+<table class="table table-striped table-bordered">
+<thead><tr>
+<th>Operation</th>
+<th>What it produces</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>lpeg.C(pattern)</td>
+<td>the match for pattern plus all captures made by pattern</td>
+</tr>
+<tr>
+<td>lpeg.Cp()</td>
+<td>the current position (matches the empty string)</td>
+</tr>
+</tbody>
+</table>
+<p>(tables taken from the <a href="https://www.inf.puc-rio.br/~roberto/lpeg/">LPeg documentation</a>)</p>
+<p>These patterns are translated into bytecode by LPeg, at which point we are able
+to pass them into our own VM.</p>
+<h1 id="the-vm">
+<a id="The_VM_73"></a>The VM<a href="#the-vm" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>The state of the VM at any point is defined by the following variables:</p>
+<ul>
+<li>
+<code>PC</code>: program counter indicating the current instruction</li>
+<li>
+<code>fail</code>: an indicator that some match failed and the VM must backtrack</li>
+<li>
+<code>index</code>: counter indicating the current character of the input string</li>
+<li>
+<code>stackentries</code>: stack of return addresses and choice points</li>
+<li>
+<code>captures</code>: stack of capture objects</li>
+</ul>
+<p>The execution of bytecode manipulates the values of these variables in order to
+produce some output. How that works and what that output looks like will be
+explained now.</p>
+<h1 id="the-bytecode">
+<a id="The_Bytecode_88"></a>The Bytecode<a href="#the-bytecode" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>For simplicity’s sake I will not go over every individual bytecode, but instead
+choose some that exemplify the core concepts of the bytecode set.</p>
+<h2 id="generic-character-matching-bytecodes">
+<a id="generic_character_matching_bytecodes_93"></a>generic character matching bytecodes<a href="#generic-character-matching-bytecodes" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<ul>
+<li>
+<p><code>any</code>: Checks if there’s any characters left in the inputstring. If it succeeds
+it advances the index and PC by 1, if not the bytecode fails.</p>
+</li>
+<li>
+<p><code>char c</code>: Checks if there is another bytecode in the input and if that
+character is equal to <code>c</code>. Otherwise the bytecode fails.</p>
+</li>
+<li>
+<p><code>set c1-c2</code>: Checks if there is another bytecode in the input and if that
+character is between (including) c1 and c2. Otherwise the bytecode fails.</p>
+</li>
+</ul>
+<p>These bytecodes are the easiest to understand with very little impact on the
+VM. What it means for a bytecode to fail will be explained when
+we get to control flow bytecodes.</p>
+<p>To get back to the example, the first half of the pattern <code>lpeg.P"ab"</code> could be
+compiled to the following bytecodes:</p>
+<pre><code>char a
+char b
+</code></pre>
+<h2 id="control-flow-bytecodes">
+<a id="control_flow_bytecodes_117"></a>control flow bytecodes<a href="#control-flow-bytecodes" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<ul>
+<li>
+<p><code>jmp n</code>: Sets <code>PC</code> to <code>n</code>, effectively jumping to the n’th bytecode. Has no defined
+failure case.</p>
+</li>
+<li>
+<p><code>testchar c n</code>: This is a lookahead bytecode. If the current character is equal
+to <code>c</code> it advances the <code>PC</code> but not the index. Otherwise it jumps to <code>n</code>.</p>
+</li>
+<li>
+<p><code>call n</code>: Puts a return address (the current <code>PC + 1</code>) on the <code>stackentries</code> stack
+and sets the <code>PC</code> to <code>n</code>. Has no defined failure case.</p>
+</li>
+<li>
+<p><code>ret</code>: Opposite of <code>call</code>. Removes the top value of the <code>stackentries</code> stack (if
+the string of bytecodes is valid this will always be a return address) and
+sets the <code>PC</code> to the removed value. Has no defined failure case.</p>
+</li>
+<li>
+<p><code>choice n</code>: Puts a choice point on the <code>stackentries</code> stack. Has no defined
+failure case.</p>
+</li>
+<li>
+<p><code>commit n</code>: Removes the top value of the <code>stackentries</code> stack (if the string of
+bytecodes is valid this will always be a choice point) and jumps to <code>n</code>. Has no
+defined failure case.</p>
+</li>
+</ul>
+<p>Using <code>testchar</code> we can implement the full pattern <code>lpeg.P"ab"+lpeg.P"cd"</code> with
+bytecode as follows:</p>
+<pre><code>testchar a -&gt; L1
+any
+char b
+end
+any
+L1: char c
+char d
+end
+</code></pre>
+<p>The <code>any</code> bytecode is needed because <code>testchar</code> does not consume a character
+from the input.</p>
+<h2 id="failure-handling-backtracking-and-choice-points">
+<a id="Failure_Handling_Backtracking_and_Choice_Points_158"></a>Failure Handling, Backtracking and Choice Points<a href="#failure-handling-backtracking-and-choice-points" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>A choice point consist of the VM’s current <code>index</code> and <code>capturestack</code> as well as a
+<code>PC</code>. This is not the VM’s <code>PC</code> at the time of creating the
+choicepoint, but rather the <code>PC</code> where we should continue trying to find
+matches when a failure occurs later.</p>
+<p>Now that we have talked about choice points, we can talk about how the VM
+behaves in the fail state. If the VM is in the fail state, it removed entries
+from the stackentries stack until it finds a choice point. Then it backtracks
+by restoring the VM to the state defined by the choice point. If no choice
+point is found this way, no match was found in the string and the VM halts.</p>
+<p>Using choice points we could implement the example <code>lpeg.P"ab" + lpeg.P"cd"</code> in
+bytecodes in a different way (LPEG uses the simpler way shown above, but for
+more complex patterns it can’t use the lookahead solution using <code>testchar</code>):</p>
+<pre><code>choice L1
+char a
+char b
+commit
+end
+L1: char c
+char d
+end
+</code></pre>
+<h2 id="captures">
+<a id="Captures_188"></a>Captures<a href="#captures" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Some patterns require the VM to produce more output than just “the pattern
+matched” or “the pattern did not match”. Imagine searching a document for an
+IPv4 address and all your program responded was “I found one”. In order to
+recieve additional information about our inputstring, captures are used.</p>
+<h3 id="the-capture-object">
+<a id="The_capture_object_195"></a>The capture object<a href="#the-capture-object" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>In my VM, two types of capture objects are supported, one of them being the
+position capture. It consists of a single index referencing the point in the
+inputstring where the object was created.</p>
+<p>The other type of capture object is called simplecapture. It consists of an
+index and a size value, which are used to reference a substring of the
+inputstring. In addition, simplecaptures have a variable status indicating they
+are either open or full. If a simplecapture object is open, that means that its
+size is not yet determined, since the pattern we are capturing is of variable
+length.</p>
+<p>Capture objects are created using the following bytecodes:</p>
+<ul>
+<li>
+<p><code>Fullcapture Position</code>: Pushes a positioncapture object with the current index
+value to the capture stack.</p>
+</li>
+<li>
+<p><code>Fullcapture Simple n</code>: Pushes a simplecapture object with current index value
+and size=n to the capture stack.</p>
+</li>
+<li>
+<p><code>Opencapture Simple</code>: Pushes an open simplecapture object with current index
+value and undetermined size to the capture stack.</p>
+</li>
+<li>
+<p><code>closecapture</code>: Sets the top element of the capturestack to full and sets its
+size value using the difference between the current index and the index of
+the capture object.</p>
+</li>
+</ul>
+<h1 id="the-rpython-implementation">
+<a id="The_RPython_Implementation_224"></a>The RPython Implementation<a href="#the-rpython-implementation" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>These, and many more bytecodes were implemented in an RPython-interpreter.
+By adding jit hints, we were able to generate an efficient JIT.
+We will now take a closer look at some implementations of bytecodes.</p>
+<pre><code class="language-python">...
+        <span class="hljs-keyword">elif</span> instruction.name == <span class="hljs-string">"any"</span>:
+            <span class="hljs-keyword">if</span> index &gt;= len(inputstring):
+                fail = <span class="hljs-keyword">True</span>
+            <span class="hljs-keyword">else</span>:
+                pc += <span class="hljs-number">1</span>
+                index += <span class="hljs-number">1</span>
+
+...
+</code></pre>
+<p>The code for the <code>any</code>-bytecode is relatively straight-forward. It either
+advances the <code>pc</code> and <code>index</code> or sets the VM into the fail state,
+depending on whether the end of the inputstring has been reached or not.</p>
+<pre><code class="language-python">...
+        <span class="hljs-keyword">if</span> instruction.name == <span class="hljs-string">"char"</span>:
+            <span class="hljs-keyword">if</span> index &gt;= len(inputstring):
+                fail = <span class="hljs-keyword">True</span>
+            <span class="hljs-keyword">elif</span> instruction.character == inputstring[index]:
+                pc += <span class="hljs-number">1</span>
+                index += <span class="hljs-number">1</span>
+            <span class="hljs-keyword">else</span>:
+                fail = <span class="hljs-keyword">True</span>
+...
+</code></pre>
+<p>The <code>char</code>-bytecode also looks as one would expect. If the VM’s string index is
+out of range or the character comparison fails, the VM is put into the
+fail state, otherwise the <code>pc</code> and <code>index</code> are advanced by 1. As you can see, the
+character we’re comparing the current inputstring to is stored in the
+instruction object (note that this code-example has been simplified for
+clarity, since the actual implementation includes a jit-optimization that
+allows the VM to execute multiple successive char-bytecodes at once).</p>
+<pre><code class="language-python">...
+        <span class="hljs-keyword">elif</span> instruction.name == <span class="hljs-string">"jmp"</span>:
+            pc = instruction.goto
+...
+</code></pre>
+<p>The <code>jmp</code>-bytecode comes with a <code>goto</code> value which is a <code>pc</code> that we want
+execution to continue at.</p>
+<pre><code class="language-python">...
+        <span class="hljs-keyword">elif</span> instruction.name == <span class="hljs-string">"choice"</span>:
+            pc += <span class="hljs-number">1</span>
+            choice_points = choice_points.push_choice_point(
+                instruction.goto, index, captures)
+...
+</code></pre>
+<p>As we can see here, the <code>choice</code>-bytecode puts a choice point onto the stack that
+may be backtracked to if the VM is in the fail-state. This choice point
+consists of a pc to jump to which is determined by the bytecode.
+But it also includes the current <code>index</code> and <code>captures</code> values at the time the choice
+point was created. An ongoing topic of jit optimization is which data structure
+is best suited to store choice points and return addresses. Besides naive
+implementations of stacks and single-linked lists, more case-specific
+structures are also being tested for performance.</p>
+<h1 id="benchmarking-result">
+<a id="Benchmarking_Result_299"></a>Benchmarking Result<a href="#benchmarking-result" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>In order to find out how much it helps to JIT LPeg patterns we ran a small
+number of benchmarks. We used an otherwise idle Intel Core i5-2430M CPU with
+3072 KiB of cache and 8 GiB of RAM, running with 2.40GHz. The machine was
+running Ubuntu 14.04 LTS, Lua 5.2.3 and we used GNU grep 2.16 as a point of
+comparison for one of the benchmarks. The benchmarks were run 100 times in
+a new process each. We measured the full runtime of the called process,
+including starting the process.</p>
+<p>Now we will take a look at some plots generated by measuring the runtime of
+different iterations of my JIT compared to lua and using bootstrapping to
+generate a sampling distribution of mean values. The plots contain a few different
+variants of pypeg, only the one called "fullops" is important for this blog post, however.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://1.bp.blogspot.com/-Qv3aZapdMOk/XKXMDhTGujI/AAAAAAAAsNo/b7QShypeeV8mvePwTjPgmDSzUVB6EsiaACLcBGAs/s1600/rawplot_100_kb_urlinput.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://1.bp.blogspot.com/-Qv3aZapdMOk/XKXMDhTGujI/AAAAAAAAsNo/b7QShypeeV8mvePwTjPgmDSzUVB6EsiaACLcBGAs/s400/rawplot_100_kb_urlinput.png" width="400"></a></div>
+
+<p>This is the plot for a search pattern that searches a text file for valid URLs.
+As we can see, if the input file is as small as 100 kb, the benefits of JIT
+optimizations do not outweigh the time required to generate the
+machine code. As a result, all of our attempts perform significantly slower
+than LPeg.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-mTry3w1vSFA/XKXMNoaeHOI/AAAAAAAAsNs/YhdGWoGmyjU3yxqFgcePBklGv-qw13wXgCLcBGAs/s1600/rawplot_500_kb_urlinput.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://2.bp.blogspot.com/-mTry3w1vSFA/XKXMNoaeHOI/AAAAAAAAsNs/YhdGWoGmyjU3yxqFgcePBklGv-qw13wXgCLcBGAs/s400/rawplot_500_kb_urlinput.png" width="400"></a></div>
+
+<p>This is the plot for the same search pattern on a larger input file. As we can
+see, for input files as small as 500 kb our VM already outperforms LPeg’s. An
+ongoing goal of continued development is to get this lower boundary as small as
+possible.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-Cr4BE9Cejg8/XKXMUXamP3I/AAAAAAAAsN0/t5PTo0Q4vPMLwL12bdQ93Q4bAMIjJTEVACLcBGAs/s1600/rawplot_5_mb_urlinput.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://2.bp.blogspot.com/-Cr4BE9Cejg8/XKXMUXamP3I/AAAAAAAAsN0/t5PTo0Q4vPMLwL12bdQ93Q4bAMIjJTEVACLcBGAs/s400/rawplot_5_mb_urlinput.png" width="400"></a></div>
+
+<p>The benefits of a JIT compared to an Interpreter become more and more relevant
+for larger input files. Searching a file as large as 5 MB makes this fairly
+obvious and is exactly the behavior we expect.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-uIoguDb7ApE/XKXMngYEnSI/AAAAAAAAsOA/zdv2WAfdRwwruS1yOdX7jFz0nB_PPQqRACLcBGAs/s1600/rawplot_50_kb_jsoninput.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://2.bp.blogspot.com/-uIoguDb7ApE/XKXMngYEnSI/AAAAAAAAsOA/zdv2WAfdRwwruS1yOdX7jFz0nB_PPQqRACLcBGAs/s400/rawplot_50_kb_jsoninput.png" width="400"></a></div>
+
+<p>This time we are looking at a different more complicated pattern, one that parses JSON used on a
+50 kb input file. As expected, LPeg outperforms us, however, something
+unexpected happens as we increase the filesize.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://3.bp.blogspot.com/-r1-Aq39Oe9I/XKXMuQlcB6I/AAAAAAAAsOE/Eqmj7i3JKz0zdTK6Cd1ai11aZCf-EZkVwCLcBGAs/s1600/rawplot_100_kb_jsoninput.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://3.bp.blogspot.com/-r1-Aq39Oe9I/XKXMuQlcB6I/AAAAAAAAsOE/Eqmj7i3JKz0zdTK6Cd1ai11aZCf-EZkVwCLcBGAs/s400/rawplot_100_kb_jsoninput.png" width="400"></a></div>
+
+<p>Since LPeg has a defined maximum depth of 400 for the choicepoints and
+returnaddresses Stack, LPeg by default refuses to parse files as small as
+100kb. This raises the question if LPeg was intended to be used for parsing.
+Until a way to increase LPeg’s maximum stack depth is found, no comparisons to
+LPeg can be performed at this scale. This has been a low priority in the past
+but may be addressed in the future.</p>
+<p>To conclude, we see that at sufficiently high filesizes, our JIT outperforms
+the native LPeg-interpreter. This lower boundary is currently as low as 100kb
+in filesize.</p>
+<h1 id="conclusion">
+<a id="Conclusion_353"></a>Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>Writing a JIT for PEG’s has proven itself to be a challenge worth pursuing, as
+the expected benefits of a JIT compared to an Interpreter have been achieved.
+Future goals include getting LPeg to be able to use parsing patterns on larger
+files, further increasing the performance of our JIT and comparing it to other
+well-known programs serving a similar purpose, like grep.</p>
+<p>The prototype implementation that I described in this post can be found
+<a href="https://github.com/sktroost/PyPeg/tree/master/pypeg">on Github</a>
+(it's a bit of a hack in some places, though).</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../03/pypy-v71-released-now-uses-utf-8-451324088028792912.html" rel="prev" title="PyPy v7.1 released; now uses utf-8 internally for unicode strings">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy-711-bug-fix-release-6539023630991217367.html" rel="next" title="PyPy 7.1.1 Bug Fix Release">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="An RPython JIT for LPegs" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

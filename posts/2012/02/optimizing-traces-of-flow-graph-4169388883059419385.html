@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optimizing Traces of the Flow Graph Language | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2012/02/optimizing-traces-of-flow-graph-4169388883059419385.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="almost-there-pypys-arm-backend_01-3216759488618774525.html" title="Almost There - PyPy's ARM Backend" type="text/html">
+<link rel="next" href="introductionary-article-about-rpython-5386281283454207551.html" title="Introductory Article About RPython" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Optimizing Traces of the Flow Graph Language">
+<meta property="og:url" content="https://www.pypy.org/posts/2012/02/optimizing-traces-of-flow-graph-4169388883059419385.html">
+<meta property="og:description" content="Part 3 of Comparing Partial Evaluation to Tracing
+This is the third blog post in a series about comparing partial evaluation and
+tracing. In the first post of the series I introduced a small flow-grap">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2012-02-07T16:01:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Optimizing Traces of the Flow Graph Language</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2012-02-07T16:01:00Z" itemprop="datePublished" title="2012-02-07 16:01">2012-02-07 16:01</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="optimizing-traces-of-flow-graph-4169388883059419385.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <h2 id="part-3-of-comparing-partial-evaluation-to-tracing">Part 3 of Comparing Partial Evaluation to Tracing<a href="#part-3-of-comparing-partial-evaluation-to-tracing" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>This is the third blog post in a series about comparing partial evaluation and
+tracing. In the <a class="reference external" href="../01/comparing-partial-evaluation-and-7255412724168990164.html">first post of the series</a> I introduced a small flow-graph
+language together with an interpreter for it. Then I showed a partial evaluator
+for the language. In the <a class="reference external" href="../01/simple-tracer-for-flow-graph-language-6930951890987229484.html">second post of the series</a> I showed how a tracer for
+the same language works and how it relates to both execution and to partial
+evaluation. Then I added support for promotion to that tracer.</p>
+<p>In this post I will show how to optimize the traces that are produced by the
+tracer and compare the structure of the optimizer to that of partial
+evaluation.</p>
+<p>The code from this post can be found here: <a class="reference external" href="https://paste.pocoo.org/show/547304/">https://paste.pocoo.org/show/547304/</a></p>
+<h2 id="optimizing-traces">Optimizing Traces<a href="#optimizing-traces" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>In the last post we saw how to produce a linear trace with guards by
+interpreting a control flow graph program in a special mode. A trace always end with
+a <tt class="docutils literal">loop</tt> statement, which jumps to the beginning. The tracer is just logging
+the operations that are done while interpreting, so the trace can contain
+superfluous operations. On the other hand, the trace also contains some of the
+runtime values through promotions and some decisions made on them which can be
+exploited by optimization. An example for this is the trace produced by the
+promotion example from the last post:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">ge</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),
+<span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">l_done</span>,
+<span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">x</span>,<span style="color: #FF6600;">5</span>,[],<span style="color: #CC3300;">b2</span>,
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x2</span>,<span style="color: #CC3300;">mul</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">2</span>),
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x3</span>,<span style="color: #CC3300;">add</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x2</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">i</span>,<span style="color: #CC3300;">sub</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x3</span>),
+<span style="color: #CC3300;">loop</span>))))))
+</pre></div>
+<p>After the <tt class="docutils literal">guard_value(x, 5, <span class="pre">...)</span></tt> operation, <tt class="docutils literal">x</tt> is know to be <tt class="docutils literal">5</tt>: If
+it isn't <tt class="docutils literal">5</tt>, execution falls back to the interpreter. Therefore, operations
+on <tt class="docutils literal">x</tt> after the guard can be constant-folded. To do that sort of
+constant-folding,
+an extra optimization step is needed. That optimization step walks along the
+trace, remembers which variables are constants and what their values are using a
+partial environment. The opimizer removes operations that have only constant
+arguments and leaves the others in the trace. This process is actually
+remarkably similar to partial evaluation: Some variables are known to be
+constants, operations on only constant arguments are optimized away, the rest
+remains.</p>
+<p>The code for optimizing operations looks as follows:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">optimize</span>(<span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">RArg</span>),
+    (<span style="color: #003333;">RArg</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">C</span>, <span style="color: #003333;">Res</span>),
+        <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #003333;">RestResidual</span>
+    ;
+        <span style="color: #CC00FF;">remove_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg</span>, <span style="color: #003333;">RestResidual</span>)
+    ),
+    <span style="color: #CC00FF;">optimize</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">RestResidual</span>).
+
+<span style="color: #CC00FF;">optimize</span>(<span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">Arg1</span>, <span style="color: #003333;">Arg2</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg1</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">RArg1</span>),
+    <span style="color: #CC00FF;">presolve</span>(<span style="color: #003333;">Arg2</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">RArg2</span>),
+    (<span style="color: #003333;">RArg1</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C1</span>), <span style="color: #003333;">RArg2</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C2</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #CC00FF;">do_op</span>(<span style="color: #003333;">Op</span>, <span style="color: #003333;">C1</span>, <span style="color: #003333;">C2</span>, <span style="color: #003333;">Res</span>),
+        <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Res</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #003333;">RestResidual</span>
+    ;
+        <span style="color: #CC00FF;">remove_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">op2</span>(<span style="color: #003333;">ResultVar</span>, <span style="color: #003333;">Op</span>, <span style="color: #003333;">RArg1</span>, <span style="color: #003333;">RArg2</span>, <span style="color: #003333;">RestResidual</span>)
+    ),
+    <span style="color: #CC00FF;">optimize</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">RestResidual</span>).
+</pre></div>
+<p>Just like partial evaluation! It even reuses the helper functions <tt class="docutils literal">presolve</tt>
+from the partial evaluator and a partial environment <tt class="docutils literal">PEnv</tt>. When the
+arguments of the operation are known constants in the partial environment, the
+operation can be executed at optimization time and removed from the trace.
+Otherwise, the operation has to stay in the output trace. The result variable
+(as in the partial evaluator) needs to be removed from the partial environment,
+because it was just overwritten by an unknown result.</p>
+<p>Now we need to deal with guards in the trace.</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">optimize</span>(<span style="color: #CC00FF;">guard_true</span>(<span style="color: #003333;">V</span>, [], <span style="color: #003333;">L</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #003333;">RestResidual</span>
+    ;
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">guard_true</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">L</span>, <span style="color: #003333;">RestResidual</span>)
+    ),
+    <span style="color: #CC00FF;">optimize</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">RestResidual</span>).
+
+<span style="color: #CC00FF;">optimize</span>(<span style="color: #CC00FF;">guard_false</span>(<span style="color: #003333;">V</span>, [], <span style="color: #003333;">L</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #003333;">RestResidual</span>,
+        <span style="color: #003333;">NEnv</span> <span style="color: #555555;">=</span> <span style="color: #003333;">PEnv</span>
+    ;
+        <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">V</span>, <span style="color: #FF6600;">0</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">guard_false</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">L</span>, <span style="color: #003333;">RestResidual</span>)
+    ),
+    <span style="color: #CC00FF;">optimize</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">RestResidual</span>).
+</pre></div>
+<p>When the variable that is being guarded is actually known to be a constant, we
+can remove the guard. Note that it is not possible that the guard of that
+constant fails: The tracer recorded the operation while running with real
+values, therefore the guards <em>have</em> to succeed for values the optimizer
+discovers to be constant.</p>
+<p><tt class="docutils literal">guard_false</tt> is slightly different from <tt class="docutils literal">guard_true</tt>: after the former we
+know that the argument is actually <tt class="docutils literal">0</tt>. After <tt class="docutils literal">guard_true</tt> we only know that
+it is not equal to zero, but not which precise value it has.</p>
+<p>Another point to note in the optimization of guards is that the second argument
+of the guard operation, which was so far always just an empty list, is now
+replaced by the partial environment <tt class="docutils literal">PEnv</tt>. I will discuss further down why
+this is needed.</p>
+<p>Optimizing <tt class="docutils literal">guard_value</tt> is very similar, except that it really gives precise
+information about the variable involved:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">optimize</span>(<span style="color: #CC00FF;">guard_value</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">C</span>, [], <span style="color: #003333;">L</span>, <span style="color: #003333;">Rest</span>), <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">NewOp</span>) :-
+    <span style="color: #CC00FF;">plookup</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">Val</span>),
+    (<span style="color: #003333;">Val</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">C1</span>) <span style="color: #CC3300;">-&gt;</span>
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #003333;">RestResidual</span>,
+        <span style="color: #003333;">NEnv</span> <span style="color: #555555;">=</span> <span style="color: #003333;">PEnv</span>
+    ;
+        <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">V</span>, <span style="color: #003333;">C</span>, <span style="color: #003333;">NEnv</span>),
+        <span style="color: #003333;">NewOp</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">guard_value</span>(<span style="color: #003333;">V</span>, <span style="color: #003333;">C</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">L</span>, <span style="color: #003333;">RestResidual</span>)
+    ),
+    <span style="color: #CC00FF;">optimize</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">NEnv</span>, <span style="color: #003333;">RestResidual</span>).
+</pre></div>
+<p>This operation is the main way how the optimizer gains constant variables that
+it then exploits to do constant-folding on later operations. This is a chief
+difference from partial evaluation: There the optimizer knows the value of some
+variables from the start. When optimizing traces, at the beginning the value of
+no variable is known. Knowledge about some variables is only later gained
+through guards.</p>
+<p>Now we are missing what happens with the <tt class="docutils literal">loop</tt> statement. In principle, it is
+turned into a <tt class="docutils literal">loop</tt> statement again. However, at the loop statement a few
+additional operations need to be emitted. The reason is that we optimized away
+operations and thus assignments when the result value of the variable was a
+constant. That means the involved variable still potentially has some older
+value. The next iteration of the loop would continue with this older value,
+which is obviously wrong. Therefore we need to emit some assignments before the
+loop statement, one per entry in the partial environment:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">optimize</span>(<span style="color: #CC3300;">loop</span>, <span style="color: #003333;">PEnv</span>, <span style="color: #003333;">T</span>) :-
+    <span style="color: #CC00FF;">generate_assignments</span>(<span style="color: #003333;">PEnv</span>, <span style="color: #003333;">T</span>).
+
+<span style="color: #CC00FF;">generate_assignments</span>([], <span style="color: #CC3300;">loop</span>).
+<span style="color: #CC00FF;">generate_assignments</span>([<span style="color: #003333;">Var</span><span style="color: #555555;">/</span><span style="color: #003333;">Val</span> | <span style="color: #003333;">Tail</span>], <span style="color: #CC00FF;">op1</span>(<span style="color: #003333;">Var</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #003333;">Val</span>), <span style="color: #003333;">T</span>)) :-
+    <span style="color: #CC00FF;">generate_assignments</span>(<span style="color: #003333;">Tail</span>, <span style="color: #003333;">T</span>).
+</pre></div>
+<p>As an example of how <tt class="docutils literal">generate_assignments</tt> assignments works, let's look at
+the following example. When the partial environment is, <tt class="docutils literal">[x/5, y/10]</tt> the
+following assignments are generated:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">generate_assignments</span>([<span style="color: #CC3300;">x</span><span style="color: #555555;">/</span><span style="color: #FF6600;">5</span>, <span style="color: #CC3300;">y</span><span style="color: #555555;">/</span><span style="color: #FF6600;">10</span>], <span style="color: #003333;">Out</span>).
+<span style="color: #003333;">Out</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">x</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">5</span>), <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">y</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">10</span>), <span style="color: #CC3300;">loop</span>)).
+</pre></div>
+<p>That's all the code of the optimizer. While the basic structure is quite similar to partial evaluation,
+it's a lot less complex as well. What made the partial evaluator hard was that
+it needs to deal with control flow statements and with making sure that code is
+reused if the same block is partially evaluated with the same constants. Here,
+all these complexities go away. The tracer has already removed all control flow
+and replaced it with guards and one <tt class="docutils literal">loop</tt> operation at the end. Thus, the
+optimizer can simply do one pass over the operations, removing some (with some
+extra care around the <tt class="docutils literal">loop</tt> statement).</p>
+<p>With this machinery in place, we can optimize the trace from the promotion
+example of the last post:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC3300;">?-</span> <span style="color: #CC00FF;">optimize</span>(
+    <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">x</span>,<span style="color: #FF6600;">3</span>,[],<span style="color: #CC3300;">b2</span>,
+    <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x2</span>,<span style="color: #CC3300;">mul</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">2</span>),
+    <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">x3</span>,<span style="color: #CC3300;">add</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x2</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">1</span>),
+    <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">i</span>,<span style="color: #CC3300;">sub</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>),<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">x3</span>),
+    <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>,<span style="color: #CC3300;">ge</span>,<span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>),<span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),
+    <span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">c</span>,[],<span style="color: #CC3300;">l_done</span>, <span style="color: #CC3300;">loop</span>)))))),
+    [],
+    <span style="color: #003333;">LoopOut</span>).
+<span style="color: #003333;">LoopOut</span> <span style="color: #555555;">=</span> <span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">x</span>, <span style="color: #FF6600;">3</span>, [], <span style="color: #CC3300;">b2</span>, <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">i</span>, <span style="color: #CC3300;">sub</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">7</span>), <span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">ge</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>), <span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">c</span>, [<span style="color: #CC3300;">x</span><span style="color: #555555;">/</span><span style="color: #FF6600;">3</span>, <span style="color: #CC3300;">x2</span><span style="color: #555555;">/</span><span style="color: #FF6600;">6</span>, <span style="color: #CC3300;">x3</span><span style="color: #555555;">/</span><span style="color: #FF6600;">7</span>], <span style="color: #CC3300;">l_done</span>, <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">x</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">3</span>), <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">x2</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">6</span>), <span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">x3</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">7</span>), <span style="color: #CC3300;">loop</span>)))))))
+</pre></div>
+<p>More readably, the optimized version is:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">guard_value</span>(<span style="color: #CC3300;">x</span>, <span style="color: #FF6600;">3</span>, [], <span style="color: #CC3300;">b2</span>,
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">i</span>, <span style="color: #CC3300;">sub</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">7</span>),
+<span style="color: #CC00FF;">op2</span>(<span style="color: #CC3300;">c</span>, <span style="color: #CC3300;">ge</span>, <span style="color: #CC00FF;">var</span>(<span style="color: #CC3300;">i</span>), <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">0</span>),
+<span style="color: #CC00FF;">guard_true</span>(<span style="color: #CC3300;">c</span>, [<span style="color: #CC3300;">x</span><span style="color: #555555;">/</span><span style="color: #FF6600;">3</span>, <span style="color: #CC3300;">x2</span><span style="color: #555555;">/</span><span style="color: #FF6600;">6</span>, <span style="color: #CC3300;">x3</span><span style="color: #555555;">/</span><span style="color: #FF6600;">7</span>], <span style="color: #CC3300;">l_done</span>,
+<span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">x</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">3</span>),
+<span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">x2</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">6</span>),
+<span style="color: #CC00FF;">op1</span>(<span style="color: #CC3300;">x3</span>, <span style="color: #CC3300;">same</span>, <span style="color: #CC00FF;">const</span>(<span style="color: #FF6600;">7</span>),
+<span style="color: #CC3300;">loop</span>)))))))
+</pre></div>
+<p>As intended, the operations on <tt class="docutils literal">x</tt> after the <tt class="docutils literal">guard_value</tt> have all been
+removed. However, some additional assignments (to <tt class="docutils literal">x</tt>, <tt class="docutils literal">x2</tt>, <tt class="docutils literal">x3</tt>) at the end have been generated as
+well. The assignments look superfluous, but the optimizer does not have
+enough information to easily recognize this. That can be fixed, but only at the
+cost of additional complexity. (A real system would transform the trace into
+<a class="reference external" href="https://en.wikipedia.org/wiki/Static_single_assignment_form">static single assignment form</a> to answer such questions.)</p>
+<h2 id="resuming-to-the-interpreter">Resuming to the Interpreter<a href="#resuming-to-the-interpreter" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Why does the code above need to add the partial environment to
+the guards that cannot be optimized away? The reason is related to why we needed
+to generate assignments before the <tt class="docutils literal">loop</tt> statement. The problem is that the optimizer
+removes assignments to variables when it knows the values of these variables.
+That means that when switching back from running the optimized trace to the
+interpreter, a number of variables are not updated in the environment, making
+the execution in the interpreter incorrect.</p>
+<p>In the example above, this applies to the variables <tt class="docutils literal">x2</tt> and <tt class="docutils literal">x3</tt>. When the
+second guard fails, they have not been assigned in the optimized case.
+Therefore, the guard lists them and their (always constant) values.</p>
+<p>When switching back these assignments need to be made. Thus we need to adapt the
+<tt class="docutils literal">resume_interp</tt> function from the last blog post as follows:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #CC00FF;">write_resumevars</span>([], <span style="color: #003333;">Env</span>, <span style="color: #003333;">Env</span>).
+<span style="color: #CC00FF;">write_resumevars</span>([<span style="color: #003333;">Key</span> <span style="color: #555555;">/</span> <span style="color: #003333;">Value</span> | <span style="color: #003333;">Rest</span>], <span style="color: #003333;">Env</span>, <span style="color: #003333;">NEnv</span>) :-
+    <span style="color: #CC00FF;">write_env</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">Key</span>, <span style="color: #003333;">Value</span>, <span style="color: #003333;">Env1</span>),
+    <span style="color: #CC00FF;">write_resumevars</span>(<span style="color: #003333;">Rest</span>, <span style="color: #003333;">Env1</span>, <span style="color: #003333;">NEnv</span>).
+
+<span style="color: #CC00FF;">resume_interp</span>(<span style="color: #003333;">Env</span>, <span style="color: #003333;">ResumeVars</span>, <span style="color: #003333;">L</span>) :-
+    <span style="color: #CC00FF;">write_resumevars</span>(<span style="color: #003333;">ResumeVars</span>, <span style="color: #003333;">Env</span>, <span style="color: #003333;">NEnv</span>),
+    <span style="color: #CC00FF;">block</span>(<span style="color: #003333;">L</span>, <span style="color: #003333;">Block</span>),
+    <span style="color: #CC00FF;">interp</span>(<span style="color: #003333;">Block</span>, <span style="color: #003333;">NEnv</span>).
+</pre></div>
+<p>On resuming, the <tt class="docutils literal">ResumeVars</tt> (a former partial environment) are simply added
+back to the normal environment before going back to the interpreter.</p>
+<p>The data attached to guards about what needs to be done to resume to the
+interpreter when the guard fails is often a very complex part of a tracing
+system. The data can become big, yet most guards never fail. Therefore, most
+real systems try hard to compress the attached data or try to share it between
+subsequent guards.</p>
+<h2 id="summary">Summary<a href="#summary" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>In this post we have shown how to optimize traces by applying a variant of the
+partial evaluation principle: Perform all the operations that have only constant
+arguments, leave the others alone. However, optimizing traces is much simpler,
+because no control flow is involved. All the questions about control flow have
+already been solved by the tracing component.</p>
+<p>In the next and final post of the series I will show a larger example of how
+tracing and partial evaluation can be used to optimize a small bytecode
+interpreter.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="almost-there-pypys-arm-backend_01-3216759488618774525.html" rel="prev" title="Almost There - PyPy's ARM Backend">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="introductionary-article-about-rpython-5386281283454207551.html" rel="next" title="Introductory Article About RPython">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="Optimizing Traces of the Flow Graph Language" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

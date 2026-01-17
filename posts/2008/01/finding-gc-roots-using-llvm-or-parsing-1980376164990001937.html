@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finding GC roots: using LLVM or parsing assembler files from GCC | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2008/01/finding-gc-roots-using-llvm-or-parsing-1980376164990001937.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="visualizing-python-tokenizer-5020282079473796926.html" title="Visualizing a Python tokenizer" type="text/html">
+<link rel="next" href="leysin-winter-sport-sprint-started-5478612778498579467.html" title="Leysin Winter Sport Sprint Started" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Finding GC roots: using LLVM or parsing assembler files from GCC">
+<meta property="og:url" content="https://www.pypy.org/posts/2008/01/finding-gc-roots-using-llvm-or-parsing-1980376164990001937.html">
+<meta property="og:description" content="PyPy contains a framework for writing custom Garbage Collectors, and a few simple GCs have been written in this framework. A common issue with all these GCs is how to find all the stack roots, i.e. al">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2008-01-11T17:31:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Finding GC roots: using LLVM or parsing assembler files from GCC</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2008-01-11T17:31:00Z" itemprop="datePublished" title="2008-01-11 17:31">2008-01-11 17:31</time></a>
+            </p>
+                <p class="commentline">5 comments</p>
+
+                <p class="commentline">            <a href="finding-gc-roots-using-llvm-or-parsing-1980376164990001937.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>PyPy contains a framework for writing custom Garbage Collectors, and a few simple GCs have been written in this framework. A common issue with all these GCs is how to find all the <span style="font-style: italic;">stack roots,</span> i.e. all the pointers to live GC-managed objects currently stored in local variables, in all the callers of the current function. The current solution is to maintain a custom <span style="font-style: italic;">shadow stack</span> of roots, where all functions push and pop copies of their local variables of type "GC pointer". Clearly this is an overhead. Can we remove it?</p>
+
+<p>LLVM has recently grown some support for this. By emitting markers in the LLVM source and with the help of a bit of custom C++ code, we can generate <span style="font-style: italic;">stack maps</span> for the functions compiled by LLVM.  Then, with 100% <span style="font-style: italic;">non-portable</span> code in our framework GC's root finding algorithm, we can walk the machine stack and locate where in each stack frame LLVM stores the GC pointers. (Yes, I mean <span style="font-style: italic;">non-portable:</span> LLVM offers no help for doing that.  Maybe it will at some point, though I didn't manage to explain why this is an issue to people working on  this in LLVM so far...).  I've tried that approach in the <a href="https://codespeak.net/svn/pypy/branch/llvmgcroot/">llvmgcroot</a> branch.  Over the manually-managed shadow stack, this gives speed improvements which are, very roughly, on the order of 5%.</p>
+
+<p>Note that this prevents some optimizations in LLVM, because it forces it to allocate all local variables of type "GC pointer" in the stack; it cannot keep them in registers and it must assume that they can be changed more or less at any time (as moving GCs do). Can we do better?</p>
+
+<p>Actually, yes.  We can even do better in the C backend, using a GCC hack.  GCC has this nice extension:
+</p>
+<pre>asm("bla", constrains);</pre>
+This is meant to generate assembler instructions directly from C. Internally, GCC considers the whole asm() as a single regular instruction of its intermediate language; the constrains are expressed in the same way as the constrains for all the prebuilt intermediate language instructions. They express things like input and output operands of the instruction, whether they can live in memory or in registers, whether the whole instruction has side-effects, etc. The nice thing about asm() is that it doesn't kill any optimization whatsoever in GCC - it's your job to make sure that you use the correct constrains.
+
+<p>So what I've tried in the <a href="https://codespeak.net/svn/pypy/branch/asmgcroot/">asmgcroot</a> branch is to use asm() as markers. In this branch, the C backend produces code like this after each function call, for each local variable containing a live GC pointer:</p>
+
+<pre>asm("/* GCROOT %0 */" : "=g"(<span style="font-style: italic;">localvar</span>) : "0"(<span style="font-style: italic;">localvar</span>) : "memory");</pre>
+
+<p>This causes GCC to emit the following line in the assembler file it generates:</p>
+
+<pre>/* GCROOT <span style="font-style: italic;">register-or-memory-containing-localvar</span> */</pre>
+
+<p>I won't go in the details of the asm() line above - the constrains are just enough to make sure that GCC doesn't optimize too much, but don't prevent most optimizations from occurring. For example, the <span style="font-style: italic;">localvar</span> can be in a register.</p>
+
+<p>The assembler will just ignore the line above; it is a comment. But what we can do is write our own tool parsing the assembler files. This tool locates the /* GCROOT */ comments and follows where the register or memory location in the comment comes from (to do this it must follow the control flow and data flow of the function). This allows it to build a stack map: for each <span style="font-style: italic;">call</span> instruction it knows exactly which registers and frame stack locations contain a live GC pointer. The stack map is then emitted in an extra assembler file that we link with the rest. As with LLVM above, the stack map is then used at run-time by non-portable code written in our GC's stack root tracker.</p>
+
+<p>Yes, that's rather insane. But at least, we don't need to modify the assembler file - just read it. If GCC is too clever in its optimizations, the custom parser will get lost and complain cleanly; but I think that it is relatively safe in the sense that GCC optimizations should not be able to make the custom parser produce wrong results.</p>
+
+<p>The branch is not merged because it's probably too insane to merge (not to mention, it's probably not portable to non-GCC compilers, and it is completely platform-specific). Still, it gives good results, better that the pure LLVM approach - on the order of 10% to 25% speed-ups for pypy-c.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="visualizing-python-tokenizer-5020282079473796926.html" rel="prev" title="Visualizing a Python tokenizer">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="leysin-winter-sport-sprint-started-5478612778498579467.html" rel="next" title="Leysin Winter Sport Sprint Started">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-1403536203977022275">
+        <div class="comment-header">
+          <a name="comment-1403536203977022275"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-01-11 21:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>How does Objective-C 2.0 handle this same problem?</p>
+        </div>
+      </div>
+      <div class="comment comment-5152655013078464933">
+        <div class="comment-header">
+          <a name="comment-5152655013078464933"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2008-01-12 09:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>Obviously it depends on the compiler, but the basic idea is that the natural place to support this is in the compiler itself.  For example, instead of parsing the assembler produced by GCC, it would probably be possible to extend GCC to cleanly generate stack maps.  (This is basically what I tried to do with LLVM, which gives a plug-in API to do that.)<br><br>After a bit of googling, GCC doesn't seem to support Objective-C 2.0 yet.  Moreover, the current Objective-C run-time library simply uses the conservative Boehm collector.</p>
+        </div>
+      </div>
+      <div class="comment comment-1642813680147746758">
+        <div class="comment-header">
+          <a name="comment-1642813680147746758"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-01-15 08:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>ObjC 2 does not use Boehm.  The collecting thread suspends other threads and conservatively scans their stacks.  It picks up values in registers by querying the kernel for the suspended thread state.  It depends heavily on Mach.</p>
+        </div>
+      </div>
+      <div class="comment comment-8249229776761838201">
+        <div class="comment-header">
+          <a name="comment-8249229776761838201"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-01-16 17:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>llvm-gcc fully supports inline asm, so you could use the same hack you use with GCC with your llvm backend.<br><br>Also, you might be interested in https://llvm.org/PR1917, which proposes a method of identifying GC pointers that doesn't disable most optimizations.</p>
+        </div>
+      </div>
+      <div class="comment comment-3298615952142193477">
+        <div class="comment-header">
+          <a name="comment-3298615952142193477"></a>
+            <span class="author">Barry Kelly</span> wrote on <span class="date">2010-04-08 21:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>To Anonymous saying Objective C 2 not using Boehm: that may be true (I don't know the details), but the Boehm GC also suspends other threads, conservatively scans their stacks and picks up values in registers using the OS.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

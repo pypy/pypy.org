@@ -1,0 +1,1799 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="A Faster Python">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy (old posts, page 37) | PyPy</title>
+<link href="../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/blog/index-37.html">
+<link rel="icon" href="../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../favicon32x32.ico" sizes="32x32">
+<link rel="prev" href="index-38.html" type="text/html">
+<link rel="next" href="index-36.html" type="text/html">
+<!--[if lt IE 9]><script src="../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../assets/css/tipuesearch.css">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../index.html">
+                    <image id="toplogo" src="../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href=".">Index</a> </li>  
+                    <li> <a href="../categories/">Tags</a> </li>  
+                    <li> <a href="../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><div class="post">
+<div class="postindex">
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/10/how-to-make-your-code-80-times-faster-1424098117108093942.html" class="u-url">How to make your code 80 times faster</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/10/how-to-make-your-code-80-times-faster-1424098117108093942.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-10-30T10:15:00Z" itemprop="datePublished" title="2017-10-30 10:15">2017-10-30 10:15</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div class="document" id="how-to-make-your-code-80-times-faster">
+I often hear people who are happy because PyPy makes their code 2 times faster
+or so. Here is a short personal story which shows PyPy can go well beyond
+that.<br><br><strong>DISCLAIMER</strong>: this is not a silver bullet or a general recipe: it worked in
+this particular case, it might not work so well in other cases. But I think it
+is still an interesting technique. Moreover, the various steps and
+implementations are showed in the same order as I tried them during the
+development, so it is a real-life example of how to proceed when optimizing
+for PyPy.<br><br>
+Some months ago I <a class="reference external" href="https://github.com/antocuni/evolvingcopter">played a bit</a> with evolutionary algorithms: the ambitious
+plan was to automatically evolve a logic which could control a (simulated)
+quadcopter, i.e. a <a class="reference external" href="https://en.wikipedia.org/wiki/PID_controller">PID controller</a> (<strong>spoiler</strong>: it doesn't fly).<br><br>
+The idea is to have an initial population of random creatures: at each
+generation, the ones with the best fitness survive and reproduce with small,
+random variations.<br><br>
+However, for the scope of this post, the actual task at hand is not so
+important, so let's jump straight to the code. To drive the quadcopter, a
+<tt class="docutils literal">Creature</tt> has a <tt class="docutils literal">run_step</tt> method which runs at each <tt class="docutils literal">delta_t</tt> (<a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/creature.py">full
+code</a>):<br><pre class="code python literal-block"><span class="keyword">class</span> <span class="name class">Creature</span><span class="punctuation">(</span><span class="name builtin">object</span><span class="punctuation">):</span>
+    <span class="name">INPUTS</span> <span class="operator">=</span> <span class="literal number integer">2</span>  <span class="comment single"># z_setpoint, current z position</span>
+    <span class="name">OUTPUTS</span> <span class="operator">=</span> <span class="literal number integer">1</span> <span class="comment single"># PWM for all 4 motors</span>
+    <span class="name">STATE_VARS</span> <span class="operator">=</span> <span class="literal number integer">1</span>
+    <span class="operator">...</span>
+
+    <span class="keyword">def</span> <span class="name function">run_step</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="name">inputs</span><span class="punctuation">):</span>
+        <span class="comment single"># state: [state_vars ... inputs]</span>
+        <span class="comment single"># out_values: [state_vars, ... outputs]</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">state</span><span class="punctuation">[</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">:]</span> <span class="operator">=</span> <span class="name">inputs</span>
+        <span class="name">out_values</span> <span class="operator">=</span> <span class="name">np</span><span class="operator">.</span><span class="name">dot</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">matrix</span><span class="punctuation">,</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">state</span><span class="punctuation">)</span> <span class="operator">+</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">constant</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">state</span><span class="punctuation">[:</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="name">out_values</span><span class="punctuation">[:</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">]</span>
+        <span class="name">outputs</span> <span class="operator">=</span> <span class="name">out_values</span><span class="punctuation">[</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">:]</span>
+        <span class="keyword">return</span> <span class="name">outputs</span>
+</pre>
+<ul class="simple">
+<li>
+<tt class="docutils literal">inputs</tt> is a numpy array containing the desired setpoint and the current
+position on the Z axis;</li>
+<li>
+<tt class="docutils literal">outputs</tt> is a numpy array containing the thrust to give to the motors. To
+start easy, all the 4 motors are constrained to have the same thrust, so
+that the quadcopter only travels up and down the Z axis;</li>
+<li>
+<tt class="docutils literal">self.state</tt> contains arbitrary values of unknown size which are passed from
+one step to the next;</li>
+<li>
+<tt class="docutils literal">self.matrix</tt> and <tt class="docutils literal">self.constant</tt> contains the actual logic. By putting
+the "right" values there, in theory we could get a perfectly tuned PID
+controller. These are randomly mutated between generations.</li>
+</ul>
+<tt class="docutils literal">run_step</tt> is called at 100Hz (in the virtual time frame of the simulation). At each
+generation, we test 500 creatures for a total of 12 virtual seconds each. So,
+we have a total of 600,000 executions of <tt class="docutils literal">run_step</tt> at each generation.<br><br>
+At first, I simply tried to run this code on CPython; here is the result:<br><pre class="code literal-block">$ python -m ev.main
+Generation   1: ... [population = 500]  [12.06 secs]
+Generation   2: ... [population = 500]  [6.13 secs]
+Generation   3: ... [population = 500]  [6.11 secs]
+Generation   4: ... [population = 500]  [6.09 secs]
+Generation   5: ... [population = 500]  [6.18 secs]
+Generation   6: ... [population = 500]  [6.26 secs]
+</pre>
+Which means ~6.15 seconds/generation, excluding the first.<br><br>
+Then I tried with PyPy 5.9:<br><pre class="code literal-block">$ pypy -m ev.main
+Generation   1: ... [population = 500]  [63.90 secs]
+Generation   2: ... [population = 500]  [33.92 secs]
+Generation   3: ... [population = 500]  [34.21 secs]
+Generation   4: ... [population = 500]  [33.75 secs]
+</pre>
+Ouch! We are ~5.5x slower than CPython. This was kind of expected: numpy is
+based on cpyext, which is infamously slow.  (Actually, <a class="reference external" href="https://pypy.org/posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html">we are working on
+that</a> and on the <tt class="docutils literal"><span class="pre">cpyext-avoid-roundtrip</span></tt> branch we are already faster than
+CPython, but this will be the subject of another blog post.)<br><br>
+So, let's try to avoid cpyext. The first obvious step is to use <a class="reference external" href="https://doc.pypy.org/en/latest/faq.html#what-about-numpy-numpypy-micronumpy">numpypy</a>
+instead of numpy (actually, there is a <a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/pypycompat.py">hack</a> to use just the micronumpy
+part). Let's see if the speed improves:<br><pre class="code literal-block">$ pypy -m ev.main   # using numpypy
+Generation   1: ... [population = 500]  [5.60 secs]
+Generation   2: ... [population = 500]  [2.90 secs]
+Generation   3: ... [population = 500]  [2.78 secs]
+Generation   4: ... [population = 500]  [2.69 secs]
+Generation   5: ... [population = 500]  [2.72 secs]
+Generation   6: ... [population = 500]  [2.73 secs]
+</pre>
+So, ~2.7 seconds on average: this is 12x faster than PyPy+numpy, and more than
+2x faster than the original CPython. At this point, most people would be happy
+and go tweeting how PyPy is great.<br><br>
+In general, when talking of CPython vs PyPy, I am rarely satisfied with a 2x
+speedup: I know that PyPy can do much better than this, especially if you
+write code which is specifically optimized for the JIT. For a real-life
+example, have a look at <a class="reference external" href="https://capnpy.readthedocs.io/en/latest/benchmarks.html">capnpy benchmarks</a>, in which the PyPy version is
+~15x faster than the heavily optimized CPython+Cython version (both have been
+written by me, and I tried hard to write the fastest code for both
+implementations).<br><br>
+So, let's try to do better. As usual, the first thing to do is to profile and
+see where we spend most of the time. Here is the <a class="reference external" href="https://vmprof.com/#/449ca8ee-3ab2-49d4-b6f0-9099987e9000">vmprof profile</a>. We spend a
+lot of time inside the internals of numpypy, and allocating tons of temporary
+arrays to store the results of the various operations.<br><br>
+Also, let's look at the <a class="reference external" href="https://vmprof.com/#/28fd6e8f-f103-4bf4-a76a-4b65dbd637f4/traces">jit traces</a> and search for the function <tt class="docutils literal">run</tt>:
+this is loop in which we spend most of the time, and it is composed of 1796
+operations.  The operations emitted for the line <tt class="docutils literal"><span class="pre">np.dot(...)</span> +
+self.constant</tt> are listed between lines 1217 and 1456. Here is the excerpt
+which calls <tt class="docutils literal"><span class="pre">np.dot(...)</span></tt>; most of the ops are cheap, but at line 1232 we
+see a call to the RPython function <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/blob/release-pypy3.5-v5.10.0/pypy/module/micronumpy/ndarray.py#L1160">descr_dot</a>; by looking at the
+implementation we see that it creates a new <tt class="docutils literal">W_NDimArray</tt> to store the
+result, which means it has to do a <tt class="docutils literal">malloc()</tt>:<br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://4.bp.blogspot.com/-_h6BuLTtEO8/Wfb6BXDg93I/AAAAAAAABNY/BY2XBg4ZtwokB9f1mWSmzI9gn_qanb81QCLcBGAs/s1600/2017-10-trace1.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="450" src="https://4.bp.blogspot.com/-_h6BuLTtEO8/Wfb6BXDg93I/AAAAAAAABNY/BY2XBg4ZtwokB9f1mWSmzI9gn_qanb81QCLcBGAs/s640/2017-10-trace1.png" width="640"></a>
+</div>
+<br>
+The implementation of the <tt class="docutils literal">+ self.constant</tt> part is also interesting:
+contrary the former, the call to <tt class="docutils literal">W_NDimArray.descr_add</tt> has been inlined by
+the JIT, so we have a better picture of what's happening; in particular, we
+can see the call to <tt class="docutils literal">__0_alloc_with_del____</tt> which allocates the
+<tt class="docutils literal">W_NDimArray</tt> for the result, and the <tt class="docutils literal">raw_malloc</tt> which allocates the
+actual array. Then we have a long list of 149 simple operations which set the
+fields of the resulting array, construct an iterator, and finally do a
+<tt class="docutils literal">call_assembler</tt>: this is the actual logic to do the addition, which was
+JITtted independently; <tt class="docutils literal">call_assembler</tt> is one of the operations to do
+JIT-to-JIT calls:<br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://1.bp.blogspot.com/-vmo0pWharIU/Wfb3VfwHjxI/AAAAAAAABNE/a6Em09qZizwGiWJeTbGzKfHQH70dB7RKgCEwYBhgL/s1600/2017-10-trace2.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="640" src="https://1.bp.blogspot.com/-vmo0pWharIU/Wfb3VfwHjxI/AAAAAAAABNE/a6Em09qZizwGiWJeTbGzKfHQH70dB7RKgCEwYBhgL/s640/2017-10-trace2.png" width="625"></a>
+</div>
+<br>
+All of this is very suboptimal: in this particular case, we know that the
+shape of <tt class="docutils literal">self.matrix</tt> is always <tt class="docutils literal">(3, 2)</tt>: so, we are doing an incredible
+amount of work, including calling <tt class="docutils literal">malloc()</tt> twice for the temporary arrays, just to
+call two functions which ultimately do a total of 6 multiplications
+and 6 additions.  Note also that this is not a fault of the JIT: CPython+numpy
+has to do the same amount of work, just hidden inside C calls.<br><br>
+One possible solution to this nonsense is a well known compiler optimization:
+loop unrolling.  From the compiler point of view, unrolling the loop is always
+risky because if the matrix is too big you might end up emitting a huge blob
+of code, possibly uselss if the shape of the matrices change frequently: this
+is the main reason why the PyPy JIT does not even try to do it in this case.<br><br>
+However, we <strong>know</strong> that the matrix is small, and always of the same
+shape. So, let's unroll the loop manually:<br><pre class="code python literal-block"><span class="keyword">class</span> <span class="name class">SpecializedCreature</span><span class="punctuation">(</span><span class="name">Creature</span><span class="punctuation">):</span>
+
+    <span class="keyword">def</span> <span class="name function magic">__init__</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="operator">*</span><span class="name">args</span><span class="punctuation">,</span> <span class="operator">**</span><span class="name">kwargs</span><span class="punctuation">):</span>
+        <span class="name">Creature</span><span class="operator">.</span><span class="name function magic">__init__</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="operator">*</span><span class="name">args</span><span class="punctuation">,</span> <span class="operator">**</span><span class="name">kwargs</span><span class="punctuation">)</span>
+        <span class="comment single"># store the data in a plain Python list</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data</span> <span class="operator">=</span> <span class="name builtin">list</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">matrix</span><span class="operator">.</span><span class="name">ravel</span><span class="punctuation">())</span> <span class="operator">+</span> <span class="name builtin">list</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">constant</span><span class="punctuation">)</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data_state</span> <span class="operator">=</span> <span class="punctuation">[</span><span class="literal number float">0.0</span><span class="punctuation">]</span>
+        <span class="keyword">assert</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">matrix</span><span class="operator">.</span><span class="name">shape</span> <span class="operator">==</span> <span class="punctuation">(</span><span class="literal number integer">2</span><span class="punctuation">,</span> <span class="literal number integer">3</span><span class="punctuation">)</span>
+        <span class="keyword">assert</span> <span class="name builtin">len</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data</span><span class="punctuation">)</span> <span class="operator">==</span> <span class="literal number integer">8</span>
+
+    <span class="keyword">def</span> <span class="name function">run_step</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="name">inputs</span><span class="punctuation">):</span>
+        <span class="comment single"># state: [state_vars ... inputs]</span>
+        <span class="comment single"># out_values: [state_vars, ... outputs]</span>
+        <span class="name">k0</span><span class="punctuation">,</span> <span class="name">k1</span><span class="punctuation">,</span> <span class="name">k2</span><span class="punctuation">,</span> <span class="name">q0</span><span class="punctuation">,</span> <span class="name">q1</span><span class="punctuation">,</span> <span class="name">q2</span><span class="punctuation">,</span> <span class="name">c0</span><span class="punctuation">,</span> <span class="name">c1</span> <span class="operator">=</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data</span>
+        <span class="name">s0</span> <span class="operator">=</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data_state</span><span class="punctuation">[</span><span class="literal number integer">0</span><span class="punctuation">]</span>
+        <span class="name">z_sp</span><span class="punctuation">,</span> <span class="name">z</span> <span class="operator">=</span> <span class="name">inputs</span>
+        <span class="comment single">#</span>
+        <span class="comment single"># compute the output</span>
+        <span class="name">out0</span> <span class="operator">=</span> <span class="name">s0</span><span class="operator">*</span><span class="name">k0</span> <span class="operator">+</span> <span class="name">z_sp</span><span class="operator">*</span><span class="name">k1</span> <span class="operator">+</span> <span class="name">z</span><span class="operator">*</span><span class="name">k2</span> <span class="operator">+</span> <span class="name">c0</span>
+        <span class="name">out1</span> <span class="operator">=</span> <span class="name">s0</span><span class="operator">*</span><span class="name">q0</span> <span class="operator">+</span> <span class="name">z_sp</span><span class="operator">*</span><span class="name">q1</span> <span class="operator">+</span> <span class="name">z</span><span class="operator">*</span><span class="name">q2</span> <span class="operator">+</span> <span class="name">c1</span>
+        <span class="comment single">#</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data_state</span><span class="punctuation">[</span><span class="literal number integer">0</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="name">out0</span>
+        <span class="name">outputs</span> <span class="operator">=</span> <span class="punctuation">[</span><span class="name">out1</span><span class="punctuation">]</span>
+        <span class="keyword">return</span> <span class="name">outputs</span>
+</pre>
+In the <a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/creature.py#L100">actual code</a> there is also a sanity check which asserts that the
+computed output is the very same as the one returned by <tt class="docutils literal">Creature.run_step</tt>.<br><br>
+So, let's try to see how it performs. First, with CPython:<br><pre class="code literal-block">$ python -m ev.main
+Generation   1: ... [population = 500]  [7.61 secs]
+Generation   2: ... [population = 500]  [3.96 secs]
+Generation   3: ... [population = 500]  [3.79 secs]
+Generation   4: ... [population = 500]  [3.74 secs]
+Generation   5: ... [population = 500]  [3.84 secs]
+Generation   6: ... [population = 500]  [3.69 secs]
+</pre>
+This looks good: 60% faster than the original CPython+numpy
+implementation. Let's try on PyPy:<br><pre class="code literal-block">Generation   1: ... [population = 500]  [0.39 secs]
+Generation   2: ... [population = 500]  [0.10 secs]
+Generation   3: ... [population = 500]  [0.11 secs]
+Generation   4: ... [population = 500]  [0.09 secs]
+Generation   5: ... [population = 500]  [0.08 secs]
+Generation   6: ... [population = 500]  [0.12 secs]
+Generation   7: ... [population = 500]  [0.09 secs]
+Generation   8: ... [population = 500]  [0.08 secs]
+Generation   9: ... [population = 500]  [0.08 secs]
+Generation  10: ... [population = 500]  [0.08 secs]
+Generation  11: ... [population = 500]  [0.08 secs]
+Generation  12: ... [population = 500]  [0.07 secs]
+Generation  13: ... [population = 500]  [0.07 secs]
+Generation  14: ... [population = 500]  [0.08 secs]
+Generation  15: ... [population = 500]  [0.07 secs]
+</pre>
+Yes, it's not an error. After a couple of generations, it stabilizes at around
+~0.07-0.08 seconds per generation. This is around <strong>80 (eighty) times faster</strong>
+than the original CPython+numpy implementation, and around 35-40x faster than
+the naive PyPy+numpypy one.<br><br>
+Let's look at the <a class="reference external" href="https://vmprof.com/#/402af746-2966-4403-a61d-93015abac033/traces">trace</a> again: it no longer contains expensive calls, and
+certainly no more temporary <tt class="docutils literal">malloc()</tt> s. The core of the logic is between
+lines 386-416, where we can see that it does fast C-level multiplications and
+additions: <tt class="docutils literal">float_mul</tt> and <tt class="docutils literal">float_add</tt> are translated straight into
+<tt class="docutils literal">mulsd</tt> and <tt class="docutils literal">addsd</tt> x86 instructions.<br><br>
+As I said before, this is a very particular example, and the techniques
+described here do not always apply: it is not realistic to expect an 80x
+speedup on arbitrary code, unfortunately. However, it clearly shows the potential of PyPy when
+it comes to high-speed computing. And most importantly, it's not a toy
+benchmark which was designed specifically to have good performance on PyPy:
+it's a real world example, albeit small.<br><br>
+You might be also interested in the talk I gave at last EuroPython, in which I
+talk about a similar topic: "The Joy of PyPy JIT: abstractions for free"
+(<a class="reference external" href="https://ep2017.europython.eu/conference/talks/the-joy-of-pypy-jit-abstractions-for-free">abstract</a>, <a class="reference external" href="https://speakerdeck.com/antocuni/the-joy-of-pypy-jit-abstractions-for-free">slides</a> and <a class="reference external" href="https://www.youtube.com/watch?v=NQfpHQII2cU">video</a>).<br><br><div class="section" id="how-to-reproduce-the-results">
+<h3>
+How to reproduce the results</h3>
+<pre class="code literal-block">$ git clone https://github.com/antocuni/evolvingcopter
+$ cd evolvingcopter
+$ {python,pypy} -m ev.main --no-specialized --no-numpypy
+$ {python,pypy} -m ev.main --no-specialized
+$ {python,pypy} -m ev.main
+</pre>
+</div>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-5224678192359798621">
+        <div class="comment-header">
+          <a name="comment-5224678192359798621"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-11-02 21:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>Isn't this a factor 80 slowdown because of a design error? Normally, one should store all creatures in a big numpy array and evaluate run_step on all creatures at once.</p>
+        </div>
+      </div>
+      <div class="comment comment-236503210440598911">
+        <div class="comment-header">
+          <a name="comment-236503210440598911"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-11-27 10:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>I don't understand - how do you figure out that line 1232 is not cheap?</p>
+        </div>
+      </div>
+      <div class="comment comment-1027494427925729781">
+        <div class="comment-header">
+          <a name="comment-1027494427925729781"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2017-11-28 09:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>@anatoly: line 1232 is a call to descr_dot: if you look at the implementation, you see that it does lots of things including mallocs, and those we know are not cheap at all</p>
+        </div>
+      </div>
+      <div class="comment comment-422136929529467376">
+        <div class="comment-header">
+          <a name="comment-422136929529467376"></a>
+            <span class="author">homm</span> wrote on <span class="date">2018-05-21 15:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>Have you tried the third argument of numpy.dot, out to avoid memory alocation?</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html" class="u-url">(Cape of) Good Hope for PyPy</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-10-18T13:31:00Z" itemprop="datePublished" title="2017-10-18 13:31">2017-10-18 13:31</time></a>
+            </p>
+                <p class="commentline">6 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div>
+<br>
+</div>
+Hello from the other side of the world (for most of you)!<br><br>
+With the excuse of coming to <a class="reference external" href="https://za.pycon.org/">PyCon ZA</a> during the last two weeks Armin,
+Ronan, Antonio and sometimes Maciek had a very nice and productive sprint in
+Cape Town, as pictures show :). We would like to say a big thank you to
+Kiwi.com, which sponsored part of the travel costs via its awesome <a class="reference external" href="https://www.kiwi.com/sourcelift/">Sourcelift</a>
+program to help Open Source projects.<br><br><table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="float: right; margin-left: 1em; text-align: right;"><tbody>
+<tr><td style="text-align: center;"><a href="https://3.bp.blogspot.com/-9YVNucPN1wE/WeaWmTUFB-I/AAAAAAAABMQ/HeVMqS-ya2IYJuk0iZZODlULqpKaf5XcgCLcBGAs/s1600/DSC_2418.JPG" style="margin-left: auto; margin-right: auto;"><img border="0" height="225" src="https://3.bp.blogspot.com/-9YVNucPN1wE/WeaWmTUFB-I/AAAAAAAABMQ/HeVMqS-ya2IYJuk0iZZODlULqpKaf5XcgCLcBGAs/s400/DSC_2418.JPG" width="400"></a></td></tr>
+<tr><td class="tr-caption" style="text-align: center;">Armin, Anto and Ronan at Cape Point</td></tr>
+</tbody></table>
+<br>
+Armin, Ronan and Anto spent most of the time hacking at cpyext, our CPython
+C-API compatibility layer: during the last years, the focus was to make it
+working and compatible with CPython, in order to run existing libraries such
+as numpy and pandas. However, we never paid too much attention to performance,
+so the net result is that with the latest released version of PyPy, C
+extensions generally work but their speed ranges from "slow" to "horribly
+slow".<br><br>
+For example, these very simple <a class="reference external" href="https://github.com/antocuni/cpyext-benchmarks">microbenchmarks</a> measure the speed of
+calling (empty) C functions, i.e. the time you spend to "cross the border"
+between RPython and C.  <i>(Note: this includes the time spent doing the loop in regular Python code.)</i> These are the results on CPython, on PyPy 5.8, and on
+our newest in-progress version:<br><br><pre class="literal-block">$ python bench.py     # CPython
+noargs      : 0.41 secs
+onearg(None): 0.44 secs
+onearg(i)   : 0.44 secs
+varargs     : 0.58 secs
+</pre>
+<div>
+<br>
+</div>
+<pre class="literal-block">$ pypy-5.8 bench.py   # PyPy 5.8
+noargs      : 1.01 secs
+onearg(None): 1.31 secs
+onearg(i)   : 2.57 secs
+varargs     : 2.79 secs
+</pre>
+<div>
+<br>
+</div>
+<pre class="literal-block">$ pypy bench.py       # cpyext-refactor-methodobject branch
+noargs      : 0.17 secs
+onearg(None): 0.21 secs
+onearg(i)   : 0.22 secs
+varargs     : 0.47 secs
+</pre>
+<div>
+<br>
+</div>
+<pre class="literal-block"></pre>
+<pre class="literal-block"></pre>
+So yes: before the sprint, we were ~2-6x slower than CPython. Now, we are
+<strong>faster</strong> than it!
+To reach this result, we did various improvements, such as:
+<br><blockquote>
+<ol class="arabic simple">
+<li>teach the JIT how to look (a bit) inside the cpyext module;</li>
+<li>write specialized code for calling <tt class="docutils literal">METH_NOARGS</tt>, <tt class="docutils literal">METH_O</tt> and
+<tt class="docutils literal">METH_VARARGS</tt> functions; previously, we always used a very general and
+slow logic;</li>
+<li>implement freelists to allocate the cpyext versions of <tt class="docutils literal">int</tt> and
+<tt class="docutils literal">tuple</tt> objects, as CPython does;</li>
+<li>the <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/merge_requests/573">cpyext-avoid-roundtrip</a> branch: crossing the RPython/C border is
+slowish, but the real problem was (and still is for many cases) we often
+cross it many times for no good reason. So, depending on the actual API
+call, you might end up in the C land, which calls back into the RPython
+land, which goes to C, etc. etc. (ad libitum).</li>
+</ol>
+</blockquote>
+The branch tries to fix such nonsense: so far, we fixed only some cases, which
+are enough to speed up the benchmarks shown above.  But most importantly, we
+now have a clear path and an actual plan to improve cpyext more and
+more. Ideally, we would like to reach a point in which cpyext-intensive
+programs run at worst at the same speed of CPython.<br><br>
+The other big topic of the sprint was Armin and Maciej doing a lot of work on the
+<a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/branch/unicode-utf8">unicode-utf8</a> branch: the goal of the branch is to always use UTF-8 as the
+internal representation of unicode strings. The advantages are various:
+<br><blockquote>
+<ul class="simple">
+<li>decoding a UTF-8 stream is super fast, as you just need to check that the
+stream is valid;</li>
+<li>encoding to UTF-8 is almost a no-op;</li>
+<li>UTF-8 is always more compact representation than the currently
+used UCS-4. It's also almost always more compact than CPython 3.5 latin1/UCS2/UCS4 combo;</li>
+<li>smaller representation means everything becomes quite a bit faster due to lower cache pressure.</li>
+</ul>
+</blockquote>
+Before you ask: yes, this branch contains special logic to ensure that random
+access of single unicode chars is still O(1), as it is on both CPython and the
+current PyPy.<br>
+We also plan to improve the speed of decoding even more by using modern processor features, like SSE and AVX. Preliminary results show that decoding can be done 100x faster than the current setup.
+<br><br>
+In summary, this was a long and profitable sprint, in which we achieved lots
+of interesting results. However, what we liked even more was the privilege of
+doing <a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/a4307fb5912e">commits</a> from awesome places such as the top of Table Mountain:<br><br><blockquote class="twitter-tweet">
+<div dir="ltr" lang="en">
+Our sprint venue today <a href="https://twitter.com/hashtag/pypy?src=hash&amp;ref_src=twsrc%5Etfw">#pypy</a> <a href="https://t.co/o38IfTYmAV">pic.twitter.com/o38IfTYmAV</a>
+</div>
+— Ronan Lamy (@ronanlamy) <a href="https://twitter.com/ronanlamy/status/915575026107240449?ref_src=twsrc%5Etfw">4 ottobre 2017</a>
+</blockquote>
+
+
+<br><table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="float: left; margin-right: 1em; text-align: left;"><tbody>
+<tr><td style="text-align: center;"><a href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/extradoc/sprintinfo/cape-town-2017/2017-10-04-155524.jpg" style="margin-left: auto; margin-right: auto;"><img border="0" height="360" src="https://bytebucket.org/pypy/extradoc/raw/extradoc/sprintinfo/cape-town-2017/2017-10-04-155524.jpg" width="640"></a></td></tr>
+<tr><td class="tr-caption" style="text-align: center;">The panorama we looked at instead of staring at cpyext code</td></tr>
+</tbody></table>
+</div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-5899326807895697190">
+        <div class="comment-header">
+          <a name="comment-5899326807895697190"></a>
+            <span class="author">Nickolas</span> wrote on <span class="date">2017-10-18 22:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>It was awesome meeting you all, and I'm so stoked about the recent PyPy improvements :-D</p>
+        </div>
+      </div>
+      <div class="comment comment-9152292617430945430">
+        <div class="comment-header">
+          <a name="comment-9152292617430945430"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2017-10-19 06:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>Fantastic news.  Many Python users need to use some of these many specialized CPython-based extension modules for which there is no CFFI alternative extensively and as a result have not benefited much, or not at all, from PyPy's speed advantages.   These improvements could make PyPy the default Python for many of us.<br><br></p>
+        </div>
+      </div>
+      <div class="comment comment-3103999683143322295">
+        <div class="comment-header">
+          <a name="comment-3103999683143322295"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2017-10-19 07:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>Could you give a hint to how you're doing O(1) individual character access in UTF-8 strings? Not that I'd find such a requirement particularly necessary (might be handy for all-ASCII strings, but easy to flat those cases), but how is it done? I can figure O(log(n)) ways with up to O(n) storage overhead or O(sqrt(n)) with up to O(sqrt(n)) storage overhead, but O(1) w/o the O(n) storage overhead of having UTF-32 around?</p>
+        </div>
+      </div>
+      <div class="comment comment-3075628329973403579">
+        <div class="comment-header">
+          <a name="comment-3075628329973403579"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2017-10-19 09:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi Anonymous.<br><br>It's O(1) time with O(n) storage overhead, but the constants can be manipulated to have 10% or 25% overhead, and only if ever indexed and not ascii at that.</p>
+        </div>
+      </div>
+      <div class="comment comment-6944049620884917610">
+        <div class="comment-header">
+          <a name="comment-6944049620884917610"></a>
+            <span class="author">intgr</span> wrote on <span class="date">2017-10-20 15:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>Really excited to hear about the Unicode representation changes; it should finally make PyPy significantly faster at Unicode manipulation than CPython 3.6 is. It seems this has been bogging down PyPy's advantage at Unicode-heavy workloads like webapp template rendering.<br><br>Even without O(1) access to characters by index, I think it's a great idea to use UTF-8 internally, since that's the prevalent encoding for input/output pretty much everywhere. Accessing Unicode characters by index is an antipattern in most situations and UCS-2/UTF-16 is becoming irrelevant.</p>
+        </div>
+      </div>
+      <div class="comment comment-6104779943523943197">
+        <div class="comment-header">
+          <a name="comment-6104779943523943197"></a>
+            <span class="author">Oscar Smith</span> wrote on <span class="date">2017-10-20 16:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>I would also be really interested in a quick blogpost at some point about how to get O(1) indexing without greater storage overhead than just using UTF-32</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/10/pypy-v59-released-now-supports-pandas-2261195727261691228.html" class="u-url">PyPy v5.9 Released, Now Supports Pandas, NumPy</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/mattip.html">mattip</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/10/pypy-v59-released-now-supports-pandas-2261195727261691228.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-10-05T14:19:00Z" itemprop="datePublished" title="2017-10-05 14:19">2017-10-05 14:19</time></a>
+            </p>
+                <p class="commentline">6 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+The PyPy team is proud to release both PyPy3.5 v5.9 (a beta-quality interpreter for Python
+3.5 syntax) and PyPy2.7 v5.9 (an interpreter supporting
+Python 2.7 syntax). <br><br><ul style="text-align: left;">
+<li>NumPy and Pandas now work on PyPy2.7 (together with Cython 0.27.1). Many other modules
+based on C-API extensions work on PyPy as well.</li>
+</ul>
+<br><ul style="text-align: left;">
+<li>Cython 0.27.1 (released very recently) supports more projects with PyPy, both
+on PyPy2.7 and PyPy3.5 beta. Note version <strong>0.27.1</strong> is now the minimum
+version that supports this version of PyPy, due to some interactions with
+updated C-API interface code.</li>
+</ul>
+<br><ul style="text-align: left;">
+<li>We optimized the JSON parser for recurring string keys, which should decrease
+memory use by up to 50% and increase parsing speed by up to 15% for large JSON files
+with many repeating dictionary keys (which is quite common).</li>
+</ul>
+<br><ul style="text-align: left;">
+<li>
+<a class="reference external" href="https://cffi.readthedocs.io/en/latest/whatsnew.html">CFFI</a>, which is part of the PyPy release, has been updated to 1.11.1,
+improving an already great package for interfacing with C. CFFI now supports
+complex arguments in API mode, as well as <code class="docutils literal"><span class="pre">char16_t</span></code> and <code class="docutils literal"><span class="pre">char32_t</span></code> and has
+improved support for callbacks.</li>
+</ul>
+<br><ul style="text-align: left;">
+<li>Issues in the C-API compatibility layer that appeared as excessive memory
+use were cleared up and other incompatibilities were resolved. The C-API
+compatibility layer does slow down code which crosses the python-c interface
+often. Some fixes are in the pipelines for some of the performance issues, and we still recommend
+using pure python on PyPy or interfacing via <a class="reference external" href="https://cffi.readthedocs.io/en/latest/whatsnew.html">CFFI</a>.  </li>
+</ul>
+<br>
+Please let us know if your use case is slow, we have ideas how to make things
+faster but need real-world examples (not micro-benchmarks) of problematic code.<br><br>
+Work sponsored by a Mozilla <a class="reference external" href="../posts/2016/08/pypy-gets-funding-from-mozilla-for-5569307998787871200.html">grant</a> continues on PyPy3.5; we continue on the path to the goal of a complete python 3.5 implementation. Of course the bug fixes and performance enhancements
+mentioned above are part of both PyPy2.7 and PyPy3.5 beta.<br><br>
+As always, this release fixed many other issues and bugs raised by the
+growing community of PyPy users. We strongly recommend updating.<br><br>
+You can download the v5.9 releases here (note that we provide PyPy3.5 binaries for only Linux 64bit for now):<br><br><blockquote>
+<div>
+<a class="reference external" href="https://pypy.org/download.html">https://pypy.org/download.html</a>
+</div>
+</blockquote>
+We would like to thank our donors and contributors, and
+encourage new people to join the project. PyPy has many
+layers and we need help with all of them: <a class="reference external" href="https://doc.pypy.org/en/latest/index.html">PyPy</a> and <a class="reference external" href="https://rpython.readthedocs.org/">RPython</a> documentation
+improvements, tweaking popular <a class="reference external" href="https://doc.pypy.org/en/latest/project-ideas.html#make-more-python-modules-pypy-friendly">modules</a> to run on PyPy, or general <a class="reference external" href="https://doc.pypy.org/en/latest/project-ideas.html">help</a>
+with making RPython’s JIT even better.<br><br><h2 style="text-align: center;">
+What is PyPy?</h2>
+PyPy is a very compliant Python interpreter, almost a drop-in replacement for CPython 2.7 (stdlib version 2.7.13), and CPython 3.5 (stdlib version 3.5.3). It’s fast (<a class="reference external" href="https://speed.pypy.org/">PyPy and CPython 2.7.x</a> performance comparison) due to its integrated tracing JIT compiler.<br><br>
+We also welcome developers of other <a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html">dynamic languages</a> to see what RPython can do for them.<br><br>
+The PyPy 2.7 release supports:<br><blockquote>
+<div>
+<ul class="simple">
+<li>
+<b>x86</b> machines on most common operating systems (Linux 32/64 bits, Mac OS X 64 bits, Windows 32 bits, OpenBSD, FreeBSD)</li>
+<li>newer <b>ARM</b> hardware (ARMv6 or ARMv7, with VFPv3) running Linux,</li>
+<li>big- and little-endian variants of <b>PPC64</b> running Linux,</li>
+<li>
+<b>s390x</b> running Linux </li>
+</ul>
+</div>
+</blockquote>
+<h2 style="text-align: center;">
+What else is new?</h2>
+<div style="text-align: left;">
+PyPy 5.8 was released in June, 2017.</div>
+<div style="text-align: left;">
+There are many incremental improvements to RPython and PyPy, the complete listing is <a href="https://pypy.readthedocs.io/en/latest/release-v5.9.0.html">here</a>.</div>
+<div style="text-align: left;">
+  </div>
+Please update, and continue to help us make PyPy better.<br><br>
+Cheers, The PyPy team</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1546052556747030442">
+        <div class="comment-header">
+          <a name="comment-1546052556747030442"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2017-10-05 19:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>Pypy3 works very well with flask. Good Job and thanx.<br><br><br><br>cheers Rob</p>
+        </div>
+      </div>
+      <div class="comment comment-5777585028895933590">
+        <div class="comment-header">
+          <a name="comment-5777585028895933590"></a>
+            <span class="author">Carlos Vega</span> wrote on <span class="date">2017-10-08 16:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>Good job ! 😀🎉<br>It would be great if you could update https://packages.pypy.org/<br>I'm going to donate again ! your work is awesome.</p>
+        </div>
+      </div>
+      <div class="comment comment-8224266177511599393">
+        <div class="comment-header">
+          <a name="comment-8224266177511599393"></a>
+            <span class="author">melin</span> wrote on <span class="date">2017-11-02 13:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>Pypy test run pands two or three times slower than pyhon<br><br>df = sparkSession.sql("select * from test_users_dt").toPandas()<br>    for index, row in df.iterrows():<br>        result = 0<br><br>        for key in range(0, 10000000):<br>            event_type = row.event_type<br>            if key &gt; 234:<br>                result = result + 1<br>                len(event_type + "123")<br><br>        print(result)</p>
+        </div>
+      </div>
+      <div class="comment comment-6118817758507534534">
+        <div class="comment-header">
+          <a name="comment-6118817758507534534"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2017-11-02 14:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>@melin<br><br>We know that. We're in the process of improving that by merging various cpyext improvement branches. Stay tuned.</p>
+        </div>
+      </div>
+      <div class="comment comment-5460121973918273239">
+        <div class="comment-header">
+          <a name="comment-5460121973918273239"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-11-20 09:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>So this means the numpy port for pypy is redundant now right? We can use the original python numpy package?</p>
+        </div>
+      </div>
+      <div class="comment comment-3411440191197132665">
+        <div class="comment-header">
+          <a name="comment-3411440191197132665"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2017-11-20 09:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Eitan<br><br>yes, but look at this FAQ for a longer explanation: https://doc.pypy.org/en/latest/faq.html#what-about-numpy-numpypy-micronumpy</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/08/lets-remove-global-interpreter-lock-748023554216649595.html" class="u-url">Let's remove the Global Interpreter Lock</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/08/lets-remove-global-interpreter-lock-748023554216649595.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-08-14T14:34:00Z" itemprop="datePublished" title="2017-08-14 14:34">2017-08-14 14:34</time></a>
+            </p>
+                <p class="commentline">14 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+<p>Hello everyone</p>
+<p>The Python community has been discussing removing the Global Interpreter Lock for
+a long time.
+There have been various attempts at removing it:
+Jython or IronPython successfully removed it with the help of the underlying
+platform, and some have yet to bear fruit, like <a class="reference external" href="https://github.com/larryhastings/gilectomy">gilectomy</a>. Since our <a class="reference external" href="../posts/2017/03/leysin-winter-sprint-summary-4587213628578490701.html">February sprint</a> in Leysin,
+we have experimented with the topic of GIL removal in the PyPy project.
+We believe that the work done in IronPython or Jython can be reproduced with
+only a bit more effort in PyPy. Compared to that, removing the GIL in CPython is a much
+harder topic, since it also requires tackling the problem of multi-threaded reference
+counting. See the section below for further details.</p>
+<p>As we announced at EuroPython, what we have so far is a GIL-less PyPy
+which can run <strong>very simple</strong> multi-threaded, nicely parallelized, programs.
+At the moment, more complicated programs probably segfault. The
+remaining 90% (and another 90%) of work is with putting locks in strategic
+places so PyPy does not segfault during concurrent accesses to
+data structures.</p>
+<p>Since such work would complicate the PyPy code base and our day-to-day work,
+we would like to judge the interest of the community and the commercial
+partners to make it happen (we are not looking for individual
+donations at this point).  We estimate a total cost of $50k,
+out of which we already have backing for about 1/3 (with a possible 1/3
+extra from the STM money, see below).  This would give us a good
+shot at delivering a good proof-of-concept working PyPy with no GIL. If we can get a $100k
+contract, we will deliver a fully working PyPy interpreter with no GIL as a release,
+possibly separate from the default PyPy release.</p>
+<p>People asked several questions, so I'll try to answer the technical parts
+here.</p>
+<h3>What would the plan entail?</h3>
+<p>We've already done the work on the Garbage Collector to allow doing multi-
+threaded programs in RPython.  "All" that is left is adding locks on mutable
+data structures everywhere in the PyPy codebase. Since it would significantly complicate
+our workflow, we require real interest in that topic, backed up by
+commercial contracts in order to justify the added maintenance burden.</p>
+<h3>Why did the STM effort not work out?</h3>
+<p>STM was a research project that proved that the idea is possible. However,
+the amount of user effort that is required to make programs run in a
+parallelizable way is significant, and we never managed to develop tools
+that would help in doing so.  At the moment we're not sure if more work
+spent on tooling would improve the situation or if the whole idea is really doomed.
+The approach also ended up adding significant overhead on single threaded programs,
+so in the end it is very easy to make your programs slower.  (We have some money
+left in the donation pot for STM which we are not using; according to the rules, we
+could declare the STM attempt failed and channel that money towards the present
+GIL removal proposal.)</p>
+<h3>Wouldn't subinterpreters be a better idea?</h3>
+<p>Python is a very mutable language - there are tons of mutable state and
+basic objects (classes, functions,...) that are compile-time in other
+language but runtime and fully mutable in Python.  In the end, sharing
+things between subinterpreters would be restricted to basic immutable
+data structures, which defeats the point. Subinterpreters suffers from the same problems as
+multiprocessing with no additional benefits.
+We believe that reducing mutability to implement subinterpreters is not viable without seriously impacting the
+semantics of the language (a conclusion which applies to many other
+approaches too).</p>
+<h3>Why is it easier to do in PyPy than CPython?</h3>
+<p>Removing the GIL in CPython has two problems:</p>
+<ul class="simple">
+<li>how do we guard access to mutable  data structures with locks and</li>
+<li>what to do with reference counting that needs to be guarded.</li>
+</ul>
+<p>PyPy only has the former problem; the latter doesn't exist,
+due to a different garbage collector approach.  Of course the first problem
+is a mess too, but at least we are already half-way there. Compared to Jython
+or IronPython, PyPy lacks some data structures that are provided by JVM or .NET,
+which we would need to implement, hence the problem is a little harder
+than on an existing multithreaded platform. However, there is good research
+and we know how that problem can be solved.</p>
+<p>Best regards,<br>
+Maciej Fijalkowski</p>
+<br>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-5672716563453954731">
+        <div class="comment-header">
+          <a name="comment-5672716563453954731"></a>
+            <span class="author">Patrick</span> wrote on <span class="date">2017-08-14 18:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>Where can one donate? Is there a specific page for it? :)</p>
+        </div>
+      </div>
+      <div class="comment comment-8545687788114187699">
+        <div class="comment-header">
+          <a name="comment-8545687788114187699"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2017-08-14 20:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>Where can we we donate or forward a link to managing directors for corporate donations?</p>
+        </div>
+      </div>
+      <div class="comment comment-3082635565260388758">
+        <div class="comment-header">
+          <a name="comment-3082635565260388758"></a>
+            <span class="author">funny_falcon</span> wrote on <span class="date">2017-08-14 21:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>Neither .Net, nor Java put locks around every mutable access. Why the hell PyPy should?</p>
+        </div>
+      </div>
+      <div class="comment comment-5938406748463360521">
+        <div class="comment-header">
+          <a name="comment-5938406748463360521"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-08-15 00:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>It sounds to me like you are just looking for money to spend.  I see no reliable or commercial deliverable coming out of this effort (you listed a bucketload of caveats already).  If it were doable in $100k, it would have been done long ago, no?  Caveat Emptor to those who toss their money at this.</p>
+        </div>
+      </div>
+      <div class="comment comment-1010640416566860229">
+        <div class="comment-header">
+          <a name="comment-1010640416566860229"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-08-15 06:05</span>:
+        </div>
+        <div class="comment-content">
+          <p>200+ comments about this article are at: https://news.ycombinator.com/item?id=15008636</p>
+        </div>
+      </div>
+      <div class="comment comment-6996417011876857448">
+        <div class="comment-header">
+          <a name="comment-6996417011876857448"></a>
+            <span class="author">Zunzster</span> wrote on <span class="date">2017-08-15 06:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>@funny_falcon: I don't read this as them arguing for putting "putting locks around *every* mutable access". Rather, just the core shared-mutable pieces of the run-time library and infrastructure, which in .NET and the JVM are provided by the VM itself for Jython and IronPython but which PyPy has to implement.<br><br>@scott_taggart: Your vision seems limited. Perhaps you aren't familiar with the PyPy team's strong history of delivering. It may well be 'doable in $100K' but how is that supposed to have spontaneously happened already without a viable plan and a trusted team which is exactly what the PyPy project is?<br><br>I always thought the STM concept was really clever and elegant in theory but that the overhead involved, both in recording and rollback-retries, could impact forward progress too much to be viable in practice. Essentially, STM and locks are dual's of each other, with STM having better composition and locks less overhead.<br><br>At least with a more traditional locking approach, the locks are still being inserted by the interpreter/library, so they can be reasoned about more carefully (and even instrumented programmatically) to avoid some of the classic problems with lock-based designs whilst regaining the performance lost to STM overhead.<br><br>If anyone can pull it off, the PyPy team can :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-8135785294504328819">
+        <div class="comment-header">
+          <a name="comment-8135785294504328819"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-08-15 08:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>+1</p>
+        </div>
+      </div>
+      <div class="comment comment-6301756632403452325">
+        <div class="comment-header">
+          <a name="comment-6301756632403452325"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-08-15 09:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>Why not rather implement immutable datastructures like Clojure does?</p>
+        </div>
+      </div>
+      <div class="comment comment-4811076520752141457">
+        <div class="comment-header">
+          <a name="comment-4811076520752141457"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2017-08-15 12:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>Oh, just shut up and take my money.</p>
+        </div>
+      </div>
+      <div class="comment comment-24657593351683103">
+        <div class="comment-header">
+          <a name="comment-24657593351683103"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2017-08-15 14:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>I have been very impressed with the PyPy developers accomplishments to date and sincerely hope that they find corporate sponsors for this worthwhile endeavor.</p>
+        </div>
+      </div>
+      <div class="comment comment-8124809365700055850">
+        <div class="comment-header">
+          <a name="comment-8124809365700055850"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-08-15 20:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>How can people donate? $50k seems a bargain for such an important achievement. That's pocket change to most moderately sized companies.</p>
+        </div>
+      </div>
+      <div class="comment comment-3965110024211126189">
+        <div class="comment-header">
+          <a name="comment-3965110024211126189"></a>
+            <span class="author">Joce</span> wrote on <span class="date">2017-08-16 05:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>Sounds good, perhaps time to mark the STM effort as stale?</p>
+        </div>
+      </div>
+      <div class="comment comment-1170540913465684629">
+        <div class="comment-header">
+          <a name="comment-1170540913465684629"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-09-13 23:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>This would be awesome, please. :(</p>
+        </div>
+      </div>
+      <div class="comment comment-2559918787749984069">
+        <div class="comment-header">
+          <a name="comment-2559918787749984069"></a>
+            <span class="author">PvdE</span> wrote on <span class="date">2017-10-04 06:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>I donated to the original STM and would be happy if it were reallocated to this.<br></p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/07/binary-wheels-for-pypy-8718353804433344916.html" class="u-url">Binary wheels for PyPy</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/07/binary-wheels-for-pypy-8718353804433344916.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-07-26T16:53:00Z" itemprop="datePublished" title="2017-07-26 16:53">2017-07-26 16:53</time></a>
+            </p>
+                <p class="commentline">2 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hi,<br><br>
+this is a short blog post, just to announce the existence of this <a href="https://github.com/antocuni/pypy-wheels" target="_blank">Github repository</a>, which contains binary PyPy wheels for some selected packages. The availability of binary wheels means that you can install the packages much more quickly, without having to wait for compilation.<br></p>
+<div>
+<br>
+</div>
+At the moment of writing, these packages are available:<br><br><ul>
+<li>numpy</li>
+<li>scipy</li>
+<li>pandas</li>
+<li>psutil</li>
+<li>netifaces</li>
+</ul>
+<br>
+For now, we provide only wheels built on Ubuntu, compiled for PyPy 5.8.<br>
+In particular, it is worth noting that they are <b>not</b> <span>manylinux1</span> wheels, which means they could not work on other Linux distributions. For more information, see the explanation in the README of the above repo.<br><br>
+Moreover, the existence of the wheels does not guarantee that they work correctly 100% of the time. they still depend on <span>cpyext</span>, our C-API emulation layer, which is still work-in-progress, although it has become better and better during the last months. Again, the wheels are there only to save compilation time.<br><br>
+To install a package from the wheel repository, you can invoke <span>pip</span> like this:<br><br><span>$ pip install --extra-index https://antocuni.github.io/pypy-wheels/ubuntu numpy</span><br><div>
+<br>
+</div>
+<div>
+Happy installing!</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-957753230404080779">
+        <div class="comment-header">
+          <a name="comment-957753230404080779"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-07-27 11:16</span>:
+        </div>
+        <div class="comment-content">
+          <p>Very nice. The main reason I can't actively recommend PyPy to others is that I would have to help them install all packages, where for CPython I can just say "conda install foo". Working on efforts like this is extremely useful for the community.</p>
+        </div>
+      </div>
+      <div class="comment comment-4358393637644702491">
+        <div class="comment-header">
+          <a name="comment-4358393637644702491"></a>
+            <span class="author">Gaëtan de Menten</span> wrote on <span class="date">2017-10-02 08:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>Speaking of which if those were conda packages, that would make it much easier for me. And if pytables and pyyaml worked in pypy (a few years ago they did not and I have no idea what is their current state) and were packaged too, I could finally try pypy on my real projects, and not just toy examples.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/06/pypy-v58-released-739876359584854017.html" class="u-url">PyPy v5.8 released</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/mattip.html">mattip</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/06/pypy-v58-released-739876359584854017.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-06-08T23:20:00Z" itemprop="datePublished" title="2017-06-08 23:20">2017-06-08 23:20</time></a>
+            </p>
+                <p class="commentline">5 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+The PyPy team is proud to release both PyPy2.7 v5.8 (an interpreter supporting
+Python 2.7 syntax), and a beta-quality PyPy3.5 v5.8 (an interpreter for Python
+3.5 syntax). The two releases are both based on much the same codebase, thus
+the dual release.  Note that PyPy3.5 supports Linux 64bit only for now.<br><br>
+This new PyPy2.7 release includes the upstream stdlib version 2.7.13, and
+PyPy3.5 includes the upstream stdlib version 3.5.3.<br><br>
+We fixed critical bugs in the <a class="reference external" href="https://doc.pypy.org/en/latest/config/translation.gcrootfinder.html">shadowstack</a> rootfinder garbage collector
+strategy that crashed multithreaded programs and very rarely showed up
+even in single threaded programs.<br><br>
+We added native PyPy support to profile frames in the <a class="reference external" href="https://vmprof.readthedocs.io/">vmprof</a> statistical
+profiler.<br><br>
+The <code class="docutils literal"><span class="pre">struct</span></code> module functions <code class="docutils literal"><span class="pre">pack*</span></code> and <code class="docutils literal"><span class="pre">unpack*</span></code> are now much faster,
+especially on raw buffers and bytearrays. Microbenchmarks show a 2x to 10x
+speedup. Thanks to <a class="reference external" href="https://gambitresearch.com/">Gambit Research</a> for sponsoring this work.<br><br>
+This release adds (but disables by default) link-time optimization and
+<a class="reference external" href="https://pythonfiles.wordpress.com/2017/05/12/enabling-profile-guided-optimizations-for-pypy">profile guided optimization</a> of the base interpreter, which may make
+unjitted code run faster. To use these, translate with appropriate
+<a class="reference external" href="https://doc.pypy.org/en/latest/config/commandline.html#general-translation-options">options</a>.  Be aware of <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues/2572/link-time-optimization-lto-disabled">issues with gcc toolchains</a>, though.<br><br>
+Please let us know if your use case is slow, we have ideas how to make things
+faster but need real-world examples (not micro-benchmarks) of problematic code.<br><br>
+Work sponsored by a Mozilla <a class="reference external" href="../posts/2016/08/pypy-gets-funding-from-mozilla-for-5569307998787871200.html">grant</a> continues on PyPy3.5; numerous fixes from
+CPython were ported to PyPy and PEP 489 was fully implemented. Of course the
+bug fixes and performance enhancements mentioned above are part of both PyPy
+2.7 and PyPy 3.5.<br><br><a class="reference external" href="https://cffi.readthedocs.io/en/latest/whatsnew.html">CFFI</a>, which is part of the PyPy release, has been updated to an unreleased 1.10.1,
+improving an already great package for interfacing with C.<br><br>
+Anyone using <a href="https://docs.scipy.org/doc/numpy-dev/release.html">NumPy 1.13.0</a>, must upgrade PyPy to this release since we implemented some previously missing C-API functionality. Many other c-extension modules now work with PyPy, let us know if yours does not.<br><br>
+As always, this release fixed many issues and bugs raised by the
+growing community of PyPy users. We strongly recommend updating.<br><br>
+You can download the v5.8 release here:<br><blockquote>
+<div>
+<a class="reference external" href="https://pypy.org/download.html">https://pypy.org/download.html</a>
+</div>
+</blockquote>
+We would like to thank our donors and contributors, and
+encourage new people to join the project. PyPy has many
+layers and we need help with all of them: <a class="reference external" href="https://doc.pypy.org/en/latest/index.html">PyPy</a> and <a class="reference external" href="https://rpython.readthedocs.org/">RPython</a> documentation
+improvements, tweaking popular <a class="reference external" href="https://doc.pypy.org/en/latest/project-ideas.html#make-more-python-modules-pypy-friendly">modules</a> to run on PyPy, or general <a class="reference external" href="https://doc.pypy.org/en/latest/project-ideas.html">help</a>
+with making RPython’s JIT even better.<br><br><h2 style="text-align: center;">
+What is PyPy?</h2>
+PyPy is a very compliant Python interpreter, almost a drop-in replacement for CPython 2.7 and CPython 3.5. It’s fast (<a class="reference external" href="https://speed.pypy.org/">PyPy and CPython 2.7.x</a> performance comparison) due to its integrated tracing JIT compiler.<br>
+We also welcome developers of other <a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html">dynamic languages</a> to see what RPython can do for them.<br>
+The PyPy 2.7 release supports:<br><blockquote>
+<div>
+<ul class="simple">
+<li>
+<b>x86</b> machines on most common operating systems (Linux 32/64 bits, Mac OS X 64 bits, Windows 32 bits, OpenBSD, FreeBSD)</li>
+<li>newer <b>ARM</b> hardware (ARMv6 or ARMv7, with VFPv3) running Linux,</li>
+<li>big- and little-endian variants of <b>PPC64</b> running Linux,</li>
+<li>
+<b>s390x</b> running Linux </li>
+</ul>
+</div>
+</blockquote>
+<br><h2 style="text-align: center;">
+What else is new?</h2>
+<div style="text-align: left;">
+PyPy 5.7 was released in March, 2017.</div>
+<div style="text-align: left;">
+There are many incremental improvements to RPython and PyPy, the complete listing is <a href="https://doc.pypy.org/en/latest/release-v5.8.0.html">here.</a>
+</div>
+<div style="text-align: left;">
+  </div>
+Please update, and continue to help us make PyPy better.<br><br>
+Cheers, The PyPy team<br><br>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-6473040882760945297">
+        <div class="comment-header">
+          <a name="comment-6473040882760945297"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-06-09 12:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great news! Thank you!</p>
+        </div>
+      </div>
+      <div class="comment comment-713249026924544529">
+        <div class="comment-header">
+          <a name="comment-713249026924544529"></a>
+            <span class="author">Albert Le Blanc</span> wrote on <span class="date">2017-06-09 12:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Can we get a comprehensive update on Numpypy? It has gone really quiet since the days when Alex Gaynor used to talk at Pycon etc about the work which has been going on since what 2010/11? The repo has issues that are not looked at. I would really like an honest appraisal of what was learned in the Numpypy project and what is the future of Numpy (Scipy too) &amp; PyPy because the situation for developers like myself is that we're caught between a rock and a hard place. PyPy consistently allows us to write code and explore algorithms in Python!! Whereas CPython forces you into C/Cython continually. PyPy is a great dream in my heart. What you guys are doing - allowing me to write Python and it be fast. What other language forces you so much to write in another language when performance is a consideration? The speed difference between Node.js and Python 3 is laughable. PyPy for the win!!!! <br><br>But....and it's a big but I am one of those devs who extensively is addicted to numeric arrays, not because I'm a 'quant' or an astronomer or rocket scientist but because Numpy arrays are simply better for many solutions than Python's other data structures. And once leveraged, giving that up to go to PyPy is impossible. It forces you to choose between numpy + slower python (CPython) or slower Numpy and faster python (PyPy). <br><br>Numpypy was a great dream, the best of both. But it seems to have failed, proven to be too difficult or does it simply need more money? I would appreciate a public update (if one exists, please link to it). Because the sadness for me is that a genuinely fast Python runtime will never be usable until the Numpy/Scipy world works and you get the fast python and as fast numpy. <br><br>I would really like to help, raise money whatever but maybe I'm out of the loop and the plan has changed?</p>
+        </div>
+      </div>
+      <div class="comment comment-8281006598904790682">
+        <div class="comment-header">
+          <a name="comment-8281006598904790682"></a>
+            <span class="author">Johny JKJK</span> wrote on <span class="date">2017-06-09 12:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>Is it possible to resurrect pypy uwsgi integration for pypy3.5?</p>
+        </div>
+      </div>
+      <div class="comment comment-4348316141759484636">
+        <div class="comment-header">
+          <a name="comment-4348316141759484636"></a>
+            <span class="author">mattip</span> wrote on <span class="date">2017-06-10 18:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi Albert. We have decided that a better route is to use upstream NumPy for compatibility. We are a small group, and reimplementing all of the c code in NumPy for Numpypy would be a never ending, close to impossible task.<br><br>However, we do have a different long-term plan to combine numpy and python. Since our c-api emulation layer is slow, perhaps we can "hijack" the most common python calls that cross that emulation border and make <b>them</b> fast. This would utilize much of NumPyPy but would mean that only a subset of the extensive NumPy library would need to be implemented and maintained. We have a branch that demonstrates a proof-of-concept for simple item access (ctypedef struct). Help on the PyPy project is always welcome, come to #pypy on IRC and we can discuss it further.</p>
+        </div>
+      </div>
+      <div class="comment comment-8672126051067587242">
+        <div class="comment-header">
+          <a name="comment-8672126051067587242"></a>
+            <span class="author">v3ss</span> wrote on <span class="date">2017-06-27 18:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>Regarding Beta Status on PyPy 5.8 3.5.x  , What are the main missing points?<br>What are the current know issues for PyPy 5.8-3.5.x ?</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/04/pypy-571-bugfix-released-8519267986159880133.html" class="u-url">PyPy 5.7.1 bugfix released</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/mattip.html">mattip</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/04/pypy-571-bugfix-released-8519267986159880133.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-04-03T19:01:00Z" itemprop="datePublished" title="2017-04-03 19:01">2017-04-03 19:01</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+We have released a bugfix PyPy2.7-v5.7.1 and PyPy3.5-v5.7.1 beta (Linux 64bit),
+due to the following issues:<br><blockquote>
+<div>
+<ul class="simple">
+<li>correctly handle an edge case in dict.pop (issue <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues/2508">2508</a>)</li>
+<li>fix a regression to correctly handle multiple inheritance in a C-API type
+where the second base is an app-level class with a <code class="docutils literal"><span class="pre">__new__</span></code> function</li>
+<li>fix a regression to fill a C-API type’s <code class="docutils literal"><span class="pre">tp_getattr</span></code> slot from a
+<code class="docutils literal"><span class="pre">__getattr__</span></code> method (issue <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues/2523">2523</a>)</li>
+</ul>
+</div>
+</blockquote>
+Thanks to those who reported issues and helped test out the fixes<br><br>
+You can download the v5.7.1 release here:<br><blockquote>
+<div>
+<a class="reference external" href="https://pypy.org/download.html">https://pypy.org/download.html</a>
+</div>
+</blockquote>
+<h2 style="text-align: center;">
+What is PyPy?</h2>
+PyPy is a very compliant Python interpreter, almost a drop-in replacement for CPython 2.7 and CPython 3.5. It’s fast (<a class="reference external" href="https://speed.pypy.org/">PyPy and CPython 2.7.x</a> performance comparison) due to its integrated tracing JIT compiler.<br>
+We also welcome developers of other <a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html">dynamic languages</a> to see what RPython can do for them.<br>
+The PyPy 2.7 release supports:<br><blockquote>
+<div>
+<ul class="simple">
+<li>
+<b>x86</b> machines on most common operating systems (Linux 32/64 bits, Mac OS X 64 bits, Windows 32 bits, OpenBSD, FreeBSD)</li>
+<li>newer <b>ARM</b> hardware (ARMv6 or ARMv7, with VFPv3) running Linux,</li>
+<li>big- and little-endian variants of <b>PPC64</b> running Linux,</li>
+<li>
+<b>s390x</b> running Linux</li>
+</ul>
+</div>
+</blockquote>
+Please update, and continue to help us make PyPy better.<br><br>
+Cheers, The PyPy team<br><br>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-4653107123054825507">
+        <div class="comment-header">
+          <a name="comment-4653107123054825507"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2017-04-04 14:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>any chance for a Mac OS X PyPy3 distribution?<br>compilation from sources fails …<br><br>thanks for the great work by the way !</p>
+        </div>
+      </div>
+      <div class="comment comment-6093202284697767130">
+        <div class="comment-header">
+          <a name="comment-6093202284697767130"></a>
+            <span class="author">aiguy</span> wrote on <span class="date">2017-05-15 11:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>Tried looking for a pypy wishlist but couldn't find one. So hopefully somebody reads comments.<br><br>My three biggest pypy wishes are for...<br><br>1. faster csv file reading by replacing Python library code with compiled C code which I understand from 4 years ago is still slower than cPython so is still on the todo list.<br><br>2. Update SQLite to latest version in pypy distribution since they have made some great speed enhancements in recent releases.<br><br>3. Create an containerized downloadable Docker distribution for PyPy which allows for easy deployment of PyPy projects to other machines. platforms and thumbs drives. This would also allow easier setup of multiple PyPy microservices and encapsulation of multiple pypy environments on the same machine.<br></p>
+        </div>
+      </div>
+      <div class="comment comment-8252507640085407869">
+        <div class="comment-header">
+          <a name="comment-8252507640085407869"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2017-05-15 16:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>@aiguy: csv is written in C already nowadays.  Please report an issue with reproducible examples if you find that PyPy is still a lot slower than CPython at reading large-ish csv files.<br><br>For SQLite, I guess you're talking about Windows.  We have plans to update it at some point.<br><br>For Docker, that's outside the scope of the PyPy team and should be done (or is done already?) by other people.</p>
+        </div>
+      </div>
+      <div class="comment comment-394319490852535988">
+        <div class="comment-header">
+          <a name="comment-394319490852535988"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2017-05-15 18:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>There are maintained Docker files here, IIRC: https://hub.docker.com/_/pypy/</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/04/native-profiling-in-vmprof-6949065546884243105.html" class="u-url">Native profiling in VMProf</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/richard-plangger.html">Richard Plangger</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/04/native-profiling-in-vmprof-6949065546884243105.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-04-01T14:17:00Z" itemprop="datePublished" title="2017-04-01 14:17">2017-04-01 14:17</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>We are happy to announce a new release for the PyPI package <span>vmprof</span>.<br>
+It is now able to capture native stack frames on Linux and Mac OS X to show you bottle necks in compiled code (such as CFFI modules, Cython or C Python extensions). It supports PyPy, CPython versions 2.7, 3.4, 3.5 and 3.6. Special thanks to Jetbrains for funding the native profiling support.<br><br></p>
+<div class="separator" style="clear: both; text-align: center;">
+<a href="https://3.bp.blogspot.com/-94RAR1lkAP8/WNmQn-kpLhI/AAAAAAAAAqE/RXg6T4hptnQtH-8fdi87yh_BI37eN6COQCLcB/s1600/vmprof-logo.png" style="margin-left: 1em; margin-right: 1em;"><img alt="vmprof logo" border="0" src="https://3.bp.blogspot.com/-94RAR1lkAP8/WNmQn-kpLhI/AAAAAAAAAqE/RXg6T4hptnQtH-8fdi87yh_BI37eN6COQCLcB/s1600/vmprof-logo.png" title="vmprof logo"></a>
+</div>
+<div class="separator" style="clear: both; text-align: center;">
+</div>
+<br><span style="font-size: large;">What is vmprof?</span><br><br><span style="font-size: large;"><span style="font-size: small;">If you have already worked with vmprof you can skip the next two section. If not, here is a short introduction:</span></span><br><br><span style="font-size: large;"><span style="font-size: small;">The goal of vmprof package is to give you more insight into your program. It is a statistical profiler. Another prominent profiler you might already have worked with is cProfile. It is bundled with the Python standard library.</span></span><br><br><span style="font-size: large;"><span style="font-size: small;">vmprof's distinct feature (from most other profilers) is that it does not significantly slow down your program execution. The employed strategy is statistical, rather than deterministic. Not every function call is intercepted, but it samples stack traces and memory usage at a configured sample rate (usually around 100hz). You can imagine that this creates a lot less contention than doing work before and after each function call.</span></span><br><br><span style="font-size: large;"><span style="font-size: small;">As mentioned earlier cProfile gives you a complete profile, but it needs to intercept every function call (it is a deterministic profiler). Usually this means that you have to capture and record every function call, but this takes an significant amount time.</span></span><br><span style="font-size: large;"><span style="font-size: small;"><br></span></span> <span style="font-size: large;"><span style="font-size: small;">The overhead vmprof consumes is roughly 3-4% of your total program runtime or even less if you reduce the sampling frequency. Indeed it lets you sample and inspect much larger programs. If you failed to profile a large application with cProfile, please give vmprof a shot.</span></span><br><br><span style="font-size: large;"><span style="font-size: small;"><span style="font-size: large;">vmprof.com or PyCharm</span></span></span><br><br><div>
+<div>
+There are two major alternatives to the command-line tools shipped with vmprof:</div>
+<ul>
+<li>A web service on <a href="https://vmprof.com/">vmprof.com</a>
+</li>
+<li>PyCharm Professional Edition </li>
+</ul>
+<div>
+While the command line tool is only good for quick inspections, <a href="https://vmprof.com/">vmprof.com</a>
+ and PyCharm compliment each other providing deeper insight into your 
+program. With PyCharm you can view the per-line profiling results inside
+ the editor. With the <a href="https://vmprof.com/">vmprof.com</a> you get a handy visualization of the profiling results as a flame chart and memory usage graph.</div>
+</div>
+<div>
+<br>
+</div>
+<div>
+<div>
+Since the PyPy Team runs and maintains the service on <a href="https://vmprof.com/">vmprof.com</a> (which is by the way free and open-source), I’ll explain some more details here. On <a href="https://vmprof.com/">vmprof.com</a> you can inspect the generated profile interactively instead of looking at console output. What is sent to <a href="https://vmprof.com/">vmprof.com</a>? You can find details <a href="https://vmprof.readthedocs.io/en/latest/data.html" target="_blank">here</a>.</div>
+</div>
+<br><span style="font-size: large;"><span style="font-size: small;"><b>Flamegraph</b>: </span></span>Accumulates and displays the most frequent codepaths. It allows you to quickly and accurately identify hot spots in your code. The flame graph below is a very short run of richards.py (Thus it shows a lot of time spent in PyPy's JIT compiler).<br><br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://4.bp.blogspot.com/-n5LoH2hf7qI/WNvtNvIAbsI/AAAAAAAAAqc/zn0AXv8fkzIMQXWUwMLtLFpjochspz5MwCLcB/s1600/flamegraph.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="231" src="https://4.bp.blogspot.com/-n5LoH2hf7qI/WNvtNvIAbsI/AAAAAAAAAqc/zn0AXv8fkzIMQXWUwMLtLFpjochspz5MwCLcB/s400/flamegraph.png" width="400"></a>
+</div>
+<br><br><b>List all functions (optionally sorted)</b>: the equivalent of the vmprof command line output in the web.<br><br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://3.bp.blogspot.com/-zzAmBuf-3KM/WNvtNze_sZI/AAAAAAAAAqg/9u4Kxv_OzMsTV7KgRx9PvXGHOAPdfXYUgCLcB/s1600/list-of-functions.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="215" src="https://3.bp.blogspot.com/-zzAmBuf-3KM/WNvtNze_sZI/AAAAAAAAAqg/9u4Kxv_OzMsTV7KgRx9PvXGHOAPdfXYUgCLcB/s400/list-of-functions.png" width="400"></a>
+</div>
+<br>
+ <b>Memory curve</b>: A line plot that shows how how many MBytes have been consumed over the lifetime of your program (see more info in the section below).<br><br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://cloud.githubusercontent.com/assets/175722/17400119/70d43a84-5a46-11e6-974b-913cfa22a531.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="187" src="https://cloud.githubusercontent.com/assets/175722/17400119/70d43a84-5a46-11e6-974b-913cfa22a531.png" width="400"></a>
+</div>
+<span style="font-size: large;"><span style="font-size: small;"><span style="font-size: large;">Native programs</span></span></span><br><span style="font-size: large;"><span style="font-size: small;"></span></span><br><span style="font-size: large;"><span style="font-size: small;">The new feature introduced in vmprof 0.4.x allows you to look beyond the Python level. As you might know, Python maintains a stack of frames to save the execution. Up to now the vmprof profiles only contained that level of information. But what if you program jumps to native code (such as calling gzip compression on a large file)? Up to now you would not see that information.</span></span><br><span style="font-size: large;"><span style="font-size: small;"><br></span></span>
+<span style="font-size: large;"><span style="font-size: small;">Many packages make use of the CPython C API (which we discurage, please lookup <a href="https://cffi.readthedocs.org/" target="_blank">cffi</a> for a better way to call C). Have you ever had the issue that you know that your performance problems reach down to, but you could not profile it properly?<b> Now you can!</b></span></span><br><span style="font-size: large;"><span style="font-size: small;"><br></span></span> <span style="font-size: large;"><span style="font-size: small;">Let's inspect a very simple Python program to find out why a program is significantly slower on Linux than on Mac:</span></span><br><br><span style="font-size: large;"><span style="font-size: small;"><span>import numpy as np<br>
+n = 1000<br>
+a = np.random.random((n, n))<br>
+b = np.random.random((n, n))<br>
+c = np.dot(np.abs(a), b)</span><br></span></span><br><br>
+Take two NxN random matrix objects and create a dot product. The first argument to the dot product provides the absolute value of the random matrix.<br><br><table border="1" style="border: 1px solid silver;"><tbody>
+<tr>
+<td>Run</td>
+<td>Python</td>
+<td>NumPy</td>
+<td>OS</td>
+<td>n=...</td> <td>Took</td> </tr>
+<tr>
+<td>[1]</td>
+<td>CPython 3.5.2</td>
+<td>NumPy 1.12.1</td>
+<td>Mac OS X, 10.12.3</td>
+<td>n=5000</td>
+<td>~9 sec</td>
+</tr>
+<tr>
+<td>[2]</td>
+<td>CPython 3.6.0</td>
+<td>NumPy 1.12.1</td>
+<td>Linux 64, Kernel 4.9.14</td>
+<td>n=1000</td>
+<td>~26 sec</td>
+</tr>
+</tbody></table>
+<br>
+Note that the Linux machine operates on a 5 times smaller matrix, still it takes much longer. What is wrong? Is Linux slow? CPython 3.6.0? Well no, lets inspect and <a href="https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac" target="_blank">[1]</a> and <a href="https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c" target="_blank">[2]</a> (shown below in that order).<br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://3.bp.blogspot.com/-WF-JpMQhJaI/WNvx8CPNpTI/AAAAAAAAAqw/ixZpWng6TDc4kIlEHu9zhqrNX4tx0S4rgCLcB/s1600/macosx-profile-blog.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="105" src="https://3.bp.blogspot.com/-WF-JpMQhJaI/WNvx8CPNpTI/AAAAAAAAAqw/ixZpWng6TDc4kIlEHu9zhqrNX4tx0S4rgCLcB/s400/macosx-profile-blog.png" width="400"></a>
+</div>
+<div class="separator" style="clear: both; text-align: center;">
+<a href="https://1.bp.blogspot.com/-gjM2uj5Ko_E/WNvx73qcXEI/AAAAAAAAAqs/cMvDfcHQ2eAti4BRU0ldwGQ5M-1_TQ2FACEw/s1600/linux-blog.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="113" src="https://1.bp.blogspot.com/-gjM2uj5Ko_E/WNvx73qcXEI/AAAAAAAAAqs/cMvDfcHQ2eAti4BRU0ldwGQ5M-1_TQ2FACEw/s400/linux-blog.png" width="400"></a>
+</div>
+<br><a href="https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c" target="_blank">[2]</a> runs on Linux, spends nearly all of the time in PyArray_MatrixProduct2, if you compare to <a href="https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac" target="_blank">[1]</a> on Mac OS X, you'll see that a lot of time is spent in generating the random numbers and the rest in cblas_matrixproduct.<br><br>
+Blas has a very efficient implementation so you can achieve the same on Linux if you install a blas implementation (such as openblas).<br><br>
+Usually you can spot potential program source locations that take a lot of time and might be the first starting point to resolve performance issues.<br><br><span style="font-size: large;">Beyond Python programs </span><br><br>
+It is not unthinkable that the strategy can be reused for native programs. Indeed this can already be done by creating a small cffi wrapper around an entry point of a compiled C program. It would even work for programs compiled from other languages (e.g. C++ or Fortran). The resulting function names are the full symbol name embedded into either the executable symboltable or extracted from the dwarf debugging information. Most of those will be compiler specific and contain some cryptic information.<br><br><span style="font-size: large;">Memory profiling</span><br>
+We thankfully received a code contribution from the company Blue Yonder. They have built a memory profiler (for Linux and Mac OS X) on top of vmprof.com that displays the memory consumption for the runtime of your process.<br><br>
+You can run it the following way:<br><br><span>$ python -m vmprof --mem --web script.py</span><br><br>
+By adding --mem, vmprof will capture memory information and display it in the dedicated view on vmprof.com. You can view it by by clicking the 'Memory' switch in the flamegraph view.<br><br><span style="font-size: large;">There is more</span><br><br>
+Some more minor highlights contained in 0.4.x:<br><ul>
+<li>VMProf support for Windows 64 bit (No native profiling)</li>
+<li>VMProf can read profiles generated by another host system</li>
+<li>VMProf is now bundled in several binary wheel for fast and easy installation (Mac OS X, Linux 32/64 for CPython 2.7, 3.4, 3.5, 3.6)</li>
+</ul>
+<span style="font-size: large;">Future plans - Profile Streaming</span><br><br>
+vmprof has not reached the end of development. There are many features we could implement. But there is one feature that could be a great asset to many Python developers.<br><br>
+Continuous delivery of your statistical profile, or in short, profile streaming. One of the great strengths of vmprof is that is consumes very little overhead. It is not a crazy idea to run this in production.<br><br>
+It would require a smart way to stream the profile in the background to vmprof.com and new visualizations to look at much more data your Python service produces.<br><br>
+If that sounds like a solid vmprof improvement, don't hesitate to get in touch with us (e.g. IRC #pypy, mailing list pypy-dev, or comment below)<br><br><span style="font-size: large;">You can help! </span><br><br>
+There are some immediate things other people could help with. Either by donating time or money (yes we have occasional contributors which is great)!<br><ul>
+<li>We gladly received code contribution for the memory profiler. But it was not enough time to finish the migration completely. Sadly it is a bit brittle right now.</li>
+<li>We would like to spend more time on other visualizations. This should include to give a much better user experience on vmprof.com (like a tutorial that explains the visualization that we already have). </li>
+<li>Build Windows 32/64 bit wheels (for all CPython versions we currently support)</li>
+</ul>
+We are also happy to accept google summer of code projects on vmprof for new visualizations and other improvements. If you qualify and are interested, don't hesitate to ask!<br><br>
+Richard Plangger (plan_rich) and the PyPy Team<br><br>
+[1] Mac OS X <a href="https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac">https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac</a><br>
+[2] Linux64 <a href="https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c">https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c</a>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/03/pypy27-and-pypy35-v57-two-in-one-release-4736633226245374150.html" class="u-url">PyPy2.7 and PyPy3.5 v5.7 - two in one release</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/mattip.html">mattip</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/03/pypy27-and-pypy35-v57-two-in-one-release-4736633226245374150.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-03-21T09:18:00Z" itemprop="datePublished" title="2017-03-21 09:18">2017-03-21 09:18</time></a>
+            </p>
+                <p class="commentline">10 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+<div style="text-align: left;">
+The PyPy team is proud to release both PyPy2.7 v5.7 (an interpreter supporting
+Python v2.7 syntax), and a beta-quality PyPy3.5 v5.7 (an interpreter for Python
+v3.5 syntax). The two releases are both based on much the same codebase, thus
+the dual release.  Note that PyPy3.5 only supports Linux 64bit for now.<br><br>
+This new PyPy2.7 release includes the upstream stdlib version 2.7.13, and PyPy3.5 (our first in the 3.5 series) includes the upstream stdlib version 3.5.3.<br><br>
+We continue to make incremental improvements to our C-API compatibility layer (cpyext). PyPy2 can now import and run many C-extension packages, among the most notable are Numpy, Cython, and Pandas. Performance may be slower than CPython, especially for frequently-called short C functions. Please let us know if your use case is slow, we have ideas how to make things faster but need real-world examples (not micro-benchmarks) of problematic code.<br><br>
+Work proceeds at a good pace on the PyPy3.5 version due to a <a class="reference external" href="../posts/2016/08/pypy-gets-funding-from-mozilla-for-5569307998787871200.html">grant</a> from the Mozilla Foundation, hence our first 3.5.3 beta release. Thanks Mozilla !!! While we do not pass all tests yet, asyncio works and as <a class="reference external" href="../posts/2017/03/async-http-benchmarks-on-pypy3-1092124994927894138.html">these benchmarks show</a> it already gives a nice speed bump. We also backported the <code class="docutils literal"><span class="pre">f""</span></code> formatting from 3.6 (as an exception; otherwise “PyPy3.5” supports the Python 3.5 language).<br><br><a class="reference external" href="https://cffi.readthedocs.io/en/latest/whatsnew.html">CFFI</a> has been updated to 1.10, improving an already great package for interfacing with C.<br><br>
+We now use shadowstack as our default <a class="reference external" href="https://doc.pypy.org/en/latest/config/translation.gcrootfinder.html">gcrootfinder</a> even on Linux. The alternative, asmgcc, will be deprecated at some future point. While about 3% slower, shadowstack is much more easily maintained and debuggable. Also, the performance of shadowstack has been improved in general: this should close the speed gap between other platforms and Linux.<br><br>
+As always, this release fixed many issues and bugs raised by the growing community of PyPy users. We strongly recommend updating.<br><br>
+You can download the v5.7 release here:<br><blockquote>
+<div>
+<a class="reference external" href="https://pypy.org/download.html">https://pypy.org/download.html</a>
+</div>
+</blockquote>
+We would like to thank our donors for the continued support of the PyPy project.<br>
+We would also like to thank our contributors and encourage new people to join the project. PyPy has many layers and we need help with all of them: <a class="reference external" href="https://doc.pypy.org/en/latest/index.html">PyPy</a> and <a class="reference external" href="https://rpython.readthedocs.org/">RPython</a> documentation improvements, tweaking popular <a class="reference external" href="https://doc.pypy.org/en/latest/project-ideas.html#make-more-python-modules-pypy-friendly">modules</a> to run on pypy, or general <a class="reference external" href="https://doc.pypy.org/en/latest/project-ideas.html">help</a> with making RPython’s JIT even better.<br><div class="section" id="what-is-pypy">
+<h2 style="text-align: center;">
+ </h2>
+<h2 style="text-align: center;">
+What is PyPy?</h2>
+PyPy is a very compliant Python interpreter, almost a drop-in replacement for CPython 2.7 and CPython 3.5. It’s fast (<a class="reference external" href="https://speed.pypy.org/">PyPy and CPython 2.7.x</a> performance comparison) due to its integrated tracing JIT compiler.<br>
+We also welcome developers of other <a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html">dynamic languages</a> to see what RPython can do for them.<br>
+The PyPy 2.7 release supports:<br><blockquote>
+<div>
+<ul class="simple">
+<li>
+<b>x86</b> machines on most common operating systems (Linux 32/64 bits, Mac OS X 64 bits, Windows 32 bits, OpenBSD, FreeBSD)</li>
+<li>newer <b>ARM</b> hardware (ARMv6 or ARMv7, with VFPv3) running Linux,</li>
+<li>big- and little-endian variants of <b>PPC64</b> running Linux,</li>
+<li>
+<b>s390x</b> running Linux</li>
+</ul>
+</div>
+</blockquote>
+<br><h2 style="text-align: center;">
+ </h2>
+<h2 style="text-align: center;">
+What else is new?</h2>
+<div style="text-align: left;">
+(since the releases of PyPy 2.7 and 3.3 at the end of 2016)</div>
+<div style="text-align: left;">
+There are many incremental improvements to RPython and PyPy, the complete listing is <a href="https://doc.pypy.org/en/latest/release-v5.7.0.html">here.</a>
+</div>
+<div style="text-align: left;">
+  </div>
+Please update, and continue to help us make PyPy better.<br><br>
+Cheers, The PyPy team<br><br>
+</div>
+</div>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-7319138757580313424">
+        <div class="comment-header">
+          <a name="comment-7319138757580313424"></a>
+            <span class="author">Sergei</span> wrote on <span class="date">2017-03-21 10:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>Awesome! Thanks, guys.</p>
+        </div>
+      </div>
+      <div class="comment comment-106959242475810275">
+        <div class="comment-header">
+          <a name="comment-106959242475810275"></a>
+            <span class="author">Baczek</span> wrote on <span class="date">2017-03-21 11:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt;  We also backported the f"" formatting from 3.6 (as an exception; otherwise “PyPy3.5” supports the Python 3.5 language).<br><br>Could you also support just the syntax part of variable type declarations? It'll make using mypy that much nicer.</p>
+        </div>
+      </div>
+      <div class="comment comment-912623797975461036">
+        <div class="comment-header">
+          <a name="comment-912623797975461036"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-03-21 12:16</span>:
+        </div>
+        <div class="comment-content">
+          <p>Awesome! Thanks a lot!</p>
+        </div>
+      </div>
+      <div class="comment comment-7534830280118468836">
+        <div class="comment-header">
+          <a name="comment-7534830280118468836"></a>
+            <span class="author">Mike</span> wrote on <span class="date">2017-03-23 10:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hello.<br>Thanks for pypy!<br>I have a question: Is there any big company who using pypy in production?<br>Thanks</p>
+        </div>
+      </div>
+      <div class="comment comment-4505867789645392789">
+        <div class="comment-header">
+          <a name="comment-4505867789645392789"></a>
+            <span class="author">Canesin</span> wrote on <span class="date">2017-03-23 14:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great work as usual! Is there any plan to benefit from programs using PEP 484 syntax ?</p>
+        </div>
+      </div>
+      <div class="comment comment-2548956776105125237">
+        <div class="comment-header">
+          <a name="comment-2548956776105125237"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2017-03-23 16:16</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Canesin: benefit for performance?  No.  The PEP itself says "Using type hints for performance optimizations is left as an exercise for the reader".  But that's a misleading comment.  There is no useful optimization that we can apply from the knowledge "argument 1 is an int", because that could also be an arbitrarily-large integer and/or an instance of a subclass of int.  And if it really turns out to be almost always a regular machine-sized integer, then PyPy's JIT will figure it out by itself.   PEP 484 is totally pointless for performance.  (It is probably useful for other reasons outside the scope of this comment.)</p>
+        </div>
+      </div>
+      <div class="comment comment-7040770899110213201">
+        <div class="comment-header">
+          <a name="comment-7040770899110213201"></a>
+            <span class="author">Miro Hrončok</span> wrote on <span class="date">2017-03-29 17:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>Excellent news! Is PyPy3 support for 32bit Linux planned? Thanks for info.</p>
+        </div>
+      </div>
+      <div class="comment comment-5627285645240993429">
+        <div class="comment-header">
+          <a name="comment-5627285645240993429"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2017-04-01 08:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>Miro: yes, we plan to have support for the same set of platforms.  The various Posix platforms are not too much work, and Windows will follow, too.</p>
+        </div>
+      </div>
+      <div class="comment comment-5712955424811900650">
+        <div class="comment-header">
+          <a name="comment-5712955424811900650"></a>
+            <span class="author">Gaëtan de Menten</span> wrote on <span class="date">2017-04-02 09:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>Is there anybody working on win64? It is a bit frustrating to see pypy maturing quickly to the point that I could probably use it soon in production... if only it worked on win64.</p>
+        </div>
+      </div>
+      <div class="comment comment-8459860362947135631">
+        <div class="comment-header">
+          <a name="comment-8459860362947135631"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2017-04-02 09:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>Gaëtan: no.  We need either outside contributions or, more likely, money to make it happen.  Just like what <a href="https://morepypy.blogspot.ch/2016/08/pypy-gets-funding-from-mozilla-for.html" rel="nofollow">occurred with Mozilla</a> for Python 3.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/03/leysin-winter-sprint-summary-4587213628578490701.html" class="u-url">Leysin Winter Sprint Summary</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/richard-plangger.html">Richard Plangger</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/03/leysin-winter-sprint-summary-4587213628578490701.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-03-04T09:59:00Z" itemprop="datePublished" title="2017-03-04 09:59">2017-03-04 09:59</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <span class="">Today
+ is the last day of our yearly sprint event in Leysin. We had lots of 
+ideas on how to enhance the current state of PyPy, we went skiing and 
+had interesting discussions around virtual machines, the Python 
+ecosystem, and other real world problems.</span><div class="ace-line" id="magicdomid662">
+<span class=""> </span>
+</div>
+<div class="ace-line" id="magicdomid664">
+<h2>
+<span class="">Why don't you join us next time?</span>
+</h2>
+</div>
+<div class="ace-line" id="magicdomid667">
+<span class="">A usual PyPy sprints day goes through the following stages:</span>
+</div>
+<div class="ace-line" id="magicdomid668">
+<br>
+</div>
+<div class="ace-line" id="magicdomid669">
+<ol>
+<li><span class=""> <b>Planning Session:</b> Tasks from previous days that have seen progress or 
+are completed are noted in a shared document. Everyone adds new tasks 
+and then assigns themselves to one or more tasks (usually in pairs). As 
+soon as everybody is happy with their task and has a partner to work 
+with, the planning session is concluded and the work can start.</span></li>
+<li>
+<b>Discussions</b><span class=""><b>:</b> A sprint is a good occasion to discuss difficult 
+and important topics in person. We usually sit down in a separate area 
+in the sprint room and discuss until a) nobody wants to discuss anymore 
+or b) we found a solution to the problem. The good thing is that usally 
+the outcome is b).</span>
+</li>
+<li>
+<b><span class=""></span></b><span class=""><b>Lunch:</b> For lunch we prepare sandwiches and other finger food.</span>
+</li>
+<li>
+<span class=""></span><span class=""><b>Continue working</b> until dinner, which we eat at a random restaurant in Leysin.</span>
+</li>
+<li>
+<span class=""></span><b>Goto 1 the next day, </b>if sprint has not ended.</li>
+</ol>
+</div>
+<div class="ace-line" id="magicdomid677">
+<span class="">Sprints
+ are open to everybody and help newcomers to get started with PyPy (we usually
+ pair you with a developer familiar with PyPy). They are perfect to 
+discuss and find solutions to problems we currently face. If you are 
+eager to join next year, please don't hesitate to register next year 
+around January.</span>
+</div>
+<div class="ace-line" id="magicdomid677">
+<span class=""> </span>
+</div>
+<div class="ace-line" id="magicdomid679">
+<h2>
+<span class="">Sprint Summary  </span><span class=""> </span>
+</h2>
+<span class="">Sprint goals included to work on the following topics: </span>
+</div>
+<div class="ace-line" id="magicdomid682">
+<ul>
+<li><span class="">Work towards releasing PyPy 3.5 (it will be released soon)</span></li>
+<li>
+<span class=""></span><span class="">CPython Extension</span><span class="author-g-s5b0glqpe67hakm8">s</span><span class="">ion (CPyExt) modules on PyPy</span>
+</li>
+<li><span class="">Have fun in winter sports (a side goal)</span></li>
+</ul>
+</div>
+<div class="ace-line" id="magicdomid1290">
+<h3>
+<span class="">Highlights</span>
+</h3>
+<h3>
+</h3>
+<h3>
+<span class=""></span>
+</h3>
+</div>
+<div class="ace-line" id="magicdomid7007">
+<ul>
+<li>
+<span class=""></span><span class="">We have spent lots of time debugging and fixing memory issues on CPyExt.</span><span class="author-g-fhxuve7d2vlo71s1">
+ In particular, we fixed a serious memory leak where taking a memoryview
+ would prevent numpy arrays from ever being freed. More work is still required to ensure that our GC always releases arrays in a timely 
+manner.</span>
+</li>
+<li>
+<span class=""></span><span class="">Fruitful discussions and progress </span><span class="author-g-s5b0glqpe67hakm8">about </span><span class="">how </span><span class="author-g-fhxuve7d2vlo71s1">to</span><span class=""> flesh out some details about</span><span class="author-g-s5b0glqpe67hakm8"> the</span><span class=""> unicode representation in PyPy. Our current goal is to use utf-8 as</span><span class="author-g-s5b0glqpe67hakm8"> the</span><span class=""> unicode representation internally and have fast vectorized </span><span class="author-g-s5b0glqpe67hakm8">operations</span><span class=""> (indexing, check if valid, ...).</span>
+</li>
+<li>
+<span class=""></span><span class="">PyPy will participate in GSoC 2017 and we will try to allocate more resources to that than last year.</span>
+</li>
+<li>
+<span class=""></span><span class="">Profile and think about some details how to reduce the starting size of the interpreter. The starting point would be to </span><span class="author-g-s5b0glqpe67hakm8">look at</span><span class=""> the parser and reduce the amount of strings to ke</span><span class="author-g-fhxuve7d2vlo71s1">ep</span><span class=""> alive.</span>
+</li>
+<li><span class=""><span class="">Found a topic for a student's master thesis</span><span class="author-g-fhxuve7d2vlo71s1">:</span><span class=""> correctly free</span><span class="author-g-fhxuve7d2vlo71s1">ing</span><span class=""> cpyext reference cycles.</span></span></li>
+<li><span class=""><span class=""><span class="">Run lots of Python3 code on top of PyPy3 and resolve issues we found along the way.</span></span></span></li>
+<li>
+<span class=""><span class=""><span class=""></span></span></span><span class="">Initial work on making RPython thread-safe without a GIL.</span>
+</li>
+</ul>
+</div>
+<div class="ace-line" id="magicdomid7022">
+<h3>
+<span class="">List of attendees</span>
+</h3>
+</div>
+<div class="ace-line" id="magicdomid7025">
+<span class="">- Stefan Beyer</span>
+</div>
+<div class="ace-line" id="magicdomid7026">
+<span class="">- Antonio Cuni</span>
+</div>
+<div class="ace-line" id="magicdomid7027">
+<span class="">- Maciej Fijalkowski</span>
+</div>
+<div class="ace-line" id="magicdomid7028">
+<span class="">- Manuel Jacob</span>
+</div>
+<div class="ace-line" id="magicdomid7029">
+<span class="">- Ronan Lamy</span>
+</div>
+<div class="ace-line" id="magicdomid7030">
+<span class="">- Remi Meier</span>
+</div>
+<div class="ace-line" id="magicdomid7031">
+<span class="">- Richard Plangger</span>
+</div>
+<div class="ace-line" id="magicdomid7032">
+<span class="">- Armin Rigo</span>
+</div>
+<div class="ace-line" id="magicdomid7033">
+<span class="">- Robert Zaremba</span>
+</div>
+<div class="ace-line" id="magicdomid7033">
+<span class=""> </span>
+</div>
+<div class="ace-line" id="magicdomid7033">
+<span class=""><a href="https://1.bp.blogspot.com/-DXQBN6Crkkg/WLqLRCyUQoI/AAAAAAAAAoI/YJkwrYbCX1Y3fS97pcrzx1DLAAbEWSK5wCK4B/s1600/C5r2PnqXQAIHFew.jpg"><img border="0" height="221" src="https://1.bp.blogspot.com/-DXQBN6Crkkg/WLqLRCyUQoI/AAAAAAAAAoI/YJkwrYbCX1Y3fS97pcrzx1DLAAbEWSK5wCK4B/s400/C5r2PnqXQAIHFew.jpg" width="400"></a>  </span>
+</div>
+<div class="ace-line" id="magicdomid7033">
+<span class=""><br></span>
+</div>
+<div class="ace-line" id="magicdomid7033">
+<div class="ace-line" id="magicdomid7035">
+<a href="https://2.bp.blogspot.com/-GW3_ikXNLnM/WLqLfyj2F1I/AAAAAAAAAoY/rhzM8oMWHCYyIJoZK30GcDCOg8XqIZXagCK4B/s1600/C52T_j3XQAACB0f.jpg%253Alarge.jpg"><img border="0" height="150" src="https://2.bp.blogspot.com/-GW3_ikXNLnM/WLqLfyj2F1I/AAAAAAAAAoY/rhzM8oMWHCYyIJoZK30GcDCOg8XqIZXagCK4B/s200/C52T_j3XQAACB0f.jpg%253Alarge.jpg" width="200"></a><a href="https://2.bp.blogspot.com/-pr6jpOXCwOA/WLqLig_veDI/AAAAAAAAAog/bDmzrAyn4k8xserwrxB8TpGt8WK49LxDACK4B/s1600/C6AjnJHWAAUogZ-.jpg"><img border="0" height="150" src="https://2.bp.blogspot.com/-pr6jpOXCwOA/WLqLig_veDI/AAAAAAAAAog/bDmzrAyn4k8xserwrxB8TpGt8WK49LxDACK4B/s200/C6AjnJHWAAUogZ-.jpg" width="200"></a><a href="https://3.bp.blogspot.com/-Wy9pnXLtepg/WLqOnQR9gcI/AAAAAAAAApA/KaFuiYY1oPAZtqAOK10-lqdS8BNk9v7NgCK4B/s1600/IMG_20170302_173339.jpg"><img border="0" height="150" src="https://3.bp.blogspot.com/-Wy9pnXLtepg/WLqOnQR9gcI/AAAAAAAAApA/KaFuiYY1oPAZtqAOK10-lqdS8BNk9v7NgCK4B/s200/IMG_20170302_173339.jpg" width="200"></a><span class=""></span><span class=""><a href="https://4.bp.blogspot.com/-XsqEquoT_CE/WLqPlTTeP0I/AAAAAAAAApc/U40smIsLpw4I5HqF5-xWfEPTzq_HsSr2QCK4B/s1600/C5wDgCdXQAAedGq.jpg%253Alarge.jpg"><img border="0" height="133" src="https://4.bp.blogspot.com/-XsqEquoT_CE/WLqPlTTeP0I/AAAAAAAAApc/U40smIsLpw4I5HqF5-xWfEPTzq_HsSr2QCK4B/s200/C5wDgCdXQAAedGq.jpg%253Alarge.jpg" width="200"></a></span>
+</div>
+<div class="ace-line" id="magicdomid7035">
+<span class=""><br></span>
+</div>
+<div class="ace-line" id="magicdomid7035">
+<span class="">We
+ would like to thank our donors for the continued support of the PyPy 
+project and we looking forward to next years sprint in Leysin.</span>
+</div>
+</div>
+<div class="ace-line" id="magicdomid7036">
+<br>
+</div>
+<div class="ace-line" id="magicdomid7037">
+<span class="">The PyPy Team</span>
+</div>
+<div class="" id="magicdomid210">
+<br>
+</div>
+<br><br><br><br>
+</div>
+    </article>
+</div>
+</div>
+<div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div></div>
+</main>
+</div>
+<div style="clear: both; width: 75%; margin: 1em auto;">
+        <nav class="postindexpager"><ul class="pager">
+<li class="previous">
+                <a href="index-38.html" rel="prev">Newer posts</a>
+            </li>
+            <li class="next">
+                <a href="index-36.html" rel="next">Older posts</a>
+            </li>
+        </ul></nav>
+</div>
+         
+                 <footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../assets/js/styles.js"></script></footer>
+</body>
+</html>

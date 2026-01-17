@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype PHP interpreter using the PyPy toolchain - Hippy VM | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2012/07/hello-everyone-6869934374873967346.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Maciej Fijalkowski">
+<link rel="prev" href="py3k-status-update-5-359698189825543897.html" title="Py3k status update #5" type="text/html">
+<link rel="next" href="cffi-release-02-4800000428934604295.html" title="CFFI release 0.2.1" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Prototype PHP interpreter using the PyPy toolchain - Hippy VM">
+<meta property="og:url" content="https://www.pypy.org/posts/2012/07/hello-everyone-6869934374873967346.html">
+<meta property="og:description" content="Hello everyone.
+I'm proud to release the result of a Facebook-sponsored study on the feasibility of
+using the RPython toolchain to produce a PHP interpreter. The rules were
+simple: two months; one per">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2012-07-13T22:00:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Prototype PHP interpreter using the PyPy toolchain - Hippy VM</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2012-07-13T22:00:00Z" itemprop="datePublished" title="2012-07-13 22:00">2012-07-13 22:00</time></a>
+            </p>
+                <p class="commentline">23 comments</p>
+
+                <p class="commentline">            <a href="hello-everyone-6869934374873967346.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Hello everyone.</p>
+<p>I'm proud to release the result of a Facebook-sponsored study on the feasibility of
+using the RPython toolchain to produce a PHP interpreter. The rules were
+simple: two months; one person; get as close to PHP as possible, implementing
+enough warts and corner cases to be reasonably sure that it answers hard
+problems in the PHP language. The outcome is called <tt class="docutils literal">Hippy VM</tt> and implements
+most of the PHP 1.0 language (functions, arrays, ints, floats and strings).
+This should be considered an alpha release.</p>
+<p>The resulting interpreter is obviously incomplete – it does not support all
+modern PHP constructs (classes are completely unimplemented), builtin functions,
+grammar productions, web server integration, builtin libraries
+etc., etc.. It's <strong>just</strong> complete enough for me to reasonably be able to
+say that – given some engineering effort – it's possible to provide a rock-solid
+and fast PHP VM using PyPy technologies.</p>
+<p>The result is available in a <a class="reference external" href="https://bitbucket.org/fijal/hippyvm">Bitbucket repo</a> and is released under the MIT
+license.</p>
+<div class="section" id="performance">
+<h3>Performance<a href="#performance" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The table below shows a few benchmarks comparing Hippy VM to <a class="reference external" href="https://www.zend.com">Zend</a> (a standard
+PHP interpreter available in Linux distributions) and <a class="reference external" href="https://github.com/facebook/hiphop-php">HipHop VM</a> (a PHP-to-C++
+optimizing compiler developed by Facebook).  The versions used were Zend 5.3.2
+(Zend Engine v2.3.0) and HipHop VM heads/vm-0-ga4fbb08028493df0f5e44f2bf7c042e859e245ab
+(note that you need to check out the <tt class="docutils literal">vm</tt> branch to get the newest version).</p>
+<p>The run was performed on 64-bit Linux running on a Xeon W3580 with 8M of
+L2 cache, which was otherwise unoccupied.</p>
+<p>Unfortunately, I was not able to run it on the JITted version of HHVM, the new effort by Facebook,
+but people involved with the project told me it's usually slower or comparable with the compiled HipHop.
+Their JITted VM is still alpha software, so I'll update it as soon as I have the info.</p>
+<blockquote>
+<table border="1" class="docutils">
+<colgroup>
+<col width="20%">
+<col width="11%">
+<col width="15%">
+<col width="15%">
+<col width="19%">
+<col width="21%">
+</colgroup>
+<tbody valign="top">
+<tr>
+<td>benchmark</td>
+<td>Zend</td>
+<td>HipHop VM</td>
+<td>Hippy VM</td>
+<td>Hippy / Zend</td>
+<td>Hippy / HipHop</td>
+</tr>
+<tr>
+<td>arr</td>
+<td>2.771</td>
+<td>0.508+-0%</td>
+<td>0.274+-0%</td>
+<td>10.1x</td>
+<td>1.8x</td>
+</tr>
+<tr>
+<td>fannkuch</td>
+<td>21.239</td>
+<td>7.248+-0%</td>
+<td>1.377+-0%</td>
+<td>15.4x</td>
+<td>5.3x</td>
+</tr>
+<tr>
+<td>heapsort</td>
+<td>1.739</td>
+<td>0.507+-0%</td>
+<td>0.192+-0%</td>
+<td>9.1x</td>
+<td>2.6x</td>
+</tr>
+<tr>
+<td>binary_trees</td>
+<td>3.223</td>
+<td>0.641+-0%</td>
+<td>0.460+-0%</td>
+<td>7.0x</td>
+<td>1.4x</td>
+</tr>
+<tr>
+<td>cache_get_scb</td>
+<td>3.350</td>
+<td>0.614+-0%</td>
+<td>0.267+-2%</td>
+<td>12.6x</td>
+<td>2.3x</td>
+</tr>
+<tr>
+<td>fib</td>
+<td>2.357</td>
+<td>0.497+-0%</td>
+<td>0.021+-0%</td>
+<td>111.6x</td>
+<td>23.5x</td>
+</tr>
+<tr>
+<td>fasta</td>
+<td>1.499</td>
+<td>0.233+-4%</td>
+<td>0.177+-0%</td>
+<td>8.5x</td>
+<td>1.3x</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<p>The PyPy compiler toolchain provides a way to implement a dynamic
+language interpreter in a high-level language called RPython. This is
+a language which is lower-level than Python, but still higher-level than
+C or C++: for example, RPython is a garbage-collected language. The killer
+feature is that the toolchain will generate a JIT for your interpreter which
+will be able to leverage most of the work that has been done on speeding up Python
+in the PyPy project.  The resulting JIT is generated for your interpreter, and is not Python-specific.
+This was one of the toolchain's original design decisions – in contrast to e.g. the JVM,
+which was initially only used to interpret Java and later adjusted to serve as a platform for
+dynamic languages.</p>
+<p>Another important difference is that there is no common bytecode to which you compile both your
+language and Python, so you don't inherit problems presented when implementing language X on top of,
+say, <a class="reference external" href="https://www.parrot.org/">Parrot VM</a> or the JVM.  The PyPy toolchain does not impose constraints on the semantics of
+your language, whereas the benefits of the JVM only apply to languages that map well onto Java concepts.</p>
+<p>To read more about creating your own interpreters using the PyPy toolchain,
+read <a class="reference external" href="../../2011/04/tutorial-writing-interpreter-with-pypy-3785910476193156295.html">more</a> <a class="reference external" href="../../2011/04/tutorial-part-2-adding-jit-8121732841568309472.html">blog posts</a> or an <a class="reference external" href="https://tratt.net/laurie/tech_articles/articles/fast_enough_vms_in_fast_enough_time">excellent article</a> by Laurence Tratt.</p>
+</div>
+<div class="section" id="php-deviations">
+<h3>PHP deviations<a href="#php-deviations" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The project's biggest deviation from the PHP specification is probably
+that GC is no longer reference counting. That means that the object finalizer, when
+implemented, will not be called directly at the moment of object death, but
+at some later point. There are possible future developments to alleviate that
+problem, by providing "refcounted" objects when leaving the current scope.
+Research has to be done in order to achieve that.</p>
+</div>
+<div class="section" id="assessment">
+<h3>Assessment<a href="#assessment" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The RPython toolchain seems to be a cost-effective choice for writing
+dynamic language VMs.  It both provides a fast JIT and gives you
+access to low-level primitives when you need them. A good example is
+in the directory <tt class="docutils literal">hippy/rpython</tt> which contains the implementation
+of an ordered dictionary. An ordered dictionary is not a primitive
+that RPython provides – it's not necessary for the goal of
+implementing Python.  Now, implementing it on top of a normal dictionary
+is possible, but inefficient. RPython provides a way to work
+directly at a lower level, if you desire to do so.</p>
+<p>Things that require improvements in RPython:</p>
+<ul class="simple">
+<li>Lack of mutable strings on the RPython level ended up being a problem.
+I ended up using lists of characters; which are efficient, but inconvenient,
+since they don't support any string methods.</li>
+<li>Frame handling is too conservative and too Python-specific, especially around
+the calls. It's possible to implement less general, but simpler and faster
+frame handling implementation in RPython.</li>
+</ul>
+</div>
+<div class="section" id="status-of-the-implementation">
+<h3>Status of the implementation<a href="#status-of-the-implementation" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Don't use it! It's a research prototype intended to assess the feasibility
+of using RPython to create dynamic language VMs. The most notable
+feature that's missing is reasonable error reporting. That said, I'm
+confident it implements enough of the PHP language to prove that the full
+implementation will present the same performance characteristics.</p>
+</div>
+<div class="section" id="benchmarks">
+<h3>Benchmarks<a href="#benchmarks" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The benchmarks are a selection of computer language shootout benchmarks, as well
+as <tt class="docutils literal">cache_get_scb</tt>, which is a part of old Facebook code. All benchmarks other
+than this one (which is not open source, but definitely the most interesting :( ) are
+available in the <tt class="docutils literal">bench</tt> directory. The Python program to run them is called
+<tt class="docutils literal">runner.py</tt> and is in the same directory. It runs them 10 times, cutting off the first
+3 runs (to ignore the JIT warm-up time) and averaging the rest. As you can see
+the standard deviation is fairly minimal for all interpreters and runs; if
+it's omitted it means it's below 0.5%.</p>
+<p>The benchmarks were not selected for their ease of optimization – the optimizations
+in the interpreter were written specifically for this set of benchmarks. No special JIT
+optimizations were added, and barring what's mentioned below a vanilla PyPy 1.9 checkout
+was used for compilation.</p>
+</div>
+<div class="section" id="so-how-fast-will-my-website-run-if-this-is-completed">
+<h3>So, how fast will my website run if this is completed?<a href="#so-how-fast-will-my-website-run-if-this-is-completed" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The truth is that I lack the benchmarks to be able to answer that right now. The core
+of the PHP language is implemented up to the point where I'm confident
+that the performance will not change as we get more of the PHP going.</p>
+</div>
+<div class="section" id="how-do-i-run-it">
+<h3>How do I run it?<a href="#how-do-i-run-it" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Get a <a class="reference external" href="https://bitbucket.org/pypy/pypy">PyPy checkout</a>, apply the <a class="reference external" href="https://gist.github.com/2923845">diff</a> if you want to squeeze out the last
+bits of performance and run <tt class="docutils literal"><span class="pre">pypy-checkout/pypy/bin/rpython</span> targethippy.py</tt> to
+get an executable that resembles a PHP interpreter. You can also directly run
+<tt class="docutils literal">python targethippy.py file.php</tt>, but this will be about 2000x slower.</p>
+</div>
+<div class="section" id="rpython-modifications">
+<h3>RPython modifications<a href="#rpython-modifications" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>There was a modification that I did to the PyPy source code; the <a class="reference external" href="https://gist.github.com/2923845">diff</a>
+is available. It's trivial, and should simply be made optional in the
+RPython JIT generator, but it was easier just to do it, given the very constrained time
+frame.</p>
+<ul class="simple">
+<li>
+<tt class="docutils literal">gen_store_back_in_virtualizable</tt> was disabled. This feature is
+necessary for Python frames but not for PHP frames. PHP frames
+do not have to be kept alive after we exit a function.</li>
+</ul>
+</div>
+<div class="section" id="future">
+<h3>Future<a href="#future" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Hippy is a cool prototype that presents a very interesting path towards a fast
+PHP VM.  However, at the moment I have too many other open source commitments
+to take on the task of completing it in my spare time.  I do think that this project
+has a lot of potential, but I will not commit to any further development at
+this time.  If you send pull requests I'll try to review them.  I'm also open
+to having further development on this project funded, so if you're interested
+in this project and the potential of a fast PHP interpreter, please get in
+touch.</p>
+</div>
+<p>Cheers,<br>
+fijal</p>
+<p><b>EDIT:</b> Fixed the path to the rpython binary</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="py3k-status-update-5-359698189825543897.html" rel="prev" title="Py3k status update #5">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="cffi-release-02-4800000428934604295.html" rel="next" title="CFFI release 0.2.1">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-3710669179595077863">
+        <div class="comment-header">
+          <a name="comment-3710669179595077863"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-07-13 23:26</span>:
+        </div>
+        <div class="comment-content">
+          <p>it's cool. Next on the list Javascript to Python/PyPy converter...</p>
+        </div>
+      </div>
+      <div class="comment comment-5665985040660223763">
+        <div class="comment-header">
+          <a name="comment-5665985040660223763"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-07-13 23:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>please read the blog post first. It's *not* PHP to Python converter. There is also a started JS implementation on in https://bitbucket.org/pypy/lang-js, but JS is kind of useless without  a browser.</p>
+        </div>
+      </div>
+      <div class="comment comment-2459966363522684350">
+        <div class="comment-header">
+          <a name="comment-2459966363522684350"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-07-14 00:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>JS to pypy would be useful when time comes to running all those node based apps in prod ;)<br><br>Also, Java to PyPy would be a cool experiment too - jvm's way too bloated...</p>
+        </div>
+      </div>
+      <div class="comment comment-516520678031000187">
+        <div class="comment-header">
+          <a name="comment-516520678031000187"></a>
+            <span class="author">Christian Heimes</span> wrote on <span class="date">2012-07-14 01:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>Do I read the numbers correctly? The fibonacci test runs more than 110 times faster in your experimental, 2 months old VM than in the default Zend VM? That's amazing!<br><br>It took me a while to figure out the meaning of the numbers. Please add units and explain that small is faster.<br><br>Christian</p>
+        </div>
+      </div>
+      <div class="comment comment-8416785118423821044">
+        <div class="comment-header">
+          <a name="comment-8416785118423821044"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-07-14 02:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>Nice, Python surprising when</p>
+        </div>
+      </div>
+      <div class="comment comment-4095625575541185422">
+        <div class="comment-header">
+          <a name="comment-4095625575541185422"></a>
+            <span class="author">Konstantine Rybnikov</span> wrote on <span class="date">2012-07-14 07:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>Cool. When will your pypy converter convert my c++ programs to python? Can't wait until that happens! Anyway, nice work!<br><br>p.s.: sarcasm</p>
+        </div>
+      </div>
+      <div class="comment comment-8792857887674185571">
+        <div class="comment-header">
+          <a name="comment-8792857887674185571"></a>
+            <span class="author">Benedikt Morbach</span> wrote on <span class="date">2012-07-14 10:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hey there, nice work.<br><br>Do you have any numbers or estimates how memory consumption compares?</p>
+        </div>
+      </div>
+      <div class="comment comment-6325877219749512493">
+        <div class="comment-header">
+          <a name="comment-6325877219749512493"></a>
+            <span class="author">Ole Laursen</span> wrote on <span class="date">2012-07-14 11:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>I hope you get funding for researching the refcount thing. Being able to predict when something gets whacked is just really convenient and something PyPy Python can benefit from too.<br><br>While GC may be more efficient, the unpredictable nature of it do become a problem in production in some cases.<br><br>For instance, for a webapp written with Django and CPython, when a request is over I know that the stuff that was allocated is now gone unless I put something in a global data structure. I suspect many applications have similar patterns where you perform a big operation after which it's natural to have a clean up.</p>
+        </div>
+      </div>
+      <div class="comment comment-5111006641531805511">
+        <div class="comment-header">
+          <a name="comment-5111006641531805511"></a>
+            <span class="author">Inactive Account</span> wrote on <span class="date">2012-07-15 00:21</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wow, this is wonderful.<br>You rock.<br><br>I surely hope you get funding.<br><br>If I didn't live in Brazil, and our currency wasn't so weak, and my income wasn't so low, I would definitely donate some dozens of dollars.<br><br>Keep the good work</p>
+        </div>
+      </div>
+      <div class="comment comment-5109655457605455129">
+        <div class="comment-header">
+          <a name="comment-5109655457605455129"></a>
+            <span class="author">Tom</span> wrote on <span class="date">2012-07-15 19:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>I would like to see how this compares to the <a href="https://www.php-compiler.net/" rel="nofollow">Phalanger</a> project. Which runs PHP in the .NET runtime.</p>
+        </div>
+      </div>
+      <div class="comment comment-2931376234803009827">
+        <div class="comment-header">
+          <a name="comment-2931376234803009827"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-07-15 19:05</span>:
+        </div>
+        <div class="comment-content">
+          <p>About phalanger: the short answer is that I don't have windows and comparisons on mono would be a bit ingenuine. The longer answer is that I don't expect phalanger to particularly excel compared to Zend.<br><br>For example compare the performance of IronPython and CPython. The same reasons apply as they do towards JVM or Parrot - this is IMO nto the right way for dynamic lanaguages.</p>
+        </div>
+      </div>
+      <div class="comment comment-7621765546146017010">
+        <div class="comment-header">
+          <a name="comment-7621765546146017010"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-07-15 20:16</span>:
+        </div>
+        <div class="comment-content">
+          <p>Does the Zend test include APC as well? That's the current standard way to run php scripts...</p>
+        </div>
+      </div>
+      <div class="comment comment-1865498004365663513">
+        <div class="comment-header">
+          <a name="comment-1865498004365663513"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-07-15 20:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>Yes, although APC does not change anything in *this* set of benchmarks, precisely because you run everything in-process (within the same interpreter instance even).</p>
+        </div>
+      </div>
+      <div class="comment comment-4041864966588241407">
+        <div class="comment-header">
+          <a name="comment-4041864966588241407"></a>
+            <span class="author">Reini Urban</span> wrote on <span class="date">2012-07-16 16:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>Love this effort and esp. the benchmarks! Great work<br><br>Referring to your mentioning of JVM and parrot:<br><br>You consider as disadvantage to be tied to an existing set of VM opcodes to implement many languages. You were talking about .NET (which had to add Iron-style dynamic reflection later) or the JVM.<br><br>parrot already has all the functionality the JVM or .NET was missing and even more (e.g. dynamic types loadable as plugins) and considers it as advantage to share opcodes and bytecode libraries across different languages.<br><br>But parrot cannot compete with your speed yet.</p>
+        </div>
+      </div>
+      <div class="comment comment-4942497212095849904">
+        <div class="comment-header">
+          <a name="comment-4942497212095849904"></a>
+            <span class="author">SM</span> wrote on <span class="date">2012-07-16 17:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>Very interesting project. It would be nice if you used a recent version of PHP for comparisons - 5.3.2 is over 2 years old and one version behind. Try something like 5.4.4.</p>
+        </div>
+      </div>
+      <div class="comment comment-5346990792083561677">
+        <div class="comment-header">
+          <a name="comment-5346990792083561677"></a>
+            <span class="author">Reinis I.</span> wrote on <span class="date">2012-07-18 20:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; JS is kind of useless without a browser<br><br>This would have been more true before Node.js, but now it's false.</p>
+        </div>
+      </div>
+      <div class="comment comment-481516948631103181">
+        <div class="comment-header">
+          <a name="comment-481516948631103181"></a>
+            <span class="author">Arne Babenhauserheide</span> wrote on <span class="date">2012-07-18 22:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wow, 1.5x to 20x faster than a PHP-compiler and 7x to 100x faster than PHP itself… congrats!</p>
+        </div>
+      </div>
+      <div class="comment comment-5350924029518750107">
+        <div class="comment-header">
+          <a name="comment-5350924029518750107"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-07-24 11:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>Offtopic: not trying to sound offensive or pushy, but what happened to numpypy development? I'm regularly checking https://buildbot.pypy.org/numpy-status/latest.html, and it looks like its development is stale for several months.</p>
+        </div>
+      </div>
+      <div class="comment comment-901192786151187898">
+        <div class="comment-header">
+          <a name="comment-901192786151187898"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-07-24 11:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous not much. I'll write a non-progress blog post some time soon.</p>
+        </div>
+      </div>
+      <div class="comment comment-6896952487830933678">
+        <div class="comment-header">
+          <a name="comment-6896952487830933678"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-07-24 11:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Fijal<br>Thank you!</p>
+        </div>
+      </div>
+      <div class="comment comment-953436885126732429">
+        <div class="comment-header">
+          <a name="comment-953436885126732429"></a>
+            <span class="author">Dima Tisnek</span> wrote on <span class="date">2012-08-08 09:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>Awesome proof of concept!<br><br>Can you post memory footprint comparison, please?<br><br>And perhaps a quick overview what these test cases cover, arithmetic,  function call overhead, dynamic language features?<br><br>Thanks for your hard work, without likes of you OSS would never exist!</p>
+        </div>
+      </div>
+      <div class="comment comment-3853192815660169340">
+        <div class="comment-header">
+          <a name="comment-3853192815660169340"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-02-03 15:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>Just in case anyone *is* interested in implementing PHP on the Parrot Virtual Machine, you don't have to tie yourself to the PVM bytecodes.<br><br>You can write your PHP compiler entirely in NQP (Not Quite Perl) which in turn produces parrot bytecode for you.<br><br>This is important for two reasons:<br><br>First, NQP is a mid level language, and is relatively easy to write in, and doesn't require you to know anything at all about the PVM.<br><br>Second, although NQP *presently* only targets PVM, there's an in-progress backend which targets the Java Virtual Machine!  Early benchmarks suggest that it is already faster than perl5, and there are many optimizations and speedups to come.<br><br>Thus, if you were to write a PHP compiler in NQP, you could target either the Parrot Virtual machine, or (in the future) the Java virtual machine.</p>
+        </div>
+      </div>
+      <div class="comment comment-7399035795213527866">
+        <div class="comment-header">
+          <a name="comment-7399035795213527866"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2013-02-03 15:16</span>:
+        </div>
+        <div class="comment-content">
+          <p>Just in case anyone *is* interested in implementing PHP on the Parrot Virtual Machine, you don't have to tie yourself to the PVM bytecodes.<br><br>You can write your PHP compiler entirely in NQP (Not Quite Perl) which in turn produces parrot bytecode for you.<br><br>This is important for two reasons:<br><br>First, NQP is a mid level language, and is relatively easy to write in, and doesn't require you to know anything at all about the PVM.<br><br>Second, although NQP *presently* only targets PVM, there's an in-progress backend which targets the Java Virtual Machine!  Early benchmarks suggest that it is already faster than perl5, and there are many optimizations and speedups to come.<br><br>Thus, if you were to write a PHP compiler in NQP, you could target either the Parrot Virtual machine, or (in the future) the Java virtual machine.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

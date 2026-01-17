@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Python compatibility | PyPy</title>
+<link href="assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="rss.xml">
+<link rel="canonical" href="https://www.pypy.org/compat.html">
+<link rel="icon" href="favicon2.ico" sizes="16x16">
+<link rel="icon" href="favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="assets/css/tipuesearch.css">
+<meta name="author" content="The PyPy Team">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Python compatibility">
+<meta property="og:url" content="https://www.pypy.org/compat.html">
+<meta property="og:description" content="The goal of this page is to point out some of the differences between running
+python with PyPy and with CPython
+
+TL;DR
+Pure python code works, but there are a few differences with object lifetime
+mana">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2019-12-28T16:14:02Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="index.html">
+                    <image id="toplogo" src="images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="features.html">What is PyPy?</a> </li>  
+                    <li> <a href="#">Compatibility</a> </li>  
+                    <li> <a href="performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="blog/">Index</a> </li>  
+                    <li> <a href="categories/">Tags</a> </li>  
+                    <li> <a href="archive.html">Archive by year</a> </li>  
+                    <li> <a href="rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text storypage" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Python compatibility</a></h1>
+
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+    <p>The goal of this page is to point out some of the differences between running
+python with PyPy and with CPython</p>
+<section id="tl-dr"><h2>TL;DR<a href="#tl-dr" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Pure python code works, but there are a few differences with object lifetime
+management. Modules that use the <a class="reference external" href="http://docs.python.org/c-api/">CPython C API</a> will probably work, but will
+not achieve a speedup via the JIT. We encourage library authors to use <a class="reference external" href="http://cffi.readthedocs.org/">CFFI</a>
+and <a class="reference external" href="https://hpyproject.org/">HPy</a> instead.</p>
+</section><section id="refcounting-del-and-resource-use"><h2>Refcounting, <code class="docutils literal">__del__</code>, and resource use<a href="#refcounting-del-and-resource-use" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>The main difference in pure-python code that is not going to be fixed is that
+PyPy does
+not support refcounting semantics for "automatically" releasing state when
+an object's <code class="docutils literal">__del__</code> is called. The following code won't fill the
+file immediately, but only after a certain period of time, when the GC
+does a collection and flushes the output, since the file is only closed when
+the <code class="docutils literal">__del__</code> method is called:</p>
+<div class="code"><pre class="code python"><a id="rest_code_cf8f3e78effd4d099df0aab2399eef2c-1" name="rest_code_cf8f3e78effd4d099df0aab2399eef2c-1" href="compat.html#rest_code_cf8f3e78effd4d099df0aab2399eef2c-1"></a><span class="nb">open</span><span class="p">(</span><span class="s2">"filename"</span><span class="p">,</span> <span class="s2">"w"</span><span class="p">)</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">"stuff"</span><span class="p">)</span>
+</pre></div>
+<p>The proper fix is</p>
+<div class="code"><pre class="code python"><a id="rest_code_820c70c8e1e148299033f8a51f0138c2-1" name="rest_code_820c70c8e1e148299033f8a51f0138c2-1" href="compat.html#rest_code_820c70c8e1e148299033f8a51f0138c2-1"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"filename"</span><span class="p">,</span> <span class="s2">"w"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="rest_code_820c70c8e1e148299033f8a51f0138c2-2" name="rest_code_820c70c8e1e148299033f8a51f0138c2-2" href="compat.html#rest_code_820c70c8e1e148299033f8a51f0138c2-2"></a>    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">"stuff"</span><span class="p">)</span>
+</pre></div>
+<p>The same problem---not closing your files---can also show up if your
+program opens a large number of files without closing them explicitly.
+In that case, you can easily hit the system limit on the number of file
+descriptors that are allowed to be opened at the same time.</p>
+<p>PyPy can be run with the command-line option <code class="docutils literal"><span class="pre">-X</span> <span class="pre">track-resources</span></code> (as in,
+<code class="docutils literal">pypy <span class="pre">-X</span> <span class="pre">track-resources</span> myprogram.py</code>). This produces a <code class="docutils literal">ResourceWarning</code>
+when the GC closes a non-closed file or socket.  The traceback for the place
+where the file or socket was allocated is given as well, which aids finding
+places where <code class="docutils literal">close()</code> is missing.</p>
+<p>Similarly, remember that you must <code class="docutils literal">close()</code> a non-exhausted
+generator in order to have its pending <code class="docutils literal">finally</code> or <code class="docutils literal">with</code>
+clauses executed immediately:</p>
+<div class="code"><pre class="code python"><a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-1" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-1" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">mygen</span><span class="p">():</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-2" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-2" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-2"></a>    <span class="k">with</span> <span class="n">foo</span><span class="p">:</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-3" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-3" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-3"></a>        <span class="k">yield</span> <span class="mi">42</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-4" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-4" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-4"></a>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-5" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-5" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-5"></a><span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">mygen</span><span class="p">():</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-6" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-6" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-6"></a>    <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">42</span><span class="p">:</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-7" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-7" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-7"></a>        <span class="k">break</span>    <span class="c1"># foo.__exit__ is not run immediately!</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-8" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-8" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-8"></a>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-9" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-9" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-9"></a><span class="c1"># fixed version:</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-10" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-10" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-10"></a><span class="n">gen</span> <span class="o">=</span> <span class="n">mygen</span><span class="p">()</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-11" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-11" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-11"></a><span class="k">try</span><span class="p">:</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-12" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-12" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-12"></a>    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">gen</span><span class="p">:</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-13" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-13" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-13"></a>        <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">42</span><span class="p">:</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-14" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-14" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-14"></a>            <span class="k">break</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-15" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-15" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-15"></a><span class="k">finally</span><span class="p">:</span>
+<a id="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-16" name="rest_code_c92041c15bbd4b1e88850a541ea7e7b3-16" href="compat.html#rest_code_c92041c15bbd4b1e88850a541ea7e7b3-16"></a>    <span class="n">gen</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+<p>More generally, <code class="docutils literal">__del__()</code> methods are not executed as predictively
+as on CPython: they run "some time later" in PyPy (or not at all if
+the program finishes running in the meantime).  See <a class="reference external" href="http://pypy.readthedocs.org/en/latest/cpython_differences.html#differences-related-to-garbage-collection-strategies">more details
+here</a>.</p>
+</section><section id="why-is-memory-usage-so-high"><h2>Why is memory usage so high?<a href="#why-is-memory-usage-so-high" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Note that PyPy returns unused memory to the operating system only after
+a madvise() system call (at least Linux, OS X, BSD) or on Windows.  It is
+important to realize that you may not see this in <code class="docutils literal">top</code>.  The unused
+pages are marked with <code class="docutils literal">MADV_FREE</code>, which tells the system "if you
+need more memory at some point, grab this page".  As long as memory is
+plentiful, the <code class="docutils literal">RES</code> column in <code class="docutils literal">top</code> might remains high.  (Exceptions to
+this rule are systems with no <code class="docutils literal">MADV_FREE</code>, where we use
+<code class="docutils literal">MADV_DONTNEED</code>, which forcefully lowers the <code class="docutils literal">RES</code>.  This includes
+Linux &lt;= 4.4.)</p>
+</section><section id="more-info"><h2>More info<a href="#more-info" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>A more complete list of known differences is available at <a class="reference external" href="http://pypy.readthedocs.org/en/latest/cpython_differences.html">our dev site</a>.</p>
+</section>
+</div>
+    
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

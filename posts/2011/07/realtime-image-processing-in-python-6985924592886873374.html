@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Realtime image processing in Python | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2011/07/realtime-image-processing-in-python-6985924592886873374.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Antonio Cuni">
+<link rel="prev" href="../06/global-interpreter-lock-or-how-to-kill-8270246310848099963.html" title="Global Interpreter Lock, or how to kill it" type="text/html">
+<link rel="next" href="../08/pypy-is-faster-than-c-again-string-6756589731691762127.html" title="PyPy is faster than C, again: string formatting" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Realtime image processing in Python">
+<meta property="og:url" content="https://www.pypy.org/posts/2011/07/realtime-image-processing-in-python-6985924592886873374.html">
+<meta property="og:description" content="Image processing is notoriously a CPU intensive task.  To do it in realtime,
+you need to implement your algorithm in a fast language, hence trying to do it
+in Python is foolish: Python is clearly not ">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2011-07-07T16:24:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Realtime image processing in Python</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2011-07-07T16:24:00Z" itemprop="datePublished" title="2011-07-07 16:24">2011-07-07 16:24</time></a>
+            </p>
+                <p class="commentline">26 comments</p>
+
+                <p class="commentline">            <a href="realtime-image-processing-in-python-6985924592886873374.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Image processing is notoriously a CPU intensive task.  To do it in realtime,
+you need to implement your algorithm in a fast language, hence trying to do it
+in Python is foolish: Python is clearly not fast enough for this task. Is it?
+:-)<br>
+Actually, it turns out that the PyPy JIT compiler produces code which is fast
+enough to do realtime video processing using two simple algorithms implemented
+by Håkan Ardö.<br><tt class="docutils literal">sobel.py</tt> implements a classical way of locating edges in images, the
+<a class="reference external" href="https://en.wikipedia.org/wiki/Sobel_operator">Sobel operator</a>. It is an approximation of the magnitude of the <a class="reference external" href="https://en.wikipedia.org/wiki/Image_gradient">image
+gradient</a>. The processing time is spend on two <a class="reference external" href="https://en.wikipedia.org/wiki/Convolution">convolutions</a> between the
+image and 3x3-kernels.<br><tt class="docutils literal">magnify.py</tt> implements a pixel coordinate transformation that rearranges
+the pixels in the image to form a magnifying effect in the center.
+It consists of a single loop over the pixels in the output image copying
+pixels from the input image.<br>
+You can try by yourself by downloading the appropriate demo:<br></p>
+<blockquote>
+<ul class="simple">
+<li>
+<a class="reference external" href="https://wyvern.cs.uni-duesseldorf.de/%7Eantocuni/pypy-image-demo.tar.bz2">pypy-image-demo.tar.bz2</a>: this archive contains only the source code,
+use this is you have PyPy already installed</li>
+<li>
+<a class="reference external" href="https://wyvern.cs.uni-duesseldorf.de/%7Eantocuni/pypy-image-demo-full.tar.bz2">pypy-image-demo-full.tar.bz2</a>: this archive contains both the source
+code and prebuilt PyPy binaries for linux 32 and 64 bits</li>
+</ul>
+</blockquote>
+To run the demo, you need to have <tt class="docutils literal">mplayer</tt> installed on your system.  The
+demo has been tested only on linux, it might (or not) work also on other
+systems:<br><pre class="literal-block">$ pypy pypy-image-demo/sobel.py
+
+$ pypy pypy-image-demo/magnify.py
+</pre>
+By default, the two demos uses an example AVI file.  To have more fun, you can
+use your webcam by passing the appropriate mplayer parameters to the scripts,
+e.g:<br><pre class="literal-block">$ pypy demo/sobel.py tv://
+</pre>
+By default magnify.py uses <a class="reference external" href="https://en.wikipedia.org/wiki/Nearest-neighbor_interpolation">nearest-neighbor interpolation</a>.  By adding the
+option -b, <a class="reference external" href="https://en.wikipedia.org/wiki/Bilinear_interpolation">bilinear interpolation</a> will be used instead, which gives
+smoother result:<br><pre class="literal-block">$ pypy demo/magnify.py -b
+</pre>
+There is only a single implementation of the algorithm in
+<tt class="docutils literal">magnify.py</tt>. The two different interpolation methods are implemented by
+subclassing the class used to represent images and embed the
+interpolation within the pixel access method. PyPy is able to achieve good
+performance with this kind of abstractions because it can inline
+the pixel access method and specialize the implementation of the algorithm.
+In C++ that kind of pixel access method would be virtual and you'll need to use
+templates to get the same effect without incurring in runtime overhead.<br><div class="separator" style="clear: both; text-align: center;">
+
+
+
+
+</div>
+The <a class="reference external" href="https://www.youtube.com/watch?v=5DtlBC_Zbq4">video</a> above shows PyPy and CPython running <tt class="docutils literal">sobel.py</tt> side by
+side (PyPy taking input from the webcam, CPython from the test
+file). Alternatively, to have a feeling on how much PyPy is faster than
+CPython, try to run the demo with the latter.  These are the the average fps
+(frames per second) that I get on my machine (Ubuntu 64 bit, Intel i7 920, 4GB
+RAM) when processing the default <tt class="docutils literal">test.avi</tt> video and using the prebuilt
+PyPy binary found in the <a class="reference external" href="https://wyvern.cs.uni-duesseldorf.de/%7Eantocuni/pypy-image-demo-full.tar.bz2">full</a> tarball alinked above.  For <tt class="docutils literal">sobel.py</tt>:<br><blockquote>
+<ul class="simple">
+<li>PyPy: ~47.23 fps</li>
+<li>CPython: ~0.08 fps</li>
+</ul>
+</blockquote>
+For <tt class="docutils literal">magnify.py</tt>:<br><blockquote>
+<ul class="simple">
+<li>PyPy: ~26.92 fps</li>
+<li>CPython: ~1.78 fps</li>
+</ul>
+</blockquote>
+This means that on <tt class="docutils literal">sobel.py</tt>, PyPy is <b>590 times faster</b>.  On
+<tt class="docutils literal">magnify.py</tt> the difference is much less evident and the speedup is "only"
+15x.<br>
+It must be noted that this is an extreme example of what PyPy can do.  In
+particular, you cannot expect (yet :-)) PyPy to be fast enough to run an
+arbitrary video processing algorithm in real time, but the demo still proves
+that PyPy has the potential to get there.
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../06/global-interpreter-lock-or-how-to-kill-8270246310848099963.html" rel="prev" title="Global Interpreter Lock, or how to kill it">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../08/pypy-is-faster-than-c-again-string-6756589731691762127.html" rel="next" title="PyPy is faster than C, again: string formatting">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-2943010555064589589">
+        <div class="comment-header">
+          <a name="comment-2943010555064589589"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-07-07 17:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>Pypy is awesome!</p>
+        </div>
+      </div>
+      <div class="comment comment-6259739352394434795">
+        <div class="comment-header">
+          <a name="comment-6259739352394434795"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-07-07 18:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>I have a n00b problem: On Mac OS X 10.5.8, the precompiled pypy binary crashes with this message:<br>dyld: Library not loaded: /usr/lib/libssl.0.9.8.dylib<br><br>What's up with this? Thanks, and sorry for being offtopic.</p>
+        </div>
+      </div>
+      <div class="comment comment-8105520275309823280">
+        <div class="comment-header">
+          <a name="comment-8105520275309823280"></a>
+            <span class="author">metapundit.net</span> wrote on <span class="date">2011-07-07 19:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>I saw this demo recently when Dan Roberts presented at Baypiggies. We broke into spontaneous applause when the pypy runtime ran at a watchable speed after cpython ran at less than 1 frame/second. Very impressive!</p>
+        </div>
+      </div>
+      <div class="comment comment-8170685505003013178">
+        <div class="comment-header">
+          <a name="comment-8170685505003013178"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-07-07 21:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>Anonymous, can you read?<br><br>"prebuilt PyPy binaries for linux 32 and 64 bits"<br>"The demo has been tested only on linux, it might (or not) work also on other systems"<br><br>Mac OS X is not Linux.</p>
+        </div>
+      </div>
+      <div class="comment comment-1047578302387670600">
+        <div class="comment-header">
+          <a name="comment-1047578302387670600"></a>
+            <span class="author">schmichael</span> wrote on <span class="date">2011-07-07 21:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>Perhaps add a comment to sobel.py explaining what "pypyjit.set_param(trace_limit=200000)" does?</p>
+        </div>
+      </div>
+      <div class="comment comment-1341363140164843137">
+        <div class="comment-header">
+          <a name="comment-1341363140164843137"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2011-07-07 22:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>The only chamge I'd like to see in this project is its name... Trying to gather news from twitter for example, makes me search amongst thousands of comments in japanese (pypy means "boobies" in japanese), other incomprehensible comments in malay and hundreds of music fans of Look-Ka PYPY (WTF??)</p>
+        </div>
+      </div>
+      <div class="comment comment-3116590502925101234">
+        <div class="comment-header">
+          <a name="comment-3116590502925101234"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-07-07 22:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>Other Anonymous: Yes, I can read. I should have given a bit more context, but I was offtopic anyway. My goal was not running the demo, my goal was running pypy. I used the OS X binary from pypy.org. For those who are really good at reading, this was probably clear from the fact that my binary only crashed at library loading time.</p>
+        </div>
+      </div>
+      <div class="comment comment-8363213654373007421">
+        <div class="comment-header">
+          <a name="comment-8363213654373007421"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2011-07-07 23:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous: most probably, the prebuilt PyPy for Mac Os X was built on a system different (older?) than yours.<br><br>For a quick workaround, you can try to do "ln -s /usr/lib/libssl-XXX.dylib /usr/lib/libssl.0.9.8.dylib".  This should at least make it working, but of course it might break in case you actually use libssl.<br><br>The proper fix is to recompile PyPy by yourself.</p>
+        </div>
+      </div>
+      <div class="comment comment-2976519511209904057">
+        <div class="comment-header">
+          <a name="comment-2976519511209904057"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2011-07-07 23:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>@schmichael<br><br>to avoid the potential problem of infinite tracing, the JIT bails out if it traces "too much", depending on the trace_limit.<br>In this case, the default trace_limit is not enough to fully optimize the whole algorithm, hence we need to help the JIT by telling it to trace a bit more than usual.<br><br>I agree that having to mess up with the internal parameters of the JIT is suboptimal.  I plan to address this issue in the next weeks.</p>
+        </div>
+      </div>
+      <div class="comment comment-2479667334713593647">
+        <div class="comment-header">
+          <a name="comment-2479667334713593647"></a>
+            <span class="author">relet</span> wrote on <span class="date">2011-07-07 23:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>How does it perform against python-opencv?</p>
+        </div>
+      </div>
+      <div class="comment comment-107533072454334839">
+        <div class="comment-header">
+          <a name="comment-107533072454334839"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-07-07 23:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>Antonio: Thanks for the quick reply. Unfortunately pypy can't be misled with the symlink hack: "Reason: Incompatible library version: pypy requires version 0.9.8 or later, but libssl.0.9.8.dylib provides version 0.9.7"<br><br>It seem like the prebuilt was created on a 10.6, and it does not work on vanilla 10.5 systems. Not a big deal, but is good to know.</p>
+        </div>
+      </div>
+      <div class="comment comment-4627961902425136062">
+        <div class="comment-header">
+          <a name="comment-4627961902425136062"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-07-08 04:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks for posting this. pypy is great. I'm trying to figure out how to write modules in RPython. I was sad that I missed the Baypiggies presentation.</p>
+        </div>
+      </div>
+      <div class="comment comment-5761070663559655675">
+        <div class="comment-header">
+          <a name="comment-5761070663559655675"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2011-07-08 07:35</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hello,<br><br>it's lovely that pypy can do this.  This result is amazing, wonderful, and is very kittens.  pypy is fast at running python code (*happy dance*).<br><br>But.<br><br>It also makes kittens cry when you compare to CPython in such a way.<br><br>The reality is that CPython users would do this using a library like numpy, opencv, pygame, scipy, pyopengl, freej (the list of real time video processing python libraries is very large, so I won't list them all here).<br><br>Of course python can do this task well, and has for more than 10 years.<br><br>This code does not take advantage of vectorization through efficient SIMD, multiple cores or graphics hardware, and isn't careful with reusing memory - so is not within an order of magnitude of the speed of CPython code with libraries doing real time video processing.  <br><br>Anyone within the field would ask about using these features.<br><br>Another question they would ask is about pauses. How does the JIT affect pauses in animation? What are the rules for when the JIT warms up, and how can you tell when the code will start running fast? How does the GC affect pauses?  If there is a way to turn off the GC, or reuse memory in some way such that the GC won't cause the program to fail(Remember that in realtime a pause is a program fail).  Does the GC pool memory of similar size objects automatically?  Does the GC work well with 256MB-1GB-16GB sized objects?  In a 16GB system, can you use 15GB of objects, and then delete those objects to then use another 15GB of different objects?  Or will the program swap, or fragment memory causing pauses?<br><br>Please don't make kittens cry.  Be realistic with CPython comparisons.<br><br><br>At the moment the python implementation is not as elegant as a vector style implementation.  A numpy/matlab/CUDA/OpenCL approach looks really nice for this type of code.  One speed up might be to reuse memory, or act in place where possible.  For example, not copying the image... unless the GC magically takes care of that for you.</p>
+        </div>
+      </div>
+      <div class="comment comment-7414768546568623334">
+        <div class="comment-header">
+          <a name="comment-7414768546568623334"></a>
+            <span class="author">Jacob Hallén</span> wrote on <span class="date">2011-07-08 08:21</span>:
+        </div>
+        <div class="comment-content">
+          <p>@illume:More or less everyone knows that you can speed up your code by writing or using an extension library. Unfortunately this introduces a dependency on the library (for instance libssl mentioned in the comment thread) and it usually increases the complexity of your code.<br><br>Using PyPy you can solve computationally intensive problems in plain Python. Writing in Python saves development time. This is what the comparison is all about.</p>
+        </div>
+      </div>
+      <div class="comment comment-2259532970770795910">
+        <div class="comment-header">
+          <a name="comment-2259532970770795910"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2011-07-08 12:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>hi @jacob: below is code which runs either multi core, vectorised SIMD, and on a GPU if you like.  You'll notice that it is way shorter and more elegant than the 'pure python' code.<br><br>def sobelEdgeDetect(im=DImage, p=Position):<br>....wX = outerproduct([1,2,1],[-1,0,1])<br>....wY = transpose(wX)<br><br>....Gx = convolve(wX,im,p)<br>....Gy = convolve(wY,im,p)<br><br>....return sqrt(Gx**2 + Gy**2)<br><br>If pypy is 5x slower than C, and SIMD is 5x faster than C... and using multiple cores is 8x faster than a single core you can see this python code is (5 * 5 * 8) 200x faster than the pypy code.  This is just comparing CPU based code.  Obviously GPU code for real time image processing is very fast compared to CPU based code.<br><br>Things like numpy, pyopengl etc come packaged with various OSes - but chosing those dependencies compared to depending on pypy is a separate issue I guess (but many cpython packaged libraries are packaged for more platforms than pypy).<br><br>Of course using tested, and debugged existing code written in python will save you development time:  for example using sobel written with the scipy library:<br>https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.filters.sobel.html<br><br>The fact is CPython is fast enough, more elegant, and will save you time for realtime image processing - unless you ignore the reality that people use CPython libraries for these tasks.<br><br>Finally the given code does not prove that the frames are all processed in realtime.  They give an average time over all of the frames.  Realtime video requires that you meet your target speed for every frame.  It would need to be extended to measure each frame to make sure that each frame is within the required time budget.</p>
+        </div>
+      </div>
+      <div class="comment comment-4916843119818645430">
+        <div class="comment-header">
+          <a name="comment-4916843119818645430"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2011-07-08 12:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>@illume: I think you completely missed the point of the blog post.  This is not about "you should use pypy to do video processing", it's about "pypy runs pure python code very fast".</p>
+        </div>
+      </div>
+      <div class="comment comment-1542607159410824789">
+        <div class="comment-header">
+          <a name="comment-1542607159410824789"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2011-07-08 12:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Antonio Cuni, I'm saying the post reads like cpython can not do "realtime image processing in python" and that pypy can.</p>
+        </div>
+      </div>
+      <div class="comment comment-4741291015132985550">
+        <div class="comment-header">
+          <a name="comment-4741291015132985550"></a>
+            <span class="author">tismer</span> wrote on <span class="date">2011-07-08 14:21</span>:
+        </div>
+        <div class="comment-content">
+          <p>@illume:<br>This example shows pure python code and compares its execution time in cpython and pypy. Nothing else. Writing graphics code in pure python that runs not dreadfully slow was to my knowledge never before shown.<br>If enough people understand the potential of this technique and put their time into it, we will hopefully come closer to  your (5 * 5 * 8) acceleration in pypy, too.<br>I will for sure work on this.</p>
+        </div>
+      </div>
+      <div class="comment comment-8926240906193241790">
+        <div class="comment-header">
+          <a name="comment-8926240906193241790"></a>
+            <span class="author">Eventh</span> wrote on <span class="date">2011-07-08 14:41</span>:
+        </div>
+        <div class="comment-content">
+          <p>SIMD instructions and multi core support is something PyPy has potential to support, given time and funding.</p>
+        </div>
+      </div>
+      <div class="comment comment-5532902188274574015">
+        <div class="comment-header">
+          <a name="comment-5532902188274574015"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-07-08 21:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>The typical optimization path here would be implementing the necessary numpy array operations for the algorithms described. I wonder how a proper numpy implementation would compare.</p>
+        </div>
+      </div>
+      <div class="comment comment-3053748581716885386">
+        <div class="comment-header">
+          <a name="comment-3053748581716885386"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-07-09 13:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>I think you are still missing the point of the post.  It was not "use pure Python to write your video processing algos".  That's of course nonsense, given the amount and quality of existing C extension modules to do that.<br><br>The point is that when you want to experiment with writing a new algorithm of any kind, it is now possible to do it in pure Python instead of, say, C code.  If later your project needs to move past the experimentation phase, you will have to decide if you want to keep that Python code, rewrite it in C, or (if applicable) use SIMD instructions from Python or from C, or whatever.<br><br>The real point of this demo is to show that PyPy makes Python fast enough as an early experimentation platform for almost any kind of algorithm.  If you can write in Python instead of in C, you'll save 50% of your time (random estimate); and then for the 5% of projects that go past the experimentation phase and where Python is not enough (other random estimate), spend more time learning other techniques and using them.  The result is still in your favor, and it's only going to be more so as PyPy continues to improve.</p>
+        </div>
+      </div>
+      <div class="comment comment-1583982725496321611">
+        <div class="comment-header">
+          <a name="comment-1583982725496321611"></a>
+            <span class="author">Yaacov</span> wrote on <span class="date">2011-10-18 23:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>I was hoping to experiment with this amazing demo on my Windows-based computers. Any advice for how I would start making the required changes?<br><br>Jacob</p>
+        </div>
+      </div>
+      <div class="comment comment-1017355034859226233">
+        <div class="comment-header">
+          <a name="comment-1017355034859226233"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-07-24 13:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>dead links</p>
+        </div>
+      </div>
+      <div class="comment comment-2908069235368118326">
+        <div class="comment-header">
+          <a name="comment-2908069235368118326"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-07-24 13:41</span>:
+        </div>
+        <div class="comment-content">
+          <p>Unfortunately the server died :( I'm not sure where exactly are packaged demos, but they can be run from:<br><br>https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/extradoc/talk/iwtc11/benchmarks/image</p>
+        </div>
+      </div>
+      <div class="comment comment-1161620714914734176">
+        <div class="comment-header">
+          <a name="comment-1161620714914734176"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-10-04 22:08</span>:
+        </div>
+        <div class="comment-content">
+          <br>The python code for this seems to be now here:<br>https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/talk/dls2012/demo
+        </div>
+      </div>
+      <div class="comment comment-4722258372613934573">
+        <div class="comment-header">
+          <a name="comment-4722258372613934573"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-10-04 22:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>The scripts can be found here:<br><br>https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/153804ce4fc3/talk/dls2012/demo</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

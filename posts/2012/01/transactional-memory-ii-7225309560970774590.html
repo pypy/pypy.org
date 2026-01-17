@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transactional Memory (II) | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2012/01/transactional-memory-ii-7225309560970774590.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="numpypy-progress-report-running-3336055571122066974.html" title="NumPyPy progress report - running benchmarks" type="text/html">
+<link rel="next" href="pypy-internship-at-ncar-2244162842744077724.html" title="PyPy internship at NCAR" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Transactional Memory (II)">
+<meta property="og:url" content="https://www.pypy.org/posts/2012/01/transactional-memory-ii-7225309560970774590.html">
+<meta property="og:description" content="Here is an update about the previous blog post about the
+Global Interpreter Lock (GIL).  In 5 months, the point of view
+changed quite a bit.
+Let me remind you that the GIL is the technique used in bot">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2012-01-14T13:21:00Z">
+<meta property="article:tag" content="stm">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Transactional Memory (II)</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2012-01-14T13:21:00Z" itemprop="datePublished" title="2012-01-14 13:21">2012-01-14 13:21</time></a>
+            </p>
+                <p class="commentline">22 comments</p>
+
+                <p class="commentline">            <a href="transactional-memory-ii-7225309560970774590.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Here is an update about the <a class="reference" href="../../2011/06/global-interpreter-lock-or-how-to-kill-8270246310848099963.html">previous blog post</a> about the
+Global Interpreter Lock (GIL).  In 5 months, the point of view
+changed quite a bit.</p>
+<p>Let me remind you that the GIL is the technique used in both CPython and
+PyPy to safely run multi-threaded programs: it is a global lock that
+prevents multiple threads from actually running at the same time.  The
+reason to do that is that it would have disastrous effects in the
+interpreter if several threads access the same object concurrently --- to
+the point that in CPython even just manipulating the object's reference
+counter needs to be protected by the lock.</p>
+<p>So far, the ultimate goal to enable true multi-CPU usage has been to
+remove the infamous GIL from the interpreter, so that multiple threads
+could actually run in parallel.  It's a lot of work, but this has been
+done in Jython.  The reason that it has not been done in CPython so far
+is that it's even more work: we would need to care not only about
+carefully adding fine-grained locks everywhere, but also about reference
+counting; and there are a lot more C extension modules that would need
+care, too.  And we don't have locking primitives as performant as
+Java's, which have been hand-tuned since ages (e.g. to use help from the
+JIT compiler).</p>
+<p>But we think we have a plan to implement a different model for using
+multiple cores.  Believe it or not, this is <em>better</em> than just removing
+the GIL from PyPy.  You might get to use all your cores <em>without ever
+writing threads.</em></p>
+<p>You would instead just use some event dispatcher, say from Twisted, from
+Stackless, or from your favorite GUI; or just write your own.  From
+there, you (or someone else) would add some minimal extra code to the
+event dispatcher's source code, to exploit the new transactional features
+offered by PyPy.  Then you would run your program on a
+special version of PyPy, and voilà: you get some form of automatic parallelization.
+Sounds magic, but the basic idea is simple: start handling multiple
+events in parallel, giving each one its own <em>transaction.</em>  More about
+it later.</p>
+
+<h2 id="threads-or-events"><a id="threads-or-events" name="threads-or-events">Threads or Events?</a><a href="#threads-or-events" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>First, why would this be better than "just" removing the GIL?  Because
+using threads can be a mess in any complex program.  Some authors (e.g.
+<a class="reference" href="https://www.eecs.berkeley.edu/Pubs/TechRpts/2006/EECS-2006-1.pdf">Lee</a>) have argued that the reason is that threads are fundamentally
+non-deterministic.  This makes it very hard to reason about them.
+Basically the programmer needs to "trim" down the non-determinism (e.g.
+by adding locks, semaphores, etc.), and it's hard to be sure when he's
+got a sufficiently deterministic result, if only because he can't write
+exhaustive tests for it.</p>
+<p>By contrast, consider a Twisted program.  It's not a multi-threaded
+program, which means that it handles the "events" one after the other.
+The exact ordering of the events is not really deterministic, because
+they often correspond to external events; but that's the only source of
+non-determinism.  The actual handling of each event occurs in a nicely
+deterministic way, and most importantly, not in parallel with the
+handling of other events.  The same is true about other libraries like
+GUI toolkits, gevent, or Stackless.</p>
+<p>(Of course the Twisted and the Stackless models, to cite only these two,
+are quite different from each other; but they have in common the fact
+that they are not multi-threaded, and based instead on "events" ---
+which in the Stackless case means running a tasklet from one switch()
+point to the next one.)</p>
+<p>These two models --- threads or events --- are the two main models we
+have right now.  The latter is more used in Python, because it is much
+simpler to use than the former, and the former doesn't give any benefit
+because of the GIL.  A third model, which is the only one that gives
+multi-core benefits, is to use multiple processes, and do inter-process
+communication.</p>
+
+<h2 id="the-problem"><a id="the-problem" name="the-problem">The problem</a><a href="#the-problem" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Consider the case of a big program that has arbitrary complicated
+dependencies.  Even assuming a GIL-less Python, this is likely enough to
+prevent the programmer from even starting a multi-threaded rewrite,
+because it would require a huge mess of locks.  He could also consider
+using multiple processes instead, but the result is annoying as well:
+the complicated dependencies translate into a huge mess of inter-process
+synchronization.</p>
+<p>The problem can also be down-sized to very small programs, like the kind
+of hacks that you do and forget about.  In this case, the dependencies
+might be simpler, but you still have to learn and use subtle locking
+patterns or a complex inter-process library, which is overkill for the
+purpose.</p>
+<p>(This is similar to how explicit memory management is not very hard for
+small programs --- but still, nowadays a lot of people agree that
+automatic memory management is easier for programs of all sizes.  I
+think the same will eventually be true for using multiple CPUs, but the
+correct solution will take time to mature, like garbage collectors did.
+This post is a step in hopefully the right direction <tt class="docutils literal"><span class="pre">:-)</span></tt>)</p>
+
+<h2 id="events-in-transactions"><a id="events-in-transactions" name="events-in-transactions">Events in Transactions</a><a href="#events-in-transactions" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Let me introduce the notion of <em>independent events</em>: two events are
+independent if they don't touch the same set of objects. In a multi-threaded
+world, it means that they can be executed in parallel without needing any lock
+to ensure correctness.</p>
+<p>Events might also be <em>mostly independent</em>, i.e. they rarely access the same
+object concurrently.  Of course, in a multi-threaded world we would still need
+locks to ensure correctness, but the point is that the locks are rarely causing
+pauses: <a class="reference" href="https://en.wikipedia.org/wiki/Lock_%28computer_science%29">lock contention</a> is low.</p>
+<p>Consider again the Twisted example I gave above.  There are often several
+events pending in the dispatch queue (assuming the program is using 100%
+of our single usable CPU, otherwise the whole discussion is moot).  The case I am
+interested in is the case in which these events are <em>generally mostly
+independent</em>, i.e. we expect few conflicts between them.  However
+they don't <em>have</em> to be proved independent.  In fact it is fine if
+they have arbitrary complicated dependencies as described above.  The
+point is the expected common case.  Imagine that you have a GIL-less
+Python and that you can, by a wave of your hand, have all the careful
+locking mess magically done.  Then what I mean here is the case in which
+such a theoretical program would run mostly in parallel on multiple
+core, without waiting too often on the locks.</p>
+<p>In this case, the solution I'm proposing is that with minimal tweaks
+in the event dispatch loop, we can
+handle multiple events on multiple threads, each in its own transaction.
+A <a class="reference" href="https://en.wikipedia.org/wiki/Transactional_memory">transaction</a> is basically a tentative execution of the corresponding
+piece of code: if we detect conflicts with other concurrently executing
+transactions, we abort the whole transaction and restart it from
+scratch.</p>
+<p>By now, the fact that it can basically work should be clear: multiple
+transactions will only get into conflict when modifying the same data
+structures, which is the case where the magical wand above would have
+put locks.  If the magical program could progress without too many
+locks, then the transactional program can progress without too many
+conflicts.  In a way, you get even more than what the magical program
+can give you: each event is dispatched in its own transaction, which
+means that from each event's point of view, we have the illusion that
+nobody else is running concurrently.  This is exactly what all existing
+Twisted-/Stackless-/etc.-based programs are assuming.</p>
+<p>Note that this solution, without transactions, already exists in some
+other languages: for example, Erlang is all about independent events.
+This is the simple case where we can just run them on multiple cores,
+knowing by construction of the language that you can't get conflicts.
+Of course, it doesn't work for Python or for a lot of other languages.
+From that point of view, what I'm suggesting is merely that
+transactional memory could be a good model to cope with the risks of
+conflicts that come from not having a special-made language.</p>
+
+<h2 id="not-a-perfect-solution"><a id="not-a-perfect-solution" name="not-a-perfect-solution">Not a perfect solution</a><a href="#not-a-perfect-solution" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Of course, transactional memory
+(TM) is not a perfect solution either.  Right now, the biggest issue is
+the performance hit that comes from the software implementation (STM).
+In time, hardware support (HTM) is <a class="reference" href="https://en.wikipedia.org/wiki/Haswell_%28microarchitecture%29">likely to show up</a> and help
+mitigate the problem; but I won't deny the fact that in some cases,
+because it's simple enough and/or because you really need the top
+performance, TM is not the best solution.</p>
+<p>Also, the explanations above are silent on what is a hard point for TM,
+namely system calls.  The basic general solution is to suspend other
+transactions as soon as a transaction does its first system call, so
+that we are sure that the transaction will succeed.  Of course this
+solution is far from optimal.  Interestingly, it's possible to do better
+on a case-by-case basis: for example, by adding in-process buffers, we
+can improve the situation for sockets, by having recv() store in a
+buffer what is received so that it can be re-recv()-ed later if the
+transaction is aborted; similarly, send() or writes to log files can be
+delayed until we are sure that the transaction will commit.</p>
+<p>From my point of view, the most important point is that the TM solution
+comes from the correct side of the "determinism" scale.  With threads,
+you have to prune down non-determinism.  With TM, you start from a
+mostly deterministic point, and if needed, you add non-determinism.  The
+reason you would want to do so is to make the transactions shorter:
+shorter transactions have less risks of conflicts, and when there are
+conflicts, less things to redo.  So making transactions shorter
+increases the parallelism that your program can achieve, while at the
+same time requiring more care.</p>
+<p>In terms of an event-driven model, the equivalent would be to divide the
+response of a big processing event into several events that are handled
+one after the other: for example, the first event sets things up and fires the second
+event, which does the actual computation; and afterwards a third event
+writes the results back.  As a result, the second event's transaction
+has little risks of getting aborted.  On the other hand, the writing
+back needs to be aware of the fact that it's not in the same transaction
+as the original setting up, which means that other unrelated
+transactions may have run in-between.</p>
+
+<h2 id="one-step-towards-the-future"><a id="one-step-towards-the-future" name="one-step-towards-the-future">One step towards the future?</a><a href="#one-step-towards-the-future" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>These, and others, are the problems of the TM approach.  They are "new"
+problems, too, in the sense that the existing ways of programming don't
+have these problems.</p>
+<p>Still, as you have guessed, I think that it is overall a win, and
+possibly a big win --- a win that might be on the same scale for the age
+of multiple CPUs as automatic garbage collection was 20 years ago for
+the age of RAM size explosion.</p>
+<p>Stay tuned for more!</p>
+<p>--- Armin (and reviews by Antonio and Fijal)</p>
+
+<br><b>UPDATE:</b> please look at the tiny <a href="https://bitbucket.org/arigo/arigo/raw/default/hack/stm/transactionmodule/">transaction module</a> I wrote as an example.  The idea is to have the same interface as this module, but implemented differently.  By making use of transactional memory internally, it should be possible to safely run on multiple CPUs while keeping the very same programmer interface.
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/stm.html" rel="tag">stm</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="numpypy-progress-report-running-3336055571122066974.html" rel="prev" title="NumPyPy progress report - running benchmarks">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy-internship-at-ncar-2244162842744077724.html" rel="next" title="PyPy internship at NCAR">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-1318986761862693600">
+        <div class="comment-header">
+          <a name="comment-1318986761862693600"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-01-14 15:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great article, great solution to a big problem...<br><br>I am really looking forward to this :-) <br><br>As an experiment I have developed Pyworks, which makes objects concurrent and methods asynchronious. But it makes little sense to do performance test on an multicore CPU because of the GIL.<br><br>The code for Pyworks can be found at https://bitbucket.org/raindog/pyworks</p>
+        </div>
+      </div>
+      <div class="comment comment-1477286392193343717">
+        <div class="comment-header">
+          <a name="comment-1477286392193343717"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-14 15:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; These two models --- threads or events --- are the two main models we have right now.<br><br>Where does Go-style concurrency fit in?</p>
+        </div>
+      </div>
+      <div class="comment comment-6088752932582739680">
+        <div class="comment-header">
+          <a name="comment-6088752932582739680"></a>
+            <span class="author">gasche</span> wrote on <span class="date">2012-01-14 16:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>If you go that road, you will certainly find out that Transactional Memory is much, much harder to get right than it looks like in today effectful/imperative languages. Sure, it looks wonderful on paper, but if your language doesn't help you control side-effects it will give you a very hard time.<br><br>Currently, there is satisfying STM support <a href="https://www.haskell.org/haskellwiki/Software_transactional_memory" rel="nofollow">in Haskell</a> (because of its tight type-based control of side-effects) <a href="https://clojure.org/refs" rel="nofollow">and Clojure</a> (beacuse of its tight control on mutability), and it might be getting <a href="https://nbronson.github.com/scala-stm/index.html" rel="nofollow">into Scala</a>.<br><br>I doubt Python can easily get such control, at least without an important reorganization of idiomatic practices and frameworks, that go beyond the "let's be event-driven" decision. Which makes your "this is going to work magically" story a bit hard to believe.<br><br>There has been intense research on this topic for some decades now, and several attempts at getting it to work in current mainstream languages have mostly failed.<br><br>See for example this long retrospective of the STM.NET effort at Microsoft Research, by Joe Duffy:<br><a href="https://www.bluebytesoftware.com/blog/2010/01/03/ABriefRetrospectiveOnTransactionalMemory.aspx" rel="nofollow">A (brief) retrospective on transactional memory</a><br>or this shorter blog post by Brian Hurt:<br><a href="https://enfranchisedmind.com/blog/posts/the-problem-with-stm-your-languages-still-suck/" rel="nofollow">The problem with STM: your languages still suck</a>.<br><br>I was a bit disappointed that you didn't cite any of the relevant literature in your post. It made me suspicious of "reiventing the wheel"...</p>
+        </div>
+      </div>
+      <div class="comment comment-8152331298676961160">
+        <div class="comment-header">
+          <a name="comment-8152331298676961160"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-14 16:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>One major use-case for multithreading involves a large, unchanging data structure which many threads access. I.e., the data structure is loaded by a parent task, then not modified again; a number of threads are then spawned to use it for calculations.<br><br>In CPython, the GIL makes this impossible if only because the reference counters need to be protected. With Cython in threads, however, you can turn off the GIL and do some work on C-style data structures.<br><br>I'm wondering whether the STM PyPy effort could have a very useful, and very early, benefit: simply enabling an unchanging data structure to be accessed by a number of processors via the kinds of events you describe. There wouldn't be a need for transactions, because the programmer would take responsibility for only sharing unchanging structures between simultaneously-executing events. <br><br>But it seems like the basic requirements for this kind of facility might be met in in early stage of STM development. And a solution that allowed multiple processors to access large, unchanging structures would be very useful in certain applications. I know I have one in mind that I'm looking at CPython/Cython for, but I'd rather see if I could get the performance I need from PyPy.<br><br>Just thought it was worth mentioning.</p>
+        </div>
+      </div>
+      <div class="comment comment-5089221139241070034">
+        <div class="comment-header">
+          <a name="comment-5089221139241070034"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-14 19:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous: in the extract you cite I meant "the two main models in Python".  As far as I can tell, Go does concurrency by enforcing all communications to go via channels, so I would classify it as a "special-made" language.  This solution might be nice and usable, but it does not really work at all in languages like Python.</p>
+        </div>
+      </div>
+      <div class="comment comment-2382784834088449417">
+        <div class="comment-header">
+          <a name="comment-2382784834088449417"></a>
+            <span class="author">Daniel Waterworth</span> wrote on <span class="date">2012-01-14 20:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin, CSP may be built into Go, but IMO this was a mistake, there is no requirement for it to be a language feature; it fits nicer as library. See [python-csp] for a python implementation.<br><br>[python-csp] https://code.google.com/p/python-csp/wiki/Tutorial</p>
+        </div>
+      </div>
+      <div class="comment comment-6845472824706739410">
+        <div class="comment-header">
+          <a name="comment-6845472824706739410"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-14 21:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>@gasche: I know about Haskell, Clojure and Scala, and I just read the two blog posts you pointed to.<br><br>I'm not talking about giving explicit TM to the end programmers.  I'm instead considering TM as an internal, implementation-only feature.  That makes it very similar to GCs.<br><br>I know the points and issues of traditional TM systems, which are nicely reported by Joe Duffy in "A (brief) retrospective on transactional memory".  These are of course perfectly valid issues, but I think they do not apply (or "not that much") in the particular context I'm talking about.  For example, this includes the large sections about nested transactions, and about consistency between the transactional and non-transactional worlds (Weak or Strong Atomicity, The Privatization Problem).  Even "Where is the Killer App?" is obvious in this case: any existing Twisted App is potentially a Killer App.<br><br>Sorry for not including references to papers.  I must admit I don't know any paper that describes a similar use case for TM.</p>
+        </div>
+      </div>
+      <div class="comment comment-472626244581189589">
+        <div class="comment-header">
+          <a name="comment-472626244581189589"></a>
+            <span class="author">Simon Weber</span> wrote on <span class="date">2012-01-14 21:45</span>:
+        </div>
+        <div class="comment-content">
+          <p>The link to the previous blog post is broken. It should be: https://morepypy.blogspot.com/2011/06/global-interpreter-lock-or-how-to-kill.html</p>
+        </div>
+      </div>
+      <div class="comment comment-1707200339142844939">
+        <div class="comment-header">
+          <a name="comment-1707200339142844939"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-01-15 07:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; @Armin, CSP may be built into Go, but IMO this was a mistake, there is no requirement for it to be a language feature; it fits nicer as library. See [python-csp] for a python implementation.<br><br>Stackless (which PyPy enables) supports Go-style channels as well, no?<br><br>https://www.stackless.com/wiki/Channels</p>
+        </div>
+      </div>
+      <div class="comment comment-1484927910338553671">
+        <div class="comment-header">
+          <a name="comment-1484927910338553671"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2012-01-15 08:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>Your idea could work for other easy to inject into points, such as loops, and comprehensions.  Especially with much of the work in pypy already done for identifying information about loops.<br><br>How does this compare to grand central dispatch and blocks?  https://en.wikipedia.org/wiki/Grand_Central_Dispatch<br><br>Events are a very good way to model concurrency, and are widely used.  It is a great place to dispatch concurrency into parallelism.<br><br>Closures/blocks provide a fairly decent way to get some of the protection of STM - and in many programs give you the 80% solution.  For code that plays nicely and avoids mutable, or global data - this works.  Luckily, a lot of event based code is already written in this way.  As you say, they are "generally mostly independent".<br><br>Making the bad cases a quick fail, like in JavaScript worker threads could be an ok option.  As soon as someone tries to access global data(do a system call, access the DOM, or access data outside the closure even), the program would fail there.  Then you could fix those cases, or "add non-determinism" as you say.  I think I'd prefer fail fast here, rather than have to detect these problems, and have them silently pass by.<br><br>You still have scheduling problems, and trying to figure out task size.  As well, this does not solve lots of other problems.  However, it is cool that it could be applied automatically, and probably 'safely'.<br><br>Another random thought... you could probably mark chunks of code as 'pure' as your run through them, and if they do a system call or mutate global data mark them as 'unpure' and don't try them again.<br><br>I very much look forward to reading your results as you implement more.</p>
+        </div>
+      </div>
+      <div class="comment comment-1930769890566757486">
+        <div class="comment-header">
+          <a name="comment-1930769890566757486"></a>
+            <span class="author">Eric van Riet Paap</span> wrote on <span class="date">2012-01-15 08:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>When Armin gets this excited I'd fasten my seatbelt and put my goggles on.<br><br>Thank you for letting me be an (otherwise mostly silent) observer.<br><br>Please keep shifting boundaries!<br><br>- Eric</p>
+        </div>
+      </div>
+      <div class="comment comment-6428686435032752939">
+        <div class="comment-header">
+          <a name="comment-6428686435032752939"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-16 10:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>Update: please look at the tiny transaction module I wrote as an example. The idea is to have the same interface as this module, but implemented differently. By making use of transactional memory internally, it should be possible to safely run on multiple CPUs while keeping the very same programmer interface.<br><br>https://bitbucket.org/arigo/arigo/raw/default/hack/stm/transactionmodule/</p>
+        </div>
+      </div>
+      <div class="comment comment-4122617787896398035">
+        <div class="comment-header">
+          <a name="comment-4122617787896398035"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2012-01-16 12:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin: That transaction code looks very simple.  It seems trivial to implement a map/mapReduce style function on top of your transaction module.<br><br>It is a very similar API to worker pool APIs which many thread using programs use.  The main difference is that you combine the join() in the run method.  It seems that a threaded web server for example could use this?  What would happen if each incoming request comes in, and is put into the transaction (and say the 10th request has an error)?  Would it be better to use multiple transactions?<br><br>Have you thought how thread local storage would work?</p>
+        </div>
+      </div>
+      <div class="comment comment-2487460185736501677">
+        <div class="comment-header">
+          <a name="comment-2487460185736501677"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-16 12:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>@notme: yes, a web server or anything can use this instead of using threads.  It's of course missing a convincing select() or poll() version for that.<br><br>The details haven't been thought out; right now an exception interrupts everything.  In an STM model it's unclear if concurrent transactions should still be allowed to complete or not.  Anyway the point is that exceptions should not really occur because precisely they interrupt everything --- you would typically add instead in every transaction code like "try: .. except: traceback.print_exc()".<br><br>Thread local storage: what would be the point?</p>
+        </div>
+      </div>
+      <div class="comment comment-3484891071069135359">
+        <div class="comment-header">
+          <a name="comment-3484891071069135359"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-01-18 10:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>I also see no reason for Thread local memory.<br><br>I like the idea of thinking about TM in the same line as GC. When you have GC the changes to the language is that you don't need to write free/dealloc. <br><br>Having TM would mean that you don't have to write acquire_GIL</p>
+        </div>
+      </div>
+      <div class="comment comment-1145104452833260266">
+        <div class="comment-header">
+          <a name="comment-1145104452833260266"></a>
+            <span class="author">headius</span> wrote on <span class="date">2012-01-24 04:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>The devil's in the details.<br><br>I'm not sure I buy your conclusions here. STM is not a panacea for solving concurrency issues, and it has some key limitations that limit its general applicability.<br><br>On what granularity do you plan to have transactions? How do you know? Perhaps the VM will have enough knowledge of a given thread's activities to limit transactional overhead to only those structures in memory that are shared, but there still needs to be some indirection in case another thread hops in and starts making changes.<br><br>Where do transactions start and end? In STMs I know, the in-transaction overhead for reading and writing data is *much* higher, since it needs to know if someone else has committed a transaction first and be able to roll back.<br><br>Perhaps this is all intended to be hidden, and you never actually have "threads" that the user can see. But if you're going to parallelize, you'll have threads *somewhere* that are going to contend for resources. If they're going to contend for resources, even in an STM, they're going to have to check for contention, register their interest, and then you're back to the indirection overhead.<br><br>Perhaps I'm not understand what your end goal is. You can't simply turn the world into a series of transactions unless you want every read and write to have transaction overhead or you have some clear way of limiting transaction overhead to only where it's needed. You cite Erlang...but Erlang deals with immutable objects, and there's far less need for anything like an STM. Others have mentioned Clojure...but again, Clojure is mostly immutable structures, and transactional overhead is limited to Refs, where you'll make single coarse-grained reads and writes.<br><br>Am I missing the point? Are you not suggesting VM-wide STM, with the resulting transactional overhead for every read and write?</p>
+        </div>
+      </div>
+      <div class="comment comment-5704534779473103775">
+        <div class="comment-header">
+          <a name="comment-5704534779473103775"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-24 10:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Charles: Indeed, I am suggesting VM-wide STM, with the resulting transactional overhead for every read and write.  I actually got such a VM yesterday (with no GC): it seems to be about 10x slower on a single thread.<br><br>Note that even 10x slower is a plus if it scales to dozens of processors.  But of course, a better point of view is that some years ago the regular pypy *was* 10x slower than CPython.  It was a lot of efforts but we managed to make it only 1.5-2x slower.  And this is all without counting the JIT.  If STM bogs down to a generally-not-triggered read barrier before every read, then the performance impact could be well under 2x.<br><br>Please note also that I don't care about Java-like performance where even loosing 10% of performance would be a disaster.  If we end up with a pypy-tm that is 2x slower than a regular pypy, I would be quite happy, and I believe that there is a non-negligible fraction of the Python users that would be, too.<br><br>On granularity: for now I'm going with the idea that the granularity is defined "naturally" in the source program as the amount of work done every time some central dispatch loop calls some code.  There might be several dispatch loops in total, too.  This is true in the cases I can think of: typical Twisted or Stackless programs, pypy's "translate.py", the richards benchmark, etc.<br><br>Please look at https://paste.pocoo.org/show/539822/ for an example of what I'm talking about.  It's a diff against the standard <a href="https://foss.heptapod.net/pypy/pypy/-/tree/branch//default/pypy/translator/goal/richards.py" rel="nofollow">richards.py</a>: it is a pure Python user program in which I added calls to the new 'transaction' module.  At this level there is no hint of Transactional Memory.</p>
+        </div>
+      </div>
+      <div class="comment comment-5557967065974700000">
+        <div class="comment-header">
+          <a name="comment-5557967065974700000"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-01-31 17:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Gary Robinson: (off-topic:) for this kind of use case, you can use os.fork() after the immutable data is ready.  It "kind of works" both in pypy and in cpython, although not really --- in cpython the reference counts are modified, causing the pages to get unshared between processes; and in pypy the garbage collector (GC) has the same effect, so far.  It could be solved in pypy by more tweaks the GC.</p>
+        </div>
+      </div>
+      <div class="comment comment-7410558668406857782">
+        <div class="comment-header">
+          <a name="comment-7410558668406857782"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-01 18:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>@armin: <i>@Anonymous: in the extract you cite I meant "the two main models in Python". As far as I can tell, Go does concurrency by enforcing all communications to go via channels, so I would classify it as a "special-made" language. This solution might be nice and usable, but it does not really work at all in languages like Python. </i><br><br>Armin, Stackless Python uses a model that at the API level is very similar to Go. Go borrows from the Bell Labs family of languages (i.e. Newsqueak). The fundamental idea is that message pasing is used to share information between threads/processes/coroutines. In this regard, Go is in the same camp as say, Erlang (although the messaging systems are different).<br><br><br>What I think is interesting and workable for Python are efforts in languages like Polyphonic C# (see the paper "Scalable Join Patterns") and Concurrent/Parallel ML, where lock-free libraries and STM techniques are used under the hood to improve the efficiency of the messaging/synchronisation system. In this fashion, the programmer has a conceptually clean concurrency model and still can make the important decisions about how to partition the problem. <br><br>Cheers,<br>Andrew</p>
+        </div>
+      </div>
+      <div class="comment comment-3231132041235268174">
+        <div class="comment-header">
+          <a name="comment-3231132041235268174"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-01 18:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>@daniel<i>@Armin, CSP may be built into Go, but IMO this was a mistake, there is no requirement for it to be a language feature; it fits nicer as library. See [python-csp] for a python library </i><br><br>I have looked at Python-CSP a long time ago. I recall it being verbose. However I use Stackless Python. And using PyPy's stackless.py, I implemented select() and join patterns. Sometimes I wish I had language support: they cut down on silly mistakes and make the code less verbose for simple cases. However what I have found is that the language can get in the way. For instance, in Go, one has to come up with hacks to do some simple like do a select on an arbitrary number of channels. Perhaps I am wrong but I suspect stuff like select()'s design was influenced by the fact Newsqueak was originally designed to make a windowing system easier to write. So one is monitoring only a handful of channels. In constrast, this is not the way Stackless Python programmes are written.<br><br>Cheers,<br>Andrew</p>
+        </div>
+      </div>
+      <div class="comment comment-6616530454489575665">
+        <div class="comment-header">
+          <a name="comment-6616530454489575665"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-02-01 20:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>A link to a group that did the same thing (thanks a lot Andrew for this link!):<br><br>https://research.microsoft.com/en-us/projects/ame/<br><br>In particular the May 2007 paper (HotOS) nicely summarizes exactly what I'm trying to say, and I think it is clearer than me, if I have to jugde from feedback :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-1515389083772199299">
+        <div class="comment-header">
+          <a name="comment-1515389083772199299"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-27 17:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>Speaking as someone maintaining a large application that uses Twisted, this sounds great.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

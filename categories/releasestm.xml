@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about releasestm)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/releasestm.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:36 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>PyPy-STM: first "interesting" release</title><link>https://www.pypy.org/posts/2014/07/pypy-stm-first-interesting-release-8684276541915333814.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;p&gt;Hi all,&lt;/p&gt;
+
+&lt;p&gt;PyPy-STM is now reaching a point where we can say it's good enough to be
+a GIL-less Python.  (We don't guarantee there are no more bugs, so please
+report them :-)  The first official STM release:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://bitbucket.org/pypy/pypy/downloads/pypy-stm-2.3-r2-linux64.tar.bz2"&gt;pypy-stm-2.3-r2-linux64&lt;/a&gt;
+&lt;br&gt;&lt;i&gt;(UPDATE: this is release r2, fixing a systematic segfault at start-up on some systems)&lt;/i&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;This corresponds roughly to PyPy 2.3 (not 2.3.1).  It requires 64-bit
+Linux.  More precisely, this release is built for Ubuntu 12.04 to 14.04;
+you can also &lt;a href="https://pypy.org/download.html#building-from-source"&gt;rebuild it
+from source&lt;/a&gt; by getting the branch &lt;strong&gt;stmgc-c7&lt;/strong&gt;.  You need
+clang to compile, and you need a &lt;a href="https://bitbucket.org/pypy/stmgc/src/default/c7/llvmfix/"&gt;patched
+version of llvm&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;This version's performance can reasonably be compared with a regular
+PyPy, where both include the JIT.  Thanks for following the meandering progress of PyPy-STM over the past three years --- we're finally getting somewhere really interesting!  We cannot thank enough all contributors to the &lt;a href="https://pypy.org/tmdonate.html"&gt;previous PyPy-STM money pot&lt;/a&gt; that made this possible.  And, although this blog post is focused on the results from that period of time, I have of course to remind you that we're running a &lt;a href="https://pypy.org/tmdonate2.html"&gt;second call for donation&lt;/a&gt; for future work, which I will briefly mention again later.&lt;/p&gt;
+
+&lt;p&gt;A recap of what we did to get there: &lt;a href="https://www.pypy.org/posts/2014/02/rewrites-of-stm-core-model-again-633249729751034512.html"&gt;around the start of the year&lt;/a&gt; we found a new model, a "redo-log"-based STM which uses a couple of hardware tricks to not require chasing pointers, giving it (in this context) exceptionally cheap read barriers.  This idea &lt;a href="https://www.pypy.org/posts/2014/03/hi-all-here-is-one-of-first-full-pypys-8725931424559481728.html"&gt;was developed&lt;/a&gt; over the following months and (relatively) easily &lt;a href="https://www.pypy.org/posts/2014/04/stm-results-and-second-call-for-1767845182888902777.html"&gt;integrated with the JIT compiler&lt;/a&gt;.  The most recent improvements on the Garbage Collection side are closing the gap with a regular PyPy (there is still a bit more to do there).  There is some &lt;a href="https://pypy.readthedocs.org/en/latest/stm.html"&gt;preliminary user documentation&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Today, the result of this is a PyPy-STM that is capable of running pure Python code on multiple threads in parallel, as we will show in the benchmarks that follow.  A quick warning: this is only about pure Python code.  We didn't try so far to optimize the case where most of the time is spent in external libraries, or even manipulating "raw" memory like &lt;code&gt;array.array&lt;/code&gt; or numpy arrays.  To some extent there is no point because the approach of CPython works well for this case, i.e. releasing the GIL around the long-running operations in C.  Of course it would be nice if such cases worked as well in PyPy-STM --- which they do to some extent; but checking and optimizing that is future work.&lt;/p&gt;
+
+&lt;p&gt;As a starting point for our benchmarks, when running code that
+only uses one thread, we get a slow-down between 1.2 and 3: at worst,
+three times as slow; at best only 20% slower than a regular
+PyPy.  This worst case has been brought down --it used to be 10x-- by
+recent work on "card marking", a useful GC technique that is also
+present in the regular PyPy (and about which I don't find any blog post;
+maybe we should write one :-)  The main remaining issue is fork(), or
+any function that creates subprocesses: it works, but is very slow.  To
+remind you of this fact, it prints a line to stderr when used.&lt;/p&gt;
+
+&lt;p&gt;Now the real main part: when you run multithreaded code, it scales very nicely with two
+threads, and less-than-linearly but still not badly with three or four
+threads.  Here is an artificial example:&lt;/p&gt;
+
+&lt;pre&gt;    total = 0
+    lst1 = ["foo"]
+    for i in range(100000000):
+        lst1.append(i)
+        total += lst1.pop()&lt;/pre&gt;
+
+&lt;p&gt;We run this code N times, once in each of N threads
+(&lt;a href="https://bitbucket.org/pypy/benchmarks/raw/default/multithread/minibench1.py"&gt;full
+benchmark&lt;/a&gt;).  Run times, best of three:&lt;/p&gt;
+
+&lt;table border="1" cellpadding="5"&gt;
+&lt;tbody&gt;
+&lt;tr&gt;&lt;td&gt;Number of threads&lt;/td&gt;
+    &lt;td&gt;Regular PyPy (head)&lt;/td&gt;
+    &lt;td&gt;PyPy-STM&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;N = 1&lt;/td&gt;
+    &lt;td&gt;real &lt;strong&gt;0.92s&lt;/strong&gt; &lt;br&gt;
+user+sys 0.92s&lt;/td&gt;
+    &lt;td&gt;real &lt;strong&gt;1.34s&lt;/strong&gt; &lt;br&gt;
+user+sys 1.34s&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;N = 2&lt;/td&gt;
+    &lt;td&gt;real &lt;strong&gt;1.77s&lt;/strong&gt; &lt;br&gt;
+user+sys 1.74s&lt;/td&gt;
+    &lt;td&gt;real &lt;strong&gt;1.39s&lt;/strong&gt; &lt;br&gt;
+user+sys 2.47s&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;N = 3&lt;/td&gt;
+    &lt;td&gt;real &lt;strong&gt;2.57s&lt;/strong&gt; &lt;br&gt;
+user+sys 2.56s&lt;/td&gt;
+    &lt;td&gt;real &lt;strong&gt;1.58s&lt;/strong&gt; &lt;br&gt;
+user+sys 4.106s&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;N = 4&lt;/td&gt;
+    &lt;td&gt;real &lt;strong&gt;3.38s&lt;/strong&gt; &lt;br&gt;
+user+sys 3.38s&lt;/td&gt;
+    &lt;td&gt;real &lt;strong&gt;1.64s&lt;/strong&gt; &lt;br&gt;
+user+sys 5.35s&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+
+&lt;p&gt;(The "real" time is the wall clock time.  The "user+sys" time is the
+recorded CPU time, which can be larger than the wall clock time if
+multiple CPUs run in parallel.  This was run on a 4x2 cores machine.
+For direct comparison, avoid loops that are so trivial
+that the JIT can remove &lt;b&gt;all&lt;/b&gt; allocations from them: right now
+PyPy-STM does not handle this case well.  It has to force a dummy allocation
+in such loops, which makes minor collections occur much more frequently.)&lt;/p&gt;
+
+&lt;p&gt;Four threads is the limit so far: only four threads can be executed in
+parallel.  Similarly, the memory usage is limited to 2.5 GB of GC
+objects.  These two limitations are not hard to increase, but at least
+increasing the memory limit requires fighting against more LLVM bugs.
+(Include here snark remarks about LLVM.)&lt;/p&gt;
+
+&lt;p&gt;Here are some measurements from more real-world benchmarks.  This time,
+the amount of work is fixed and we parallelize it on T threads.  The first benchmark is just running &lt;a href="https://pypy.org/download.html#building-from-source"&gt;translate.py&lt;/a&gt; on a trunk PyPy.  The last
+three benchmarks are &lt;a href="https://bitbucket.org/pypy/benchmarks/src/default/multithread/"&gt;here&lt;/a&gt;.&lt;/p&gt;
+
+&lt;table border="1" cellpadding="5"&gt;
+&lt;tbody&gt;
+&lt;tr&gt;&lt;td&gt;Benchmark&lt;/td&gt;
+    &lt;td&gt;PyPy 2.3&lt;/td&gt;
+    &lt;td bgcolor="#A0A0A0"&gt;(PyPy head)&lt;/td&gt;
+    &lt;td&gt;PyPy-STM, T=1&lt;/td&gt;
+    &lt;td&gt;T=2&lt;/td&gt;
+    &lt;td&gt;T=3&lt;/td&gt;
+    &lt;td&gt;T=4&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;code&gt;translate.py --no-allworkingmodules&lt;/code&gt;&lt;br&gt;
+(annotation step)&lt;/td&gt;
+    &lt;td&gt;184s&lt;/td&gt;
+    &lt;td bgcolor="#A0A0A0"&gt;(170s)&lt;/td&gt;
+    &lt;td&gt;386s (2.10x)&lt;/td&gt;
+    &lt;td colspan="3"&gt;n/a&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;multithread-richards&lt;br&gt;
+5000 iterations&lt;/td&gt;
+    &lt;td&gt;24.2s&lt;/td&gt;
+    &lt;td bgcolor="#A0A0A0"&gt;(16.8s)&lt;/td&gt;
+    &lt;td&gt;52.5s (2.17x)&lt;/td&gt;
+    &lt;td&gt;37.4s (1.55x)&lt;/td&gt;
+    &lt;td&gt;25.9s (1.07x)&lt;/td&gt;
+    &lt;td&gt;32.7s (1.35x)&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;mandelbrot&lt;br&gt;
+divided in 16-18 bands&lt;/td&gt;
+    &lt;td&gt;22.9s&lt;/td&gt;
+    &lt;td bgcolor="#A0A0A0"&gt;(18.2s)&lt;/td&gt;
+    &lt;td&gt;27.5s (1.20x)&lt;/td&gt;
+    &lt;td&gt;14.4s (0.63x)&lt;/td&gt;
+    &lt;td&gt;10.3s (0.45x)&lt;/td&gt;
+    &lt;td&gt;8.71s (0.38x)&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;btree&lt;/td&gt;
+    &lt;td&gt;2.26s&lt;/td&gt;
+    &lt;td bgcolor="#A0A0A0"&gt;(2.00s)&lt;/td&gt;
+    &lt;td&gt;2.01s (0.89x)&lt;/td&gt;
+    &lt;td&gt;2.22s (0.98x)&lt;/td&gt;
+    &lt;td&gt;2.14s (0.95x)&lt;/td&gt;
+    &lt;td&gt;2.42s (1.07x)&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+
+&lt;p&gt;This shows various cases that can occur:&lt;/p&gt;
+
+&lt;ul&gt;&lt;li&gt;The mandelbrot example runs with minimal overhead and very good parallelization.
+It's dividing the plane to compute in bands, and each of the T threads receives the
+same number of bands.
+
+&lt;/li&gt;&lt;li&gt;Richards, a classical benchmark for PyPy (tweaked to run the iterations
+in multiple threads), is hard to beat on regular PyPy:
+we suspect that the difference is due to the fact that a lot of
+paths through the loops don't allocate, triggering the issue already
+explained above.  Moreover, the speed of Richards was again improved
+dramatically recently, in trunk.
+
+&lt;/li&gt;&lt;li&gt;The translation benchmark measures the time &lt;code&gt;translate.py&lt;/code&gt;
+takes to run the first phase only, "annotation" (for now it consumes too much memory
+to run &lt;code&gt;translate.py&lt;/code&gt; to the end).  Moreover the timing starts only after the large number of
+subprocesses spawned at the beginning (mostly gcc).  This benchmark is not parallel, but we
+include it for reference here.  The slow-down factor of 2.1x is still too much, but
+we have some idea about the reasons: most likely, again the Garbage Collector, missing the regular PyPy's
+very fast small-object allocator for old objects.  Also, &lt;code&gt;translate.py&lt;/code&gt;
+is an example of application that could, with
+reasonable efforts, be made largely parallel in the future using &lt;i&gt;atomic blocks.&lt;/i&gt;
+
+&lt;/li&gt;&lt;li&gt;Atomic blocks are also present in the btree benchmark.  I'm not completely sure
+but it seems that, in this case, the atomic blocks create too many
+conflicts between the threads for actual parallization: the base time is very good,
+but running more threads does not help at all.
+&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;As a summary, PyPy-STM looks already useful to run CPU-bound multithreaded
+applications.  We are certainly still going to fight slow-downs, but it
+seems that there are cases where 2 threads are enough to outperform a regular
+PyPy, by a large margin.  Please try it out on your own small examples!&lt;/p&gt;
+
+&lt;p&gt;And, at the same time, please don't attempt to retrofit threads inside
+an existing large program just to benefit from PyPy-STM!
+Our goal is not to send everyone down the obscure route of multithreaded
+programming and its dark traps.  We are going finally to shift our main
+focus on the &lt;a href="https://pypy.org/tmdonate2.html"&gt;phase 2 of our
+research&lt;/a&gt; (donations welcome): how to enable a better way of writing multi-core programs.
+The starting point is to fix and test atomic blocks.  Then we will have to
+debug common causes of conflicts and fix them or work around them; and
+try to see how common frameworks like Twisted can be adapted.&lt;/p&gt;
+
+&lt;p&gt;Lots of work ahead, but lots of work behind too :-)&lt;/p&gt;
+
+&lt;p&gt;Armin (thanks Remi as well for the work).&lt;/p&gt;</description><category>releasestm</category><guid>https://www.pypy.org/posts/2014/07/pypy-stm-first-interesting-release-8684276541915333814.html</guid><pubDate>Sat, 05 Jul 2014 09:37:00 GMT</pubDate></item></channel></rss>

@@ -1,0 +1,1231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about profiling)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/profiling.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:36 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>Low Overhead Allocation Sampling with VMProf in PyPy's GC</title><link>https://www.pypy.org/posts/2025/02/pypy-gc-sampling.html</link><dc:creator>Christoph Jung</dc:creator><description>&lt;h3 id="introduction"&gt;Introduction&lt;/h3&gt;
+&lt;p&gt;There are many time-based statistical profilers around (like VMProf or py-spy
+just to name a few). They allow the user to pick a trade-off between profiling
+precision and runtime overhead.&lt;/p&gt;
+&lt;p&gt;On the other hand there are memory profilers
+such as &lt;a href="https://github.com/bloomberg/memray"&gt;memray&lt;/a&gt;. They can be handy for
+finding leaks or for discovering functions that allocate a lot of memory.
+Memory profilers typlically save every single allocation a program does. This
+results in precise profiling, but larger overhead.&lt;/p&gt;
+&lt;p&gt;In this post we describe our experimental approach to low overhead statistical
+memory profiling. Instead of saving every single allocation a program does, it
+only saves every nth allocated byte. We have tightly integrated VMProf and the
+PyPy Garbage Collector to achieve this. The main technical insight is that the
+check whether an allocation should be sampled can be made free. This is done by
+folding it into the bump pointer allocator check that the PyPy’s GC uses to
+find out if it should start a minor collection. In this way the fast path with
+and without memory sampling are exactly the same.&lt;/p&gt;
+&lt;h3 id="background"&gt;Background&lt;/h3&gt;
+&lt;p&gt;To get an insight how the profiler and GC interact, lets take a brief look at
+both of them first.&lt;/p&gt;
+&lt;h4 id="vmprof"&gt;VMProf&lt;/h4&gt;
+&lt;p&gt;&lt;a href="https://github.com/vmprof/vmprof-python"&gt;VMProf&lt;/a&gt; is a statistical time-based profiler for PyPy. VMProf samples the stack of currently running Python functions a certain user-configured number of times per second. By adjusting
+this number, the overhead of profiling can be modified to pick the correct trade-off between overhead and precision of the profile. In the resulting profile, functions with huge runtime stand out the most, functions with shorter runtime less so. If you want to get a little more introduction to VMProf and how to use it with PyPy, you may look
+at &lt;a href="https://pypy.org/posts/2024/05/vmprof-firefox-converter.html"&gt;this blog post&lt;/a&gt;&lt;/p&gt;
+&lt;h4 id="pypys-gc"&gt;PyPy’s GC&lt;/h4&gt;
+&lt;p&gt;PyPy uses a generational incremental copying collector. That means there are two spaces for allocated objects, the nursery and the old-space. Freshly allocated objects will be allocated into the nursery. When the nursery is full at some point, it will be collected and all objects that survive will be tenured i.e. moved into the old-space. The old-space is much larger than the nursery and is collected less frequently and &lt;a href="https://www.pypy.org/posts/2024/03/fixing-bug-incremental-gc.html"&gt;incrementally&lt;/a&gt; (not completely
+collected in one go, but step-by-step). The old space collection is not relevant for the rest of the post though. We will now take a look at nursery allocations and how the nursery is collected.&lt;/p&gt;
+&lt;h4 id="bump-pointer-allocation-in-the-nursery"&gt;Bump Pointer Allocation in the Nursery&lt;/h4&gt;
+&lt;p&gt;The nursery (a small continuous memory area) utilizes two pointers to keep track from where on the nursery is free and where it ends. They are called &lt;code&gt;nursery_free&lt;/code&gt; and &lt;code&gt;nursery_top&lt;/code&gt;. When memory is allocated, the GC checks if there is enough space in the nursery left. If there is enough space, the &lt;code&gt;nursery_free&lt;/code&gt; pointer will be returned as the start address for the newly allocated memory, and &lt;code&gt;nursery_free&lt;/code&gt; will be moved forward by the amount of allocated memory.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://www.pypy.org/images/2025_02_allocation_sampling_images/nursery_allocation.svg"&gt;&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;allocate&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;totalsize&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+  &lt;span class="c1"&gt;# Save position, where the object will be allocated to as result&lt;/span&gt;
+  &lt;span class="n"&gt;result&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_free&lt;/span&gt;
+  &lt;span class="c1"&gt;# Move nursery_free pointer forward by totalsize&lt;/span&gt;
+  &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_free&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;result&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;totalsize&lt;/span&gt;
+  &lt;span class="c1"&gt;# Check if this allocation would exceed the nursery&lt;/span&gt;
+  &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_free&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_top&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+      &lt;span class="c1"&gt;# If it does =&amp;gt; collect the nursery and allocate afterwards&lt;/span&gt;
+      &lt;span class="n"&gt;result&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;collect_and_reserve&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;totalsize&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="c1"&gt;# result is a pointer into the nursery, obj will be allocated there&lt;/span&gt;
+  &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;result&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;collect_and_reserve&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;size_of_allocation&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="c1"&gt;# do a minor collection and return the start of the nursery afterwards&lt;/span&gt;
+    &lt;span class="n"&gt;minor_collection&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_free&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Understanding this is crucial for our allocation sampling approach, so let us go through this step-by-step.&lt;/p&gt;
+&lt;p&gt;We already saw an example on how an allocation into a non-full nursery will look like. But what happens, if the nursery is (too) full?&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://www.pypy.org/images/2025_02_allocation_sampling_images/nursery_full.svg"&gt;&lt;/p&gt;
+&lt;p&gt;As soon as an object doesn't fit into the nursery anymore, it will be collected. A nursery collection will move all surviving objects into the old-space, so that the nursery is free afterwards, and the requested allocation can be made.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://www.pypy.org/images/2025_02_allocation_sampling_images/nursery_collected.svg"&gt;&lt;/p&gt;
+&lt;p&gt;(Note that this is still a bit of a simplification.)&lt;/p&gt;
+&lt;h3 id="sampling-approach"&gt;Sampling Approach&lt;/h3&gt;
+&lt;p&gt;The last section described how the nursery allocation works normally. Now we'll talk how we integrate the new allocation sampling approach into it.&lt;/p&gt;
+&lt;p&gt;To decide whether the GC should trigger a sample, the sampling logic is integrated into the bump pointer allocation logic. Usually, when there is not enough space in the nursery left to fulfill an allocation request, the nursery will be collected and the allocation will be done afterwards. We reuse that mechanism for sampling, by introducing a new pointer called &lt;code&gt;sample_point&lt;/code&gt; that is calculated by &lt;code&gt;sample_point = nursery_free + sample_n_bytes&lt;/code&gt; where &lt;code&gt;sample_n_bytes&lt;/code&gt; is the number of bytes allocated before a sample is made (i.e. our sampling rate).&lt;/p&gt;
+&lt;p&gt;Imagine we'd have a nursery of 2MB and want to sample every 512KB allocated, then you could imagine our nursery looking like that:&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://www.pypy.org/images/2025_02_allocation_sampling_images/nursery_sampling.svg"&gt;&lt;/p&gt;
+&lt;p&gt;We use the sample point as &lt;code&gt;nursery_top&lt;/code&gt;, so that allocating a chunk of 512KB would exceed the nursery top and start a nursery collection. But of course we don't want to do a minor collection just then, so before starting a collection, we need to check if the nursery is actually full or if that is just an exceeded sample point. The latter will then trigger a VMprof stack sample. Afterwards we don't actually do a minor collection, but change &lt;code&gt;nursery_top&lt;/code&gt; and immediately return to the caller.&lt;/p&gt;
+&lt;p&gt;The last picture is a conceptual simplification. Only one sampling point exists at any given time. After we created the sampling point, it will be used as nursery top, if exceeded at some point, we will just add &lt;code&gt;sample_n_bytes&lt;/code&gt; to that sampling point, i.e. move it forward.&lt;/p&gt;
+&lt;p&gt;Here's how the updated &lt;code&gt;collect_and_reserve&lt;/code&gt; function looks like:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;collect_and_reserve&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;size_of_allocation&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="c1"&gt;# Check if we exceeded a sample point or if we need to do a minor collection&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_top&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;sample_point&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="c1"&gt;# One allocation could exceed multiple sample points&lt;/span&gt;
+        &lt;span class="c1"&gt;# Sample, move sample_point forward&lt;/span&gt;
+        &lt;span class="n"&gt;vmprof&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;sample_now&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;sample_point&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="n"&gt;sample_n_bytes&lt;/span&gt;
+
+        &lt;span class="c1"&gt;# Set sample point as new nursery_top if it fits into the nursery&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;sample_point&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;=&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;real_nursery_top&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_top&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;sample_point&lt;/span&gt;
+        &lt;span class="c1"&gt;# Or use the real nursery top if it does not fit&lt;/span&gt;
+        &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_top&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;real_nursery_top&lt;/span&gt;
+
+        &lt;span class="c1"&gt;# Is there enough memory left inside the nursery&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_free&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;size_of_allocation&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;=&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_top&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="c1"&gt;# Yes =&amp;gt; move nursery_free forward&lt;/span&gt;
+            &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_free&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="n"&gt;size_of_allocation&lt;/span&gt;
+            &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_free&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# We did not exceed a sampling point and must do a minor collection, or&lt;/span&gt;
+    &lt;span class="c1"&gt;# we exceeded a sample point but we needed to do a minor collection anyway&lt;/span&gt;
+    &lt;span class="n"&gt;minor_collection&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;gc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;nursery_free&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;h3 id="why-is-the-overhead-low"&gt;Why is the Overhead ‘low’&lt;/h3&gt;
+&lt;p&gt;The most important property of our approach is that the bump-pointer fast path is not changed at all. If sampling is turned off, the slow path in &lt;code&gt;collect_and_reserve&lt;/code&gt; has three extra instructions for the if at the beginning, but are only a very small amount of overhead, compared to doing a minor collection.&lt;/p&gt;
+&lt;p&gt;When sampling is on, the extra logic in &lt;code&gt;collect_and_reserve&lt;/code&gt; gets executed. Every time an allocation exceeds the &lt;code&gt;sample_point&lt;/code&gt;, &lt;code&gt;collect_and_reserve&lt;/code&gt; will sample the Python functions currently executing. The resulting overhead is directly controlled by &lt;code&gt;sample_n_bytes&lt;/code&gt;. After sampling, the &lt;code&gt;sample_point&lt;/code&gt; and &lt;code&gt;nursery_top&lt;/code&gt; must be set accordingly. This will be done once after sampling in &lt;code&gt;collect_and_reserve&lt;/code&gt;. At some point a nursery collection will free the nursery and set the new &lt;code&gt;sample_point&lt;/code&gt; afterwards.&lt;/p&gt;
+&lt;p&gt;That means that the overhead mostly depends on the sampling rate and the rate at which the user program allocates memory, as the combination of those two factors determines the amount of samples.&lt;/p&gt;
+&lt;p&gt;Since the sampling rate can be adjusted from as low as 64 Byte to a theoretical maximum of ~4 GB (at the moment), the tradeoff between number of samples (i.e. profiling precision) and overhead can be completely adjusted.&lt;/p&gt;
+&lt;p&gt;We also suspect linkage between user program stack depth and overhead (a deeper stack takes longer to walk, leading to higher overhead), especially when walking the C call stack to.&lt;/p&gt;
+&lt;h3 id="sampling-rates-bigger-than-the-nursery-size"&gt;Sampling rates bigger than the nursery size&lt;/h3&gt;
+&lt;p&gt;The nursery usually has a size of a few megabytes, but profiling long-runningor larger applications with tons of allocations could result in very high number of samples per second (and thus overhead). To combat that it is possible to use sampling rates higher than the nursery size.&lt;/p&gt;
+&lt;p&gt;The sampling point is not limited by the nursery size, but if it is 'outside' the nursery (e.g. because &lt;code&gt;sample_n_bytes&lt;/code&gt; is set to twice the nursery size) it won't be used as &lt;code&gt;nursery_top&lt;/code&gt; until it 'fits' into the nursery.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://www.pypy.org/images/2025_02_allocation_sampling_images/nursery_sampling_larger_than_nursery.svg"&gt;&lt;/p&gt;
+&lt;p&gt;After every nursery collection, we'd usually set the &lt;code&gt;sample_point&lt;/code&gt; to &lt;code&gt;nursery_free + sample_n_bytes&lt;/code&gt;, but if it is larger than the nursery, then the amount of collected memory during the last nursery collection is subtracted from &lt;code&gt;sample_point&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://www.pypy.org/images/2025_02_allocation_sampling_images/nursery_sampling_larger_than_nursery_post_minor.svg"&gt;&lt;/p&gt;
+&lt;p&gt;At some point the &lt;code&gt;sample_point&lt;/code&gt; will be smaller than the nursery size, then it will be used as &lt;code&gt;nursery_top&lt;/code&gt; again to trigger a sample when exceeded.&lt;/p&gt;
+&lt;h3 id="differences-to-time-based-sampling"&gt;Differences to Time-Based Sampling&lt;/h3&gt;
+&lt;p&gt;As mentioned in the introduction, time-based sampling ‘hits’ functions with high runtime, and allocation-sampling ‘hits’ functions allocating much memory. But are those always different functions? The answer is: sometimes. There can be functions allocating lots of memory, that do not have a (relative) high runtime.&lt;/p&gt;
+&lt;p&gt;Another difference to time-based sampling is that the profiling overhead does not solely depend on the sampling rate (if we exclude a potential stack-depth - overhead correlation for now) but also on the amount of memory the user code allocates.&lt;/p&gt;
+&lt;p&gt;Let us look at an example:&lt;/p&gt;
+&lt;p&gt;If we’d sample every 1024 Byte and some program A allocates 3 MB and runs for 5 seconds, and program B allocates 6 MB but also runs for 5 seconds, there will be ~3000 samples when profiling A, but ~6000 samples when profiling B. That means we cannot give a ‘standard’ sampling rate like time-based profilers use to do (e.g. vmprof uses ~1000 samples/s for time sampling), as the number of resulting samples, and thus overhead, depends on sampling rate and amount of memory allocated by the program.&lt;/p&gt;
+&lt;p&gt;For testing and benchmarking, we usually started with a sampling rate of 128Kb and then halved or doubled that (multiple times) depending on sample counts, our need for precision (and size of the profile).&lt;/p&gt;
+&lt;h3 id="evaluation"&gt;Evaluation&lt;/h3&gt;
+&lt;h4 id="overhead"&gt;Overhead&lt;/h4&gt;
+&lt;p&gt;Now let us take a look at the allocation sampling overhead, by profiling some benchmarks. &lt;/p&gt;
+&lt;p&gt;The x-axis shows the sampling rate, while the y-axis shows the overhead, which is computed as &lt;code&gt;runtime_with_sampling / runtime_without_sampling&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;All benchmarks were executed five times on a PyPy with JIT and native profiling enabled, so that every dot in the plot is one run of a benchmark.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://www.pypy.org/images/2025_02_allocation_sampling_images/as_overhead.png"&gt;&lt;/p&gt;
+&lt;p&gt;As you probably expected, the Overhead drops with higher allocation sampling rates.
+Reaching from as high as ~390% for 32kb allocation sampling to as low as &amp;lt; 10% for 32mb.&lt;/p&gt;
+&lt;p&gt;Let me give one concrete example: One run of the microbenchmark at 32kb sampling took 15.596 seconds and triggered 822050 samples.
+That makes a ridiculous amount of &lt;code&gt;822050 / 15.596 = ~52709&lt;/code&gt; samples per second. &lt;/p&gt;
+&lt;p&gt;There is probably no need for that amount of samples per second, so that for 'real' application profiling a much higher sampling rate would be sufficient.&lt;/p&gt;
+&lt;p&gt;Let us compare that to time sampling.&lt;/p&gt;
+&lt;p&gt;This time we ran those benchmarks with 100, 1000 and 2000 samples per second.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://www.pypy.org/images/2025_02_allocation_sampling_images/ts_overhead.png"&gt;&lt;/p&gt;
+&lt;p&gt;The overhead varies with the sampling rate. Both with allocation and time sampling, you can reach any amount of overhead and any level of profiling precision you want. The best approach probably is to just try out a sampling rate and choose what gives you the right tradeoff between precision and overhead (and disk usage).&lt;/p&gt;
+&lt;p&gt;The benchmarks used are:&lt;/p&gt;
+&lt;p&gt;microbenchmark &lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://github.com/Cskorpion/microbenchmark"&gt;https://github.com/Cskorpion/microbenchmark&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pypy microbench.py 65536&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;gcbench &lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://github.com/pypy/pypy/blob/main/rpython/translator/goal/gcbench.py"&gt;https://github.com/pypy/pypy/blob/main/rpython/translator/goal/gcbench.py&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;print statements removed&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pypy gcbench.py 1&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;pypy translate step&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;first step of the pypy translation (annotation step)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pypy path/to/rpython --opt=0 --cc=gcc --dont-write-c-files --gc=incminimark --annotate path/to/pypy/goal/targetpypystandalone.py&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;interpreter pystone&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;pystone benchmark on top of an interpreted pypy on top of a translated pypy&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pypy path/to/pypy/bin/pyinteractive.py -c "import test.pystone; test.pystone.main(1)"&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;All benchmarks executed on:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Kubuntu 24.04&lt;/li&gt;
+&lt;li&gt;AMD Ryzen 7 5700U&lt;/li&gt;
+&lt;li&gt;24gb DDR4 3200MHz (dual channel)&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;SSD benchmarking at read: 1965 MB/s, write: 227 MB/s&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Sequential 1MB 1 Thread 8 Queues&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Self built PyPy with allocation sampling features&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://github.com/Cskorpion/pypy/tree/gc_allocation_sampling_u_2.7"&gt;https://github.com/Cskorpion/pypy/tree/gc_allocation_sampling_u_2.7&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Modified VMProf with allocation sampling support&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://github.com/Cskorpion/vmprof-python/tree/pypy_gc_allocation_sampling"&gt;https://github.com/Cskorpion/vmprof-python/tree/pypy_gc_allocation_sampling&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id="example"&gt;Example&lt;/h4&gt;
+&lt;p&gt;We have also modified &lt;a href="https://github.com/Cskorpion/vmprof-firefox-converter/tree/allocation_sampling"&gt;vmprof-firefox-converter&lt;/a&gt; to show the allocation samples in the Firefor Profiler UI. With the techniques from this post, the output looks like this:&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://www.pypy.org/images/2025_02_allocation_sampling_images/allocation_sampling_call_tree.png"&gt;&lt;/p&gt;
+&lt;p&gt;While this view is interesting, it would be even better if we could also see what types of objects are being allocated in these functions. We will take about how to do this in a future blog post.&lt;/p&gt;
+&lt;h3 id="conclusion"&gt;Conclusion&lt;/h3&gt;
+&lt;p&gt;In this blog post we introduced allocation sampling for PyPy by going through the technical aspects and the corresponding overhead. In a future blog post, we are going to dive into the actual usage of allocation sampling with VMProf, and show an example case study. That will be accompanied by some new improvements and additional features, like extracting the type of an object that triggered a sample.&lt;/p&gt;
+&lt;p&gt;So far all this work is still experimental and happening on PyPy branches but
+we hope to get the technique stable enough to merge it to main and ship it with
+PyPy eventually.&lt;/p&gt;
+&lt;p&gt;-- Christoph Jung and CF Bolz-Tereick&lt;/p&gt;</description><category>gc</category><category>profiling</category><category>vmprof</category><guid>https://www.pypy.org/posts/2025/02/pypy-gc-sampling.html</guid><pubDate>Tue, 25 Feb 2025 10:16:00 GMT</pubDate></item><item><title>Profiling PyPy using the Firefox profiler user interface</title><link>https://www.pypy.org/posts/2024/05/vmprof-firefox-converter.html</link><dc:creator>Christoph Jung</dc:creator><description>&lt;h3 id="introduction"&gt;Introduction&lt;/h3&gt;
+&lt;p&gt;If you ever wanted to profile your Python code on PyPy, you probably came across &lt;a href="https://vmprof.readthedocs.io/en/latest/vmprof.html"&gt;VMProf&lt;/a&gt; — a statistical profiler for PyPy.&lt;/p&gt;
+&lt;p&gt;VMProf's console output can already give some insights into where your code spends time, 
+but it is far from showing all the information captured while profiling.&lt;/p&gt;
+&lt;p&gt;There have been some tools around to visualize VMProf's output.
+Unfortunately the vmprof.com user interface is no longer available and vmprof-server is not as easy to use, you may want to take a look at a local viewer or converter.
+Those so far could give you some general visualizations of your profile, but do not show any PyPy related context like PyPy's log output (&lt;a href="https://rpython.readthedocs.io/en/latest/logging.html"&gt;PyPyLog&lt;/a&gt;, which is output when using the PYPYLOG environment variable to log JIT actions).&lt;/p&gt;
+&lt;p&gt;To bring all of those features together in one tool, you may take a look at the vmprof-firefox-converter.&lt;/p&gt;
+&lt;p&gt;Created in the context of my bachelor's thesis, the vmprof-firefox-converter is a tool for analyzing VMProf profiles with the &lt;a href="https://profiler.firefox.com/"&gt;Firefox profiler&lt;/a&gt; user interface. 
+Instead of building a new user interface from scratch, this allows us to reuse the user interface work Mozilla put into the Firefox profiler.
+The Firefox profiler offers a timeline where you can zoom into profiles and work with different visualizations like a flame graph or a stack chart.
+To understand why there is time spent inside a function, you can revisit the source code and even dive into the intermediate representation of functions executed by PyPy's just-in-time compiler.
+Additionally, there is a visualization for PyPy's log output, to keep track whether PyPy spent time inside the interpreter, JIT or GC throughout the profiling time.&lt;/p&gt;
+&lt;h3 id="profiling-word-count"&gt;Profiling word count&lt;/h3&gt;
+&lt;p&gt;In this blog post, I want to show an example of how to use the vmprof-firefox-converter for a simple Python program.
+Based on Ben Hoyt's blog &lt;a href="https://benhoyt.com/writings/count-words/"&gt;Performance comparison: counting words in Python, Go, C++, C, AWK, Forth, and Rust&lt;/a&gt; we will profile two python versions of a word counter running on PyPy. One being a bit more optimized. For this, VMProf will be used, but instead of just going with the console output, we will use the Firefox profiler user interface.&lt;/p&gt;
+&lt;p&gt;At first, we are going to look at a simple way of counting words with &lt;code&gt;Collections.Counter&lt;/code&gt;.
+This will read one line from the standard input at a time and count the words with &lt;code&gt;counter.update()&lt;/code&gt;&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;counts = collections.Counter()
+for line in sys.stdin:
+    words = line.lower().split()
+    counts.update(words)
+
+for word, count in counts.most_common():
+    print(word, count)
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;To start profiling, simply execute:
+&lt;code&gt;pypy -m vmprofconvert -run simple.py &amp;lt;kjvbible_x10.txt&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;This will run the above code with vmprof, automatically capture and convert the results and finally open the Firefox profiler. &lt;/p&gt;
+&lt;p&gt;The input file is the king James version of the bible concatenated ten times.&lt;/p&gt;
+&lt;p&gt;To get started, we take a look at the call stack.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_call_stack_crp.png?raw=true"&gt;
+Here we see that most of the time is spent in native code (marked as blue) e.g., the &lt;code&gt;counter.update()&lt;/code&gt; or &lt;code&gt;split()&lt;/code&gt; C implementation.&lt;/p&gt;
+&lt;p&gt;Now let's proceed with the more optimized version.
+This time we read 64 Kb of data from the standard input and count the words with &lt;code&gt;counter.update()&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;counts = collections.Counter()
+remaining = ''
+while True:
+    chunk = remaining + sys.stdin.read(64*1024)
+    if not chunk:
+        break
+    last_lf = chunk.rfind('\n')  # process to last LF character
+    if last_lf == -1:
+        remaining = ''
+    else:
+        remaining = chunk[last_lf+1:]
+        chunk = chunk[:last_lf]
+    counts.update(chunk.lower().split())
+
+for word, count in counts.most_common():
+    print(word, count)
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;As we did before, we are going to take a peek at the call stack.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_call_stack_crp.png?raw=true"&gt; &lt;/p&gt;
+&lt;p&gt;Now there is more time spent in native code, caused by larger chunks of text passed to  &lt;code&gt;counter.update()&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;This becomes even more clear by comparing the stack charts.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_stack_chart.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;Here, in the unoptimized case, we only read in one line at each loop iteration.
+This results in small "spikes" in the stack chart. &lt;/p&gt;
+&lt;p&gt;But let's take an even closer look.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/simple_stack_chart_zoom.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;Zoomed in, we see the call stack alternating between &lt;code&gt;_count_elements()&lt;/code&gt; and (unfortunately unsymbolized) native calls coming from reading and splitting the input text (e.g., &lt;code&gt;decode()&lt;/code&gt;).&lt;/p&gt;
+&lt;p&gt;Let us now take a look at the optimized case.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_stack_chart.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;And if we look closer at the same interval as before, we see some spikes, but slightly different.&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/Cskorpion/vmprof-firefox-converter/blob/main/images/blog/optimized_stack_chart_zoom.png?raw=true"&gt;&lt;/p&gt;
+&lt;p&gt;Even though we do not want to compare the (amount of) milliseconds directly, we clearly see that the spikes are wider, i.e. the time spent in those function calls is longer.
+You may already know where this comes from.
+We read a 64 Kb chunk of data from std in and pass that to &lt;code&gt;counter.update()&lt;/code&gt;, so both these tasks do more work and take longer.
+Bigger chunks mean there is less alternating between reading and counting, so there is more time spent doing work than "doing" loop iterations.&lt;/p&gt;
+&lt;h3 id="getting-started"&gt;Getting started&lt;/h3&gt;
+&lt;p&gt;You can get the converter from &lt;a href="https://github.com/Cskorpion/vmprof-firefox-converter"&gt;GitHub&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Both VMProf and the vmprof-firefox-converter were created for profiling PyPy, but you can also use them with CPython. &lt;/p&gt;
+&lt;p&gt;This project is still somewhat experimental, so if you want to try it out, please let us know whether it worked for you.&lt;/p&gt;</description><category>profiling</category><category>vmprof</category><guid>https://www.pypy.org/posts/2024/05/vmprof-firefox-converter.html</guid><pubDate>Fri, 26 Apr 2024 14:38:00 GMT</pubDate></item><item><title>Inside cpyext: Why emulating CPython C API is so Hard</title><link>https://www.pypy.org/posts/2018/09/inside-cpyext-why-emulating-cpython-c-8083064623681286567.html</link><dc:creator>Antonio Cuni</dc:creator><description>&lt;br&gt;
+&lt;div class="document" id="inside-cpyext-why-emulating-cpython-c-api-is-so-hard"&gt;
+&lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; is PyPy's subsystem which provides a compatibility
+layer to compile and run CPython C extensions inside PyPy.  Often people ask
+why a particular C extension doesn't work or is very slow on PyPy.
+Usually it is hard to answer without going into technical details. The goal of
+this blog post is to explain some of these technical details, so that we can
+simply link here instead of explaining again and again :).&lt;br&gt;
+From a 10.000 foot view, &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; is PyPy's version of &lt;tt class="docutils literal"&gt;"Python.h"&lt;/tt&gt;. Every time
+you compile an extension which uses that header file, you are using &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt;.
+This includes extension explicitly written in C (such as &lt;tt class="docutils literal"&gt;numpy&lt;/tt&gt;) and
+extensions which are generated from other compilers/preprocessors
+(e.g. &lt;tt class="docutils literal"&gt;Cython&lt;/tt&gt;).&lt;br&gt;
+At the time of writing, the current status is that most C extensions "just
+work". Generally speaking, you can simply &lt;tt class="docutils literal"&gt;pip install&lt;/tt&gt; them,
+provided they use the public, &lt;a class="reference external" href="https://docs.python.org/2/c-api/index.html"&gt;official C API&lt;/a&gt; instead of poking at private
+implementation details.  However, the performance of cpyext is generally
+poor. A Python program which makes heavy use of &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; extensions
+is likely to be slower on PyPy than on CPython.&lt;br&gt;
+Note: in this blog post we are talking about Python 2.7 because it is still
+the default version of PyPy: however most of the implementation of &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; is
+shared with PyPy3, so everything applies to that as well.&lt;br&gt;
+&lt;div class="section" id="c-api-overview"&gt;
+&lt;h1&gt;
+C API Overview&lt;/h1&gt;
+In CPython, which is written in C, Python objects are represented as &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;,
+i.e. (mostly) opaque pointers to some common "base struct".&lt;br&gt;
+CPython uses a very simple memory management scheme: when you create an
+object, you allocate a block of memory of the appropriate size on the heap.
+Depending on the details, you might end up calling different allocators, but
+for the sake of simplicity, you can think that this ends up being a call to
+&lt;tt class="docutils literal"&gt;malloc()&lt;/tt&gt;. The resulting block of memory is initialized and casted to to
+&lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;: this address never changes during the object lifetime, and the
+C code can freely pass it around, store it inside containers, retrieve it
+later, etc.&lt;br&gt;
+Memory is managed using reference counting. When you create a new reference to
+an object, or you discard a reference you own, you have to &lt;a class="reference external" href="https://docs.python.org/2/c-api/refcounting.html#c.Py_INCREF"&gt;increment&lt;/a&gt; or
+&lt;a class="reference external" href="https://docs.python.org/2/c-api/refcounting.html#c.Py_DECREF"&gt;decrement&lt;/a&gt; the reference counter accordingly. When the reference counter goes to
+0, it means that the object is no longer used and can safely be
+destroyed. Again, we can simplify and say that this results in a call to
+&lt;tt class="docutils literal"&gt;free()&lt;/tt&gt;, which finally releases the memory which was allocated by &lt;tt class="docutils literal"&gt;malloc()&lt;/tt&gt;.&lt;br&gt;
+Generally speaking, the only way to operate on a &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; is to call the
+appropriate API functions. For example, to convert a given &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; to a C
+integer, you can use &lt;a class="reference external" href="https://docs.python.org/2/c-api/int.html#c.PyInt_AsLong"&gt;PyInt_AsLong()&lt;/a&gt;; to add two objects together, you can
+call &lt;a class="reference external" href="https://docs.python.org/2/c-api/number.html#c.PyNumber_Add"&gt;PyNumber_Add()&lt;/a&gt;.&lt;br&gt;
+Internally, PyPy uses a similar approach. All Python objects are subclasses of
+the RPython &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; class, and they are operated by calling methods on the
+&lt;tt class="docutils literal"&gt;space&lt;/tt&gt; singleton, which represents the interpreter.&lt;br&gt;
+At first, it looks very easy to write a compatibility layer: just make
+&lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; an alias for &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt;, and write simple RPython functions
+(which will be translated to C by the RPython compiler) which call the
+&lt;tt class="docutils literal"&gt;space&lt;/tt&gt; accordingly:&lt;br&gt;
+&lt;pre class="code python literal-block"&gt;&lt;span class="keyword"&gt;def&lt;/span&gt; &lt;span class="name function"&gt;PyInt_AsLong&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;space&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;o&lt;/span&gt;&lt;span class="punctuation"&gt;):&lt;/span&gt;
+    &lt;span class="keyword"&gt;return&lt;/span&gt; &lt;span class="name"&gt;space&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;int_w&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;o&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt;
+
+&lt;span class="keyword"&gt;def&lt;/span&gt; &lt;span class="name function"&gt;PyNumber_Add&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;space&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;o1&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;o2&lt;/span&gt;&lt;span class="punctuation"&gt;):&lt;/span&gt;
+    &lt;span class="keyword"&gt;return&lt;/span&gt; &lt;span class="name"&gt;space&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;add&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;o1&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;o2&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt;
+&lt;/pre&gt;
+Actually, the code above is not too far from the real
+implementation. However, there are tons of gory details which make it much
+harder than it looks, and much slower unless you pay a lot of attention
+to performance.&lt;/div&gt;
+&lt;div class="section" id="the-pypy-gc"&gt;
+&lt;h1&gt;
+The PyPy GC&lt;/h1&gt;
+To understand some of &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; challenges, you need to have at least a rough
+idea of how the PyPy GC works.&lt;br&gt;
+Contrarily to the popular belief, the "Garbage Collector" is not only about
+collecting garbage: instead, it is generally responsible for all memory
+management, including allocation and deallocation.&lt;br&gt;
+Whereas CPython uses a combination of malloc/free/refcounting to manage
+memory, the PyPy GC uses a completely different approach. It is designed
+assuming that a dynamic language like Python behaves the following way:&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;You create, either directly or indirectly, lots of objects.&lt;/li&gt;
+&lt;li&gt;Most of these objects are temporary and very short-lived. Think e.g. of
+doing &lt;tt class="docutils literal"&gt;a + b + c&lt;/tt&gt;: you need to allocate an object to hold the temporary
+result of &lt;tt class="docutils literal"&gt;a + b&lt;/tt&gt;, then it dies very quickly because you no longer need it
+when you do the final &lt;tt class="docutils literal"&gt;+ c&lt;/tt&gt; part.&lt;/li&gt;
+&lt;li&gt;Only small fraction of the objects survive and stay around for a while.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+So, the strategy is: make allocation as fast as possible; make deallocation of
+short-lived objects as fast as possible; find a way to handle the remaining
+small set of objects which actually survive long enough to be important.&lt;br&gt;
+This is done using a &lt;strong&gt;Generational GC&lt;/strong&gt;: the basic idea is the following:&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ol class="arabic simple"&gt;
+&lt;li&gt;We have a nursery, where we allocate "young objects" very quickly.&lt;/li&gt;
+&lt;li&gt;When the nursery is full, we start what we call a "minor collection".&lt;ul&gt;
+&lt;li&gt;We do a quick scan to determine the small set of objects which survived so
+far&lt;/li&gt;
+&lt;li&gt;We &lt;strong&gt;move&lt;/strong&gt; these objects out of the nursery, and we place them in the
+area of memory which contains the "old objects". Since the address of the
+objects changes, we fix all the references to them accordingly.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ol class="arabic simple" start="4"&gt;
+&lt;li&gt;now the nursery contains only objects which "died young". We can
+discard all of them very quickly, reset the nursery, and use the same area
+of memory to allocate new objects from now.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+In practice, this scheme works very well and it is one of the reasons why PyPy
+is much faster than CPython.  However, careful readers have surely noticed
+that this is a problem for &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt;. On one hand, we have PyPy objects which
+can potentially move and change their underlying memory address; on the other
+hand, we need a way to represent them as fixed-address &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; when we
+pass them to C extensions.  We surely need a way to handle that.&lt;/div&gt;
+&lt;div class="section" id="pyobject-in-pypy"&gt;
+&lt;h1&gt;
+&lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; in PyPy&lt;/h1&gt;
+Another challenge is that sometimes, &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; structs are not completely
+opaque: there are parts of the public API which expose to the user specific
+fields of some concrete C struct. For example the definition of &lt;a class="reference external" href="https://docs.python.org/2/c-api/typeobj.html"&gt;PyTypeObject&lt;/a&gt;
+which exposes many of the &lt;tt class="docutils literal"&gt;tp_*&lt;/tt&gt; slots to the user.
+Since the low-level layout of PyPy &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; objects is completely different
+than the one used by CPython, we cannot simply pass RPython objects to C; we
+need a way to handle the difference.&lt;br&gt;
+So, we have two issues so far: objects can move, and incompatible
+low-level layouts. &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; solves both by decoupling the RPython and the C
+representations. We have two "views" of the same entity, depending on whether
+we are in the PyPy world (the movable &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; subclass) or in the C world
+(the non-movable &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;).&lt;br&gt;
+&lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; are created lazily, only when they are actually needed. The
+vast majority of PyPy objects are never passed to any C extension, so we don't
+pay any penalty in that case. However, the first time we pass a &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; to
+C, we allocate and initialize its &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; counterpart.&lt;br&gt;
+The same idea applies also to objects which are created in C, e.g. by calling
+&lt;a class="reference external" href="https://docs.python.org/2/c-api/allocation.html#c.PyObject_New"&gt;PyObject_New()&lt;/a&gt;. At first, only the &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; exists and it is
+exclusively managed by reference counting. As soon as we pass it to the PyPy
+world (e.g. as a return value of a function call), we create its &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt;
+counterpart, which is managed by the GC as usual.&lt;br&gt;
+Here we start to see why calling cpyext modules is more costly in PyPy than in
+CPython. We need to pay some penalty for all the conversions between
+&lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;.&lt;br&gt;
+Moreover, the first time we pass a &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; to C we also need to allocate
+the memory for the &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; using a slowish "CPython-style" memory
+allocator. In practice, for all the objects which are passed to C we pay more
+or less the same costs as CPython, thus effectively "undoing" the speedup
+guaranteed by PyPy's Generational GC under normal circumstances.&lt;/div&gt;
+&lt;div class="section" id="maintaining-the-link-between-w-root-and-pyobject"&gt;
+&lt;h1&gt;
+Maintaining the link between &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;&lt;/h1&gt;
+We now need a way to convert between &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; and
+vice-versa; also, we need to to ensure that the lifetime of the two entities
+are in sync. In particular:&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ol class="arabic simple"&gt;
+&lt;li&gt;as long as the &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; is kept alive by the GC, we want the
+&lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; to live even if its refcount drops to 0;&lt;/li&gt;
+&lt;li&gt;as long as the &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; has a refcount greater than 0, we want to
+make sure that the GC does not collect the &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+The &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; ⇨ &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; link is maintained by the special field
+&lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/parse/cpyext_object.h#lines-5"&gt;ob_pypy_link&lt;/a&gt; which is added to all &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;. On a 64 bit machine this
+means that all &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; have 8 bytes of overhead, but then the
+conversion is very quick, just reading the field.&lt;br&gt;
+For the other direction, we generally don't want to do the same: the
+assumption is that the vast majority of &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; objects will never be
+passed to C, and adding an overhead of 8 bytes to all of them is a
+waste. Instead, in the general case the link is maintained by using a
+dictionary, where &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; are the keys and &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; the values.&lt;br&gt;
+However, for a &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/pyobject.py#lines-66"&gt;few selected&lt;/a&gt; &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; subclasses we &lt;strong&gt;do&lt;/strong&gt; maintain a
+direct link using the special &lt;tt class="docutils literal"&gt;_cpy_ref&lt;/tt&gt; field to improve performance. In
+particular, we use it for &lt;tt class="docutils literal"&gt;W_TypeObject&lt;/tt&gt; (which is big anyway, so a 8 bytes
+overhead is negligible) and &lt;tt class="docutils literal"&gt;W_NoneObject&lt;/tt&gt;. &lt;tt class="docutils literal"&gt;None&lt;/tt&gt; is passed around very
+often, so we want to ensure that the conversion to &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; is very
+fast. Moreover it's a singleton, so the 8 bytes overhead is negligible as
+well.&lt;br&gt;
+This means that in theory, passing an arbitrary Python object to C is
+potentially costly, because it involves doing a dictionary lookup.  We assume
+that this cost will eventually show up in the profiler: however, at the time
+of writing there are other parts of &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; which are even more costly (as we
+will show later), so the cost of the dict lookup is never evident in the
+profiler.&lt;/div&gt;
+&lt;div class="section" id="crossing-the-border-between-rpython-and-c"&gt;
+&lt;h1&gt;
+Crossing the border between RPython and C&lt;/h1&gt;
+There are two other things we need to care about whenever we cross the border
+between RPython and C, and vice-versa: exception handling and the GIL.&lt;br&gt;
+In the C API, exceptions are raised by calling &lt;a class="reference external" href="https://docs.python.org/2/c-api/exceptions.html#c.PyErr_SetString"&gt;PyErr_SetString()&lt;/a&gt; (or one of
+&lt;a class="reference external" href="https://docs.python.org/2/c-api/exceptions.html#exception-handling"&gt;many other functions&lt;/a&gt; which have a similar effect), which basically works by
+creating an exception value and storing it in some global variable. The
+function then signals that an exception has occurred by returning an error value,
+usually &lt;tt class="docutils literal"&gt;NULL&lt;/tt&gt;.&lt;br&gt;
+On the other hand, in the PyPy interpreter, exceptions are propagated by raising the
+RPython-level &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/interpreter/error.py#lines-20"&gt;OperationError&lt;/a&gt; exception, which wraps the actual app-level
+exception values. To harmonize the two worlds, whenever we return from C to
+RPython, we need to check whether a C API exception was raised and if so turn it
+into an &lt;tt class="docutils literal"&gt;OperationError&lt;/tt&gt;.&lt;br&gt;
+We won't dig into details of &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-205"&gt;how the GIL is handled in cpyext&lt;/a&gt;.
+For the purpose of this post, it is enough to know that whenever we enter
+C land, we store the current thread id into a global variable which is
+accessible also from C; conversely, whenever we go back from RPython to C, we
+restore this value to 0.&lt;br&gt;
+Similarly, we need to do the inverse operations whenever you need to cross the
+border between C and RPython, e.g. by calling a Python callback from C code.&lt;br&gt;
+All this complexity is automatically handled by the RPython function
+&lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-1757"&gt;generic_cpy_call&lt;/a&gt;. If you look at the code you see that it takes care of 4
+things:&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ol class="arabic simple"&gt;
+&lt;li&gt;Handling the GIL as explained above.&lt;/li&gt;
+&lt;li&gt;Handling exceptions, if they are raised.&lt;/li&gt;
+&lt;li&gt;Converting arguments from &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; to &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;.&lt;/li&gt;
+&lt;li&gt;Converting the return value from &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; to &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+So, we can see that calling C from RPython introduce some overhead.
+Can we measure it?&lt;br&gt;
+Assuming that the conversion between &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; has a
+reasonable cost (as explained by the previous section), the overhead
+introduced by a single border-cross is still acceptable, especially if the
+callee is doing some non-negligible amount of work.&lt;br&gt;
+However this is not always the case. There are basically three problems that
+make (or used to make) &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; super slow:&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ol class="arabic simple"&gt;
+&lt;li&gt;Paying the border-crossing cost for trivial operations which are called
+very often, such as &lt;tt class="docutils literal"&gt;Py_INCREF&lt;/tt&gt;.&lt;/li&gt;
+&lt;li&gt;Crossing the border back and forth many times, even if it's not strictly
+needed.&lt;/li&gt;
+&lt;li&gt;Paying an excessive cost for argument and return value conversions.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+The next sections explain in more detail each of these problems.&lt;/div&gt;
+&lt;div class="section" id="avoiding-unnecessary-roundtrips"&gt;
+&lt;h1&gt;
+Avoiding unnecessary roundtrips&lt;/h1&gt;
+Prior to the &lt;a class="reference external" href="https://www.pypy.org/posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html"&gt;2017 Cape Town Sprint&lt;/a&gt;, &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; was horribly slow, and we were
+well aware of it: the main reason was that we never really paid too much
+attention to performance. As explained in the blog post, emulating all the
+CPython quirks is basically a nightmare, so better to concentrate on
+correctness first.&lt;br&gt;
+However, we didn't really know &lt;strong&gt;why&lt;/strong&gt; it was so slow. We had theories and
+assumptions, usually pointing at the cost of conversions between &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt;
+and &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;, but we never actually measured it.&lt;br&gt;
+So, we decided to write a set of &lt;a class="reference external" href="https://github.com/antocuni/cpyext-benchmarks"&gt;cpyext microbenchmarks&lt;/a&gt; to measure the
+performance of various operations.  The result was somewhat surprising: the
+theory suggests that when you do a cpyext C call, you should pay the
+border-crossing costs only once, but what the profiler told us was that we
+were paying the cost of &lt;tt class="docutils literal"&gt;generic_cpy_call&lt;/tt&gt; several times more than what we expected.&lt;br&gt;
+After a bit of investigation, we discovered this was ultimately caused by our
+"correctness-first" approach. For simplicity of development and testing, when
+we started &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; we wrote everything in RPython: thus, every single API call
+made from C (like the omnipresent &lt;a class="reference external" href="https://docs.python.org/2/c-api/arg.html#c.PyArg_ParseTuple"&gt;PyArg_ParseTuple()&lt;/a&gt;, &lt;a class="reference external" href="https://docs.python.org/2/c-api/int.html#c.PyInt_AsLong"&gt;PyInt_AsLong()&lt;/a&gt;, etc.)
+had to cross back the C-to-RPython border. This was especially daunting for
+very simple and frequent operations like &lt;tt class="docutils literal"&gt;Py_INCREF&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;Py_DECREF&lt;/tt&gt;,
+which CPython implements as a single assembly instruction!&lt;br&gt;
+Another source of slow down was the implementation of &lt;tt class="docutils literal"&gt;PyTypeObject&lt;/tt&gt; slots.
+At the C level, these are function pointers which the interpreter calls to do
+certain operations, e.g. &lt;a class="reference external" href="https://docs.python.org/2/c-api/typeobj.html#c.PyTypeObject.tp_new"&gt;tp_new&lt;/a&gt; to allocate a new instance of that type.&lt;br&gt;
+As usual, we have some magic to implement slots in RPython; in particular,
+&lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-362"&gt;_make_wrapper&lt;/a&gt; does the opposite of &lt;tt class="docutils literal"&gt;generic_cpy_call&lt;/tt&gt;: it takes a
+RPython function and wraps it into a C function which can be safely called
+from C, handling the GIL, exceptions and argument conversions automatically.&lt;br&gt;
+This was very handy during the development of cpyext, but it might result in
+some bad nonsense; consider what happens when you call the following C
+function:&lt;br&gt;
+&lt;pre class="code C literal-block"&gt;&lt;span class="keyword"&gt;static&lt;/span&gt; &lt;span class="name"&gt;PyObject&lt;/span&gt;&lt;span class="operator"&gt;*&lt;/span&gt; &lt;span class="name function"&gt;foo&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;PyObject&lt;/span&gt;&lt;span class="operator"&gt;*&lt;/span&gt; &lt;span class="name"&gt;self&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;PyObject&lt;/span&gt;&lt;span class="operator"&gt;*&lt;/span&gt; &lt;span class="name"&gt;args&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt;
+&lt;span class="punctuation"&gt;{&lt;/span&gt;
+    &lt;span class="name"&gt;PyObject&lt;/span&gt;&lt;span class="operator"&gt;*&lt;/span&gt; &lt;span class="name"&gt;result&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;PyInt_FromLong&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="literal number integer"&gt;1234&lt;/span&gt;&lt;span class="punctuation"&gt;);&lt;/span&gt;
+    &lt;span class="keyword"&gt;return&lt;/span&gt; &lt;span class="name"&gt;result&lt;/span&gt;&lt;span class="punctuation"&gt;;&lt;/span&gt;
+&lt;span class="punctuation"&gt;}&lt;/span&gt;
+&lt;/pre&gt;
+&lt;ol class="arabic simple"&gt;
+&lt;li&gt;you are in RPython and do a cpyext call to &lt;tt class="docutils literal"&gt;foo&lt;/tt&gt;: &lt;strong&gt;RPython-to-C&lt;/strong&gt;;&lt;/li&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;foo&lt;/tt&gt; calls &lt;tt class="docutils literal"&gt;PyInt_FromLong(1234)&lt;/tt&gt;, which is implemented in RPython:
+&lt;strong&gt;C-to-RPython&lt;/strong&gt;;&lt;/li&gt;
+&lt;li&gt;the implementation of &lt;tt class="docutils literal"&gt;PyInt_FromLong&lt;/tt&gt; indirectly calls
+&lt;tt class="docutils literal"&gt;PyIntType.tp_new&lt;/tt&gt;, which is a C function pointer: &lt;strong&gt;RPython-to-C&lt;/strong&gt;;&lt;/li&gt;
+&lt;li&gt;however, &lt;tt class="docutils literal"&gt;tp_new&lt;/tt&gt; is just a wrapper around an RPython function, created
+by &lt;tt class="docutils literal"&gt;_make_wrapper&lt;/tt&gt;: &lt;strong&gt;C-to-RPython&lt;/strong&gt;;&lt;/li&gt;
+&lt;li&gt;finally, we create our RPython &lt;tt class="docutils literal"&gt;W_IntObject(1234)&lt;/tt&gt;; at some point
+during the &lt;strong&gt;RPython-to-C&lt;/strong&gt; crossing, its &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; equivalent is
+created;&lt;/li&gt;
+&lt;li&gt;after many layers of wrappers, we are again in &lt;tt class="docutils literal"&gt;foo&lt;/tt&gt;: after we do
+&lt;tt class="docutils literal"&gt;return result&lt;/tt&gt;, during the &lt;strong&gt;C-to-RPython&lt;/strong&gt; step we convert it from
+&lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; to &lt;tt class="docutils literal"&gt;W_IntObject(1234)&lt;/tt&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+Phew! After we realized this, it was not so surprising that &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; was very
+slow :). And this was a simplified example, since we are not passing a
+&lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; to the API call. When we do, we need to convert it back and
+forth at every step.  Actually, I am not even sure that what I described was
+the exact sequence of steps which used to happen, but you get the general
+idea.&lt;br&gt;
+The solution is simple: rewrite as much as we can in C instead of RPython,
+to avoid unnecessary roundtrips. This was the topic of most of the Cape Town
+sprint and resulted in the &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;cpyext-avoid-roundtrip&lt;/span&gt;&lt;/tt&gt; branch, which was
+eventually &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/cpyext_avoid-roundtrip"&gt;merged&lt;/a&gt;.&lt;br&gt;
+Of course, it is not possible to move &lt;strong&gt;everything&lt;/strong&gt; to C: there are still
+operations which need to be implemented in RPython. For example, think of
+&lt;tt class="docutils literal"&gt;PyList_Append&lt;/tt&gt;: the logic to append an item to a list is complex and
+involves list strategies, so we cannot replicate it in C.  However, we
+discovered that a large subset of the C API can benefit from this.&lt;br&gt;
+Moreover, the C API is &lt;strong&gt;huge&lt;/strong&gt;. While we invented this new way of writing
+&lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; code, we still need to
+convert many of the functions to the new paradigm.  Sometimes the rewrite is
+not automatic
+or straighforward. &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; is a delicate piece of software, so it happens often
+that we make a mistake and end up staring at a segfault in gdb.&lt;br&gt;
+However, the most important takeaway is that the performance improvements we got
+from this optimization are impressive, as we will detail later.&lt;/div&gt;
+&lt;div class="section" id="conversion-costs"&gt;
+&lt;h1&gt;
+Conversion costs&lt;/h1&gt;
+The other potential big source of slowdown is the conversion of arguments
+between &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;.&lt;br&gt;
+As explained earlier, the first time you pass a &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; to C, you need to
+allocate its &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; counterpart. Suppose you have a &lt;tt class="docutils literal"&gt;foo&lt;/tt&gt; function
+defined in C, which takes a single int argument:&lt;br&gt;
+&lt;pre class="code python literal-block"&gt;&lt;span class="keyword"&gt;for&lt;/span&gt; &lt;span class="name"&gt;i&lt;/span&gt; &lt;span class="operator word"&gt;in&lt;/span&gt; &lt;span class="name builtin"&gt;range&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;N&lt;/span&gt;&lt;span class="punctuation"&gt;):&lt;/span&gt;
+    &lt;span class="name"&gt;foo&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;i&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt;
+&lt;/pre&gt;
+To run this code, you need to create a different &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; for each value
+of &lt;tt class="docutils literal"&gt;i&lt;/tt&gt;: if implemented naively, it means calling &lt;tt class="docutils literal"&gt;N&lt;/tt&gt; times &lt;tt class="docutils literal"&gt;malloc()&lt;/tt&gt;
+and &lt;tt class="docutils literal"&gt;free()&lt;/tt&gt;, which kills performance.&lt;br&gt;
+CPython has the very same problem, which is solved by using a &lt;a class="reference external" href="https://en.wikipedia.org/wiki/Free_list"&gt;free list&lt;/a&gt; to
+&lt;a class="reference external" href="https://github.com/python/cpython/blob/2.7/Objects/intobject.c#L16"&gt;allocate ints&lt;/a&gt;. So, what we did was to simply &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/commit/d8754ab9ba6371c83eaeb80cdf8cc13a37ee0c89"&gt;steal the code&lt;/a&gt; from CPython
+and do the exact same thing. This was also done in the
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;cpyext-avoid-roundtrip&lt;/span&gt;&lt;/tt&gt; branch, and the benchmarks show that it worked
+perfectly.&lt;br&gt;
+Every type which is converted often to &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; must have a very fast
+allocator. At the moment of writing, PyPy uses free lists only for ints and
+&lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/commit/35e2fb9903f2483940d7970bd83ce8c65aa1c1a3"&gt;tuples&lt;/a&gt;: one of the next steps on our TODO list is certainly to use this
+technique with more types, like &lt;tt class="docutils literal"&gt;float&lt;/tt&gt;.&lt;br&gt;
+Conversely, we also need to optimize the conversion from &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; to
+&lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt;: this happens when an object is originally allocated in C and
+returned to Python. Consider for example the following code:&lt;br&gt;
+&lt;pre class="code python literal-block"&gt;&lt;span class="keyword namespace"&gt;import&lt;/span&gt; &lt;span class="name namespace"&gt;numpy&lt;/span&gt; &lt;span class="keyword namespace"&gt;as&lt;/span&gt; &lt;span class="name namespace"&gt;np&lt;/span&gt;
+&lt;span class="name"&gt;myarray&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;np&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;random&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;random&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;N&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt;
+&lt;span class="keyword"&gt;for&lt;/span&gt; &lt;span class="name"&gt;i&lt;/span&gt; &lt;span class="operator word"&gt;in&lt;/span&gt; &lt;span class="name builtin"&gt;range&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name builtin"&gt;len&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;arr&lt;/span&gt;&lt;span class="punctuation"&gt;)):&lt;/span&gt;
+    &lt;span class="name"&gt;myarray&lt;/span&gt;&lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="name"&gt;i&lt;/span&gt;&lt;span class="punctuation"&gt;]&lt;/span&gt;
+&lt;/pre&gt;
+At every iteration, we get an item out of the array: the return type is a an
+instance of &lt;tt class="docutils literal"&gt;numpy.float64&lt;/tt&gt; (a numpy scalar), i.e. a &lt;tt class="docutils literal"&gt;PyObject'*&lt;/tt&gt;: this is
+something which is implemented by numpy entirely in C, so completely
+opaque to &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt;. We don't have any control on how it is allocated,
+managed, etc., and we can assume that allocation costs are the same as on
+CPython.&lt;br&gt;
+As soon as we return these &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; to Python, we need to allocate
+their &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; equivalent. If you do it in a small loop like in the example
+above, you end up allocating all these &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; inside the nursery, which is
+a good thing since allocation is super fast (see the section above about the
+PyPy GC).&lt;br&gt;
+However, we also need to keep track of the &lt;tt class="docutils literal"&gt;W_Root&lt;/tt&gt; to &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; link.
+Currently, we do this by putting all of them in a dictionary, but it is very
+inefficient, especially because most of these objects die young and thus it
+is wasted work to do that for them.  Currently, this is one of the biggest
+unresolved problem in &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt;, and it is what causes the two microbenchmarks
+&lt;tt class="docutils literal"&gt;allocate_int&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;allocate_tuple&lt;/tt&gt; to be very slow.&lt;br&gt;
+We are well aware of the problem, and we have a plan for how to fix it. The
+explanation is too technical for the scope of this blog post as it requires a
+deep knowledge of the GC internals to be understood, but the details are
+&lt;a class="reference external" href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/extradoc/planning/cpyext.txt#L27"&gt;here&lt;/a&gt;.&lt;/div&gt;
+&lt;div class="section" id="c-api-quirks"&gt;
+&lt;h1&gt;
+C API quirks&lt;/h1&gt;
+Finally, there is another source of slowdown which is beyond our control. Some
+parts of the CPython C API are badly designed and expose some of the
+implementation details of CPython.&lt;br&gt;
+The major example is reference counting. The &lt;tt class="docutils literal"&gt;Py_INCREF&lt;/tt&gt; / &lt;tt class="docutils literal"&gt;Py_DECREF&lt;/tt&gt; API
+is designed in such a way which forces other implementation to emulate
+refcounting even in presence of other GC management schemes, as explained
+above.&lt;br&gt;
+Another example is borrowed references. There are API functions which &lt;strong&gt;do
+not&lt;/strong&gt; incref an object before returning it, e.g. &lt;a class="reference external" href="https://docs.python.org/2/c-api/list.html#c.PyList_GetItem"&gt;PyList_GetItem()&lt;/a&gt;.  This is
+done for performance reasons because we can avoid a whole incref/decref pair,
+if the caller needs to handle the returned item only temporarily: the item is
+kept alive because it is in the list anyway.&lt;br&gt;
+For PyPy, this is a challenge: thanks to &lt;a class="reference external" href="https://www.pypy.org/posts/2011/10/more-compact-lists-with-list-strategies-8229304944653956829.html"&gt;list strategies&lt;/a&gt;, lists are often
+represented in a compact way. For example, a list containing only integers is
+stored as a C array of &lt;tt class="docutils literal"&gt;long&lt;/tt&gt;.  How to implement &lt;tt class="docutils literal"&gt;PyList_GetItem&lt;/tt&gt;? We
+cannot simply create a &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt; on the fly, because the caller will never
+decref it and it will result in a memory leak.&lt;br&gt;
+The current solution is very inefficient. The first time we do a
+&lt;tt class="docutils literal"&gt;PyList_GetItem&lt;/tt&gt;, we &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/listobject.py#lines-28"&gt;convert&lt;/a&gt; the &lt;strong&gt;whole&lt;/strong&gt; list to a list of
+&lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;. This is bad in two ways: the first is that we potentially pay a
+lot of unneeded conversion cost in case we will never access the other items
+of the list. The second is that by doing that we lose all the performance
+benefit granted by the original list strategy, making it slower for the
+rest of the pure-python code which will manipulate the list later.&lt;br&gt;
+&lt;tt class="docutils literal"&gt;PyList_GetItem&lt;/tt&gt; is an example of a bad API because it assumes that the list
+is implemented as an array of &lt;tt class="docutils literal"&gt;PyObject*&lt;/tt&gt;: after all, in order to return a
+borrowed reference, we need a reference to borrow, don't we?&lt;br&gt;
+Fortunately, (some) CPython developers are aware of these problems, and there
+is an ongoing project to &lt;a class="reference external" href="https://pythoncapi.readthedocs.io/"&gt;design a better C API&lt;/a&gt; which aims to fix exactly
+this kind of problem.&lt;br&gt;
+Nonetheless, in the meantime we still need to implement the current
+half-broken APIs. There is no easy solution for that, and it is likely that
+we will always need to pay some performance penalty in order to implement them
+correctly.&lt;br&gt;
+However, what we could potentially do is to provide alternative functions
+which do the same job but are more PyPy friendly: for example, we could think
+of implementing &lt;tt class="docutils literal"&gt;PyList_GetItemNonBorrowed&lt;/tt&gt; or something like that: then, C
+extensions could choose to use it (possibly hidden inside some macro and
+&lt;tt class="docutils literal"&gt;#ifdef&lt;/tt&gt;) if they want to be fast on PyPy.&lt;/div&gt;
+&lt;div class="section" id="current-performance"&gt;
+&lt;h1&gt;
+Current performance&lt;/h1&gt;
+During the whole blog post we claimed &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; is slow. How
+slow it is, exactly?&lt;br&gt;
+We decided to concentrate on &lt;a class="reference external" href="https://github.com/antocuni/cpyext-benchmarks"&gt;microbenchmarks&lt;/a&gt; for now. It should be evident
+by now there are simply too many issues which can slow down a &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt;
+program, and microbenchmarks help us to concentrate on one (or few) at a
+time.&lt;br&gt;
+The microbenchmarks measure very simple things, like calling functions and
+methods with the various calling conventions (no arguments, one arguments,
+multiple arguments); passing various types as arguments (to measure conversion
+costs); allocating objects from C, and so on.&lt;br&gt;
+Here are the results from the old PyPy 5.8 relative and normalized to CPython
+2.7, the lower the better:&lt;br&gt;
+&lt;br&gt;
+
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://4.bp.blogspot.com/-5QV9jBfeXfo/W6UOCRA9YqI/AAAAAAAABX4/H2zgbv_XFQEHD4Lb2lj5Ve4Ob_YMuSXLwCLcBGAs/s1600/pypy58.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="480" src="https://4.bp.blogspot.com/-5QV9jBfeXfo/W6UOCRA9YqI/AAAAAAAABX4/H2zgbv_XFQEHD4Lb2lj5Ve4Ob_YMuSXLwCLcBGAs/s640/pypy58.png" width="640"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://www.blogger.com/blogger.g?blogID=3971202189709462152" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://www.blogger.com/blogger.g?blogID=3971202189709462152" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+PyPy was horribly slow everywhere, ranging from 2.5x to 10x slower. It is
+particularly interesting to compare &lt;tt class="docutils literal"&gt;simple.noargs&lt;/tt&gt;, which measures the cost
+of calling an empty function with no arguments, and &lt;tt class="docutils literal"&gt;simple.onearg(i)&lt;/tt&gt;,
+which measures the cost calling an empty function passing an integer argument:
+the latter is ~2x slower than the former, indicating that the conversion cost
+of integers is huge.&lt;br&gt;
+PyPy 5.8 was the last release before the famous Cape Town sprint, when we
+started to look at cpyext performance seriously. Here are the performance data for
+PyPy 6.0, the latest release at the time of writing:&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://1.bp.blogspot.com/-MRkRoxtCeOE/W6UOL5txl1I/AAAAAAAABX8/i0ZiOyS2MOgiSyxFAyMOkKcB6xqjSihBACLcBGAs/s1600/pypy60.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="480" src="https://1.bp.blogspot.com/-MRkRoxtCeOE/W6UOL5txl1I/AAAAAAAABX8/i0ZiOyS2MOgiSyxFAyMOkKcB6xqjSihBACLcBGAs/s640/pypy60.png" width="640"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+&lt;br&gt;
+The results are amazing! PyPy is now massively faster than before, and for
+most benchmarks it is even faster than CPython: yes, you read it correctly:
+PyPy is faster than CPython at doing CPython's job, even considering all the
+extra work it has to do to emulate the C API.  This happens thanks to the JIT,
+which produces speedups high enough to counterbalance the slowdown caused by
+cpyext.&lt;br&gt;
+There are two microbenchmarks which are still slower though: &lt;tt class="docutils literal"&gt;allocate_int&lt;/tt&gt;
+and &lt;tt class="docutils literal"&gt;allocate_tuple&lt;/tt&gt;, for the reasons explained in the section about
+&lt;a class="reference internal" href="https://www.blogger.com/blogger.g?blogID=3971202189709462152#conversion-costs"&gt;Conversion costs&lt;/a&gt;.&lt;/div&gt;
+&lt;div class="section" id="next-steps"&gt;
+&lt;h1&gt;
+Next steps&lt;/h1&gt;
+Despite the spectacular results we got so far, &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; is still slow enough to
+kill performance in most real-world code which uses C extensions extensively
+(e.g., the omnipresent numpy).&lt;br&gt;
+Our current approach is something along these lines:&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ol class="arabic simple"&gt;
+&lt;li&gt;run a real-world small benchmark which exercises cpyext&lt;/li&gt;
+&lt;li&gt;measure and find the major bottleneck&lt;/li&gt;
+&lt;li&gt;write a corresponding microbenchmark&lt;/li&gt;
+&lt;li&gt;optimize it&lt;/li&gt;
+&lt;li&gt;repeat&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+On one hand, this is a daunting task because the C API is huge and we need to
+tackle functions one by one.  On the other hand, not all the functions are
+equally important, and is is enough to optimize a relatively small subset to
+improve many different use cases.&lt;br&gt;
+Where a year ago we announced we have a working answer to run c-extension in
+PyPy, we now have a clear picture of what are the performance bottlenecks, and
+we have developed some technical solutions to fix them. It is "only" a matter
+of tackling them, one by one.  It is worth noting that most of the work was
+done during two sprints, for a total 2-3 person-months of work.&lt;br&gt;
+We think this work is important for the Python ecosystem. PyPy has established
+a baseline for performance in pure python code, providing an answer for the
+"Python is slow" detractors. The techniques used to make &lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; performant
+will let PyPy become an alternative for people who mix C extensions with
+Python, which, it turns out, is just about everyone, in particular those using
+the various scientific libraries. Today, many developers are forced to seek
+performance by converting code from Python to a lower language. We feel there
+is no reason to do this, but in order to prove it we must be able to run both
+their python and their C extensions performantly, then we can begin to educate
+them how to write JIT-friendly code in the first place.&lt;br&gt;
+We envision a future in which you can run arbitrary Python programs on PyPy,
+with the JIT speeding up the pure Python parts and the C parts running as fast
+as today: the best of both worlds!&lt;/div&gt;
+&lt;/div&gt;</description><category>cpyext</category><category>profiling</category><category>speed</category><guid>https://www.pypy.org/posts/2018/09/inside-cpyext-why-emulating-cpython-c-8083064623681286567.html</guid><pubDate>Fri, 21 Sep 2018 16:32:00 GMT</pubDate></item><item><title>How to make your code 80 times faster</title><link>https://www.pypy.org/posts/2017/10/how-to-make-your-code-80-times-faster-1424098117108093942.html</link><dc:creator>Antonio Cuni</dc:creator><description>&lt;div class="document" id="how-to-make-your-code-80-times-faster"&gt;
+I often hear people who are happy because PyPy makes their code 2 times faster
+or so. Here is a short personal story which shows PyPy can go well beyond
+that.&lt;br&gt;
+&lt;br&gt;
+&lt;strong&gt;DISCLAIMER&lt;/strong&gt;: this is not a silver bullet or a general recipe: it worked in
+this particular case, it might not work so well in other cases. But I think it
+is still an interesting technique. Moreover, the various steps and
+implementations are showed in the same order as I tried them during the
+development, so it is a real-life example of how to proceed when optimizing
+for PyPy.&lt;br&gt;
+&lt;br&gt;
+Some months ago I &lt;a class="reference external" href="https://github.com/antocuni/evolvingcopter"&gt;played a bit&lt;/a&gt; with evolutionary algorithms: the ambitious
+plan was to automatically evolve a logic which could control a (simulated)
+quadcopter, i.e. a &lt;a class="reference external" href="https://en.wikipedia.org/wiki/PID_controller"&gt;PID controller&lt;/a&gt; (&lt;strong&gt;spoiler&lt;/strong&gt;: it doesn't fly).&lt;br&gt;
+&lt;br&gt;
+The idea is to have an initial population of random creatures: at each
+generation, the ones with the best fitness survive and reproduce with small,
+random variations.&lt;br&gt;
+&lt;br&gt;
+However, for the scope of this post, the actual task at hand is not so
+important, so let's jump straight to the code. To drive the quadcopter, a
+&lt;tt class="docutils literal"&gt;Creature&lt;/tt&gt; has a &lt;tt class="docutils literal"&gt;run_step&lt;/tt&gt; method which runs at each &lt;tt class="docutils literal"&gt;delta_t&lt;/tt&gt; (&lt;a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/creature.py"&gt;full
+code&lt;/a&gt;):&lt;br&gt;
+&lt;pre class="code python literal-block"&gt;&lt;span class="keyword"&gt;class&lt;/span&gt; &lt;span class="name class"&gt;Creature&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name builtin"&gt;object&lt;/span&gt;&lt;span class="punctuation"&gt;):&lt;/span&gt;
+    &lt;span class="name"&gt;INPUTS&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="literal number integer"&gt;2&lt;/span&gt;  &lt;span class="comment single"&gt;# z_setpoint, current z position&lt;/span&gt;
+    &lt;span class="name"&gt;OUTPUTS&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="literal number integer"&gt;1&lt;/span&gt; &lt;span class="comment single"&gt;# PWM for all 4 motors&lt;/span&gt;
+    &lt;span class="name"&gt;STATE_VARS&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="literal number integer"&gt;1&lt;/span&gt;
+    &lt;span class="operator"&gt;...&lt;/span&gt;
+
+    &lt;span class="keyword"&gt;def&lt;/span&gt; &lt;span class="name function"&gt;run_step&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;inputs&lt;/span&gt;&lt;span class="punctuation"&gt;):&lt;/span&gt;
+        &lt;span class="comment single"&gt;# state: [state_vars ... inputs]&lt;/span&gt;
+        &lt;span class="comment single"&gt;# out_values: [state_vars, ... outputs]&lt;/span&gt;
+        &lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;state&lt;/span&gt;&lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;STATE_VARS&lt;/span&gt;&lt;span class="punctuation"&gt;:]&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;inputs&lt;/span&gt;
+        &lt;span class="name"&gt;out_values&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;np&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;dot&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;matrix&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;state&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt; &lt;span class="operator"&gt;+&lt;/span&gt; &lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;constant&lt;/span&gt;
+        &lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;state&lt;/span&gt;&lt;span class="punctuation"&gt;[:&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;STATE_VARS&lt;/span&gt;&lt;span class="punctuation"&gt;]&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;out_values&lt;/span&gt;&lt;span class="punctuation"&gt;[:&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;STATE_VARS&lt;/span&gt;&lt;span class="punctuation"&gt;]&lt;/span&gt;
+        &lt;span class="name"&gt;outputs&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;out_values&lt;/span&gt;&lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;STATE_VARS&lt;/span&gt;&lt;span class="punctuation"&gt;:]&lt;/span&gt;
+        &lt;span class="keyword"&gt;return&lt;/span&gt; &lt;span class="name"&gt;outputs&lt;/span&gt;
+&lt;/pre&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;inputs&lt;/tt&gt; is a numpy array containing the desired setpoint and the current
+position on the Z axis;&lt;/li&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;outputs&lt;/tt&gt; is a numpy array containing the thrust to give to the motors. To
+start easy, all the 4 motors are constrained to have the same thrust, so
+that the quadcopter only travels up and down the Z axis;&lt;/li&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;self.state&lt;/tt&gt; contains arbitrary values of unknown size which are passed from
+one step to the next;&lt;/li&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;self.matrix&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;self.constant&lt;/tt&gt; contains the actual logic. By putting
+the "right" values there, in theory we could get a perfectly tuned PID
+controller. These are randomly mutated between generations.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;tt class="docutils literal"&gt;run_step&lt;/tt&gt; is called at 100Hz (in the virtual time frame of the simulation). At each
+generation, we test 500 creatures for a total of 12 virtual seconds each. So,
+we have a total of 600,000 executions of &lt;tt class="docutils literal"&gt;run_step&lt;/tt&gt; at each generation.&lt;br&gt;
+&lt;br&gt;
+At first, I simply tried to run this code on CPython; here is the result:&lt;br&gt;
+&lt;pre class="code literal-block"&gt;$ python -m ev.main
+Generation   1: ... [population = 500]  [12.06 secs]
+Generation   2: ... [population = 500]  [6.13 secs]
+Generation   3: ... [population = 500]  [6.11 secs]
+Generation   4: ... [population = 500]  [6.09 secs]
+Generation   5: ... [population = 500]  [6.18 secs]
+Generation   6: ... [population = 500]  [6.26 secs]
+&lt;/pre&gt;
+Which means ~6.15 seconds/generation, excluding the first.&lt;br&gt;
+&lt;br&gt;
+Then I tried with PyPy 5.9:&lt;br&gt;
+&lt;pre class="code literal-block"&gt;$ pypy -m ev.main
+Generation   1: ... [population = 500]  [63.90 secs]
+Generation   2: ... [population = 500]  [33.92 secs]
+Generation   3: ... [population = 500]  [34.21 secs]
+Generation   4: ... [population = 500]  [33.75 secs]
+&lt;/pre&gt;
+Ouch! We are ~5.5x slower than CPython. This was kind of expected: numpy is
+based on cpyext, which is infamously slow.  (Actually, &lt;a class="reference external" href="https://pypy.org/posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html"&gt;we are working on
+that&lt;/a&gt; and on the &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;cpyext-avoid-roundtrip&lt;/span&gt;&lt;/tt&gt; branch we are already faster than
+CPython, but this will be the subject of another blog post.)&lt;br&gt;
+&lt;br&gt;
+So, let's try to avoid cpyext. The first obvious step is to use &lt;a class="reference external" href="https://doc.pypy.org/en/latest/faq.html#what-about-numpy-numpypy-micronumpy"&gt;numpypy&lt;/a&gt;
+instead of numpy (actually, there is a &lt;a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/pypycompat.py"&gt;hack&lt;/a&gt; to use just the micronumpy
+part). Let's see if the speed improves:&lt;br&gt;
+&lt;pre class="code literal-block"&gt;$ pypy -m ev.main   # using numpypy
+Generation   1: ... [population = 500]  [5.60 secs]
+Generation   2: ... [population = 500]  [2.90 secs]
+Generation   3: ... [population = 500]  [2.78 secs]
+Generation   4: ... [population = 500]  [2.69 secs]
+Generation   5: ... [population = 500]  [2.72 secs]
+Generation   6: ... [population = 500]  [2.73 secs]
+&lt;/pre&gt;
+So, ~2.7 seconds on average: this is 12x faster than PyPy+numpy, and more than
+2x faster than the original CPython. At this point, most people would be happy
+and go tweeting how PyPy is great.&lt;br&gt;
+&lt;br&gt;
+In general, when talking of CPython vs PyPy, I am rarely satisfied with a 2x
+speedup: I know that PyPy can do much better than this, especially if you
+write code which is specifically optimized for the JIT. For a real-life
+example, have a look at &lt;a class="reference external" href="https://capnpy.readthedocs.io/en/latest/benchmarks.html"&gt;capnpy benchmarks&lt;/a&gt;, in which the PyPy version is
+~15x faster than the heavily optimized CPython+Cython version (both have been
+written by me, and I tried hard to write the fastest code for both
+implementations).&lt;br&gt;
+&lt;br&gt;
+So, let's try to do better. As usual, the first thing to do is to profile and
+see where we spend most of the time. Here is the &lt;a class="reference external" href="https://vmprof.com/#/449ca8ee-3ab2-49d4-b6f0-9099987e9000"&gt;vmprof profile&lt;/a&gt;. We spend a
+lot of time inside the internals of numpypy, and allocating tons of temporary
+arrays to store the results of the various operations.&lt;br&gt;
+&lt;br&gt;
+Also, let's look at the &lt;a class="reference external" href="https://vmprof.com/#/28fd6e8f-f103-4bf4-a76a-4b65dbd637f4/traces"&gt;jit traces&lt;/a&gt; and search for the function &lt;tt class="docutils literal"&gt;run&lt;/tt&gt;:
+this is loop in which we spend most of the time, and it is composed of 1796
+operations.  The operations emitted for the line &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;np.dot(...)&lt;/span&gt; +
+self.constant&lt;/tt&gt; are listed between lines 1217 and 1456. Here is the excerpt
+which calls &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;np.dot(...)&lt;/span&gt;&lt;/tt&gt;; most of the ops are cheap, but at line 1232 we
+see a call to the RPython function &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/blob/release-pypy3.5-v5.10.0/pypy/module/micronumpy/ndarray.py#L1160"&gt;descr_dot&lt;/a&gt;; by looking at the
+implementation we see that it creates a new &lt;tt class="docutils literal"&gt;W_NDimArray&lt;/tt&gt; to store the
+result, which means it has to do a &lt;tt class="docutils literal"&gt;malloc()&lt;/tt&gt;:&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://4.bp.blogspot.com/-_h6BuLTtEO8/Wfb6BXDg93I/AAAAAAAABNY/BY2XBg4ZtwokB9f1mWSmzI9gn_qanb81QCLcBGAs/s1600/2017-10-trace1.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="450" src="https://4.bp.blogspot.com/-_h6BuLTtEO8/Wfb6BXDg93I/AAAAAAAABNY/BY2XBg4ZtwokB9f1mWSmzI9gn_qanb81QCLcBGAs/s640/2017-10-trace1.png" width="640"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+The implementation of the &lt;tt class="docutils literal"&gt;+ self.constant&lt;/tt&gt; part is also interesting:
+contrary the former, the call to &lt;tt class="docutils literal"&gt;W_NDimArray.descr_add&lt;/tt&gt; has been inlined by
+the JIT, so we have a better picture of what's happening; in particular, we
+can see the call to &lt;tt class="docutils literal"&gt;__0_alloc_with_del____&lt;/tt&gt; which allocates the
+&lt;tt class="docutils literal"&gt;W_NDimArray&lt;/tt&gt; for the result, and the &lt;tt class="docutils literal"&gt;raw_malloc&lt;/tt&gt; which allocates the
+actual array. Then we have a long list of 149 simple operations which set the
+fields of the resulting array, construct an iterator, and finally do a
+&lt;tt class="docutils literal"&gt;call_assembler&lt;/tt&gt;: this is the actual logic to do the addition, which was
+JITtted independently; &lt;tt class="docutils literal"&gt;call_assembler&lt;/tt&gt; is one of the operations to do
+JIT-to-JIT calls:&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://1.bp.blogspot.com/-vmo0pWharIU/Wfb3VfwHjxI/AAAAAAAABNE/a6Em09qZizwGiWJeTbGzKfHQH70dB7RKgCEwYBhgL/s1600/2017-10-trace2.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="640" src="https://1.bp.blogspot.com/-vmo0pWharIU/Wfb3VfwHjxI/AAAAAAAABNE/a6Em09qZizwGiWJeTbGzKfHQH70dB7RKgCEwYBhgL/s640/2017-10-trace2.png" width="625"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+All of this is very suboptimal: in this particular case, we know that the
+shape of &lt;tt class="docutils literal"&gt;self.matrix&lt;/tt&gt; is always &lt;tt class="docutils literal"&gt;(3, 2)&lt;/tt&gt;: so, we are doing an incredible
+amount of work, including calling &lt;tt class="docutils literal"&gt;malloc()&lt;/tt&gt; twice for the temporary arrays, just to
+call two functions which ultimately do a total of 6 multiplications
+and 6 additions.  Note also that this is not a fault of the JIT: CPython+numpy
+has to do the same amount of work, just hidden inside C calls.&lt;br&gt;
+&lt;br&gt;
+One possible solution to this nonsense is a well known compiler optimization:
+loop unrolling.  From the compiler point of view, unrolling the loop is always
+risky because if the matrix is too big you might end up emitting a huge blob
+of code, possibly uselss if the shape of the matrices change frequently: this
+is the main reason why the PyPy JIT does not even try to do it in this case.&lt;br&gt;
+&lt;br&gt;
+However, we &lt;strong&gt;know&lt;/strong&gt; that the matrix is small, and always of the same
+shape. So, let's unroll the loop manually:&lt;br&gt;
+&lt;pre class="code python literal-block"&gt;&lt;span class="keyword"&gt;class&lt;/span&gt; &lt;span class="name class"&gt;SpecializedCreature&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;Creature&lt;/span&gt;&lt;span class="punctuation"&gt;):&lt;/span&gt;
+
+    &lt;span class="keyword"&gt;def&lt;/span&gt; &lt;span class="name function magic"&gt;__init__&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="operator"&gt;*&lt;/span&gt;&lt;span class="name"&gt;args&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="operator"&gt;**&lt;/span&gt;&lt;span class="name"&gt;kwargs&lt;/span&gt;&lt;span class="punctuation"&gt;):&lt;/span&gt;
+        &lt;span class="name"&gt;Creature&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name function magic"&gt;__init__&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="operator"&gt;*&lt;/span&gt;&lt;span class="name"&gt;args&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="operator"&gt;**&lt;/span&gt;&lt;span class="name"&gt;kwargs&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt;
+        &lt;span class="comment single"&gt;# store the data in a plain Python list&lt;/span&gt;
+        &lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;data&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name builtin"&gt;list&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;matrix&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;ravel&lt;/span&gt;&lt;span class="punctuation"&gt;())&lt;/span&gt; &lt;span class="operator"&gt;+&lt;/span&gt; &lt;span class="name builtin"&gt;list&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;constant&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt;
+        &lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;data_state&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal number float"&gt;0.0&lt;/span&gt;&lt;span class="punctuation"&gt;]&lt;/span&gt;
+        &lt;span class="keyword"&gt;assert&lt;/span&gt; &lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;matrix&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;shape&lt;/span&gt; &lt;span class="operator"&gt;==&lt;/span&gt; &lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="literal number integer"&gt;2&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="literal number integer"&gt;3&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt;
+        &lt;span class="keyword"&gt;assert&lt;/span&gt; &lt;span class="name builtin"&gt;len&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;data&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt; &lt;span class="operator"&gt;==&lt;/span&gt; &lt;span class="literal number integer"&gt;8&lt;/span&gt;
+
+    &lt;span class="keyword"&gt;def&lt;/span&gt; &lt;span class="name function"&gt;run_step&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;inputs&lt;/span&gt;&lt;span class="punctuation"&gt;):&lt;/span&gt;
+        &lt;span class="comment single"&gt;# state: [state_vars ... inputs]&lt;/span&gt;
+        &lt;span class="comment single"&gt;# out_values: [state_vars, ... outputs]&lt;/span&gt;
+        &lt;span class="name"&gt;k0&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;k1&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;k2&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;q0&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;q1&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;q2&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;c0&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;c1&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;data&lt;/span&gt;
+        &lt;span class="name"&gt;s0&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;data_state&lt;/span&gt;&lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal number integer"&gt;0&lt;/span&gt;&lt;span class="punctuation"&gt;]&lt;/span&gt;
+        &lt;span class="name"&gt;z_sp&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;z&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;inputs&lt;/span&gt;
+        &lt;span class="comment single"&gt;#&lt;/span&gt;
+        &lt;span class="comment single"&gt;# compute the output&lt;/span&gt;
+        &lt;span class="name"&gt;out0&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;s0&lt;/span&gt;&lt;span class="operator"&gt;*&lt;/span&gt;&lt;span class="name"&gt;k0&lt;/span&gt; &lt;span class="operator"&gt;+&lt;/span&gt; &lt;span class="name"&gt;z_sp&lt;/span&gt;&lt;span class="operator"&gt;*&lt;/span&gt;&lt;span class="name"&gt;k1&lt;/span&gt; &lt;span class="operator"&gt;+&lt;/span&gt; &lt;span class="name"&gt;z&lt;/span&gt;&lt;span class="operator"&gt;*&lt;/span&gt;&lt;span class="name"&gt;k2&lt;/span&gt; &lt;span class="operator"&gt;+&lt;/span&gt; &lt;span class="name"&gt;c0&lt;/span&gt;
+        &lt;span class="name"&gt;out1&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;s0&lt;/span&gt;&lt;span class="operator"&gt;*&lt;/span&gt;&lt;span class="name"&gt;q0&lt;/span&gt; &lt;span class="operator"&gt;+&lt;/span&gt; &lt;span class="name"&gt;z_sp&lt;/span&gt;&lt;span class="operator"&gt;*&lt;/span&gt;&lt;span class="name"&gt;q1&lt;/span&gt; &lt;span class="operator"&gt;+&lt;/span&gt; &lt;span class="name"&gt;z&lt;/span&gt;&lt;span class="operator"&gt;*&lt;/span&gt;&lt;span class="name"&gt;q2&lt;/span&gt; &lt;span class="operator"&gt;+&lt;/span&gt; &lt;span class="name"&gt;c1&lt;/span&gt;
+        &lt;span class="comment single"&gt;#&lt;/span&gt;
+        &lt;span class="name builtin pseudo"&gt;self&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;data_state&lt;/span&gt;&lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal number integer"&gt;0&lt;/span&gt;&lt;span class="punctuation"&gt;]&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;out0&lt;/span&gt;
+        &lt;span class="name"&gt;outputs&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="name"&gt;out1&lt;/span&gt;&lt;span class="punctuation"&gt;]&lt;/span&gt;
+        &lt;span class="keyword"&gt;return&lt;/span&gt; &lt;span class="name"&gt;outputs&lt;/span&gt;
+&lt;/pre&gt;
+In the &lt;a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/creature.py#L100"&gt;actual code&lt;/a&gt; there is also a sanity check which asserts that the
+computed output is the very same as the one returned by &lt;tt class="docutils literal"&gt;Creature.run_step&lt;/tt&gt;.&lt;br&gt;
+&lt;br&gt;
+So, let's try to see how it performs. First, with CPython:&lt;br&gt;
+&lt;pre class="code literal-block"&gt;$ python -m ev.main
+Generation   1: ... [population = 500]  [7.61 secs]
+Generation   2: ... [population = 500]  [3.96 secs]
+Generation   3: ... [population = 500]  [3.79 secs]
+Generation   4: ... [population = 500]  [3.74 secs]
+Generation   5: ... [population = 500]  [3.84 secs]
+Generation   6: ... [population = 500]  [3.69 secs]
+&lt;/pre&gt;
+This looks good: 60% faster than the original CPython+numpy
+implementation. Let's try on PyPy:&lt;br&gt;
+&lt;pre class="code literal-block"&gt;Generation   1: ... [population = 500]  [0.39 secs]
+Generation   2: ... [population = 500]  [0.10 secs]
+Generation   3: ... [population = 500]  [0.11 secs]
+Generation   4: ... [population = 500]  [0.09 secs]
+Generation   5: ... [population = 500]  [0.08 secs]
+Generation   6: ... [population = 500]  [0.12 secs]
+Generation   7: ... [population = 500]  [0.09 secs]
+Generation   8: ... [population = 500]  [0.08 secs]
+Generation   9: ... [population = 500]  [0.08 secs]
+Generation  10: ... [population = 500]  [0.08 secs]
+Generation  11: ... [population = 500]  [0.08 secs]
+Generation  12: ... [population = 500]  [0.07 secs]
+Generation  13: ... [population = 500]  [0.07 secs]
+Generation  14: ... [population = 500]  [0.08 secs]
+Generation  15: ... [population = 500]  [0.07 secs]
+&lt;/pre&gt;
+Yes, it's not an error. After a couple of generations, it stabilizes at around
+~0.07-0.08 seconds per generation. This is around &lt;strong&gt;80 (eighty) times faster&lt;/strong&gt;
+than the original CPython+numpy implementation, and around 35-40x faster than
+the naive PyPy+numpypy one.&lt;br&gt;
+&lt;br&gt;
+Let's look at the &lt;a class="reference external" href="https://vmprof.com/#/402af746-2966-4403-a61d-93015abac033/traces"&gt;trace&lt;/a&gt; again: it no longer contains expensive calls, and
+certainly no more temporary &lt;tt class="docutils literal"&gt;malloc()&lt;/tt&gt; s. The core of the logic is between
+lines 386-416, where we can see that it does fast C-level multiplications and
+additions: &lt;tt class="docutils literal"&gt;float_mul&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;float_add&lt;/tt&gt; are translated straight into
+&lt;tt class="docutils literal"&gt;mulsd&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;addsd&lt;/tt&gt; x86 instructions.&lt;br&gt;
+&lt;br&gt;
+As I said before, this is a very particular example, and the techniques
+described here do not always apply: it is not realistic to expect an 80x
+speedup on arbitrary code, unfortunately. However, it clearly shows the potential of PyPy when
+it comes to high-speed computing. And most importantly, it's not a toy
+benchmark which was designed specifically to have good performance on PyPy:
+it's a real world example, albeit small.&lt;br&gt;
+&lt;br&gt;
+You might be also interested in the talk I gave at last EuroPython, in which I
+talk about a similar topic: "The Joy of PyPy JIT: abstractions for free"
+(&lt;a class="reference external" href="https://ep2017.europython.eu/conference/talks/the-joy-of-pypy-jit-abstractions-for-free"&gt;abstract&lt;/a&gt;, &lt;a class="reference external" href="https://speakerdeck.com/antocuni/the-joy-of-pypy-jit-abstractions-for-free"&gt;slides&lt;/a&gt; and &lt;a class="reference external" href="https://www.youtube.com/watch?v=NQfpHQII2cU"&gt;video&lt;/a&gt;).&lt;br&gt;
+&lt;br&gt;
+&lt;div class="section" id="how-to-reproduce-the-results"&gt;
+&lt;h3&gt;
+How to reproduce the results&lt;/h3&gt;
+&lt;pre class="code literal-block"&gt;$ git clone https://github.com/antocuni/evolvingcopter
+$ cd evolvingcopter
+$ {python,pypy} -m ev.main --no-specialized --no-numpypy
+$ {python,pypy} -m ev.main --no-specialized
+$ {python,pypy} -m ev.main
+&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description><category>jit</category><category>profiling</category><category>speed</category><guid>https://www.pypy.org/posts/2017/10/how-to-make-your-code-80-times-faster-1424098117108093942.html</guid><pubDate>Mon, 30 Oct 2017 10:15:00 GMT</pubDate></item><item><title>(Cape of) Good Hope for PyPy</title><link>https://www.pypy.org/posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html</link><dc:creator>Antonio Cuni</dc:creator><description>&lt;div&gt;
+&lt;br&gt;&lt;/div&gt;
+Hello from the other side of the world (for most of you)!&lt;br&gt;
+&lt;br&gt;
+With the excuse of coming to &lt;a class="reference external" href="https://za.pycon.org/"&gt;PyCon ZA&lt;/a&gt; during the last two weeks Armin,
+Ronan, Antonio and sometimes Maciek had a very nice and productive sprint in
+Cape Town, as pictures show :). We would like to say a big thank you to
+Kiwi.com, which sponsored part of the travel costs via its awesome &lt;a class="reference external" href="https://www.kiwi.com/sourcelift/"&gt;Sourcelift&lt;/a&gt;
+program to help Open Source projects.&lt;br&gt;
+&lt;br&gt;
+&lt;table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="float: right; margin-left: 1em; text-align: right;"&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td style="text-align: center;"&gt;&lt;a href="https://3.bp.blogspot.com/-9YVNucPN1wE/WeaWmTUFB-I/AAAAAAAABMQ/HeVMqS-ya2IYJuk0iZZODlULqpKaf5XcgCLcBGAs/s1600/DSC_2418.JPG" style="margin-left: auto; margin-right: auto;"&gt;&lt;img border="0" height="225" src="https://3.bp.blogspot.com/-9YVNucPN1wE/WeaWmTUFB-I/AAAAAAAABMQ/HeVMqS-ya2IYJuk0iZZODlULqpKaf5XcgCLcBGAs/s400/DSC_2418.JPG" width="400"&gt;&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class="tr-caption" style="text-align: center;"&gt;Armin, Anto and Ronan at Cape Point&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;br&gt;
+Armin, Ronan and Anto spent most of the time hacking at cpyext, our CPython
+C-API compatibility layer: during the last years, the focus was to make it
+working and compatible with CPython, in order to run existing libraries such
+as numpy and pandas. However, we never paid too much attention to performance,
+so the net result is that with the latest released version of PyPy, C
+extensions generally work but their speed ranges from "slow" to "horribly
+slow".&lt;br&gt;
+&lt;br&gt;
+For example, these very simple &lt;a class="reference external" href="https://github.com/antocuni/cpyext-benchmarks"&gt;microbenchmarks&lt;/a&gt; measure the speed of
+calling (empty) C functions, i.e. the time you spend to "cross the border"
+between RPython and C.  &lt;i&gt;(Note: this includes the time spent doing the loop in regular Python code.)&lt;/i&gt; These are the results on CPython, on PyPy 5.8, and on
+our newest in-progress version:&lt;br&gt;
+&lt;br&gt;
+&lt;pre class="literal-block"&gt;$ python bench.py     # CPython
+noargs      : 0.41 secs
+onearg(None): 0.44 secs
+onearg(i)   : 0.44 secs
+varargs     : 0.58 secs
+&lt;/pre&gt;
+&lt;div&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;pre class="literal-block"&gt;$ pypy-5.8 bench.py   # PyPy 5.8
+noargs      : 1.01 secs
+onearg(None): 1.31 secs
+onearg(i)   : 2.57 secs
+varargs     : 2.79 secs
+&lt;/pre&gt;
+&lt;div&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;pre class="literal-block"&gt;$ pypy bench.py       # cpyext-refactor-methodobject branch
+noargs      : 0.17 secs
+onearg(None): 0.21 secs
+onearg(i)   : 0.22 secs
+varargs     : 0.47 secs
+&lt;/pre&gt;
+&lt;div&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;pre class="literal-block"&gt;&lt;/pre&gt;
+&lt;pre class="literal-block"&gt;&lt;/pre&gt;
+So yes: before the sprint, we were ~2-6x slower than CPython. Now, we are
+&lt;strong&gt;faster&lt;/strong&gt; than it!
+To reach this result, we did various improvements, such as:
+&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ol class="arabic simple"&gt;
+&lt;li&gt;teach the JIT how to look (a bit) inside the cpyext module;&lt;/li&gt;
+&lt;li&gt;write specialized code for calling &lt;tt class="docutils literal"&gt;METH_NOARGS&lt;/tt&gt;, &lt;tt class="docutils literal"&gt;METH_O&lt;/tt&gt; and
+&lt;tt class="docutils literal"&gt;METH_VARARGS&lt;/tt&gt; functions; previously, we always used a very general and
+slow logic;&lt;/li&gt;
+&lt;li&gt;implement freelists to allocate the cpyext versions of &lt;tt class="docutils literal"&gt;int&lt;/tt&gt; and
+&lt;tt class="docutils literal"&gt;tuple&lt;/tt&gt; objects, as CPython does;&lt;/li&gt;
+&lt;li&gt;the &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/merge_requests/573"&gt;cpyext-avoid-roundtrip&lt;/a&gt; branch: crossing the RPython/C border is
+slowish, but the real problem was (and still is for many cases) we often
+cross it many times for no good reason. So, depending on the actual API
+call, you might end up in the C land, which calls back into the RPython
+land, which goes to C, etc. etc. (ad libitum).&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+The branch tries to fix such nonsense: so far, we fixed only some cases, which
+are enough to speed up the benchmarks shown above.  But most importantly, we
+now have a clear path and an actual plan to improve cpyext more and
+more. Ideally, we would like to reach a point in which cpyext-intensive
+programs run at worst at the same speed of CPython.&lt;br&gt;
+&lt;br&gt;
+The other big topic of the sprint was Armin and Maciej doing a lot of work on the
+&lt;a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/branch/unicode-utf8"&gt;unicode-utf8&lt;/a&gt; branch: the goal of the branch is to always use UTF-8 as the
+internal representation of unicode strings. The advantages are various:
+&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;decoding a UTF-8 stream is super fast, as you just need to check that the
+stream is valid;&lt;/li&gt;
+&lt;li&gt;encoding to UTF-8 is almost a no-op;&lt;/li&gt;
+&lt;li&gt;UTF-8 is always more compact representation than the currently
+used UCS-4. It's also almost always more compact than CPython 3.5 latin1/UCS2/UCS4 combo;&lt;/li&gt;
+&lt;li&gt;smaller representation means everything becomes quite a bit faster due to lower cache pressure.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+Before you ask: yes, this branch contains special logic to ensure that random
+access of single unicode chars is still O(1), as it is on both CPython and the
+current PyPy.&lt;br&gt;
+We also plan to improve the speed of decoding even more by using modern processor features, like SSE and AVX. Preliminary results show that decoding can be done 100x faster than the current setup.
+&lt;br&gt;
+&lt;br&gt;
+In summary, this was a long and profitable sprint, in which we achieved lots
+of interesting results. However, what we liked even more was the privilege of
+doing &lt;a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/a4307fb5912e"&gt;commits&lt;/a&gt; from awesome places such as the top of Table Mountain:&lt;br&gt;
+&lt;br&gt;
+&lt;blockquote class="twitter-tweet"&gt;
+&lt;div dir="ltr" lang="en"&gt;
+Our sprint venue today &lt;a href="https://twitter.com/hashtag/pypy?src=hash&amp;amp;ref_src=twsrc%5Etfw"&gt;#pypy&lt;/a&gt; &lt;a href="https://t.co/o38IfTYmAV"&gt;pic.twitter.com/o38IfTYmAV&lt;/a&gt;&lt;/div&gt;
+— Ronan Lamy (@ronanlamy) &lt;a href="https://twitter.com/ronanlamy/status/915575026107240449?ref_src=twsrc%5Etfw"&gt;4 ottobre 2017&lt;/a&gt;&lt;/blockquote&gt;
+
+
+&lt;br&gt;
+&lt;table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="float: left; margin-right: 1em; text-align: left;"&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td style="text-align: center;"&gt;&lt;a href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/extradoc/sprintinfo/cape-town-2017/2017-10-04-155524.jpg" style="margin-left: auto; margin-right: auto;"&gt;&lt;img border="0" height="360" src="https://bytebucket.org/pypy/extradoc/raw/extradoc/sprintinfo/cape-town-2017/2017-10-04-155524.jpg" width="640"&gt;&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class="tr-caption" style="text-align: center;"&gt;The panorama we looked at instead of staring at cpyext code&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;</description><category>cpyext</category><category>profiling</category><category>speed</category><category>sprint</category><category>unicode</category><guid>https://www.pypy.org/posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html</guid><pubDate>Wed, 18 Oct 2017 13:31:00 GMT</pubDate></item><item><title>Native profiling in VMProf</title><link>https://www.pypy.org/posts/2017/04/native-profiling-in-vmprof-6949065546884243105.html</link><dc:creator>Richard Plangger</dc:creator><description>&lt;p&gt;We are happy to announce a new release for the PyPI package &lt;span&gt;vmprof&lt;/span&gt;.&lt;br&gt;
+It is now able to capture native stack frames on Linux and Mac OS X to show you bottle necks in compiled code (such as CFFI modules, Cython or C Python extensions). It supports PyPy, CPython versions 2.7, 3.4, 3.5 and 3.6. Special thanks to Jetbrains for funding the native profiling support.&lt;br&gt;
+&lt;br&gt;
+&lt;/p&gt;&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://3.bp.blogspot.com/-94RAR1lkAP8/WNmQn-kpLhI/AAAAAAAAAqE/RXg6T4hptnQtH-8fdi87yh_BI37eN6COQCLcB/s1600/vmprof-logo.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img alt="vmprof logo" border="0" src="https://3.bp.blogspot.com/-94RAR1lkAP8/WNmQn-kpLhI/AAAAAAAAAqE/RXg6T4hptnQtH-8fdi87yh_BI37eN6COQCLcB/s1600/vmprof-logo.png" title="vmprof logo"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;/div&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;What is vmprof?&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;If you have already worked with vmprof you can skip the next two section. If not, here is a short introduction:&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;The goal of vmprof package is to give you more insight into your program. It is a statistical profiler. Another prominent profiler you might already have worked with is cProfile. It is bundled with the Python standard library.&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;vmprof's distinct feature (from most other profilers) is that it does not significantly slow down your program execution. The employed strategy is statistical, rather than deterministic. Not every function call is intercepted, but it samples stack traces and memory usage at a configured sample rate (usually around 100hz). You can imagine that this creates a lot less contention than doing work before and after each function call.&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;As mentioned earlier cProfile gives you a complete profile, but it needs to intercept every function call (it is a deterministic profiler). Usually this means that you have to capture and record every function call, but this takes an significant amount time.&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;br&gt;
+&lt;/span&gt;&lt;/span&gt; &lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;The overhead vmprof consumes is roughly 3-4% of your total program runtime or even less if you reduce the sampling frequency. Indeed it lets you sample and inspect much larger programs. If you failed to profile a large application with cProfile, please give vmprof a shot.&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;span style="font-size: large;"&gt;vmprof.com or PyCharm&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;div&gt;
+&lt;div&gt;
+There are two major alternatives to the command-line tools shipped with vmprof:&lt;/div&gt;
+&lt;ul&gt;
+&lt;li&gt;A web service on &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;PyCharm Professional Edition &lt;/li&gt;
+&lt;/ul&gt;
+&lt;div&gt;
+While the command line tool is only good for quick inspections, &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt;
+ and PyCharm compliment each other providing deeper insight into your 
+program. With PyCharm you can view the per-line profiling results inside
+ the editor. With the &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt; you get a handy visualization of the profiling results as a flame chart and memory usage graph.&lt;/div&gt;
+&lt;/div&gt;
+&lt;div&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div&gt;
+&lt;div&gt;
+Since the PyPy Team runs and maintains the service on &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt; (which is by the way free and open-source), I’ll explain some more details here. On &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt; you can inspect the generated profile interactively instead of looking at console output. What is sent to &lt;a href="https://vmprof.com/"&gt;vmprof.com&lt;/a&gt;? You can find details &lt;a href="https://vmprof.readthedocs.io/en/latest/data.html" target="_blank"&gt;here&lt;/a&gt;.&lt;/div&gt;
+&lt;/div&gt;
+&lt;br&gt;&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;b&gt;Flamegraph&lt;/b&gt;: &lt;/span&gt;&lt;/span&gt;Accumulates and displays the most frequent codepaths. It allows you to quickly and accurately identify hot spots in your code. The flame graph below is a very short run of richards.py (Thus it shows a lot of time spent in PyPy's JIT compiler).&lt;br&gt;
+&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://4.bp.blogspot.com/-n5LoH2hf7qI/WNvtNvIAbsI/AAAAAAAAAqc/zn0AXv8fkzIMQXWUwMLtLFpjochspz5MwCLcB/s1600/flamegraph.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="231" src="https://4.bp.blogspot.com/-n5LoH2hf7qI/WNvtNvIAbsI/AAAAAAAAAqc/zn0AXv8fkzIMQXWUwMLtLFpjochspz5MwCLcB/s400/flamegraph.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+&lt;br&gt;
+&lt;b&gt;List all functions (optionally sorted)&lt;/b&gt;: the equivalent of the vmprof command line output in the web.&lt;br&gt;
+&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://3.bp.blogspot.com/-zzAmBuf-3KM/WNvtNze_sZI/AAAAAAAAAqg/9u4Kxv_OzMsTV7KgRx9PvXGHOAPdfXYUgCLcB/s1600/list-of-functions.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="215" src="https://3.bp.blogspot.com/-zzAmBuf-3KM/WNvtNze_sZI/AAAAAAAAAqg/9u4Kxv_OzMsTV7KgRx9PvXGHOAPdfXYUgCLcB/s400/list-of-functions.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+ &lt;b&gt;Memory curve&lt;/b&gt;: A line plot that shows how how many MBytes have been consumed over the lifetime of your program (see more info in the section below).&lt;br&gt;
+&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://cloud.githubusercontent.com/assets/175722/17400119/70d43a84-5a46-11e6-974b-913cfa22a531.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="187" src="https://cloud.githubusercontent.com/assets/175722/17400119/70d43a84-5a46-11e6-974b-913cfa22a531.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;span style="font-size: large;"&gt;Native programs&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;The new feature introduced in vmprof 0.4.x allows you to look beyond the Python level. As you might know, Python maintains a stack of frames to save the execution. Up to now the vmprof profiles only contained that level of information. But what if you program jumps to native code (such as calling gzip compression on a large file)? Up to now you would not see that information.&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;br&gt;&lt;/span&gt;&lt;/span&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;Many packages make use of the CPython C API (which we discurage, please lookup &lt;a href="https://cffi.readthedocs.org/" target="_blank"&gt;cffi&lt;/a&gt; for a better way to call C). Have you ever had the issue that you know that your performance problems reach down to, but you could not profile it properly?&lt;b&gt; Now you can!&lt;/b&gt;&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;br&gt;
+&lt;/span&gt;&lt;/span&gt; &lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;Let's inspect a very simple Python program to find out why a program is significantly slower on Linux than on Mac:&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;&lt;span style="font-size: small;"&gt;&lt;span&gt;import numpy as np&lt;br&gt;
+n = 1000&lt;br&gt;
+a = np.random.random((n, n))&lt;br&gt;
+b = np.random.random((n, n))&lt;br&gt;
+c = np.dot(np.abs(a), b)&lt;/span&gt;&lt;br&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+Take two NxN random matrix objects and create a dot product. The first argument to the dot product provides the absolute value of the random matrix.&lt;br&gt;
+&lt;br&gt;
+&lt;table border="1" style="border: 1px solid silver;"&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td&gt;Run&lt;/td&gt;&lt;td&gt;Python&lt;/td&gt;&lt;td&gt;NumPy&lt;/td&gt;&lt;td&gt;OS&lt;/td&gt;&lt;td&gt;n=...&lt;/td&gt; &lt;td&gt;Took&lt;/td&gt; &lt;/tr&gt;
+&lt;tr&gt; &lt;td&gt;[1]&lt;/td&gt;&lt;td&gt;CPython 3.5.2&lt;/td&gt;&lt;td&gt;NumPy 1.12.1&lt;/td&gt;&lt;td&gt;Mac OS X, 10.12.3&lt;/td&gt;&lt;td&gt;n=5000&lt;/td&gt;&lt;td&gt;~9 sec&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt; &lt;td&gt;[2]&lt;/td&gt;&lt;td&gt;CPython 3.6.0&lt;/td&gt;&lt;td&gt;NumPy 1.12.1&lt;/td&gt;&lt;td&gt;Linux 64, Kernel 4.9.14&lt;/td&gt;&lt;td&gt;n=1000&lt;/td&gt;&lt;td&gt;~26 sec&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;br&gt;
+Note that the Linux machine operates on a 5 times smaller matrix, still it takes much longer. What is wrong? Is Linux slow? CPython 3.6.0? Well no, lets inspect and &lt;a href="https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac" target="_blank"&gt;[1]&lt;/a&gt; and &lt;a href="https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c" target="_blank"&gt;[2]&lt;/a&gt; (shown below in that order).&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://3.bp.blogspot.com/-WF-JpMQhJaI/WNvx8CPNpTI/AAAAAAAAAqw/ixZpWng6TDc4kIlEHu9zhqrNX4tx0S4rgCLcB/s1600/macosx-profile-blog.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="105" src="https://3.bp.blogspot.com/-WF-JpMQhJaI/WNvx8CPNpTI/AAAAAAAAAqw/ixZpWng6TDc4kIlEHu9zhqrNX4tx0S4rgCLcB/s400/macosx-profile-blog.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://1.bp.blogspot.com/-gjM2uj5Ko_E/WNvx73qcXEI/AAAAAAAAAqs/cMvDfcHQ2eAti4BRU0ldwGQ5M-1_TQ2FACEw/s1600/linux-blog.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="113" src="https://1.bp.blogspot.com/-gjM2uj5Ko_E/WNvx73qcXEI/AAAAAAAAAqs/cMvDfcHQ2eAti4BRU0ldwGQ5M-1_TQ2FACEw/s400/linux-blog.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+&lt;a href="https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c" target="_blank"&gt;[2]&lt;/a&gt; runs on Linux, spends nearly all of the time in PyArray_MatrixProduct2, if you compare to &lt;a href="https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac" target="_blank"&gt;[1]&lt;/a&gt; on Mac OS X, you'll see that a lot of time is spent in generating the random numbers and the rest in cblas_matrixproduct.&lt;br&gt;
+&lt;br&gt;
+Blas has a very efficient implementation so you can achieve the same on Linux if you install a blas implementation (such as openblas).&lt;br&gt;
+&lt;br&gt;
+Usually you can spot potential program source locations that take a lot of time and might be the first starting point to resolve performance issues.&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;Beyond Python programs &lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+It is not unthinkable that the strategy can be reused for native programs. Indeed this can already be done by creating a small cffi wrapper around an entry point of a compiled C program. It would even work for programs compiled from other languages (e.g. C++ or Fortran). The resulting function names are the full symbol name embedded into either the executable symboltable or extracted from the dwarf debugging information. Most of those will be compiler specific and contain some cryptic information.&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;Memory profiling&lt;/span&gt;&lt;br&gt;
+We thankfully received a code contribution from the company Blue Yonder. They have built a memory profiler (for Linux and Mac OS X) on top of vmprof.com that displays the memory consumption for the runtime of your process.&lt;br&gt;
+&lt;br&gt;
+You can run it the following way:&lt;br&gt;
+&lt;br&gt;
+&lt;span&gt;$ python -m vmprof --mem --web script.py&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+By adding --mem, vmprof will capture memory information and display it in the dedicated view on vmprof.com. You can view it by by clicking the 'Memory' switch in the flamegraph view.&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;There is more&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+Some more minor highlights contained in 0.4.x:&lt;br&gt;
+&lt;ul&gt;
+&lt;li&gt;VMProf support for Windows 64 bit (No native profiling)&lt;/li&gt;
+&lt;li&gt;VMProf can read profiles generated by another host system&lt;/li&gt;
+&lt;li&gt;VMProf is now bundled in several binary wheel for fast and easy installation (Mac OS X, Linux 32/64 for CPython 2.7, 3.4, 3.5, 3.6)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;span style="font-size: large;"&gt;Future plans - Profile Streaming&lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+vmprof has not reached the end of development. There are many features we could implement. But there is one feature that could be a great asset to many Python developers.&lt;br&gt;
+&lt;br&gt;
+Continuous delivery of your statistical profile, or in short, profile streaming. One of the great strengths of vmprof is that is consumes very little overhead. It is not a crazy idea to run this in production.&lt;br&gt;
+&lt;br&gt;
+It would require a smart way to stream the profile in the background to vmprof.com and new visualizations to look at much more data your Python service produces.&lt;br&gt;
+&lt;br&gt;
+If that sounds like a solid vmprof improvement, don't hesitate to get in touch with us (e.g. IRC #pypy, mailing list pypy-dev, or comment below)&lt;br&gt;
+&lt;br&gt;
+&lt;span style="font-size: large;"&gt;You can help! &lt;/span&gt;&lt;br&gt;
+&lt;br&gt;
+There are some immediate things other people could help with. Either by donating time or money (yes we have occasional contributors which is great)!&lt;br&gt;
+&lt;ul&gt;
+&lt;li&gt;We gladly received code contribution for the memory profiler. But it was not enough time to finish the migration completely. Sadly it is a bit brittle right now.&lt;/li&gt;
+&lt;li&gt;We would like to spend more time on other visualizations. This should include to give a much better user experience on vmprof.com (like a tutorial that explains the visualization that we already have). &lt;/li&gt;
+&lt;li&gt;Build Windows 32/64 bit wheels (for all CPython versions we currently support)&lt;/li&gt;
+&lt;/ul&gt;
+We are also happy to accept google summer of code projects on vmprof for new visualizations and other improvements. If you qualify and are interested, don't hesitate to ask!&lt;br&gt;
+&lt;br&gt;
+Richard Plangger (plan_rich) and the PyPy Team&lt;br&gt;
+&lt;br&gt;
+[1] Mac OS X &lt;a href="https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac"&gt;https://vmprof.com/#/567aa150-5927-4867-b22d-dbb67ac824ac&lt;/a&gt;&lt;br&gt;
+[2] Linux64 &lt;a href="https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c"&gt;https://vmprof.com/#/097fded2-b350-4d68-ae93-7956cd10150c&lt;/a&gt;</description><category>profiling</category><category>vmprof</category><guid>https://www.pypy.org/posts/2017/04/native-profiling-in-vmprof-6949065546884243105.html</guid><pubDate>Sat, 01 Apr 2017 14:17:00 GMT</pubDate></item><item><title>Profiling for fun with valgrind</title><link>https://www.pypy.org/posts/2007/12/profiling-for-fun-with-valgrind-3215121784705288400.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;p&gt;Recently I've been doing a lot of profiling on the PyPy executables to find speed bottlenecks. &lt;a href="https://en.wikipedia.org/wiki/Valgrind"&gt;Valgrind&lt;/a&gt; (the original &lt;a href="https://valgrind.org/"&gt;page&lt;/a&gt; seems to be down) is an extremely nice tool for doing this. It has several built-in tools that give you different types of profiles. The callgrind mode provides you with a lot of information including relative call costs. The cachegrind tool gives you less information, but what it gives you (e.g. cache misses) is much more accurate. The obvious choice would be to have a way to combine the results of two profiling runs to have both. In the last days I wrote a script that does this. It's available &lt;a href="https://codespeak.net/svn/user/fijal/pygrind"&gt;at my user's svn&lt;/a&gt; and has a pretty intuitive command line interface. The combining calculation are not perfect yet, total costs of functions can still be a bit bogus (they can sum up to whatever) but at least the relative figures are good. This means that we can stop looking at two different types of graphs now.
+
+An awesome tool for analyzing the profile data is &lt;a href="https://kcachegrind.sourceforge.net/cgi-bin/show.cgi"&gt;kcachegrind.&lt;/a&gt;
+
+&lt;a href="https://4.bp.blogspot.com/_5R1EBmwBBTs/R2JjKRYuTTI/AAAAAAAAAAM/LX5ktu_FcIE/s1600-h/kcachegrind.png"&gt;&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5143782752527469874" src="https://4.bp.blogspot.com/_5R1EBmwBBTs/R2JjKRYuTTI/AAAAAAAAAAM/LX5ktu_FcIE/s320/kcachegrind.png" style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer;"&gt;&lt;/a&gt;
+
+Which also proves that my 12'' display is to small at least for some things :-).
+
+
+&lt;b&gt;Update:&lt;/b&gt; pygrind is available under the MIT license.&lt;/p&gt;</description><category>kcachegrind</category><category>profiling</category><category>valgrind</category><guid>https://www.pypy.org/posts/2007/12/profiling-for-fun-with-valgrind-3215121784705288400.html</guid><pubDate>Fri, 14 Dec 2007 11:02:00 GMT</pubDate></item></channel></rss>

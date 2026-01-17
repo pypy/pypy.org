@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>"Blackhole" interpreter | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2010/06/blackhole-interpreter-2752965445510091289.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="pypy-13-released-8546085566902489304.html" title="PyPy 1.3 released" type="text/html">
+<link rel="next" href="../07/comparing-spur-to-pypy-8835011873209414462.html" title="Comparing SPUR to PyPy" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content='"Blackhole" interpreter'>
+<meta property="og:url" content="https://www.pypy.org/posts/2010/06/blackhole-interpreter-2752965445510091289.html">
+<meta property="og:description" content="Hi all,
+
+Here are a few words about the JIT's &quot;great speedup in compiling
+time&quot; advertized on the PyPy 1.3 release (see the
+
+previous blog post).
+The exact meaning behind these words needs a fair bit ">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2010-06-26T16:56:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">"Blackhole" interpreter</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2010-06-26T16:56:00Z" itemprop="datePublished" title="2010-06-26 16:56">2010-06-26 16:56</time></a>
+            </p>
+                <p class="commentline">8 comments</p>
+
+                <p class="commentline">            <a href="blackhole-interpreter-2752965445510091289.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Hi all,</p>
+
+<p>Here are a few words about the JIT's "great speedup in compiling
+time" advertized on the PyPy 1.3 release (see the
+<a href="pypy-13-released-8546085566902489304.html">
+previous blog post</a>).
+The exact meaning behind these words needs a fair bit of
+explanation, so here it is in case you are interested.</p>
+
+<p>If you download a version of PyPy 1.3 that includes a JIT
+compiler, you get an executable that could be qualified as rather
+fat: it actually contains <b>three</b> interpreters.  You have on the
+one hand the regular Python interpreter.  It is here because it's
+not possible to JIT-compile every single piece of Python code you
+try to run; only the most executed loops are JIT-compiled.  They
+are JIT-compiled with a tracing interpreter that operates one
+level down.  This is the second interpreter.  This tracing step
+is quite slow, but it's all right because it's only invoked on
+the most executed loops (on the order of 100 to 1000 times in
+total in a run of a Python script that takes anyway seconds or
+minutes to run).</p>
+
+<p>So apart from the JIT compilation itself, we have two worlds in
+which the execution proceeds: either by regular interpretation,
+or by the execution of assembler code generated by the JIT
+compiler.  And of course, we need to be able to switch from one
+world to the other quickly: during regular interpretation we have
+to detect if we already have generated assembler for this piece
+of code and if so, jump to it; and during execution of the
+assembler, when a "guard" fails, i.e. when we meet a path of
+execution for which we did not produce assembler, then we need to
+switch back to regular interpretation (or occasionally invoke the
+JIT compiler again).</p>
+
+<p>Let us consider the cost of switching from one world to another.
+During regular interpretation, if we detect that we already have
+assembler corresponding to this Python loop, then we just jump to
+it instead of interpreting the Python loop.  This is fairly
+cheap, as it involves just one fast extra check per Python loop.
+The reverse is harder because "guard" failures can occur at any
+point in time: it is possible that the bit of assembler that we
+already executed so far corresponds to running the first 4 Python
+opcodes of the loop <b>and a half.</b>  The guard that failed just now
+is somewhere in the middle of interpreting that opcode -- say,
+multiplying these two Python objects.</p>
+
+<p>It's almost impossible to just "jump" at the right place in the
+code of the regular interpreter -- how do you jump inside a
+regular function compiled in C, itself in a call chain, resuming
+execution of the function from somewhere in the middle?</p>
+
+<p>So here is the important new bit in PyPy 1.3.  Previously, what
+we would do is invoke the JIT compiler again in order to follow
+what needs to happen between the guard failure and the real end
+of the Python opcode.  We would then throw away the trace
+generated, as the only purpose was to finish running the current
+opcode.  We call this "blackhole interpretation".  After the end
+of the Python opcode, we can jump to the regular interpreter
+easily.</p>
+
+<p>Doing so was straightforward, but slow, in case it needs to be
+done very often (as in the case in some examples, but not all).
+In PyPy 1.3, this blackhole interpretation step has been
+redesigned as a time-critical component, and that's where the
+third interpreter comes from.  It is an interpreter that works
+like the JIT compiler, but without the overhead of tracing (e.g.
+it does not need to box all values).  It was designed from the
+ground up for the sole purpose of finishing the execution of the
+current Python opcode.  The bytecode format that it interprets is
+also new, designed for that purpose, and the JIT compiler itself
+(the second interpreter) was adapted to it.
+The old bytecode format in PyPy 1.2 is gone
+(it was more suited for the JIT compiler, but less for blackhole
+interpretation).</p>
+
+<p>In summary, it was a lot of changes in the most front-end-ish
+parts of the JIT compiler, even though it was mostly hidden
+changes.  I hope that this longish blog post helped bring it a
+bit more to the light :-)</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="pypy-13-released-8546085566902489304.html" rel="prev" title="PyPy 1.3 released">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../07/comparing-spur-to-pypy-8835011873209414462.html" rel="next" title="Comparing SPUR to PyPy">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-1441880642803555722">
+        <div class="comment-header">
+          <a name="comment-1441880642803555722"></a>
+            <span class="author">GRon</span> wrote on <span class="date">2010-06-26 21:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>Interesting, is there any documentation for the different bytecode sets you have/had?<br><br>I would be especially interested in the differences, and the reasons for those design decisions.</p>
+        </div>
+      </div>
+      <div class="comment comment-5616958369044142996">
+        <div class="comment-header">
+          <a name="comment-5616958369044142996"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2010-06-26 23:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>I fear not.  The bytecode set is quite custom, made to represent RPython code, which is at the level (roughly speaking) of Java -- with a few additional instructions to guide the JIT compiler.  The latest version uses a register-based machine, which is more convenient than a Java-like stack-based approach starting from the control flow graphs of RPython functions.  It has three independent sets of registers: integers, pointers, and floating-point (pointers are different from integers at this level because the GC needs to track them and possibly move them).  Register numbers are encoded in one byte, so there is room for 256 registers of each kind, but in practice doing a simple register allocation step on each graph means that no bytecode ends up using more than ~15 registers.  A few parts are needed only by the JIT compiler and not by the blackhole interpreter; these are encoded "off-line" to avoid slowing down the blackhole interpreter.<br><br>Well, I could talk at length about all the details of the format, but in truth there is nothing very deep there :-)  See the comments in https://codespeak.net/svn/pypy/trunk/pypy/jit/codewriter/codewriter.py as well as the tests like test/test_flatten.py and test/test_regalloc.py.</p>
+        </div>
+      </div>
+      <div class="comment comment-6743227580682071405">
+        <div class="comment-header">
+          <a name="comment-6743227580682071405"></a>
+            <span class="author">Zeev</span> wrote on <span class="date">2010-06-27 01:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>Does the PyPy JIT replace a running interpreted loop with a compiled one mid-run or only on the next iteration or only the next time this loop starts?<br><br>Is there a way to ask the PyPy interpreter to tell me what it jitted as it ran some code? <br><br>Or will it be too difficult for me to relate the produced machine code with my python source code (because it's not a straightforward method jit)?</p>
+        </div>
+      </div>
+      <div class="comment comment-5643690073582497501">
+        <div class="comment-header">
+          <a name="comment-5643690073582497501"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2010-06-27 17:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi Zeev.<br><br>Only at the next iteration of the loop. However, you have to have at least ~1000 iterations before it happens.<br><br>There is a variety of tools that we use for inspecting generated loops. There is no programmable interface from python yet, but there are some external tools.<br><br>Run: PYPYJITLOG=jit-log-opt:log pypy <br><br>and you'll get a file log which contains all the loops. There are tools in the source checkout pypy/jit/tool, loopviewer.py, showstats.py and traceviewer.py which can help you viewing those loops. They'll contain debug_merge_points which are with info about python opcodes (including functions and file), but they can span several functions. Have fun :)<br><br>If you want more info, drop by on #pypy at irc.freenode.net.<br><br>Cheers,<br>fijal</p>
+        </div>
+      </div>
+      <div class="comment comment-78038086288113139">
+        <div class="comment-header">
+          <a name="comment-78038086288113139"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2010-06-30 02:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>Is this Blackhole interpreter the Jaegermonkey of pypy?</p>
+        </div>
+      </div>
+      <div class="comment comment-3093444930825975525">
+        <div class="comment-header">
+          <a name="comment-3093444930825975525"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2010-07-08 16:26</span>:
+        </div>
+        <div class="comment-content">
+          <p>Luis: no.</p>
+        </div>
+      </div>
+      <div class="comment comment-5405860422710615418">
+        <div class="comment-header">
+          <a name="comment-5405860422710615418"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2010-07-08 16:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Luis: just to expand a bit Armin's answer :-).<br><br>Jaegermonkey is a method-by-method compiler that Tracemonkey uses *before* the tracing compiler enters in action. In pypy, this is equivalent to the normal Python interpreter that profiles your loops to find the hot ones, with the obvious difference that Jaegermonkey is a compiler, while ours is an interpreter.<br><br>The blackhole interpreter is something that it's used internally by our tracing jit compiler, and AFAIK it has no equivalent in tracemonkey.</p>
+        </div>
+      </div>
+      <div class="comment comment-8789568275892407486">
+        <div class="comment-header">
+          <a name="comment-8789568275892407486"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2010-07-08 23:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>I see. Thanks Armin and Antonio.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

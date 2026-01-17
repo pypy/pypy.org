@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Experiments in Pyrlang with RPython | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2015/02/experiments-in-pyrlang-with-rpython-8103387814587972227.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="linalg-support-in-pypynumpy-1131217944329711855.html" title="linalg support in pypy/numpy" type="text/html">
+<link rel="next" href="../03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html" title="Pydgin: Using RPython to Generate Fast Instruction-Set Simulators" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Experiments in Pyrlang with RPython">
+<meta property="og:url" content="https://www.pypy.org/posts/2015/02/experiments-in-pyrlang-with-rpython-8103387814587972227.html">
+<meta property="og:description" content="Pyrlang is an Erlang BEAM bytecode interpreter written in RPython.
+It implements approximately 25% of BEAM instructions. It can support
+integer calculations (but not bigint), closures, exception handl">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2015-02-25T10:13:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Experiments in Pyrlang with RPython</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2015-02-25T10:13:00Z" itemprop="datePublished" title="2015-02-25 10:13">2015-02-25 10:13</time></a>
+            </p>
+                <p class="commentline">1 comment</p>
+
+                <p class="commentline">            <a href="experiments-in-pyrlang-with-rpython-8103387814587972227.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p><a href="https://bitbucket.org/hrc706/pyrlang/overview">Pyrlang</a> is an Erlang BEAM bytecode interpreter written in RPython.</p>
+<p>It implements approximately 25% of BEAM instructions. It can support
+integer calculations (but not bigint), closures, exception handling,
+some operators to atom, list and tuple, user modules, and multi-process
+in single core. Pyrlang is still in development.</p>
+<p>There are some differences between BEAM and the VM of PyPy:</p>
+<ul class="simple">
+<li>BEAM is a register-based VM, whereas the VM in PyPy is stack-based.</li>
+<li>There is no traditional call-stack in BEAM. The Y register in BEAM is
+similar to a call-stack, but the Y register can sometimes store some
+variables.</li>
+<li>There are no typical language-level threads and OS-level threads in
+BEAM; only language-level processes, whose behavior is very similar
+to the actor model.</li>
+</ul>
+<p>Regarding bytecode dispatch loop, Pyrlang uses a while loop to fetch
+instructions and operands, call the function corresponding to every
+instruction, and jump back to the head of the while loop. Due to the
+differences between the RPython call-stack and BEAM’s Y register, we
+decided to implement and manage the Y register by hand. On the other
+hand, PyPy uses RPython’s call stack to implement Python’s call stack.
+As a result, the function for the dispatch loop in PyPy calls itself
+recursively. This does not happen in Pyrlang.</p>
+<p>The Erlang compiler (erlc) usually compiles the bytecode instructions
+for function invocation into CALL (for normal invocation) and CALL_ONLY
+(for tail recursive invocation). You can use a trampoline semantic to
+implement it:</p>
+<ul class="simple">
+<li>CALL instruction: The VM pushes the current instruction pointer (or
+called-program counter in PyPy) to the Y register, and jumps to the
+destination label. When encountering a RETURN instruction, the VM
+pops the instruction pointer from the Y register and returns to the
+location of the instruction pointer to continue executing the outer
+function.</li>
+<li>CALL_ONLY instruction: The VM simply jumps to the destination label,
+without any modification of the Y register. As a result, the tail
+recursive invocation never increases the Y register.</li>
+</ul>
+<p>The current implementation only inserts the JIT hint of can_enter_jit
+following the CALL_ONLY instruction. This means that the JIT only
+traces the tail-recursive invocation in Erlang code, which has a very
+similar semantic to the loop in imperative programming languages like
+Python.</p>
+<p>We have also written a single scheduler to implement the language level
+process in a single core. There is a runable queue in the scheduler. On
+each iteration, the scheduler pops one element (which is a process
+object with dispatch loop) from the queue, and executes the dispatch
+loop of the process object. In the dispatch loop, however, there is a
+counter-call “reduction” inside the dispatch loop. The reduction
+decrements during the execution of the loop, and when the reduction
+becomes 0, the dispatch loop terminates. Then the scheduler pushes that
+element into the runable queue again, and pops the next element for the
+queue, and so on.</p>
+<p>We are planning to implement a multi-process scheduler for multi-core
+CPUs, which will require multiple schedulers and even multiple runable
+queues for each core, but that will be another story. :-)</p>
+<div class="section" id="methods">
+<h2>Methods<a href="#methods" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>We wrote two benchmark programs of Erlang:</p>
+<ul class="simple">
+<li>FACT: A benchmark to calculate the factorial in a tail-recursive
+style, but because we haven’t implemented big int, we do a remainder
+calculation to the argument for the next iteration, so the number
+never overflows.</li>
+<li>REVERSE: The benchmark creates a reversed list of numbers, such as
+[20000, 19999, 19998, …], and applies a bubble sort to it.</li>
+</ul>
+</div>
+<div class="section" id="results">
+<h2>Results<a href="#results" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<div class="section" id="the-value-of-reduction">
+<h3>The Value of Reduction<a href="#the-value-of-reduction" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>We used REVERSE to evaluate the JIT with different values of
+reduction:</p>
+<a href="https://3.bp.blogspot.com/-iAQtrDEcs7s/VOxUT54I7GI/AAAAAAAAF2Q/UdJt9stUKAY/s1600/reverse.png"><img border="0" src="https://3.bp.blogspot.com/-iAQtrDEcs7s/VOxUT54I7GI/AAAAAAAAF2Q/UdJt9stUKAY/s600/reverse.png"></a>
+<a href="https://3.bp.blogspot.com/-GAOD7G7gdkU/VOxUTi19QeI/AAAAAAAAF2M/xXS3VXQwEwI/s1600/fact.png"><img border="0" src="https://3.bp.blogspot.com/-GAOD7G7gdkU/VOxUTi19QeI/AAAAAAAAF2M/xXS3VXQwEwI/s600/fact.png"></a>
+<p>The X axis is the value of reduction, and the Y axis is the execution
+time (by second).</p>
+<p>It seems that when the value of reduction is small, the reduction
+influences the performance significantly, but when reduction becomes
+larger, it only increases the speed very slightly. In fact, we use 2000
+as the default reduction value (as well as the reduction value in the
+official Erlang interpreter).</p>
+<p>Surprisingly, the trace is always generated even when the reduction is
+very small, such as 0, which means the dispatch loop can only run for a
+very limited number of iterations, and the language level process
+executes fewer instructions than an entire loop in one switch of the
+scheduler). The generated trace is almost the same, regardless of
+different reduction values.</p>
+<p>Actually, the RPython JIT only cares what code it meets, but does not
+care who executes it, thus the JIT always generates the results above.
+The trace even can be shared among different threads if they execute the
+same code.</p>
+<p>The overhead at low reduction value may be due to the scheduler, which
+switches from different processes too frequently, or from the
+too-frequent switching between bytecode interpreter and native code, but
+not from JIT itself.</p>
+<p>Here is more explanation from Armin Rigo:</p>
+<blockquote>
+“The JIT works well because you’re using a scheme where some counter
+is decremented (and the soft-thread interrupted when it reaches
+zero) only once in each app-level loop. The soft-thread switch is
+done by returning to some scheduler, which will resume a different
+soft-thread by calling it. It means the JIT can still compile each
+of the loops as usual, with the generated machine code containing
+the decrease-and-check-for-zero operation which, when true, exits
+the assembler."</blockquote>
+</div>
+<div class="section" id="fair-process-switching-vs-unfair-process-switching">
+<h3>Fair Process Switching vs. Unfair Process Switching<a href="#fair-process-switching-vs-unfair-process-switching" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>We are also concerned about the timing for decreasing reduction value.
+In our initial version of Pyrlang, we decrease reduction value at every
+local function invocation, module function invocation, and BIF (built-in
+function) invocation, since this is what the official Erlang interpreter
+does. However, since the JIT in RPython basically traces the target
+language loop (which is the tail recursive invocation in Pyrlang) it is
+typically better to keep the loop whole during a switch of the language
+level process. We modified Pyrlang, and made the reduction decrement
+only occur after CALL_ONLY, which is actually the loop boundary of the
+target language.</p>
+<p>Of course, this strategy may cause an “unfair” execution among language
+level processes. For example, if one process has only a single
+long-sequence code, it executes until the end of the code. On the other
+hand, if a process has a very short loop, it may be executed by very
+limited steps then be switched out by the scheduler. However, in the
+real world, this “unfairness” is usually considered acceptable, and is
+used in many VM implementations including PyPy for improving the overall
+performance.</p>
+<p>We compared these two versions of Pyrlang in the FACT benchmark. The
+reduction decrement is quite different because there are some BIF
+invocations inside the loop. In the old version the process can be
+suspended at loop boundaries or other function invocation, but in the
+new version, it can be suspended only at loop boundaries.</p>
+<p>We show that the strategy is effective, removing around 7% of the
+overhead. We have also compared it in REVERSE, but since there are no
+extra invocations inside the trace, it cannot provide any performance
+improvement. In the real world, we believe there is usually more than
+one extra invocation inside a single loop, so this strategy is effective
+for most cases.</p>
+</div>
+<div class="section" id="comparison-with-default-erlang-and-hipe">
+<h3>Comparison with Default Erlang and HiPE<a href="#comparison-with-default-erlang-and-hipe" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>We compared the performance of Pyrlang with the default Erlang
+interpreter and the HiPE (High Performance Erlang) complier. HiPE is an
+official Erlang compiler that can compile Erlang source code to native
+code. The speed of Erlang programs obviously improves but loses its
+generality instead.</p>
+<p>Please note that Pyrlang is still in development, so in some situations
+it does less work than the default Erlang interpreter, such as not
+checking integer overflow when dealing with big integer, and not
+checking and adding locks when accessing message queues in the
+language-level process, so is therefore faster. The final version of
+Pyrlang may be slower.</p>
+<p>We used the two benchmark programs above, and made sure both of them are
+executed for more than five seconds to cover the JIT warm-up time for
+RPython. The experiment environment is a OS X 10.10 machine with 3.5GHZ
+6-core Intel Xeon E5 CPU and 14GB 1866 MHz DDR3 ECC memory.</p>
+<p>Let’s look at the result of FACT. The graph shows that Pyrlang runs
+177.41% faster on average than Erlang, and runs at almost the same speed
+as HiPE. However, since we haven’t implemented big integer in Pyrlang,
+the arithmetical operators do not do any extra overflow checking. It is
+reasonable that the final version for Pyrlang will be slower than the
+current version and HiPE.</p>
+<a href="https://4.bp.blogspot.com/-uWegj1T-Uqo/VOxU0q3i0vI/AAAAAAAAF2k/0fI1h0eUtuY/s1600/comparison.png"><img border="0" src="https://4.bp.blogspot.com/-uWegj1T-Uqo/VOxU0q3i0vI/AAAAAAAAF2k/0fI1h0eUtuY/s600/comparison.png"></a>
+<p>As for REVERSE, the graph shows that Pyrlang runs 45.09% faster than
+Erlang, but 63.45% slower than HiPE on average. We think this is
+reasonable because there are only few arithmetical operators in this
+benchmark so the speeds of these three implementations are closer.
+However, we observed that at the scale of 40,000, the speed of Pyrlang
+slowed down significantly (111.35% slower than HiPE) compared with the
+other two scales (56.38% and 22.63% slower than HiPE).</p>
+<p>Until now we can only hypothesize why Pyrlang slows down at that scale.
+We guess that the overhead might be from GC. This is because the BEAM
+bytecode provides some GC hints to help the default Erlang compiler to
+perform some GC operations immediately. For example, using GC_BIF
+instead of a BIF instruction tells the VM that there may be a GC
+opportunity, and tells the VM how many live variables should be around
+one instruction. In Pyrlang we do not use these kinds of hints but rely
+on RPython’s GC totally. When there are a huge number of objects during
+runtime, (as for REVERSE, it should be the Erlang list object) the speed
+therefore slows down.</p>
+<a href="https://2.bp.blogspot.com/-DsEMfJl3g50/VOxU_iKhsVI/AAAAAAAAF2s/2omW5vUSZD8/s1600/reverse_comparison.png"><img border="0" src="https://2.bp.blogspot.com/-DsEMfJl3g50/VOxU_iKhsVI/AAAAAAAAF2s/2omW5vUSZD8/s600/reverse_comparison.png"></a>
+<p>Ruochen Huang</p>
+</div>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="linalg-support-in-pypynumpy-1131217944329711855.html" rel="prev" title="linalg support in pypy/numpy">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html" rel="next" title="Pydgin: Using RPython to Generate Fast Instruction-Set Simulators">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-6625331584140411790">
+        <div class="comment-header">
+          <a name="comment-6625331584140411790"></a>
+            <span class="author">peterfirefly</span> wrote on <span class="date">2015-02-26 12:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>'there is a counter-call “reduction”' should probably be:<br><br>'there is a counter called “reduction”'.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

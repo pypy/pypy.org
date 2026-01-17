@@ -1,0 +1,1193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts by Maciej Fijalkowski)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/authors/maciej-fijalkowski.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:38 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>PyPy JIT for Aarch64</title><link>https://www.pypy.org/posts/2019/07/pypy-jit-for-aarch64-7161523403247118006.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+
+&lt;p&gt;Hello everyone.&lt;/p&gt;
+&lt;p&gt;We are pleased to announce the availability of the new PyPy for AArch64. This
+port brings PyPy's high-performance just-in-time compiler to the AArch64
+platform, also known as 64-bit ARM. With the addition of AArch64, PyPy now
+supports a total of 6 architectures: x86 (32 &amp;amp; 64bit), ARM (32 &amp;amp; 64bit), PPC64,
+and s390x. The AArch64 work was funded by ARM Holdings Ltd. and Crossbar.io.&lt;/p&gt;
+&lt;p&gt;PyPy has a good record of boosting the performance of Python programs on the
+existing platforms. To show how well the new PyPy port performs, we compare the
+performance of PyPy against CPython on a set of benchmarks. As a point of
+comparison, we include the results of PyPy on x86_64.&lt;/p&gt;
+&lt;p&gt;Note, however, that the results presented here were measured on a Graviton A1
+machine from AWS, which comes with a very serious word of warning: Graviton A1's
+are virtual machines, and, as such, they are not suitable for benchmarking. If
+someone has access to a beefy enough (16G) ARM64 server and is willing to give
+us access to it, we are happy to redo the benchmarks on a real machine. One
+major concern is that while a virtual CPU is 1-to-1 with a real CPU, it is not
+clear to us how CPU caches are shared across virtual CPUs. Also, note that by no
+means is this benchmark suite representative enough to average the results. Read
+the numbers individually per benchmark.&lt;/p&gt;
+&lt;p&gt;The following graph shows the speedups on AArch64 of PyPy (hg id 2417f925ce94) compared to
+CPython (2.7.15), as well as the speedups on a x86_64 Linux laptop
+comparing the most recent release, PyPy 7.1.1, to CPython 2.7.16.&lt;/p&gt;
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://1.bp.blogspot.com/-zC5JsKK5msM/XTmxQdJawEI/AAAAAAAAJgY/mDR_IbpJOAEImVSkGtVb2V5snEtqZcdnQCLcBGAs/s1600/2019-07-arm64-speedups.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="231" src="https://1.bp.blogspot.com/-zC5JsKK5msM/XTmxQdJawEI/AAAAAAAAJgY/mDR_IbpJOAEImVSkGtVb2V5snEtqZcdnQCLcBGAs/s400/2019-07-arm64-speedups.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;p&gt;In the majority of benchmarks, the speedups achieved on AArch64 match those
+achieved on the x86_64 laptop. Over CPython, PyPy on AArch64 achieves speedups
+between 0.6x to 44.9x. These speedups are comparable to x86_64, where the
+numbers are between 0.6x and 58.9x.&lt;/p&gt;
+&lt;p&gt;The next graph compares between the speedups achieved on AArch64 to the speedups
+achieved on x86_64, i.e., how great the speedup is on AArch64 vs. the same
+benchmark on x86_64. This comparison should give a rough idea about the
+quality of the generated code for the new platform.&lt;/p&gt;
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://4.bp.blogspot.com/-29YGxYG1SLU/XTmxbjoz9nI/AAAAAAAAJgc/efNeh3P4guwHtgqKXjyMgfwfUbMFl3eDACLcBGAs/s1600/2019-07-arm64-relative.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" height="133" src="https://4.bp.blogspot.com/-29YGxYG1SLU/XTmxbjoz9nI/AAAAAAAAJgc/efNeh3P4guwHtgqKXjyMgfwfUbMFl3eDACLcBGAs/s400/2019-07-arm64-relative.png" width="400"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;p&gt;Note that we see a large variance: There are generally three groups of
+benchmarks - those that run at more or less the same speed, those that
+run at 2x the speed, and those that run at 0.5x the speed of x86_64.&lt;/p&gt;
+&lt;p&gt;The variance and disparity are likely related to a variety of issues, mostly due
+to differences in architecture. What &lt;em&gt;is&lt;/em&gt; however interesting is that, compared
+to measurements performed on older ARM boards, the branch predictor on the
+Graviton A1 machine appears to have improved. As a result, the speedups achieved
+by PyPy over CPython are smaller than on older ARM boards: sufficiently branchy
+code, like CPython itself, simply runs a lot faster. Hence, the advantage
+of the non-branchy code generated by PyPy's just-in-time compiler is smaller.&lt;/p&gt;
+&lt;p&gt;One takeaway here is that many possible improvements for PyPy have yet to be
+implemented. This is true for both of the above platforms, but probably more so
+for AArch64, which comes with a large number of CPU registers. The PyPy backend
+was written with x86 (the 32-bit variant) in mind, which has a really low number
+of registers. We think that we can improve in the area of emitting more modern
+machine code, which may have a higher impact on AArch64 than on x86_64. There is
+also a number of missing features in the AArch64 backend. These features are
+currently implemented as expensive function calls instead of inlined native
+instructions, something we intend to improve.&lt;/p&gt;
+&lt;p&gt;Best,&lt;/p&gt;
+&lt;p&gt;Maciej Fijalkowski, Armin Rigo and the PyPy team&lt;/p&gt;
+
+&lt;br&gt;&lt;/div&gt;</description><guid>https://www.pypy.org/posts/2019/07/pypy-jit-for-aarch64-7161523403247118006.html</guid><pubDate>Thu, 25 Jul 2019 14:41:00 GMT</pubDate></item><item><title>Funding for 64-bit Armv8-a support in PyPy</title><link>https://www.pypy.org/posts/2018/11/hello-everyone-at-pypy-we-are-trying-to-5336557946798583063.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+
+&lt;p&gt;Hello everyone&lt;/p&gt;
+
+&lt;p&gt;At PyPy we are trying to support a relatively wide range of platforms. We have PyPy working on OS X, Windows and various flavors of linux (and unofficially various flavors of BSD) on the software side, with hardware side having x86, x86_64, PPC, 32-bit Arm (v7) and even zarch. This is harder than for other projects, since PyPy emits assembler on the fly from the just in time compiler and it requires significant amount of work to port it to a new platform.&lt;/p&gt;
+
+&lt;p&gt;We are pleased to inform that &lt;a href="https://www.arm.com/"&gt;Arm Limited&lt;/a&gt;, together with &lt;a href="https://crossbario.com/"&gt;Crossbar.io GmbH&lt;/a&gt;, are sponsoring the development of 64-bit Armv8-a architecture support through &lt;a href="https://baroquesoftware.com"&gt;Baroque Software OU&lt;/a&gt;, which would allow PyPy to run on a new variety of low-power, high-density servers with that architecture. We believe this will be beneficial for the funders, for the PyPy project as well as to the wider community.&lt;/p&gt;
+
+&lt;p&gt;The work will commence soon and will be done some time early next year with expected speedups either comparable to x86 speedups or, if our &lt;a href="https://www.pypy.org/posts/2013/05/pypy-20-alpha-for-arm-2318299473927531503.html"&gt;current experience with ARM holds&lt;/a&gt;, more significant than x86 speedups.&lt;/p&gt;
+
+&lt;p&gt;Best,&lt;br&gt;
+Maciej Fijalkowski and the PyPy team&lt;/p&gt;
+&lt;br&gt;&lt;/div&gt;</description><guid>https://www.pypy.org/posts/2018/11/hello-everyone-at-pypy-we-are-trying-to-5336557946798583063.html</guid><pubDate>Thu, 29 Nov 2018 12:09:00 GMT</pubDate></item><item><title>PyPy2.7 and PyPy3.5 v5.10 dual release</title><link>https://www.pypy.org/posts/2017/12/pypy27-and-pypy35-v510-dual-release-3223396318213306071.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+&lt;p&gt;The PyPy team is proud to release both PyPy2.7 v5.10 (an interpreter supporting
+Python 2.7 syntax), and a final PyPy3.5 v5.10 (an interpreter for Python
+3.5 syntax). The two releases are both based on much the same codebase, thus
+the dual release.&lt;/p&gt;
+&lt;p&gt;This release is an incremental release with very few new features, the main
+feature being the final PyPy3.5 release that works on linux and OS X with beta
+windows support. It also includes fixes for &lt;a class="reference external" href="https://vmprof.readthedocs.io"&gt;vmprof&lt;/a&gt; cooperation with greenlets.&lt;/p&gt;
+&lt;p&gt;Compared to 5.9, the 5.10 release contains mostly bugfixes and small improvements.
+We have in the pipeline big new features coming for PyPy 6.0 that did not make
+the release cut and should be available within the next couple months.&lt;/p&gt;
+&lt;p&gt;As always, this release is 100% compatible with the previous one and fixed
+several issues and bugs raised by the growing community of PyPy users.
+As always, we strongly recommend updating.&lt;/p&gt;
+&lt;p&gt;There are quite a few important changes that are in the pipeline that did not
+make it into the 5.10 release. Most important are speed improvements to cpyext
+(which will make numpy and pandas a bit faster) and utf8 branch that changes
+internal representation of unicode to utf8, which should help especially the
+Python 3.5 version of PyPy.&lt;/p&gt;
+&lt;p&gt;This release concludes the Mozilla Open Source &lt;a class="reference external" href="https://www.pypy.org/posts/2016/08/pypy-gets-funding-from-mozilla-for-5569307998787871200.html"&gt;grant&lt;/a&gt; for having a compatible
+PyPy 3.5 release and we're very grateful for that.  Of course, we will continue
+to improve PyPy 3.5 and probably move to 3.6 during the course of 2018.&lt;/p&gt;
+&lt;p&gt;You can download the v5.10 releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project.&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and
+encourage new people to join the project. PyPy has many
+layers and we need help with all of them: &lt;a class="reference external" href="https://www.pypy.org/posts/2017/12/index.html"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation
+improvements, tweaking popular &lt;a class="reference external" href="https://www.pypy.org/posts/2017/12/project-ideas.html#make-more-python-modules-pypy-friendly"&gt;modules&lt;/a&gt; to run on pypy, or general &lt;a class="reference external" href="https://www.pypy.org/posts/2017/12/project-ideas.html"&gt;help&lt;/a&gt;
+with making RPython's JIT even better.&lt;/p&gt;
+&lt;div class="section" id="what-is-pypy"&gt;
+&lt;h1&gt;What is PyPy?&lt;/h1&gt;
+&lt;p&gt;PyPy is a very compliant Python interpreter, almost a drop-in replacement for
+CPython 2.7 and CPython 3.5. It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython 2.7.x&lt;/a&gt; performance comparison)
+due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;The PyPy release supports:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS X 64 bits, Windows 32 bits, OpenBSD, FreeBSD)&lt;/li&gt;
+&lt;li&gt;newer &lt;strong&gt;ARM&lt;/strong&gt; hardware (ARMv6 or ARMv7, with VFPv3) running Linux,&lt;/li&gt;
+&lt;li&gt;big- and little-endian variants of &lt;strong&gt;PPC64&lt;/strong&gt; running Linux,&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;s390x&lt;/strong&gt; running Linux&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+&lt;/div&gt;
+&lt;div class="section" id="changelog"&gt;
+&lt;h1&gt;Changelog&lt;/h1&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;improve ssl handling on windows for pypy3 (makes pip work)&lt;/li&gt;
+&lt;li&gt;improve unicode handling in various error reporters&lt;/li&gt;
+&lt;li&gt;fix vmprof cooperation with greenlets&lt;/li&gt;
+&lt;li&gt;fix some things in cpyext&lt;/li&gt;
+&lt;li&gt;test and document the cmp(nan, nan) == 0 behaviour&lt;/li&gt;
+&lt;li&gt;don't crash when calling sleep with inf or nan&lt;/li&gt;
+&lt;li&gt;fix bugs in _io module&lt;/li&gt;
+&lt;li&gt;inspect.isbuiltin() now returns True for functions implemented in C&lt;/li&gt;
+&lt;li&gt;allow the sequences future-import, docstring, future-import for CPython bug compatibility&lt;/li&gt;
+&lt;li&gt;Issue #2699: non-ascii messages in warnings&lt;/li&gt;
+&lt;li&gt;posix.lockf&lt;/li&gt;
+&lt;li&gt;fixes for FreeBSD platform&lt;/li&gt;
+&lt;li&gt;add .debug files, so builds contain debugging info, instead of being stripped&lt;/li&gt;
+&lt;li&gt;improvements to cppyy&lt;/li&gt;
+&lt;li&gt;issue #2677 copy pure c PyBuffer_{From,To}Contiguous from cpython&lt;/li&gt;
+&lt;li&gt;issue #2682, split firstword on any whitespace in sqlite3&lt;/li&gt;
+&lt;li&gt;ctypes: allow ptr[0] = foo when ptr is a pointer to struct&lt;/li&gt;
+&lt;li&gt;matplotlib will work with tkagg backend once &lt;a class="reference external" href="https://github.com/matplotlib/matplotlib/pull/9356"&gt;matplotlib pr #9356&lt;/a&gt; is merged&lt;/li&gt;
+&lt;li&gt;improvements to utf32 surrogate handling&lt;/li&gt;
+&lt;li&gt;cffi version bump to 1.11.2&lt;/li&gt;
+&lt;/ul&gt;
+Maciej Fijalkowski, Matti Picus and the whole PyPy team
+&lt;/div&gt;
+&lt;br&gt;&lt;/div&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2017/12/pypy27-and-pypy35-v510-dual-release-3223396318213306071.html</guid><pubDate>Mon, 25 Dec 2017 18:51:00 GMT</pubDate></item><item><title>Let's remove the Global Interpreter Lock</title><link>https://www.pypy.org/posts/2017/08/lets-remove-global-interpreter-lock-748023554216649595.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+&lt;p&gt;Hello everyone&lt;/p&gt;
+&lt;p&gt;The Python community has been discussing removing the Global Interpreter Lock for
+a long time.
+There have been various attempts at removing it:
+Jython or IronPython successfully removed it with the help of the underlying
+platform, and some have yet to bear fruit, like &lt;a class="reference external" href="https://github.com/larryhastings/gilectomy"&gt;gilectomy&lt;/a&gt;. Since our &lt;a class="reference external" href="https://www.pypy.org/posts/2017/03/leysin-winter-sprint-summary-4587213628578490701.html"&gt;February sprint&lt;/a&gt; in Leysin,
+we have experimented with the topic of GIL removal in the PyPy project.
+We believe that the work done in IronPython or Jython can be reproduced with
+only a bit more effort in PyPy. Compared to that, removing the GIL in CPython is a much
+harder topic, since it also requires tackling the problem of multi-threaded reference
+counting. See the section below for further details.&lt;/p&gt;
+&lt;p&gt;As we announced at EuroPython, what we have so far is a GIL-less PyPy
+which can run &lt;strong&gt;very simple&lt;/strong&gt; multi-threaded, nicely parallelized, programs.
+At the moment, more complicated programs probably segfault. The
+remaining 90% (and another 90%) of work is with putting locks in strategic
+places so PyPy does not segfault during concurrent accesses to
+data structures.&lt;/p&gt;
+&lt;p&gt;Since such work would complicate the PyPy code base and our day-to-day work,
+we would like to judge the interest of the community and the commercial
+partners to make it happen (we are not looking for individual
+donations at this point).  We estimate a total cost of $50k,
+out of which we already have backing for about 1/3 (with a possible 1/3
+extra from the STM money, see below).  This would give us a good
+shot at delivering a good proof-of-concept working PyPy with no GIL. If we can get a $100k
+contract, we will deliver a fully working PyPy interpreter with no GIL as a release,
+possibly separate from the default PyPy release.&lt;/p&gt;
+&lt;p&gt;People asked several questions, so I'll try to answer the technical parts
+here.&lt;/p&gt;
+&lt;h3&gt;What would the plan entail?&lt;/h3&gt;
+&lt;p&gt;We've already done the work on the Garbage Collector to allow doing multi-
+threaded programs in RPython.  "All" that is left is adding locks on mutable
+data structures everywhere in the PyPy codebase. Since it would significantly complicate
+our workflow, we require real interest in that topic, backed up by
+commercial contracts in order to justify the added maintenance burden.&lt;/p&gt;
+&lt;h3&gt;Why did the STM effort not work out?&lt;/h3&gt;
+&lt;p&gt;STM was a research project that proved that the idea is possible. However,
+the amount of user effort that is required to make programs run in a
+parallelizable way is significant, and we never managed to develop tools
+that would help in doing so.  At the moment we're not sure if more work
+spent on tooling would improve the situation or if the whole idea is really doomed.
+The approach also ended up adding significant overhead on single threaded programs,
+so in the end it is very easy to make your programs slower.  (We have some money
+left in the donation pot for STM which we are not using; according to the rules, we
+could declare the STM attempt failed and channel that money towards the present
+GIL removal proposal.)&lt;/p&gt;
+&lt;h3&gt;Wouldn't subinterpreters be a better idea?&lt;/h3&gt;
+&lt;p&gt;Python is a very mutable language - there are tons of mutable state and
+basic objects (classes, functions,...) that are compile-time in other
+language but runtime and fully mutable in Python.  In the end, sharing
+things between subinterpreters would be restricted to basic immutable
+data structures, which defeats the point. Subinterpreters suffers from the same problems as
+multiprocessing with no additional benefits.
+We believe that reducing mutability to implement subinterpreters is not viable without seriously impacting the
+semantics of the language (a conclusion which applies to many other
+approaches too).&lt;/p&gt;
+&lt;h3&gt;Why is it easier to do in PyPy than CPython?&lt;/h3&gt;
+&lt;p&gt;Removing the GIL in CPython has two problems:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;how do we guard access to mutable  data structures with locks and&lt;/li&gt;
+&lt;li&gt;what to do with reference counting that needs to be guarded.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy only has the former problem; the latter doesn't exist,
+due to a different garbage collector approach.  Of course the first problem
+is a mess too, but at least we are already half-way there. Compared to Jython
+or IronPython, PyPy lacks some data structures that are provided by JVM or .NET,
+which we would need to implement, hence the problem is a little harder
+than on an existing multithreaded platform. However, there is good research
+and we know how that problem can be solved.&lt;/p&gt;
+&lt;p&gt;Best regards,&lt;br&gt;
+Maciej Fijalkowski&lt;/p&gt;
+&lt;br&gt;&lt;/div&gt;</description><guid>https://www.pypy.org/posts/2017/08/lets-remove-global-interpreter-lock-748023554216649595.html</guid><pubDate>Mon, 14 Aug 2017 14:34:00 GMT</pubDate></item><item><title>Async HTTP benchmarks on PyPy3</title><link>https://www.pypy.org/posts/2017/03/async-http-benchmarks-on-pypy3-1092124994927894138.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div class="" id="magicdomid3"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;Hello everyone,&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid4"&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid5"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;Since &lt;/span&gt;&lt;a href="https://blog.mozilla.org/blog/2016/08/04/mozilla-awards-585000-to-nine-open-source-projects-in-q2-2016/" target="_blank"&gt;Mozilla announced funding&lt;/a&gt;&lt;span class="author-g-1d7t1l2jbyeccm49"&gt;,&lt;/span&gt;&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt; we've been working quite hard on delivering you a working &lt;/span&gt;&lt;span class="author-g-1d7t1l2jbyeccm49"&gt;P&lt;/span&gt;&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;ython 3.5.&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid5"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt; &lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid5"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;We are almost ready to release an alpha version of PyPy 3.5. Our goal is to release it shortly after the sprint. Many modules have already been ported and  it can probably run many Python 3 programs already. We are happy to receive any feedback after the next release.  &lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid6"&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid7"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;To show that the heart (asyncio) of Python 3 is already working we have prepared some benchmarks. They are done by &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;Paweł Piotr Przeradowski @squeaky_pl&lt;/span&gt;&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt; for &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;a HTTP&lt;/span&gt;&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt; workload on serveral&lt;/span&gt;&lt;span class="author-g-1d7t1l2jbyeccm49"&gt;&lt;/span&gt;&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt; &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;asynchronous IO&lt;/span&gt;&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt; libraries&lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;, namely &lt;/span&gt;&lt;span class="author-g-1d7t1l2jbyeccm49"&gt;the &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;relatively new &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy i"&gt;&lt;i&gt;asyncio&lt;/i&gt;&lt;/span&gt;&lt;span class="author-g-1d7t1l2jbyeccm49 i"&gt;&lt;i&gt; and&lt;/i&gt;&lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt; &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy i"&gt;&lt;i&gt;curio&lt;/i&gt;&lt;/span&gt;&lt;span class="author-g-1d7t1l2jbyeccm49 i"&gt;&lt;i&gt; libraries&lt;/i&gt;&lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt; and&lt;/span&gt;&lt;span class="author-g-1d7t1l2jbyeccm49"&gt; the&lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt; battle-tested &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy i"&gt;&lt;i&gt;tornado&lt;/i&gt;&lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;, &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy i"&gt;&lt;i&gt;gevent and Twisted&lt;/i&gt;&lt;/span&gt;&lt;span class="author-g-1d7t1l2jbyeccm49 i"&gt;&lt;i&gt; libraries&lt;/i&gt;&lt;/span&gt;&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;. To see the benchmarks check out &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy url"&gt;&lt;a href="https://github.com/squeaky-pl/zenchmarks"&gt;https://github.com/squeaky-pl/zenchmarks&lt;/a&gt;&lt;/span&gt;&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt; and the instructions &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;for reproducing can be found inside README.md in the repository&lt;/span&gt;&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;. Raw results &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;can be obtained from &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy url"&gt;&lt;a href="https://github.com/squeaky-pl/zenchmarks/blob/master/results.csv"&gt;https://github.com/squeaky-pl/zenchmarks/blob/master/results.csv&lt;/a&gt;&lt;/span&gt;&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;.&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid8"&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid9"&gt;
+&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;The
+ purpose of the presented benchmarks is showing that the upcoming PyPy release 
+is already working with unmodified code that runs on CPython 3.5. PyPy 
+also manages to make them run significantly faster.&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid10"&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid11"&gt;
+&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;The
+ benchmarks consist of HTTP servers implemented on the top of the mentioned 
+libraries. All the servers are single-threaded relying on underlying 
+event loops to provide concurrency. Access logging was disabled to 
+exclude terminal I/O from the results. The view code consists of a 
+lookup in a dictionary mapping ASCII letters to verses from the famous 
+Zen of Python. If a verse is found the view returns it, otherwise a 404 
+Not Found response is served. The 400 Bad Request and 500 Internal 
+Server Error cases are also handled.&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid12"&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid13"&gt;
+&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;The workload was generated with the &lt;/span&gt;&lt;a href="https://github.com/wg/wrk" target="_blank"&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy i"&gt;&lt;i&gt;wrk&lt;/i&gt;&lt;/span&gt;&lt;/a&gt; H&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;TTP benchmarking tool. It is run with one thread opening up to 100 
+concurrent connections for 2 seconds and repeated 1010 times to get 
+consecutive measures. There is a &lt;a href="https://github.com/squeaky-pl/zenchmarks/blob/master/zenhttp.lua" target="_blank"&gt;Lua script &lt;/a&gt;provided&lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;
+ that instructs &lt;a href="https://github.com/wg/wrk" target="_blank"&gt;wrk&lt;/a&gt; to continuously send 24 different requests that hit 
+different execution paths (200, 404, 400) in the view code. Also it is 
+worth noting that &lt;/span&gt;&lt;a href="https://github.com/wg/wrk" target="_blank"&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy i"&gt;&lt;i&gt;wrk&lt;/i&gt;&lt;/span&gt;&lt;/a&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt; will only count 200 responses as successful so the actual request per second throughput is higher.&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid14"&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid15"&gt;
+&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;For your convenience all the used libraries versions are &lt;a href="https://github.com/squeaky-pl/zenchmarks/tree/master/vendor" target="_blank"&gt;vendored&lt;/a&gt; &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;into the benchmark repository. There is also a precompiled portable version of &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy i"&gt;&lt;i&gt;wrk &lt;/i&gt;&lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;provided
+ that should run on any reasonably recent (10 year old or newer) Linux 
+x86_64 distribution. The benchmark was performed on a public cloud &lt;/span&gt;&lt;a href="https://www.scaleway.com/" target="_blank"&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy i"&gt;&lt;i&gt;scaleway&lt;/i&gt;&lt;/span&gt;&lt;/a&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt; x86_64 server launched in a Paris data center. The server was running 
+Ubuntu 16.04.01 LTS and reported Intel(R) Xeon(R) CPU D-1531 @ 2.20GHz 
+CPU. CPython 3.5.2 (shipped by default in Ubuntu) was benchmarked 
+against a &lt;a href="https://buildbot.pypy.org/nightly/py3.5/pypy-c-jit-90326-88ef793308eb-linux64.tar.bz2" target="_blank"&gt;pypy-c-jit-90326-88ef793308eb-linux64&lt;/a&gt;&lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt; snapshot of the 3.5 compatibility branch of PyPy.&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid16"&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid17"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;&lt;a href="https://1.bp.blogspot.com/-cjlKx06ZBaY/WLb_S3TBWuI/AAAAAAAAAmI/s2fsZ-SaJiwS2B-nAmyTheJfMQrKFHuQACK4B/s1600/graphs.png"&gt;&lt;img border="0" height="540" src="https://1.bp.blogspot.com/-cjlKx06ZBaY/WLb_S3TBWuI/AAAAAAAAAmI/s2fsZ-SaJiwS2B-nAmyTheJfMQrKFHuQACK4B/s640/graphs.png" width="640"&gt;&lt;/a&gt;&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid19"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt; &lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid19"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt; &lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid19"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;&lt;a href="https://4.bp.blogspot.com/-Qn9iiR_-ZKA/WLb_pXFG9mI/AAAAAAAAAmQ/rvEYKM1KYbIzFmTeu9utt9oNALlc9mTNwCK4B/s1600/table.png"&gt;&lt;img border="0" height="306" src="https://4.bp.blogspot.com/-Qn9iiR_-ZKA/WLb_pXFG9mI/AAAAAAAAAmQ/rvEYKM1KYbIzFmTeu9utt9oNALlc9mTNwCK4B/s640/table.png" width="640"&gt;&lt;/a&gt; &lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid19"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt; &lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid19"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;We want to thank Mozilla for supporting our work!&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid19"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid19"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;Cheers,&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid19"&gt;
+&lt;span class="author-g-1lpsz122z2ma8y7sqx7l"&gt;fijal, &lt;/span&gt;&lt;span class="author-g-d5i2rz122z7s6cn7iauy"&gt;squeaky_pl and the PyPy Team&lt;/span&gt;&lt;/div&gt;
+&lt;div class="" id="magicdomid20"&gt;
+&lt;br&gt;&lt;/div&gt;</description><guid>https://www.pypy.org/posts/2017/03/async-http-benchmarks-on-pypy3-1092124994927894138.html</guid><pubDate>Wed, 01 Mar 2017 17:28:00 GMT</pubDate></item><item><title>Warmup improvements: more efficient trace representation</title><link>https://www.pypy.org/posts/2016/04/warmup-improvements-more-efficient-7082900097299909512.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+&lt;p&gt;Hello everyone.&lt;/p&gt;
+&lt;p&gt;I'm pleased to inform that we've finished another round of
+improvements to the warmup performance of PyPy. Before I go
+into details, I'll recap the achievements that we've done since we've started
+working on the warmup performance. I picked a random PyPy from November 2014
+(which is definitely before we started the warmup work) and compared it with
+a recent one, after 5.0. The exact revisions are respectively &lt;tt class="docutils literal"&gt;ffce4c795283&lt;/tt&gt;
+and &lt;tt class="docutils literal"&gt;cfbb442ae368&lt;/tt&gt;. First let's compare &lt;a class="reference external" href="https://bitbucket.org/pypy/benchmarks/src/59290b59a24e54057d4c694fa4f47e7879a347a0/warmup/?at=default"&gt;pure warmup benchmarks&lt;/a&gt; that
+can be found in our benchmarking suite. Out of those,
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-graph-alloc-removal&lt;/span&gt;&lt;/tt&gt; numbers should be taken with a grain of salt,
+since other work could have influenced the results.
+The rest of the benchmarks mentioned is bottlenecked purely by warmup times.&lt;/p&gt;
+&lt;p&gt;You can see how much your program spends in warmup running
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;PYPYLOG=jit-summary:-&lt;/span&gt; pypy &lt;span class="pre"&gt;your-program.py&lt;/span&gt;&lt;/tt&gt; under "tracing" and "backend"
+fields (in the first three lines). An example looks like that:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+[e00c145a41] {jit-summary
+Tracing:        71      0.053645 &amp;lt;- time spent tracing &amp;amp; optimizing
+Backend:        71      0.028659 &amp;lt;- time spent compiling to assembler
+TOTAL:                  0.252217 &amp;lt;- total run time of the program
+&lt;/pre&gt;
+&lt;p&gt;The results of the benchmarks&lt;/p&gt;
+&lt;table border="1" class="docutils"&gt;
+&lt;colgroup&gt;
+&lt;col width="29%"&gt;
+&lt;col width="13%"&gt;
+&lt;col width="13%"&gt;
+&lt;col width="10%"&gt;
+&lt;col width="17%"&gt;
+&lt;col width="17%"&gt;
+&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;benchmark&lt;/td&gt;
+&lt;td&gt;time - old&lt;/td&gt;
+&lt;td&gt;time - new&lt;/td&gt;
+&lt;td&gt;speedup&lt;/td&gt;
+&lt;td&gt;JIT time - old&lt;/td&gt;
+&lt;td&gt;JIT time - new&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;function_call&lt;/td&gt;
+&lt;td&gt;1.86&lt;/td&gt;
+&lt;td&gt;1.42&lt;/td&gt;
+&lt;td&gt;1.3x&lt;/td&gt;
+&lt;td&gt;1.12s&lt;/td&gt;
+&lt;td&gt;0.57s&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;function_call2&lt;/td&gt;
+&lt;td&gt;5.17s&lt;/td&gt;
+&lt;td&gt;2.73s&lt;/td&gt;
+&lt;td&gt;1.9x&lt;/td&gt;
+&lt;td&gt;4.2s&lt;/td&gt;
+&lt;td&gt;1.6s&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;bridges&lt;/td&gt;
+&lt;td&gt;2.77s&lt;/td&gt;
+&lt;td&gt;2.07s&lt;/td&gt;
+&lt;td&gt;1.3x&lt;/td&gt;
+&lt;td&gt;1.5s&lt;/td&gt;
+&lt;td&gt;0.8s&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;pypy-graph-alloc-removal&lt;/td&gt;
+&lt;td&gt;2.06s&lt;/td&gt;
+&lt;td&gt;1.65s&lt;/td&gt;
+&lt;td&gt;1.25x&lt;/td&gt;
+&lt;td&gt;1.25s&lt;/td&gt;
+&lt;td&gt;0.79s&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;As we can see, the overall warmup benchmarks got up to &lt;strong&gt;90% faster&lt;/strong&gt; with
+JIT time dropping by up to &lt;strong&gt;2.5x&lt;/strong&gt;. We have more optimizations in the pipeline,
+with an idea how to transfer some of the JIT gains into more of a total program
+runtime by jitting earlier and more eagerly.&lt;/p&gt;
+&lt;div class="section" id="details-of-the-last-round-of-optimizations"&gt;
+&lt;h1&gt;Details of the last round of optimizations&lt;/h1&gt;
+&lt;p&gt;Now the nitty gritty details - what did we actually do? I covered a lot of
+warmup improvements in the &lt;a class="reference external" href="https://www.pypy.org/posts/2015/10/pypy-memory-and-warmup-improvements-2-4598780879518640015.html"&gt;past&lt;/a&gt; &lt;a class="reference external" href="https://www.pypy.org/posts/2015/09/pypy-warmup-improvements-8349465374608676233.html"&gt;blog&lt;/a&gt; posts so I'm going to focus on
+the last change, the jit-leaner-frontend branch. This last change is simple, instead of using
+pointers to store the "operations" objects created during tracing, we use a compact list of
+16-bit integers (with 16bit pointers in between). On 64bit machine the memory wins are
+tremendous - the new representation is 4x more efficient to use 16bit pointers than full 64bit pointers.
+Additionally, the smaller representation has much better cache behavior and much less
+pointer chasing in memory. It also has a better defined lifespan, so we don't need to
+bother tracking them by the GC, which also saves quite a bit of time.&lt;/p&gt;
+&lt;p&gt;The change sounds simple, but the details in the underlaying data mean that
+everything in the JIT had to be changed which took quite a bit of effort :-)&lt;/p&gt;
+&lt;p&gt;Going into the future on the JIT front, we have an exciting set of optimizations,
+ranging from faster loops through faster warmup to using better code generation
+techniques and broadening the kind of program that PyPy speeds up. Stay tuned
+for the updates.&lt;/p&gt;
+&lt;p&gt;We would like to thank our commercial partners for making all of this possible.
+The work has been performed by &lt;a class="reference external" href="https://baroquesoftware.com"&gt;baroquesoftware&lt;/a&gt; and would not be possible
+without support from people using PyPy in production. If your company uses
+PyPy and want it to do more or does not use PyPy but has performance problems
+with the Python installation, feel free to get in touch with me, trust me using
+PyPy ends up being a lot cheaper than rewriting everything in go :-)&lt;/p&gt;
+&lt;p&gt;Best regards,&lt;br&gt;
+Maciej Fijalkowski&lt;/p&gt;
+&lt;/div&gt;
+&lt;br&gt;&lt;/div&gt;</description><guid>https://www.pypy.org/posts/2016/04/warmup-improvements-more-efficient-7082900097299909512.html</guid><pubDate>Thu, 07 Apr 2016 09:56:00 GMT</pubDate></item><item><title>PyPy memory and warmup improvements (2) - Sharing of Guards</title><link>https://www.pypy.org/posts/2015/10/pypy-memory-and-warmup-improvements-2-4598780879518640015.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+&lt;p&gt;Hello everyone!&lt;/p&gt;
+&lt;p&gt;This is the second part of the series of improvements in warmup time and
+memory consumption in the PyPy JIT. This post covers recent work on sharing guard
+resume data that was recently merged to trunk. It will be a part
+of the next official PyPy release. To understand what it does, let's
+start with a loop for a simple example:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+class A(object):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def call_method(self, z):
+        return self.x + self.y + z
+
+def f():
+    s = 0
+    for i in range(100000):
+        a = A(i, 1 + i)
+        s += a.call_method(i)
+&lt;/pre&gt;
+&lt;p&gt;At the entrance of the loop, we have the following set of operations:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+&lt;div style="color: red;"&gt;guard(i5 == 4)&lt;/div&gt;
+&lt;div style="color: red;"&gt;guard(p3 is null)&lt;/div&gt;
+p27 = p2.co_cellvars
+p28 = p2.co_freevars
+&lt;div style="color: red;"&gt;guard_class(p17, 4316866008, descr=&amp;lt;Guard0x104295e08&amp;gt;)&lt;/div&gt;
+p30 = p17.w_seq
+&lt;div style="color: red;"&gt;guard_nonnull(p30, descr=&amp;lt;Guard0x104295db0&amp;gt;)&lt;/div&gt;
+i31 = p17.index
+p32 = p30.strategy
+&lt;div style="color: red;"&gt;guard_class(p32, 4317041344, descr=&amp;lt;Guard0x104295d58&amp;gt;)&lt;/div&gt;
+p34 = p30.lstorage
+i35 = p34..item0
+&lt;/pre&gt;
+&lt;p&gt;The above operations gets executed at the entrance, so each time we call &lt;tt class="docutils literal"&gt;f()&lt;/tt&gt;. They ensure
+all the optimizations done below stay valid. Now, as long as nothing
+out of the ordinary happens, they only ensure that the world around us never changed. However, if e.g. someone puts new
+methods on class &lt;tt class="docutils literal"&gt;A&lt;/tt&gt;, any of the above guards might fail. Despite the fact that it's a very unlikely
+case, PyPy needs to track how to recover from such a situation. Each of those points needs to keep the full
+state of the optimizations performed, so we can safely deoptimize them and reenter the interpreter.
+This is vastly wasteful since most of those guards never fail, hence some &lt;a href="https://www.stups.uni-duesseldorf.de/mediawiki/images/c/c4/Pub-schneider_efficient_2012.pdf"&gt;sharing between guards&lt;/a&gt;
+has been performed.&lt;/p&gt;
+&lt;p&gt;We went a step further - when two guards are next to each other or the
+operations in between them don't have side effects, we can safely redo the operations or to simply
+put, resume in the previous guard. That means every now and again we execute a few
+operations extra, but not storing extra info saves quite a bit of time and memory. This is similar to the approach that LuaJIT takes, which is called &lt;a href="https://lua-users.org/lists/lua-l/2009-11/msg00089.html"&gt;sparse snapshots&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;
+I've done some measurements on annotating &amp;amp; rtyping translation of pypy, which
+is a pretty memory hungry program that compiles a fair bit. I measured, respectively:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;total time the translation step took (annotating or rtyping)&lt;/li&gt;
+&lt;li&gt;time it took for tracing (that excludes backend time for the total JIT time) at
+the end of rtyping.&lt;/li&gt;
+&lt;li&gt;memory the GC feels responsible for after the step. The real amount of memory
+consumed will always be larger and the coefficient of savings is in 1.5-2x mark&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Here is the table:&lt;/p&gt;
+&lt;table border="1" class="docutils"&gt;
+&lt;colgroup&gt;
+&lt;col width="10%"&gt;
+&lt;col width="19%"&gt;
+&lt;col width="16%"&gt;
+&lt;col width="21%"&gt;
+&lt;col width="18%"&gt;
+&lt;col width="16%"&gt;
+&lt;/colgroup&gt;
+&lt;thead valign="bottom"&gt;
+&lt;tr&gt;&lt;th class="head"&gt;branch&lt;/th&gt;
+&lt;th class="head"&gt;time annotation&lt;/th&gt;
+&lt;th class="head"&gt;time rtyping&lt;/th&gt;
+&lt;th class="head"&gt;memory annotation&lt;/th&gt;
+&lt;th class="head"&gt;memory rtyping&lt;/th&gt;
+&lt;th class="head"&gt;tracing time&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;default&lt;/td&gt;
+&lt;td&gt;317s&lt;/td&gt;
+&lt;td&gt;454s&lt;/td&gt;
+&lt;td&gt;707M&lt;/td&gt;
+&lt;td&gt;1349M&lt;/td&gt;
+&lt;td&gt;60s&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;sharing&lt;/td&gt;
+&lt;td&gt;302s&lt;/td&gt;
+&lt;td&gt;430s&lt;/td&gt;
+&lt;td&gt;595M&lt;/td&gt;
+&lt;td&gt;1070M&lt;/td&gt;
+&lt;td&gt;51s&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;win&lt;/td&gt;
+&lt;td&gt;4.8%&lt;/td&gt;
+&lt;td&gt;5.5%&lt;/td&gt;
+&lt;td&gt;19%&lt;/td&gt;
+&lt;td&gt;26%&lt;/td&gt;
+&lt;td&gt;17%&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Obviously pypy translation is an extreme example - the vast majority of the code out there
+does not have that many lines of code to be jitted. However, it's at the very least
+a good win for us :-)&lt;/p&gt;
+&lt;p&gt;We will continue to improve the warmup performance and keep you posted!&lt;/p&gt;
+&lt;p&gt;Cheers,&lt;br&gt;
+fijal&lt;/p&gt;
+&lt;/div&gt;
+&lt;br&gt;</description><guid>https://www.pypy.org/posts/2015/10/pypy-memory-and-warmup-improvements-2-4598780879518640015.html</guid><pubDate>Mon, 05 Oct 2015 10:31:00 GMT</pubDate></item><item><title>PyPy warmup improvements</title><link>https://www.pypy.org/posts/2015/09/pypy-warmup-improvements-8349465374608676233.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+
+&lt;p&gt;Hello everyone!&lt;/p&gt;
+&lt;p&gt;I'm very pleased to announce that we've just managed to merge
+the optresult branch.
+Under this cryptic name is the biggest JIT refactoring we've done in a couple
+years, mostly focused on the warmup time and memory impact of PyPy.&lt;/p&gt;
+&lt;p&gt;To understand why we did that, let's look back in time - back when we
+got the first working JIT prototype in 2009 we were focused exclusively
+on achieving peak performance with some consideration towards memory usage, but
+without serious consideration towards warmup time. This means we accumulated
+quite a bit of technical debt over time that we're trying, with difficulty,
+to address right now. This branch mostly does not affect the peak performance
+- it should however help you with short-living scripts, like test runs.&lt;/p&gt;
+&lt;p&gt;We identified warmup time to be one of the major pain points for pypy users,
+along with memory impact and compatibility issues with CPython C extension
+world. While we can't address all the issues at once, we're trying to address
+the first two in the work contributing to this blog post. I will write
+a separate article on the last item separately.&lt;/p&gt;
+&lt;p&gt;To see how much of a problem warmup is for your program, you can run your
+program with &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;PYPYLOG=jit-summary:-&lt;/span&gt;&lt;/tt&gt; environment variable set.
+This should show you something like this:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+(pypy-optresult)fijal@hermann:~/src/botbot-web$ PYPYLOG=jit-summary:- python orm.py 1500
+[d195a2fcecc] {jit-summary
+Tracing:            781     2.924965
+Backend:            737     0.722710
+TOTAL:                      35.912011
+ops:                1860596
+recorded ops:       493138
+  calls:            81022
+guards:             131238
+opt ops:            137263
+opt guards:         35166
+forcings:           4196
+abort: trace too long:      22
+abort: compiling:   0
+abort: vable escape:        22
+abort: bad loop:    0
+abort: force quasi-immut:   0
+nvirtuals:          183672
+nvholes:            25797
+nvreused:           116131
+Total # of loops:   193
+Total # of bridges: 575
+Freed # of loops:   6
+Freed # of bridges: 75
+[d195a48de18] jit-summary}
+&lt;/pre&gt;
+&lt;p&gt;This means that the total (wall clock) time was 35.9s, out of which we spent
+2.9s tracing 781 loops and 0.72s compiling them. The remaining couple were
+aborted (trace too long is normal, vable escape means someone called
+&lt;tt class="docutils literal"&gt;sys._getframe()&lt;/tt&gt; or equivalent). You can do the following things:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;compare the numbers with &lt;tt class="docutils literal"&gt;pypy &lt;span class="pre"&gt;--jit&lt;/span&gt; off&lt;/tt&gt; and see at which number of
+iterations &lt;tt class="docutils literal"&gt;pypy&lt;/tt&gt; jit kicks in&lt;/li&gt;
+&lt;li&gt;play with the thresholds:
+&lt;tt class="docutils literal"&gt;pypy &lt;span class="pre"&gt;--jit&lt;/span&gt; threshold=500,function_threshold=400,trace_eagerness=50&lt;/tt&gt; was
+much better in this example. What this does is to lower the threshold
+for tracing loops from default of 1039 to 400, threshold for tracing
+functions from the start from 1619 to 500 and threshold for tracing bridges
+from 200 to 50. Bridges are "alternative paths" that JIT did not take that
+are being additionally traced. We believe in sane defaults, so we'll try
+to improve upon those numbers, but generally speaking there is no one-size
+fits all here.&lt;/li&gt;
+&lt;li&gt;if the tracing/backend time stays high, come and complain to us with
+benchmarks, we'll try to look at them&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Warmup, as a number, is notoriously hard to measure. It's a combination of:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;pypy running interpreter before jitting&lt;/li&gt;
+&lt;li&gt;pypy needing time to JIT the traces&lt;/li&gt;
+&lt;li&gt;additional memory allocations needed during tracing to accomodate bookkeeping
+data&lt;/li&gt;
+&lt;li&gt;exiting and entering assembler until there is enough coverage of assembler&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;We're working hard on making a better assesment at this number, stay tuned :-)&lt;/p&gt;
+&lt;div class="section" id="speedups"&gt;
+&lt;h1&gt;Speedups&lt;/h1&gt;
+&lt;p&gt;Overall we measured about 50% speed improvement in the optimizer, which reduces
+the overall warmup time between 10% and 30%. The very
+&lt;a class="reference external" href="https://bitbucket.org/pypy/benchmarks/src/fe2e89c0ae6846e3a8d4142106a4857e95f17da7/warmup/function_call2.py?at=default"&gt;obvious warmup benchmark&lt;/a&gt; got a speedup from 4.5s to 3.5s, almost
+30% improvement. Obviously the speedups on benchmarks would vastly
+depend on how much warmup time is there in those benchmarks. We observed
+annotation of pypy to decreasing by about 30% and the overall translation
+time by about 7%, so your mileage may vary.&lt;/p&gt;
+&lt;p&gt;Of course, as usual with the large refactoring of a crucial piece of PyPy,
+there are expected to be bugs. We are going to wait for the default branch
+to stabilize so you should see warmup improvements in the next release.
+If you're not afraid to try, &lt;a class="reference external" href="https://buildbot.pypy.org/nightly/trunk"&gt;nightlies&lt;/a&gt; will already have them.&lt;/p&gt;
+&lt;p&gt;We're hoping to continue improving upon warmup time and memory impact in the
+future, stay tuned for improvements.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="technical-details"&gt;
+&lt;h1&gt;Technical details&lt;/h1&gt;
+&lt;p&gt;The branch does "one" thing - it changes the underlying model of how operations
+are represented during tracing and optimizations. Let's consider a simple
+loop like:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+[i0, i1]
+i2 = int_add(i0, i1)
+i3 = int_add(i2, 1)
+i4 = int_is_true(i3)
+guard_true(i4)
+jump(i3, i2)
+&lt;/pre&gt;
+&lt;p&gt;The original representation would allocate a &lt;tt class="docutils literal"&gt;Box&lt;/tt&gt; for each of &lt;tt class="docutils literal"&gt;i0&lt;/tt&gt; - &lt;tt class="docutils literal"&gt;i4&lt;/tt&gt;
+and then store those boxes in instances of &lt;tt class="docutils literal"&gt;ResOperation&lt;/tt&gt;. The list of such
+operations would then go to the optimizer. Those lists are big - we usually
+remove &lt;tt class="docutils literal"&gt;90%&lt;/tt&gt; of them during optimizations, but they can be a couple thousand
+elements. Overall, allocating those big lists takes a toll on warmup time,
+especially due to the GC pressure. The branch removes the existance of &lt;tt class="docutils literal"&gt;Box&lt;/tt&gt;
+completely, instead using a link to &lt;tt class="docutils literal"&gt;ResOperation&lt;/tt&gt; itself. So say in the above
+example, &lt;tt class="docutils literal"&gt;i2&lt;/tt&gt; would refer to its producer - &lt;tt class="docutils literal"&gt;i2 = int_add(i0, i1)&lt;/tt&gt; with
+arguments getting special treatment.&lt;/p&gt;
+&lt;p&gt;That alone reduces the GC pressure slightly, but a reduced number
+of instances also lets us store references on them directly instead
+of going through expensive dictionaries, which were used to store optimizing
+information about the boxes.&lt;/p&gt;
+&lt;p&gt;Cheers!&lt;br&gt;
+fijal &amp;amp; arigo&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;br&gt;&lt;/div&gt;</description><guid>https://www.pypy.org/posts/2015/09/pypy-warmup-improvements-8349465374608676233.html</guid><pubDate>Wed, 09 Sep 2015 15:52:00 GMT</pubDate></item><item><title>Pydgin: Using RPython to Generate Fast Instruction-Set Simulators</title><link>https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+
+&lt;p&gt;&lt;strong&gt;Note:&lt;/strong&gt; This is a guest blog post by Derek Lockhart and Berkin Ilbeyi from
+Computer Systems Laboratory of Cornell University.&lt;/p&gt;
+&lt;p&gt;In this blog post I'd like to describe some recent work on using the RPython
+translation toolchain to generate fast instruction set simulators.
+Our open-source framework, Pydgin &lt;a class="citation-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#a" id="id1"&gt;[a]&lt;/a&gt;, provides a domain-specific
+language (DSL) embedded in Python for concisely describing instruction set
+architectures &lt;a class="citation-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#b" id="id2"&gt;[b]&lt;/a&gt; and then uses these descriptions to generate fast,
+JIT-enabled simulators.
+Pydgin will be presented at the &lt;em&gt;IEEE International Symposium on Performance
+Analysis of Systems and Software (ISPASS)&lt;/em&gt; and in this post we provide a
+preview of that work.
+In addition, we discuss some additional progress updates that occurred after
+the publishing deadline and will not appear in the final paper &lt;a class="footnote-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id16" id="id3"&gt;[1]&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Our area of research expertise is computer architecture, which is perhaps an
+unfamiliar topic for some readers of the PyPy blog.
+Below we provide some brief background on hardware simulation in the field of
+computer architecture, as well as some context as to why instruction set
+simulators in particular are such an important tool.&lt;/p&gt;
+&lt;div class="section" id="simulators-designing-hardware-with-software"&gt;
+&lt;h3&gt;Simulators: Designing Hardware with Software&lt;/h3&gt;
+&lt;p&gt;For computer architects in both academia and industry, a key step in designing
+new computational hardware (e.g., CPUs, GPUs, and mobile system-on-chips) is
+simulation &lt;a class="citation-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#c" id="id4"&gt;[c]&lt;/a&gt; of the target system.
+While numerous models for simulation exist, three classes are particularly
+important in hardware design.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Functional Level&lt;/strong&gt; models simulate the &lt;em&gt;behavior&lt;/em&gt; of the target system.
+These models are useful for creating a "golden" reference which can serve as an
+executable specification or alternatively as an emulation platform for software
+development.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Cycle Level&lt;/strong&gt; models aim to simulate both the &lt;em&gt;behavior&lt;/em&gt; and the approximate
+&lt;em&gt;timing&lt;/em&gt; of a hardware component.
+These models help computer architects explore design tradeoffs and quickly
+determine things like how big caches should be, how many functional units are
+needed to meet throughput targets, and how the addition of a custom accelerator
+block may impact total system performance.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Register-Transfer Level&lt;/strong&gt; (RTL) models specify the &lt;em&gt;behavior&lt;/em&gt;, &lt;em&gt;timing&lt;/em&gt;, and
+&lt;em&gt;resources&lt;/em&gt; (e.g., registers, wires, logic gates) of a hardware component.
+RTL models are bit-accurate hardware specifications typically written in a
+hardware description language (HDL) such as Verilog or VHDL.
+Once verified through extensive simulation, HDL specifications can be passed
+into synthesis and place-and-route tools to estimate area/energy/timing or to
+create FPGA or ASIC prototypes.&lt;/p&gt;
+&lt;p&gt;An &lt;em&gt;instruction set simulator&lt;/em&gt; (ISS) is a special kind of
+&lt;em&gt;functional-level&lt;/em&gt; model that simulates the behavior of a processor or
+system-on-chip (SOC).  ISSs serve an important role in hardware design
+because they model the instruction set architecture (ISA) interface: the
+contractual boundary between hardware designers and software developers.
+ISSs allow hardware designers to quickly experiment with adding new processor
+instructions while also allowing software developers to build new compilers,
+libraries, and applications long before physical silicon is available.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="instruction-set-simulators-must-be-fast-and-productive"&gt;
+&lt;h3&gt;Instruction-Set Simulators Must be Fast and Productive&lt;/h3&gt;
+&lt;p&gt;Instruction-set simulators are more important than ever because the ISA
+boundary has become increasingly fluid.
+While &lt;a class="reference external" href="https://en.wikipedia.org/wiki/Moore%27s_law"&gt;Moore's law&lt;/a&gt; has continued to deliver larger numbers of transistors
+which computer architects can use to build increasingly complex chips, limits
+in &lt;a class="reference external" href="https://en.wikipedia.org/wiki/Dennard_scaling#Recent_breakdown_of_Dennard_scaling"&gt;Dennard scaling&lt;/a&gt; have restricted how these transistors can be used &lt;a class="citation-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#d" id="id5"&gt;[d]&lt;/a&gt;.
+In more simple terms, thermal constraints (and energy constraints in mobile
+devices) have resulted in a growing interest in pervasive &lt;em&gt;specialization&lt;/em&gt;:
+using custom accelerators to more efficiently perform compute intensive tasks.
+This is already a reality for designers of mobile SOCs who continually add new
+accelerator blocks and custom processor instructions in order to achieve higher
+performance with less energy consumption.
+ISSs are indispensable tools in this SOC design process for both hardware
+architects building the silicon and software engineers developing the software
+stack on top of it.&lt;/p&gt;
+&lt;p&gt;An instruction set simulator has two primary responsibilities: 1) accurately
+emulating the external execution behavior of the target, and 2) providing
+observability by accurately reproducing the target's internal state (e.g.,
+register values, program counter, status flags) at each time step.
+However, other qualities critical to an effective ISS are &lt;strong&gt;simulation
+performance&lt;/strong&gt; and &lt;strong&gt;designer productivity&lt;/strong&gt;.
+Simulation performance is important because shorter simulation times allow
+developers to more quickly execute and verify large software applications.
+Designer productivity is important because it allows hardware architects to
+easily experiment with adding new instructions and estimate their impact on
+application performance.&lt;/p&gt;
+&lt;p&gt;To improve simulation performance, high-performance ISSs use dynamic binary
+translation (DBT) as a mechanism to translate frequently visited blocks of
+target instructions into optimized sequences of host instructions.
+To improve designer productivity, many design toolchains automatically generate
+ISSs from an architectural description language (ADL): a special
+domain-specific language for succinctly specifying instruction encodings and
+instruction semantics of an ISA.
+Very few existing systems have managed to encapsulate the design complexity of
+DBT engines such that high-performance, DBT-accelerated ISSs could be
+automatically generated from ADLs &lt;a class="citation-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#e" id="id6"&gt;[e]&lt;/a&gt;.
+Unfortunately, tools which have done so are either proprietary software or
+leave much to be desired in terms of performance or productivity.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="why-rpython"&gt;
+&lt;h3&gt;Why RPython?&lt;/h3&gt;
+&lt;p&gt;Our research group learned of the RPython translation toolchain through our
+experiences with PyPy, which we had used in conjunction with our Python
+hardware modeling framework to achieve significant improvements in simulation
+performance &lt;a class="footnote-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id17" id="id7"&gt;[2]&lt;/a&gt;.
+We realized that the RPython translation toolchain could potentially be adapted
+to create fast instruction set simulators since the process of interpreting
+executables comprised of binary instructions shared many similarities with the
+process of interpreting bytecodes in a dynamic-language VM.
+In addition, we were inspired by PyPy's meta-tracing approach to JIT-optimizing
+VM design which effectively separates the process of specifying a language
+interpreter from the optimization machinery needed to achieve good performance.&lt;/p&gt;
+&lt;p&gt;Existing ADL-driven ISS generators have tended to use domain-specific
+languages that require custom parsers or verbose C-based syntax that
+distracts from the instruction specification.
+Creating an embedded-ADL within Python provides several benefits over these
+existing approaches including a gentler learning curve for new users, access to
+better debugging tools, and easier maintenance and extension by avoiding a
+custom parser.
+Additionally, we have found that the ability to directly execute Pydgin
+ISA descriptions in a standard Python interpreter such as CPython or PyPy
+significantly helps debugging and testing during initial ISA exploration.
+Python's concise, pseudocode-like syntax also manages to map quite closely to
+the pseudocode specifications provided by many ISA manuals &lt;a class="citation-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#f" id="id8"&gt;[f]&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="the-pydgin-embedded-adl"&gt;
+&lt;h3&gt;The Pydgin embedded-ADL&lt;/h3&gt;
+&lt;p&gt;Defining a new ISA in the Pydgin embedded-ADL requires four primary pieces of
+information: the architectural state (e.g. register file, program counter,
+control registers), the bit encodings of each instruction, the instruction
+fields, and the semantic definitions for each instruction. Pydgin aims to make
+this process as painless as possible by providing helper classes and functions
+where possible.&lt;/p&gt;
+&lt;p&gt;For example, below we provide a truncated example of the ARMv5 instruction
+encoding table. Pydgin maintains encodings of all instructions in a centralized
+&lt;tt class="docutils literal"&gt;encodings&lt;/tt&gt; data structure for easy maintenance and quick lookup. The
+user-provided instruction names and bit encodings are used to automatically
+generate decoders for the simulator. Unlike many ADLs, Pydgin does not require
+that the user explicitly specify instruction types or mask bits for field
+matching because the Pydgin decoder generator can automatically infer decoder
+fields from the encoding table.&lt;/p&gt;
+&lt;pre class="code python literal-block"&gt;
+&lt;span class="name"&gt;encodings&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="punctuation"&gt;[&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'adc'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;      &lt;span class="literal string"&gt;'xxxx00x0101xxxxxxxxxxxxxxxxxxxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'add'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;      &lt;span class="literal string"&gt;'xxxx00x0100xxxxxxxxxxxxxxxxxxxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'and'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;      &lt;span class="literal string"&gt;'xxxx00x0000xxxxxxxxxxxxxxxxxxxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'b'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;        &lt;span class="literal string"&gt;'xxxx1010xxxxxxxxxxxxxxxxxxxxxxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'bl'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;       &lt;span class="literal string"&gt;'xxxx1011xxxxxxxxxxxxxxxxxxxxxxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'bic'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;      &lt;span class="literal string"&gt;'xxxx00x1110xxxxxxxxxxxxxxxxxxxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'bkpt'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;     &lt;span class="literal string"&gt;'111000010010xxxxxxxxxxxx0111xxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'blx1'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;     &lt;span class="literal string"&gt;'1111101xxxxxxxxxxxxxxxxxxxxxxxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'blx2'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;     &lt;span class="literal string"&gt;'xxxx00010010xxxxxxxxxxxx0011xxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+  &lt;span class="comment"&gt;# ...&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'teq'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;      &lt;span class="literal string"&gt;'xxxx00x10011xxxxxxxxxxxxxxxxxxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+  &lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="literal string"&gt;'tst'&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;      &lt;span class="literal string"&gt;'xxxx00x10001xxxxxxxxxxxxxxxxxxxx'&lt;/span&gt;&lt;span class="punctuation"&gt;],&lt;/span&gt;
+&lt;span class="punctuation"&gt;]&lt;/span&gt;
+&lt;/pre&gt;
+&lt;p&gt;A major goal of Pydgin was ensuring instruction semantic definitions map to ISA
+manual specifications as much as possible. The code below shows one such
+definition for the ARMv5 &lt;tt class="docutils literal"&gt;add&lt;/tt&gt; instruction.
+A user-defined &lt;tt class="docutils literal"&gt;Instruction&lt;/tt&gt; class (not shown) specifies field names that can
+be used to conveniently access bit positions within an instruction (e.g.
+&lt;tt class="docutils literal"&gt;rd&lt;/tt&gt;, &lt;tt class="docutils literal"&gt;rn&lt;/tt&gt;, &lt;tt class="docutils literal"&gt;S&lt;/tt&gt;).
+Additionally, users can choose to define their own helper functions, such as
+the &lt;tt class="docutils literal"&gt;condition_passed&lt;/tt&gt; function, to create more concise syntax that better
+matches the ISA manual.&lt;/p&gt;
+&lt;pre class="code python literal-block"&gt;
+&lt;span class="keyword"&gt;def&lt;/span&gt; &lt;span class="name function"&gt;execute_add&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt; &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;inst&lt;/span&gt; &lt;span class="punctuation"&gt;):&lt;/span&gt;
+  &lt;span class="keyword"&gt;if&lt;/span&gt; &lt;span class="name"&gt;condition_passed&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt; &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;inst&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;cond&lt;/span&gt;&lt;span class="punctuation"&gt;()&lt;/span&gt; &lt;span class="punctuation"&gt;):&lt;/span&gt;
+    &lt;span class="name"&gt;a&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt;   &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;rf&lt;/span&gt;&lt;span class="punctuation"&gt;[&lt;/span&gt; &lt;span class="name"&gt;inst&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;rn&lt;/span&gt;&lt;span class="punctuation"&gt;()&lt;/span&gt; &lt;span class="punctuation"&gt;]&lt;/span&gt;
+    &lt;span class="name"&gt;b&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;_&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;shifter_operand&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt; &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;inst&lt;/span&gt; &lt;span class="punctuation"&gt;)&lt;/span&gt;
+    &lt;span class="name"&gt;result&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;a&lt;/span&gt; &lt;span class="operator"&gt;+&lt;/span&gt; &lt;span class="name"&gt;b&lt;/span&gt;
+    &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;rf&lt;/span&gt;&lt;span class="punctuation"&gt;[&lt;/span&gt; &lt;span class="name"&gt;inst&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;rd&lt;/span&gt;&lt;span class="punctuation"&gt;()&lt;/span&gt; &lt;span class="punctuation"&gt;]&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;trim_32&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt; &lt;span class="name"&gt;result&lt;/span&gt; &lt;span class="punctuation"&gt;)&lt;/span&gt;
+
+    &lt;span class="keyword"&gt;if&lt;/span&gt; &lt;span class="name"&gt;inst&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;S&lt;/span&gt;&lt;span class="punctuation"&gt;():&lt;/span&gt;
+      &lt;span class="keyword"&gt;if&lt;/span&gt; &lt;span class="name"&gt;inst&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;rd&lt;/span&gt;&lt;span class="punctuation"&gt;()&lt;/span&gt; &lt;span class="operator"&gt;==&lt;/span&gt; &lt;span class="literal number integer"&gt;15&lt;/span&gt;&lt;span class="punctuation"&gt;:&lt;/span&gt;
+        &lt;span class="keyword"&gt;raise&lt;/span&gt; &lt;span class="name"&gt;FatalError&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="literal string"&gt;'Writing SPSR not implemented!'&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt;
+      &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;N&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="punctuation"&gt;(&lt;/span&gt;&lt;span class="name"&gt;result&lt;/span&gt; &lt;span class="operator"&gt;&amp;gt;&amp;gt;&lt;/span&gt; &lt;span class="literal number integer"&gt;31&lt;/span&gt;&lt;span class="punctuation"&gt;)&lt;/span&gt;&lt;span class="operator"&gt;&amp;amp;&lt;/span&gt;&lt;span class="literal number integer"&gt;1&lt;/span&gt;
+      &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;Z&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;trim_32&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt; &lt;span class="name"&gt;result&lt;/span&gt; &lt;span class="punctuation"&gt;)&lt;/span&gt; &lt;span class="operator"&gt;==&lt;/span&gt; &lt;span class="literal number integer"&gt;0&lt;/span&gt;
+      &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;C&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;carry_from&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt; &lt;span class="name"&gt;result&lt;/span&gt; &lt;span class="punctuation"&gt;)&lt;/span&gt;
+      &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;V&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;overflow_from_add&lt;/span&gt;&lt;span class="punctuation"&gt;(&lt;/span&gt; &lt;span class="name"&gt;a&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;b&lt;/span&gt;&lt;span class="punctuation"&gt;,&lt;/span&gt; &lt;span class="name"&gt;result&lt;/span&gt; &lt;span class="punctuation"&gt;)&lt;/span&gt;
+
+    &lt;span class="keyword"&gt;if&lt;/span&gt; &lt;span class="name"&gt;inst&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;rd&lt;/span&gt;&lt;span class="punctuation"&gt;()&lt;/span&gt; &lt;span class="operator"&gt;==&lt;/span&gt; &lt;span class="literal number integer"&gt;15&lt;/span&gt;&lt;span class="punctuation"&gt;:&lt;/span&gt;
+      &lt;span class="keyword"&gt;return&lt;/span&gt;
+
+  &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;rf&lt;/span&gt;&lt;span class="punctuation"&gt;[&lt;/span&gt;&lt;span class="name"&gt;PC&lt;/span&gt;&lt;span class="punctuation"&gt;]&lt;/span&gt; &lt;span class="operator"&gt;=&lt;/span&gt; &lt;span class="name"&gt;s&lt;/span&gt;&lt;span class="operator"&gt;.&lt;/span&gt;&lt;span class="name"&gt;fetch_pc&lt;/span&gt;&lt;span class="punctuation"&gt;()&lt;/span&gt; &lt;span class="operator"&gt;+&lt;/span&gt; &lt;span class="literal number integer"&gt;4&lt;/span&gt;
+&lt;/pre&gt;
+&lt;p&gt;Compared to the ARM ISA Reference manual shown below, the Pydgin instruction
+definition is a fairly close match. Pydgin's definitions could certainly be
+made more concise by using a custom DSL, however, this would lose many of the
+debugging benefits afforded to a well-supported language such as Python and
+additionally require using a custom parser that would likely need modification
+for each new ISA.&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;
+if ConditionPassed(cond) then
+   Rd = Rn + shifter_operand
+   if S == 1 and Rd == R15 then
+     if CurrentModeHasSPSR() then CPSR = SPSR
+   else UNPREDICTABLE else if S == 1 then
+     N Flag = Rd[31]
+     Z Flag = if Rd == 0 then 1 else 0
+     C Flag = CarryFrom(Rn + shifter_operand)
+     V Flag = OverflowFrom(Rn + shifter_operand)
+&lt;/pre&gt;
+&lt;p&gt;Creating an ISS that can run real applications is a rather complex task, even
+for a bare metal simulator with no operating system such as Pydgin.
+Each system call in the C library must be properly implemented, and
+bootstrapping code must be provided to set up the program stack and
+architectural state.
+This is a very tedious and error prone process which Pydgin tries to
+encapsulate so that it remains as transparent to the end user as possible.
+In future versions of Pydgin we hope to make bootstrapping more painless and
+support a wider variety of C libraries.&lt;/p&gt;
+&lt;!-- Architectural state... leave out for now. --&gt;
+&lt;!-- ::
+
+class State( object ):
+  _virtualizable_ = ['pc', 'ncycles']
+  def __init__( self, memory, debug, reset_addr=0x400 ):
+    self.pc       = reset_addr
+    self.rf       = ArmRegisterFile( self, num_regs=16 )
+    self.mem      = memory
+
+    self.rf[ 15 ]  = reset_addr
+
+    # current program status register (CPSR)
+    self.N    = 0b0      # Negative condition
+    self.Z    = 0b0      # Zero condition
+    self.C    = 0b0      # Carry condition
+    self.V    = 0b0      # Overflow condition
+
+    # other registers
+    self.status        = 0
+    self.ncycles       = 0
+
+  def fetch_pc( self ):
+    return self.pc --&gt;
+&lt;/div&gt;
+&lt;div class="section" id="pydgin-performance"&gt;
+&lt;h3&gt;Pydgin Performance&lt;/h3&gt;
+&lt;p&gt;In order to achieve good simulation performance from Pydgin ISSs, significant
+work went into adding appropriate JIT annotations to the Pydgin library
+components.
+These optimization hints, which allow the JIT generated by the RPython
+translation toolchain to produce more efficient code, have been specifically
+selected for the unique properties of ISSs.
+For the sake of brevity, we do not talk about the exact optimizations here but
+a detailed discussion can be found in the ISPASS paper &lt;a class="footnote-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id16" id="id9"&gt;[1]&lt;/a&gt;.
+In the paper we evaluate two ISSs, one for a simplified MIPS ISA and another
+for the ARMv5 ISA, whereas below we only discuss results for the ARMv5 ISS.&lt;/p&gt;
+&lt;p&gt;The performance of Pydgin-generated ARMv5 ISSs were compared against
+several reference ISSs: the &lt;a class="reference external" href="https://www.gem5.org/"&gt;gem5&lt;/a&gt; ARM atomic simulator (&lt;em&gt;gem5&lt;/em&gt;),
+interpretive and JIT-enabled versions of &lt;a class="reference external" href="https://simit-arm.sourceforge.net/"&gt;SimIt-ARM&lt;/a&gt; (&lt;em&gt;simit-nojit&lt;/em&gt; and
+&lt;em&gt;simit-jit&lt;/em&gt;), and &lt;a class="reference external" href="https://wiki.qemu.org/"&gt;QEMU&lt;/a&gt;.
+Atomic models from the gem5 simulator were chosen for comparison due their wide
+usage amongst computer architects &lt;a class="citation-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#g" id="id10"&gt;[g]&lt;/a&gt;.
+SimIt-ARM was selected because it is currently the highest performance
+ADL-generated DBT-ISS publicly available.
+QEMU has long been held as the gold-standard for DBT simulators due to its
+extremely high performance, however, QEMU is generally intended for usage as an
+emulator rather than a simulator &lt;a class="citation-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#c" id="id11"&gt;[c]&lt;/a&gt; and therefore achieves its excellent
+performance at the cost of observability.
+Unlike QEMU, all other simulators in our study faithfully track architectural
+state at an instruction level rather than block level.
+Pydgin ISSs were generated with and without JITs using the RPython translation
+toolchain in order to help quantify the performance benefit of the meta-tracing
+JIT.&lt;/p&gt;
+&lt;p&gt;The figure below shows the performance of each ISS executing applications from
+the SPEC CINT2006 benchmark suite &lt;a class="citation-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#h" id="id12"&gt;[h]&lt;/a&gt;.
+Benchmarks were run to completion on the high-performance DBT-ISSs
+(&lt;em&gt;simit-jit&lt;/em&gt;, &lt;em&gt;pydgin-jit&lt;/em&gt;, and QEMU), but were terminated after only
+10 billion simulated instructions for the non-JITed interpretive ISSs
+(these would require many hours, in some cases days, to run to completion).
+Simulation performance is measured in MIPS &lt;a class="citation-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#i" id="id13"&gt;[i]&lt;/a&gt; and plotted on a &lt;strong&gt;log
+scale&lt;/strong&gt; due to the wide variance in performance.
+The &lt;em&gt;WHMEAN&lt;/em&gt; group summarizes each ISS's performance across all benchmarks
+using the weighted harmonic mean.&lt;/p&gt;
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://4.bp.blogspot.com/-fsfrUJOQKZg/VQKqZzgcQsI/AAAAAAAACAA/20NoWKRzmvU/s1600/arm-bar-plot.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://4.bp.blogspot.com/-fsfrUJOQKZg/VQKqZzgcQsI/AAAAAAAACAA/20NoWKRzmvU/s640/arm-bar-plot.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;p&gt;A few points to take away from these results:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;ISSs without JITs (&lt;em&gt;gem5&lt;/em&gt;, &lt;em&gt;simit-nojit&lt;/em&gt;, and &lt;em&gt;pydgin-nojit&lt;/em&gt;) demonstrate
+relatively consistent performance across applications, whereas ISSs with JITs
+(&lt;em&gt;simit-jit&lt;/em&gt;, &lt;em&gt;pydgin-jit&lt;/em&gt;, and QEMU) demonstrate much greater
+performance variability from application-to-application.&lt;/li&gt;
+&lt;li&gt;The &lt;em&gt;gem5&lt;/em&gt; atomic model demonstrates particularly miserable performance, only
+2-3 MIPS!&lt;/li&gt;
+&lt;li&gt;QEMU lives up to its reputation as a gold-standard for simulator performance,
+leading the pack on nearly every benchmark and reaching speeds of 240-1120
+MIPS.&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;pydgin-jit&lt;/em&gt; is able to outperform &lt;em&gt;simit-jit&lt;/em&gt; on four of the
+applications, including considerable performance improvements of 1.44–1.52×
+for the applications &lt;em&gt;456.hmmer&lt;/em&gt;, &lt;em&gt;462.libquantum&lt;/em&gt;, and &lt;em&gt;471.omnetpp&lt;/em&gt;
+(managing to even outperform QEMU on &lt;em&gt;471.omnetpp&lt;/em&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;simit-jit&lt;/em&gt; is able to obtain much more consistent performance (230-459
+MIPS across all applications) than &lt;em&gt;pydgin-jit&lt;/em&gt; (9.6-659 MIPS).  This is
+due to &lt;em&gt;simit-jit&lt;/em&gt;'s page-based approach to JIT optimization compared to
+&lt;em&gt;pydgin-jit&lt;/em&gt;'s tracing-based approach.&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;464.h264ref&lt;/em&gt; displays particularly bad pathological behavior in Pydgin’s
+tracing JIT and is the only application to perform worse on &lt;em&gt;pydgin-jit&lt;/em&gt;
+than &lt;em&gt;pydgin-nojit&lt;/em&gt; (9.6 MIPS vs. 21 MIPS).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The pathological behavior demonstrated by &lt;em&gt;464.h264ref&lt;/em&gt; was of particular
+concern because it caused &lt;em&gt;pydgin-jit&lt;/em&gt; to perform even worse than having no
+JIT at all. RPython JIT logs indicated that the reason for this performance
+degradation was a large number of tracing aborts due to JIT traces growing too
+long. However, time limitations before the publication deadline prevented us
+from investigating this issue thoroughly.&lt;/p&gt;
+&lt;p&gt;Since the deadline we've applied some minor bug fixes and made some small
+improvements in the memory representation.
+More importantly, we've addressed the performance degradation in &lt;em&gt;464.h264ref&lt;/em&gt;
+by increasing trace lengths for the JIT.
+Below we show how the performance of &lt;em&gt;464.h264ref&lt;/em&gt; changes as the
+&lt;strong&gt;trace_limit&lt;/strong&gt; parameter exposed by the RPython JIT is varied from the default
+size of 6000 operations.&lt;/p&gt;
+
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://2.bp.blogspot.com/-rOklyrr1tzY/VQKqg3GJu9I/AAAAAAAACAI/jfoHvpJbMF8/s1600/trace-length-plot.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://2.bp.blogspot.com/-rOklyrr1tzY/VQKqg3GJu9I/AAAAAAAACAI/jfoHvpJbMF8/s640/trace-length-plot.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;p&gt;By quadrupling the trace limit we achieve an 11x performance improvement in
+&lt;em&gt;464.h264ref&lt;/em&gt;.
+The larger trace limit allows the JIT to optimize long code paths that were
+previously triggering trace aborts, greatly helping amortize the costs of
+tracing.
+Note that arbitrarily increasing this limit can potentially hurt performance if
+longer traces are not able to detect optimizable code sequences.&lt;/p&gt;
+&lt;p&gt;After performing similar experiments across the applications in the SPEC
+CINT2006 benchmark suite, we settled on a trace limit of 400,000 operations.
+In the figure below we show how the updated Pydgin ISS (&lt;em&gt;pydgin-400K&lt;/em&gt;) improves
+performance across all benchmarks and fixes the performance degradation
+previously seen in &lt;em&gt;464.h264ref&lt;/em&gt;. Note that the non-JITted simulators have been
+removed for clarity, and simulation performance is now plotted on a
+&lt;strong&gt;linear scale&lt;/strong&gt; to more clearly distinguish the performance gap between
+each ISS.&lt;/p&gt;
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://1.bp.blogspot.com/-DSAtuNZ7fnQ/VQKqm0HPBfI/AAAAAAAACAQ/8hYCDeZujq8/s1600/new-bar-plot.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://1.bp.blogspot.com/-DSAtuNZ7fnQ/VQKqm0HPBfI/AAAAAAAACAQ/8hYCDeZujq8/s640/new-bar-plot.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;p&gt;With these improvements, we are now able to beat &lt;em&gt;simit-jit&lt;/em&gt; on all but two
+benchmarks. In future work we hope to further close the gap with QEMU as well.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="conclusions-and-future-work"&gt;
+&lt;h3&gt;Conclusions and Future Work&lt;/h3&gt;
+&lt;p&gt;Pydgin demonstrates that the impressive work put into the RPython translation
+toolchain, designed to simplify the process of building fast dynamic-language
+VMs, can also be leveraged to build fast instruction set simulators.
+Our prototype ARMv5 ISS shows that Pydgin can generate ISSs with performance
+competitive to SimIt-ARM while also providing a more productive development
+experience: RPython allowed us to develop Pydgin with only four person-months
+of work.
+Another significant benefit of the Pydgin approach is that any performance
+improvements applied to the RPython translation toolchain immediately benefit
+Pydgin ISSs after a simple software download and retranslation.
+This allows Pydgin to track the continual advances in JIT technology introduced
+by the PyPy development team.&lt;/p&gt;
+&lt;p&gt;Pydgin is very much a work in progress. There are many features we would like
+to add, including:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;more concise syntax for accessing arbitrary instruction bits&lt;/li&gt;
+&lt;li&gt;support for other C libraries such as glibc, uClibc, and musl
+(we currently only support binaries compiled with newlib)&lt;/li&gt;
+&lt;li&gt;support for self-modifying code&lt;/li&gt;
+&lt;li&gt;features for more productive debugging of target applications&lt;/li&gt;
+&lt;li&gt;ISS descriptions for other ISAs such as RISC-V, ARMv8, and x86&lt;/li&gt;
+&lt;li&gt;automatic generation of compilers and toolchains from Pydgin descriptions&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;In addition, we think there are opportunities for even greater performance
+improvements with more advanced techniques such as:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;automatic generation of optimized instruction decoders&lt;/li&gt;
+&lt;li&gt;optimizations for floating-point intensive applications&lt;/li&gt;
+&lt;li&gt;multiple tracing-JITs for parallel simulation of multicore SOCs&lt;/li&gt;
+&lt;li&gt;a parallel JIT compilation engine as proposed by Böhm et al. &lt;a class="footnote-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id18" id="id14"&gt;[3]&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;We hope that Pydgin can be of use to others, so if you try it out please let us
+know what you think. Feel free to contact us if you find any of the above
+development projects interesting, or simply fork the project on GitHub and hack
+away!&lt;/p&gt;
+&lt;p&gt;-- Derek Lockhart and Berkin Ilbeyi&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="acknowledgements"&gt;
+&lt;h3&gt;Acknowledgements&lt;/h3&gt;
+&lt;p&gt; We would like to sincerely thank Carl Friedrich Bolz and Maciej Fijalkowski for their feedback on the Pydgin publication and their guidance on improving the JIT performance of our simulators. We would also like to thank for the whole PyPy team for their incredible work on the PyPy and the RPython translation toolchain. Finally, thank you to our research advisor, Prof. Christopher Batten, and the sponsors of this work which include the National Science Foundation, the Defense Advanced Research Projects Agency, and Intel Corporation.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="footnotes"&gt;
+&lt;h3&gt;Footnotes&lt;/h3&gt;
+&lt;table class="docutils citation" frame="void" id="a" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id1"&gt;[a]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;Pydgin loosely stands for [Py]thon [D]SL for [G]enerating
+[In]struction set simulators and is pronounced the same as “pigeon”. The
+name is inspired by the word “pidgin” which is a grammatically simplified
+form of language and captures the intent of the Pydgin embedded-ADL.
+&lt;a class="reference external" href="https://github.com/cornell-brg/pydgin"&gt;https://github.com/cornell-brg/pydgin&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table class="docutils citation" frame="void" id="b" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id2"&gt;[b]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;Popular instruction set architectures (ISAs) include MIPs, ARM,
+x86, and more recently RISC-V&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table class="docutils citation" frame="void" id="c" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;[c]&lt;/td&gt;&lt;td&gt;&lt;em&gt;(&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id4"&gt;1&lt;/a&gt;, &lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id11"&gt;2&lt;/a&gt;)&lt;/em&gt; For a good discussion of simulators vs. emulators, please see the
+following post on StackOverflow:
+&lt;a class="reference external" href="https://stackoverflow.com/questions/1584617/simulator-or-emulator-what-is-the-difference"&gt;https://stackoverflow.com/questions/1584617/simulator-or-emulator-what-is-the-difference&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table class="docutils citation" frame="void" id="d" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id5"&gt;[d]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;&lt;a class="reference external" href="https://en.wikipedia.org/wiki/Dark_silicon"&gt;https://en.wikipedia.org/wiki/Dark_silicon&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table class="docutils citation" frame="void" id="e" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id6"&gt;[e]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;Please see the Pydgin paper for a more detailed discussion of prior work.&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table class="docutils citation" frame="void" id="f" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id8"&gt;[f]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;&lt;p class="first"&gt;For more examples of Pydgin ISA specifications, please see the ISPASS
+paper &lt;a class="footnote-reference" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id16" id="id15"&gt;[1]&lt;/a&gt; or the Pydgin source code on GitHub.&lt;/p&gt;
+&lt;p&gt;Pydgin instruction definitions for a simple MIPS-inspired ISA can be
+found here:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://github.com/cornell-brg/pydgin/blob/master/parc/isa.py"&gt;https://github.com/cornell-brg/pydgin/blob/master/parc/isa.py&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Pydgin instruction definitions for a simplified ARMv5 ISA can be found
+here:&lt;/p&gt;
+&lt;ul class="last simple"&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://github.com/cornell-brg/pydgin/blob/master/arm/isa.py"&gt;https://github.com/cornell-brg/pydgin/blob/master/arm/isa.py&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table class="docutils citation" frame="void" id="g" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id10"&gt;[g]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;&lt;p class="first"&gt;gem5 is a cycle-level simulation framework that contains both
+functional-level (atomic) and cycle-level processor models. Although
+primarily used for detailed, cycle-approximate processor simulation,
+gem5's atomic model is a popular tool for many ISS tasks.&lt;/p&gt;
+&lt;ul class="last simple"&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://www.m5sim.org/SimpleCPU"&gt;https://www.m5sim.org/SimpleCPU&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table class="docutils citation" frame="void" id="h" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id12"&gt;[h]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;All performance measurements were taken on an unloaded server-class
+machine.&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table class="docutils citation" frame="void" id="i" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id13"&gt;[i]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;Millions of instructions per second.&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class="section" id="references"&gt;
+&lt;h3&gt;References&lt;/h3&gt;
+&lt;table class="docutils footnote" frame="void" id="id16" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;[1]&lt;/td&gt;&lt;td&gt;&lt;em&gt;(&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id3"&gt;1&lt;/a&gt;, &lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id9"&gt;2&lt;/a&gt;, &lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id15"&gt;3&lt;/a&gt;)&lt;/em&gt; &lt;p&gt;Derek Lockhart, Berkin Ilbeyi, and Christopher Batten. "Pydgin:
+Generating Fast Instruction Set Simulators from Simple Architecture
+Descriptions with Meta-Tracing JIT Compilers." IEEE Int'l Symp. on
+Performance Analysis of Systems and Software (ISPASS), Mar. 2015.&lt;/p&gt;
+&lt;ul class="last simple"&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://csl.cornell.edu/~cbatten/pdfs/lockhart-pydgin-ispass2015.pdf"&gt;https://csl.cornell.edu/~cbatten/pdfs/lockhart-pydgin-ispass2015.pdf&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://github.com/cornell-brg/pydgin"&gt;https://github.com/cornell-brg/pydgin&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table class="docutils footnote" frame="void" id="id17" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id7"&gt;[2]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;&lt;p class="first"&gt;Derek Lockhart, Gary Zibrat, and Christopher Batten. "PyMTL: A Unified
+Framework for Vertically Integrated Computer Architecture Research." 47th
+ACM/IEEE Int'l Symp. on Microarchitecture (MICRO-47), Dec. 2014.&lt;/p&gt;
+&lt;ul class="last simple"&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://csl.cornell.edu/~cbatten/pdfs/lockhart-pymtl-micro2014.pdf"&gt;https://csl.cornell.edu/~cbatten/pdfs/lockhart-pymtl-micro2014.pdf&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://github.com/cornell-brg/pymtl"&gt;https://github.com/cornell-brg/pymtl&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table class="docutils footnote" frame="void" id="id18" rules="none"&gt;
+&lt;colgroup&gt;&lt;col class="label"&gt;&lt;col&gt;&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td class="label"&gt;&lt;a class="fn-backref" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id14"&gt;[3]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;I. Böhm, B. Franke, and N. Topham. Generalized Just-In-Time Trace
+Compilation Using a Parallel Task Farm in a Dynamic Binary Translator.
+ACM SIGPLAN Conference on Programming Language Design and Implementation
+(PLDI), Jun 2011.&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+
+&lt;br&gt;&lt;/div&gt;</description><guid>https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html</guid><pubDate>Fri, 13 Mar 2015 09:31:00 GMT</pubDate></item><item><title>Faster, more memory efficient and more ordered dictionaries on PyPy</title><link>https://www.pypy.org/posts/2015/01/faster-more-memory-efficient-and-more-4096950404745375390.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+&lt;p&gt;Hello everyone!&lt;/p&gt;
+&lt;p&gt;As of today, we merged the latest branch that brings better dictionaries to PyPy by default. The work is based on an idea by Raymond Hettinger on &lt;a class="reference external" href="https://mail.python.org/pipermail/python-dev/2012-December/123028.html"&gt;python-dev&lt;/a&gt;, with prior work done notably in Java.  It was done by Maciej Fijałkowski and Armin Rigo, with Laurence Tratt recently prodding us to finish it.  (Earlier work going in a similar direction include Alex Gaynor's work on ordered dicts in Topaz, which was also used in the Hippy VM.  Each of these pieces of work is itself based on the original dict implementation in RPython, whose origins fade in the Subversion prehistory of PyPy.)  Coincidentally, a very similar idea has been implemented in Zend PHP very recently. &lt;a class="reference external" href="https://nikic.github.io/2014/12/22/PHPs-new-hashtable-implementation.html"&gt;Zend implementation description&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;This post covers the basics of design and implementation as well as some basic benchmarks.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="dictionaries-are-now-ordered"&gt;
+&lt;h3&gt;Dictionaries are now ordered!&lt;/h3&gt;
+&lt;p&gt;One surprising part is that the new design, besides being more
+memory efficient, is ordered by design: it preserves the
+insertion order.  This is not forbidden by the Python language, which allows any order.  It makes the &lt;tt class="docutils literal"&gt;collections.OrderedDict&lt;/tt&gt; subclass much faster than before: it is now a thin subclass of &lt;tt class="docutils literal"&gt;dict&lt;/tt&gt;.  Obviously, we recommend that any portable Python program continues to use &lt;tt class="docutils literal"&gt;OrderedDict&lt;/tt&gt; when ordering is important.  Note that a non-portable program might rely on more: for example, a &lt;tt class="docutils literal"&gt;**keywords&lt;/tt&gt; argument now receives the keywords in the same order as the one in which they were given in the call.  (Whether such a thing might be called a language design change or not is a bit borderline.)  The point is that Python programs that work on CPython or previous versions of PyPy should continue to work on PyPy.&lt;/p&gt;
+&lt;p&gt;There is one exception, though.  The iterators of the &lt;tt class="docutils literal"&gt;OrderedDict&lt;/tt&gt; subclass are now working just like the ones of the &lt;tt class="docutils literal"&gt;dict&lt;/tt&gt; builtin: they will raise &lt;tt class="docutils literal"&gt;RuntimeError&lt;/tt&gt; when iterating if the dictionary was modified.  In the CPython design, the class &lt;tt class="docutils literal"&gt;OrderedDict&lt;/tt&gt; explicitly doesn't worry about that, and instead you get some result that might range from correct to incorrect to crashes (i.e. random Python exceptions).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="original-pypy-dictionary-design"&gt;
+&lt;h3&gt;Original PyPy dictionary design&lt;/h3&gt;
+&lt;p&gt;Originally, PyPy dictionaries, as well as CPython dictionaries
+are implemented as follows (simplified view):&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+struct dict {
+   long num_items;
+   dict_entry* items;   /* pointer to array */
+}
+
+struct dict_entry {
+   long hash;
+   PyObject* key;
+   PyObject* value;
+}
+&lt;/pre&gt;
+&lt;p&gt;Where items is a sparse array, with 1/3 to 1/2 of the items being NULL.
+The average space occupied by a dictionary is &lt;tt class="docutils literal"&gt;3 * WORD * 12/7&lt;/tt&gt; plus some small constant (the smallest dict has 8 entries, which is
+&lt;tt class="docutils literal"&gt;8 * 3 * WORD + 2 * WORD = 26 WORDs&lt;/tt&gt;).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="new-pypy-dictionary-design"&gt;
+&lt;h3&gt;New PyPy dictionary design&lt;/h3&gt;
+&lt;p&gt;The new PyPy dictionary is split in two arrays:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+struct dict {
+    long num_items;
+    variable_int *sparse_array;
+    dict_entry* compact_array;
+}
+
+struct dict_entry {
+    long hash;
+    PyObject *key;
+    PyObject *value;
+}
+&lt;/pre&gt;
+&lt;p&gt;Here, &lt;tt class="docutils literal"&gt;compact_array&lt;/tt&gt; stores all the items in order of insertion, while &lt;tt class="docutils literal"&gt;sparse_array&lt;/tt&gt; is a 1/2 to 2/3 full array of integers. The integers themselves are of the smallest size necessary for indexing the &lt;tt class="docutils literal"&gt;compact_array&lt;/tt&gt;. So if &lt;tt class="docutils literal"&gt;compact_array&lt;/tt&gt; has less than 256 items, then &lt;tt class="docutils literal"&gt;sparse_array&lt;/tt&gt; will be made of bytes; if less than 2^16, it'll be two-byte integers; and so on.&lt;/p&gt;
+&lt;p&gt;This design saves quite a bit of memory. For example, on 64bit systems we can, but almost never, use indexing of more than 4 billion elements; and for small dicts, the extra &lt;tt class="docutils literal"&gt;sparse_array&lt;/tt&gt; takes very little space.  For example a 100 element dict, would be on average for the original design on 64bit: 100 * 12/7 * WORD * 3 =~ 4100 bytes, while on new design it's 100 * 12/7 + 3 * WORD * 100 =~ 2600 bytes, quite a significant saving.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="gc-friendliness"&gt;
+&lt;h3&gt;GC friendliness&lt;/h3&gt;
+&lt;p&gt;The obvious benefit of having more compact dictionaries is an increased cache friendliness. In modern CPUs cache misses are much more costly than doing additional simple work, like having an additional level of (in-cache) indirection. Additionally, there is a GC benefit coming from it. When doing a minor collection, the GC has to visit all the GC fields in old objects that can point to young objects. In the case of large arrays, this can prove problematic since the array grows and with each minor collection we need to visit more and more GC pointers. In order to avoid it, large arrays in PyPy employ a technique called "card marking" where the GC only visits "cards" or subsets of arrays that were modified between collections. The problem with dictionaries was that by design modifications in a dictionary occur randomly, hence a lot of cards used to get invalidated. In the new design, however, new items are typically appended to the &lt;tt class="docutils literal"&gt;compact_array&lt;/tt&gt;, hence invalidate much fewer cards --- which improves GC performance.  (The new &lt;tt class="docutils literal"&gt;sparse_array&lt;/tt&gt; is an array of integers, so it does not suffer from the same problems.)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="deletion"&gt;
+&lt;h3&gt;Deletion&lt;/h3&gt;
+&lt;p&gt;Deleting entries from dictionaries is not very common, but important in a few use cases.  To preserve order, when we delete an entry, we mark the entry as removed but don't otherwise shuffle the remaining entries.  If we repeat this operation often enough, there will be a lot of removed entries in the (originally compact) array.  At this point, we need to do a "packing" operation, which moves all live entries to the start of the array (and then reindexes the sparse array, as the positions changed).  This works well, but there are use cases where previously no reindexing was ever needed, so it makes these cases a bit slower (for example when repeatedly adding and removing keys in equal number).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="benchmarks"&gt;
+&lt;h3&gt;Benchmarks&lt;/h3&gt;
+&lt;p&gt;The PyPy speed benchmarks show mostly small effect. The microbenchmarks that we did show large improvements on large and very large dictionaries (particularly, building dictionaries of at least a couple 100s of items is now twice faster) and break-even on small ones (between 20% slower and 20% faster depending very much on the usage patterns and sizes of dictionaries). The new dictionaries enable various optimization possibilities which we're going to explore in the near future.&lt;/p&gt;
+&lt;p&gt;Cheers,&lt;br&gt;
+fijal, arigo and the PyPy team&lt;/p&gt;
+&lt;/div&gt;
+&lt;br&gt;</description><guid>https://www.pypy.org/posts/2015/01/faster-more-memory-efficient-and-more-4096950404745375390.html</guid><pubDate>Thu, 22 Jan 2015 11:31:00 GMT</pubDate></item></channel></rss>

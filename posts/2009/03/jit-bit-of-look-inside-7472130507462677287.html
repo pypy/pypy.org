@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JIT - a bit of look inside | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2009/03/jit-bit-of-look-inside-7472130507462677287.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Maciej Fijalkowski">
+<link rel="prev" href="pypy-on-mobiles-at-openbossa-845760004725129519.html" title="PyPy on Mobiles, at OpenBossa" type="text/html">
+<link rel="next" href="good-news-everyone-421421336094214242.html" title="Good news everyone!" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="JIT - a bit of look inside">
+<meta property="og:url" content="https://www.pypy.org/posts/2009/03/jit-bit-of-look-inside-7472130507462677287.html">
+<meta property="og:description" content="The previous post about our JIT explained a bit from the 1000 km
+perspective how the tracing JIT would approach a language like Python.
+
+
+I would like to step a bit inside and give a zoom to some of i">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2009-03-05T13:50:00Z">
+<meta property="article:tag" content="jit">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">JIT - a bit of look inside</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2009-03-05T13:50:00Z" itemprop="datePublished" title="2009-03-05 13:50">2009-03-05 13:50</time></a>
+            </p>
+                <p class="commentline">1 comment</p>
+
+                <p class="commentline">            <a href="jit-bit-of-look-inside-7472130507462677287.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>
+The <a href="applying-tracing-jit-to-interpreter-3287844903778799266.html">previous post</a> about our JIT explained a bit from the 1000 km
+perspective how the tracing JIT would approach a language like Python.
+</p>
+<p>
+I would like to step a bit inside and give a zoom to some of its features that
+are already working.
+While probably not the most innovative, I think it's very nice to look
+at the way we work with the JIT and what tools we use.
+</p>
+<p>
+The main cool thing is that you can work on and try the JIT (including trying
+it on the Python interpreter!) without even generating a single bit of
+assembler. How? Let's start with something very simple. Let's take
+a simple interpreter for language X.
+</p>
+<p>
+Language X has 3 opcodes: CO_INCREASE, CO_DECREASE and CO_JUMP_BACK_3.
+CO_INCREASE increase the accumulator by one, CO_DECREASE decrease
+it by one, CO_JUMP_BACK_3 jump 3 opcodes back, if the accumulator is smaller
+than 100 (this is only to maintain some halting conditions possible).
+The interpreter for language X looks like this::
+</p>
+<p>
+</p>
+<pre>
+    jitdriver = JitDriver(greens = ['i'], reds = ['res', 'a'])
+    code = [CO_INCREASE, CO_INCREASE, CO_INCREASE,
+            CO_JUMP_BACK_3, CO_INCREASE, CO_DECREASE]
+            
+    def add(res, a):
+        return res + a
+
+    def sub(res, a):
+        return res - a
+
+    def main_interpreter_loop(a):
+        i = 0
+        res = 0
+        c = len(code)
+        while i &lt; c:
+            jitdriver.jit_merge_point(res=res, i=i, a=a)
+            elem = code[i]
+            if elem == CO_INCREASE:
+                res = add(res, a)
+            elif elem == CO_DECREASE:
+                res = sub(res, a)
+            else:
+                if res &gt; 100:
+                    pass
+                else:
+                    i = i - 3
+                    jitdriver.can_enter_jit(res=res, i=i, a=a)
+                    continue
+            i = i + 1
+        return res
+</pre>
+<p>
+All very simple code, expect the jitdriver hints, which instruct JIT how to
+behave (they are the equivalent of the ``add_to_position_key`` of last the blog
+post).
+</p>
+<p>
+Let's look how this code is processed. This will also give a glance
+at how we work in this code. This particular piece can be found
+on a <a href="https://codespeak.net/svn/pypy/branch/pyjitpl5">branch</a> in <tt>pypy/jit/metainterp/test/test_loop.py</tt>
+and can be run with <tt>./test_all.py jit/metainterp/test/test_loop.py -k test_example -s --view</tt> from pypy directory. The <tt>-s</tt> option lets you see the debugging output, while
+<tt>--view</tt> will show you some graphs. So, let's look at graphs in order:
+</p>
+<a href="https://4.bp.blogspot.com/_5R1EBmwBBTs/Sa_bimW0kmI/AAAAAAAAAB4/2VZMna1K_Jk/s1600-h/jit-graph-1.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5309703873151406690" src="https://4.bp.blogspot.com/_5R1EBmwBBTs/Sa_bimW0kmI/AAAAAAAAAB4/2VZMna1K_Jk/s400/jit-graph-1.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 340px;"></a>
+
+And the same picture with a bit of zoom for the first block:
+
+<a href="https://1.bp.blogspot.com/_5R1EBmwBBTs/Sa_bp8M4fII/AAAAAAAAACA/ShAopZhNLNQ/s1600-h/jit-graph-2.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5309703999274384514" src="https://1.bp.blogspot.com/_5R1EBmwBBTs/Sa_bp8M4fII/AAAAAAAAACA/ShAopZhNLNQ/s400/jit-graph-2.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 340px;"></a>
+<p>
+
+This is the call graph of an interpreter loop, nothing magic so far. This is an
+intermediate representation of translation toolchain input. If you look around
+you can follow how the opcodes are dispatched (with a chain of ifs) and helpers
+called. Next graph is very boring, because it's a bit lower level representation
+of the same thing (you exit with q or escape btw :).
+</p>
+<p>
+When we exit the graph viewer, we can see the trace generated by interpreting
+this graph with a given bytecode (variable <tt>code</tt> in paste above). It's something
+like:
+</p>
+<pre>
+
+        [compiler] ENTER
+        [runner:cpu]    call__4 [(''), * GCREF hidden, 0] -&gt; 0
+        [runner:cpu]    int_eq [0, 0] -&gt; True
+        [runner:cpu]    int_add [9, 1] -&gt; 10
+        [runner:cpu]    int_add [0, 1] -&gt; 1
+        [runner:cpu]    int_lt [1, 6] -&gt; True
+        [runner:cpu]    call__4 [(''), * GCREF hidden, 1] -&gt; 0
+        [runner:cpu]    int_eq [0, 0] -&gt; True
+        [runner:cpu]    int_add [10, 1] -&gt; 11
+        [runner:cpu]    int_add [1, 1] -&gt; 2
+        [runner:cpu]    int_lt [2, 6] -&gt; True
+        [runner:cpu]    call__4 [(''), * GCREF hidden, 2] -&gt; 0
+        [runner:cpu]    int_eq [0, 0] -&gt; True
+        [runner:cpu]    int_add [11, 1] -&gt; 12
+        [runner:cpu]    int_add [2, 1] -&gt; 3
+        [runner:cpu]    int_lt [3, 6] -&gt; True
+        [runner:cpu]    call__4 [(''), * GCREF hidden, 3] -&gt; 1
+        [runner:cpu]    int_eq [1, 0] -&gt; False
+        [runner:cpu]    int_eq [1, 2] -&gt; False
+        [runner:cpu]    int_gt [12, 100] -&gt; False
+        [runner:cpu]    int_sub [3, 3] -&gt; 0
+        [compiler] LEAVE
+</pre>
+<p>
+It's entering JIT, doing some primitive operations for bytecode dispatching
+and repeating the loop. Note that at the end of the interpreted loop
+(not to be confused with the interpreter loop), we see <tt>int_sub [3, 3]</tt>
+which resets the bytecode position to the beginning. At this time JIT
+(instructed by <tt>can_enter_jit</tt> hint) notices that all green variables
+are the same (here only <tt>i</tt>),
+hence we can compile the efficient loop from this point.
+</p>
+<a href="https://1.bp.blogspot.com/_5R1EBmwBBTs/Sa_b9I8HcVI/AAAAAAAAACI/wuhYwAzZikQ/s1600-h/jit-graph-3.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5309704329111236946" src="https://1.bp.blogspot.com/_5R1EBmwBBTs/Sa_b9I8HcVI/AAAAAAAAACI/wuhYwAzZikQ/s400/jit-graph-3.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 340px;"></a>
+
+<p>
+The loop contains 3 additions and a check (for <tt>i &lt; 100</tt>), exactly
+the same as our interpreted program would do, but completely without
+interpretation overhead!
+</p>
+<p>
+As you might have noticed, there is no assembler involved so far. All of this
+instruction execution is done directly, in pure python. In fact, the
+code for executing instructions is located in <tt>jit/backend/llgraph</tt>
+which directly interprets instructions. This is by far simpler (and easier
+to debug) than x86 assembler.
+</p>
+<p>
+And this is basically it: the very simple interpreter and a jit for it.
+Of course we actually <b>can</b> generate assembler for that. Also the missing
+piece is optimizing the generated graphs. While for this example,
+by removing the interpretetation overhead, we're done, with more complex
+examples it's important to further optimize traces. Hopefully this and
+how we actually generate assembler will be topics for next blog posts.
+</p>
+Cheers,<br>
+fijal
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/jit.html" rel="tag">jit</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="pypy-on-mobiles-at-openbossa-845760004725129519.html" rel="prev" title="PyPy on Mobiles, at OpenBossa">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="good-news-everyone-421421336094214242.html" rel="next" title="Good news everyone!">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-1644685618156923058">
+        <div class="comment-header">
+          <a name="comment-1644685618156923058"></a>
+            <span class="author">Brent Millare</span> wrote on <span class="date">2009-03-05 20:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great article. I like how it is the simplest case that can explain the most basic work flow. You have code, the interpreter, and the generated code as part of the running JIT.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

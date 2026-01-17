@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doing the Prospero-Challenge in RPython | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2025/04/prospero-in-rpython.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="CF Bolz-Tereick">
+<link rel="prev" href="../02/pypy-v7319-release.html" title="PyPy v7.3.19 release" type="text/html">
+<link rel="next" href="../06/rpython-gc-allocation-speed.html" title="How fast can the RPython GC allocate?" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Doing the Prospero-Challenge in RPython">
+<meta property="og:url" content="https://www.pypy.org/posts/2025/04/prospero-in-rpython.html">
+<meta property="og:description" content="Recently I had a lot of fun playing with the Prospero
+Challenge by Matt
+Keeter. The challenge is to render a 1024x1024 image of
+a quote from The Tempest by Shakespeare. The input is a mathematical for">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2025-04-09T15:07:09Z">
+<meta property="article:tag" content="toy-optimizer">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Doing the Prospero-Challenge in RPython</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/cf-bolz-tereick.html">CF Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2025-04-09T15:07:09Z" itemprop="datePublished" title="2025-04-09 15:07">2025-04-09 15:07</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="prospero-in-rpython.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Recently I had a lot of fun playing with the <a href="https://www.mattkeeter.com/projects/prospero/">Prospero
+Challenge</a> by <a href="https://www.mattkeeter.com/">Matt
+Keeter</a>. The challenge is to render a 1024x1024 image of
+a quote from The Tempest by Shakespeare. The input is a mathematical formula
+with 7866 operations, which is evaluated once per pixel.</p>
+<p>What made the challenge particularly enticing for me personally was the fact
+that the formula is basically a trace in
+<a href="https://en.wikipedia.org/wiki/Static_single-assignment_form">SSA-form</a> – a
+linear sequence of operations, where every variable is assigned exactly once.
+The challenge is to evaluate the formula as fast as possible. I tried a number
+of ideas how to speed up execution and will talk about them in this somewhat
+meandering post. Most of it follows Matt's implementation
+<a href="https://github.com/mkeeter/fidget">Fidget</a> very closely. There are two points
+of difference:</p>
+<ul>
+<li>I tried to add more peephole optimizations, but they didn't end up helping
+  much.</li>
+<li>I implemented a "demanded information" optimization that removes a lot of
+  operations by only keeping the sign of the result. This optimization ended up
+  being useful.</li>
+</ul>
+<p>Most of the prototyping in this post was done in RPython (a statically typable
+subset of Python2, that can be compiled to C), but I later rewrote the program
+in C to get better performance. All the code <a href="https://github.com/cfbolz/pyfidget/">can be found on
+Github</a>.</p>
+<h3 id="input-program">Input program<a href="#input-program" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The input program is a sequence of operations, like this:</p>
+<div class="code"><pre class="code literal-block"><span class="n">_0</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="mf">2.95</span>
+<span class="n">_1</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">x</span>
+<span class="n">_2</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="mf">8.13008</span>
+<span class="n">_3</span><span class="w"> </span><span class="n">mul</span><span class="w"> </span><span class="n">_1</span><span class="w"> </span><span class="n">_2</span>
+<span class="n">_4</span><span class="w"> </span><span class="n">add</span><span class="w"> </span><span class="n">_0</span><span class="w"> </span><span class="n">_3</span>
+<span class="n">_5</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="mf">3.675</span>
+<span class="n">_6</span><span class="w"> </span><span class="n">add</span><span class="w"> </span><span class="n">_5</span><span class="w"> </span><span class="n">_3</span>
+<span class="n">_7</span><span class="w"> </span><span class="n">neg</span><span class="w"> </span><span class="n">_6</span>
+<span class="n">_8</span><span class="w"> </span><span class="nb">max</span><span class="w"> </span><span class="n">_4</span><span class="w"> </span><span class="n">_7</span>
+<span class="o">...</span>
+</pre></div>
+
+<p>The first column is the name of the result variable, the second column is the
+operation, and the rest are the arguments to the operation. <code>var-x</code> is a
+special operation that returns the x-coordinate of the pixel being rendered,
+and equivalently for <code>var-y</code> the y-coordinate. The sign of the result gives the
+color of the pixel, the absolute value is not important.</p>
+<h3 id="a-baseline-interpreter">A baseline interpreter<a href="#a-baseline-interpreter" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>To run the program, I first parse them and replace the register names with
+indexes, to avoid any dictionary lookups at runtime.
+Then I implemented a simple interpreter for the SSA-form
+input program. The interpreter is a simple register machine, where every
+operation is executed in order. The result of the operation is stored into a
+list of results, and the next operation is executed. This was the slow baseline
+implementation of the interpreter but it's very useful to compare against the optimized
+versions.</p>
+<p>This is roughly what the code looks like</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">DirectFrame</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">program</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">program</span> <span class="o">=</span> <span class="n">program</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">next</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_floats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setxyz</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">setxyz</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">x</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">=</span> <span class="n">y</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">z</span> <span class="o">=</span> <span class="n">z</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">program</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">program</span>
+        <span class="n">num_ops</span> <span class="o">=</span> <span class="n">program</span><span class="o">.</span><span class="n">num_operations</span><span class="p">()</span>
+        <span class="n">floatvalues</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="n">num_ops</span>
+        <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_ops</span><span class="p">):</span>
+            <span class="n">func</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span> <span class="o">=</span> <span class="n">program</span><span class="o">.</span><span class="n">get_func_and_args</span><span class="p">(</span><span class="n">op</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">const</span><span class="p">:</span>
+                <span class="n">floatvalues</span><span class="p">[</span><span class="n">op</span><span class="p">]</span> <span class="o">=</span> <span class="n">program</span><span class="o">.</span><span class="n">consts</span><span class="p">[</span><span class="n">arg0</span><span class="p">]</span>
+                <span class="k">continue</span>
+            <span class="n">farg0</span> <span class="o">=</span> <span class="n">floatvalues</span><span class="p">[</span><span class="n">arg0</span><span class="p">]</span>
+            <span class="n">farg1</span> <span class="o">=</span> <span class="n">floatvalues</span><span class="p">[</span><span class="n">arg1</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">var_x</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">var_y</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">var_z</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">z</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">add</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">farg0</span><span class="p">,</span> <span class="n">farg1</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">sub</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="n">farg0</span><span class="p">,</span> <span class="n">farg1</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">mul</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mul</span><span class="p">(</span><span class="n">farg0</span><span class="p">,</span> <span class="n">farg1</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">max</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">farg0</span><span class="p">,</span> <span class="n">farg1</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">min</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">farg0</span><span class="p">,</span> <span class="n">farg1</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">square</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">farg0</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">sqrt</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">farg0</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">exp</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">farg0</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">neg</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">neg</span><span class="p">(</span><span class="n">farg0</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">abs</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">farg0</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="mi">0</span>
+            <span class="n">floatvalues</span><span class="p">[</span><span class="n">op</span><span class="p">]</span> <span class="o">=</span> <span class="n">res</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">floatvalues</span><span class="p">[</span><span class="n">num_ops</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">arg0</span> <span class="o">+</span> <span class="n">arg1</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">sub</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">arg0</span> <span class="o">-</span> <span class="n">arg1</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">mul</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">arg0</span> <span class="o">*</span> <span class="n">arg1</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">max</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">min</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">min</span><span class="p">(</span><span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">square</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">):</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="n">arg0</span>
+        <span class="k">return</span> <span class="n">val</span><span class="o">*</span><span class="n">val</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">exp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">math</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">neg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">):</span>
+        <span class="k">return</span> <span class="o">-</span><span class="n">arg0</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">abs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">abs</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+</pre></div>
+
+<p>Running the naive interpreter on the prospero image file is super slow, since
+it performs 7866 * 1024 * 1024 float operations, plus the interpretation overhead.</p>
+<h3 id="using-quadtrees-to-render-the-picture">Using Quadtrees to render the picture<a href="#using-quadtrees-to-render-the-picture" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The approach that Matt describes in his really excellent
+<a href="https://www.youtube.com/watch?v=UxGxsGnbyJ4">talk</a> is to use
+<a href="https://en.wikipedia.org/wiki/Quadtree">quadtrees</a>: recursively subdivide the
+image into quadrants, and evaluate the formula in each quadrant. For every
+quadrant you can simplify the formula by doing a range analysis. After a few
+recursion steps, the formula becomes significantly smaller, often only a few
+hundred or a few dozen operations.</p>
+<p>At the bottom of the recursion you either reach a square where the range
+analysis reveals that the sign for all pixels is determined, then you can fill
+in all the pixels of the quadrant. Or you can evaluate the (now much simpler)
+formula in the quadrant by executing it for every pixel.</p>
+<p>This is an interesting use case of JIT compiler/optimization techniques,
+requiring the optimizer itself to execute really quickly since it is an essential
+part of the performance of the algorithm. The optimizer runs literally hundreds
+of times to render a single image. If the algorithm is used for 3D models
+it becomes even more crucial.</p>
+<h3 id="writing-a-simple-optimizer">Writing a simple optimizer<a href="#writing-a-simple-optimizer" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Implementing the quadtree recursion is straightforward. Since the program has
+no control flow the optimizer is very simple to write. I've written a couple of
+blog posts on how to easily write optimizers for linear sequences of
+operations, and I'm using the approach described in these <a href="https://pypy.org/categories/toy-optimizer.html">Toy
+Optimizer</a> posts. The interval
+analysis is basically an <a href="https://pypy.org/posts/2024/08/toy-knownbits.html">abstract
+interpretation</a> of the
+operations. The optimizer does a sequential forward pass over the input
+program. For every operation, the output interval is computed. The optimizer
+also performs optimizations based on the computed intervals, which helps in
+reducing the number of operations executed (I'll talk about this further down).</p>
+<p>Here's a sketch of the Python code that does the optimization:</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">Optimizer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">program</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">program</span> <span class="o">=</span> <span class="n">program</span>
+        <span class="n">num_operations</span> <span class="o">=</span> <span class="n">program</span><span class="o">.</span><span class="n">num_operations</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resultops</span> <span class="o">=</span> <span class="n">ProgramBuilder</span><span class="p">(</span><span class="n">num_operations</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intervalframe</span> <span class="o">=</span> <span class="n">IntervalFrame</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">program</span><span class="p">)</span>
+        <span class="c1"># old index -&gt; new index</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">opreplacements</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">num_operations</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_replacement</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opreplacements</span><span class="p">[</span><span class="n">op</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">newop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">arg0</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">arg1</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">resultops</span><span class="o">.</span><span class="n">add_op</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">newconst</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">const</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resultops</span><span class="o">.</span><span class="n">add_const</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intervalframe</span><span class="o">.</span><span class="n">minvalues</span><span class="p">[</span><span class="n">const</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intervalframe</span><span class="o">.</span><span class="n">maxvalues</span><span class="p">[</span><span class="n">const</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="c1">#self.seen_consts[value] = const</span>
+        <span class="k">return</span> <span class="n">const</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">optimize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">f</span><span class="p">):</span>
+        <span class="n">program</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">program</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intervalframe</span><span class="o">.</span><span class="n">setxyz</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+        <span class="n">numops</span> <span class="o">=</span> <span class="n">program</span><span class="o">.</span><span class="n">num_operations</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">numops</span><span class="p">):</span>
+            <span class="n">newop</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_optimize_op</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">opreplacements</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">newop</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opreplacements</span><span class="p">[</span><span class="n">numops</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_optimize_op</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="p">):</span>
+        <span class="n">program</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">program</span>
+        <span class="n">intervalframe</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervalframe</span>
+        <span class="n">func</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span> <span class="o">=</span> <span class="n">program</span><span class="o">.</span><span class="n">get_func_and_args</span><span class="p">(</span><span class="n">op</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">arg0</span> <span class="o">&gt;=</span> <span class="mi">0</span>
+        <span class="k">assert</span> <span class="n">arg1</span> <span class="o">&gt;=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">var_x</span><span class="p">:</span>
+            <span class="n">minimum</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">minx</span>
+            <span class="n">maximum</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">maxx</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_default</span><span class="p">(</span><span class="n">OPS</span><span class="o">.</span><span class="n">var_x</span><span class="p">,</span> <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">var_y</span><span class="p">:</span>
+            <span class="n">minimum</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">miny</span>
+            <span class="n">maximum</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">maxy</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_default</span><span class="p">(</span><span class="n">OPS</span><span class="o">.</span><span class="n">var_y</span><span class="p">,</span> <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">var_z</span><span class="p">:</span>
+            <span class="n">minimum</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">minz</span>
+            <span class="n">maximum</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">maxz</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_default</span><span class="p">(</span><span class="n">OPS</span><span class="o">.</span><span class="n">var_z</span><span class="p">,</span> <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">const</span><span class="p">:</span>
+            <span class="n">const</span> <span class="o">=</span> <span class="n">program</span><span class="o">.</span><span class="n">consts</span><span class="p">[</span><span class="n">arg0</span><span class="p">]</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">newconst</span><span class="p">(</span><span class="n">const</span><span class="p">)</span>
+        <span class="n">arg0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_replacement</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+        <span class="n">arg1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_replacement</span><span class="p">(</span><span class="n">arg1</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">arg0</span> <span class="o">&gt;=</span> <span class="mi">0</span>
+        <span class="k">assert</span> <span class="n">arg1</span> <span class="o">&gt;=</span> <span class="mi">0</span>
+        <span class="n">arg0minimum</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">minvalues</span><span class="p">[</span><span class="n">arg0</span><span class="p">]</span>
+        <span class="n">arg0maximum</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">maxvalues</span><span class="p">[</span><span class="n">arg0</span><span class="p">]</span>
+        <span class="n">arg1minimum</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">minvalues</span><span class="p">[</span><span class="n">arg1</span><span class="p">]</span>
+        <span class="n">arg1maximum</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">maxvalues</span><span class="p">[</span><span class="n">arg1</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">neg</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_neg</span><span class="p">(</span><span class="n">arg0</span><span class="p">,</span> <span class="n">arg0minimum</span><span class="p">,</span> <span class="n">arg0maximum</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">min</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_min</span><span class="p">(</span><span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg0minimum</span><span class="p">,</span> <span class="n">arg0maximum</span><span class="p">,</span> <span class="n">arg1minimum</span><span class="p">,</span> <span class="n">arg1maximum</span><span class="p">)</span>
+        <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">opt_default</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span><span class="p">,</span> <span class="n">arg0</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">arg1</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intervalframe</span><span class="o">.</span><span class="n">_set</span><span class="p">(</span><span class="n">newop</span><span class="p">,</span> <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">newop</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">opt_neg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg0minimum</span><span class="p">,</span> <span class="n">arg0maximum</span><span class="p">):</span>
+        <span class="c1"># peephole rules go here, see below</span>
+        <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervalframe</span><span class="o">.</span><span class="n">_neg</span><span class="p">(</span><span class="n">arg0minimum</span><span class="p">,</span> <span class="n">arg0maximum</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_default</span><span class="p">(</span><span class="n">OPS</span><span class="o">.</span><span class="n">neg</span><span class="p">,</span> <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span><span class="p">,</span> <span class="n">arg0</span><span class="p">)</span>
+
+    <span class="nd">@symmetric</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">opt_min</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg0minimum</span><span class="p">,</span> <span class="n">arg0maximum</span><span class="p">,</span> <span class="n">arg1minimum</span><span class="p">,</span> <span class="n">arg1maximum</span><span class="p">):</span>
+        <span class="c1"># peephole rules go here, see below</span>
+        <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervalframe</span><span class="o">.</span><span class="n">_max</span><span class="p">(</span><span class="n">arg0minimum</span><span class="p">,</span> <span class="n">arg0maximum</span><span class="p">,</span> <span class="n">arg1minimum</span><span class="p">,</span> <span class="n">arg1maximum</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_default</span><span class="p">(</span><span class="n">OPS</span><span class="o">.</span><span class="n">max</span><span class="p">,</span> <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">)</span>
+
+    <span class="o">...</span>
+</pre></div>
+
+<p>The resulting optimized traces are then simply interpreted at the bottom of the
+quadtree recursion. Matt talks about also generating machine code from them,
+but when I tried to use PyPy's JIT for that it was way too slow at
+producing machine code.</p>
+<h3 id="testing-soundness-of-the-interval-abstract-domain">Testing soundness of the interval abstract domain<a href="#testing-soundness-of-the-interval-abstract-domain" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>To make sure that my interval computation in the optimizer is correct, I
+implemented a hypothesis-based property based test. It checks the abstract
+transfer functions of the interval domain for soundness. It does so by
+generating random concrete input values for an operation and random intervals that
+surround the random concrete values, then performs the concrete operation to
+get the concrete output, and finally checks that the abstract transfer function applied
+to the input intervals gives an interval that contains the concrete output.</p>
+<p>For example, the random test for the <code>square</code> operation would look like this:</p>
+<div class="code"><pre class="code literal-block"><span class="kn">from</span><span class="w"> </span><span class="nn">hypothesis</span><span class="w"> </span><span class="kn">import</span> <span class="n">given</span><span class="p">,</span> <span class="n">strategies</span><span class="p">,</span> <span class="n">assume</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyfidget.vm</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntervalFrame</span><span class="p">,</span> <span class="n">DirectFrame</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+
+<span class="n">regular_floats</span> <span class="o">=</span> <span class="n">strategies</span><span class="o">.</span><span class="n">floats</span><span class="p">(</span><span class="n">allow_nan</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">allow_infinity</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">make_range_and_contained_float</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">):</span>
+    <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">([</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span>
+
+<span class="n">frame</span> <span class="o">=</span> <span class="n">DirectFrame</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+<span class="n">intervalframe</span> <span class="o">=</span> <span class="n">IntervalFrame</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+
+<span class="n">range_and_contained_float</span> <span class="o">=</span> <span class="n">strategies</span><span class="o">.</span><span class="n">builds</span><span class="p">(</span><span class="n">make_range_and_contained_float</span><span class="p">,</span> <span class="n">regular_floats</span><span class="p">,</span> <span class="n">regular_floats</span><span class="p">,</span> <span class="n">regular_floats</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">contains</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="n">rmin</span><span class="p">,</span> <span class="n">rmax</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">math</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">rmin</span><span class="p">)</span> <span class="ow">or</span> <span class="n">math</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">rmax</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">return</span> <span class="n">rmin</span> <span class="o">&lt;=</span> <span class="n">res</span> <span class="o">&lt;=</span> <span class="n">rmax</span>
+
+
+<span class="nd">@given</span><span class="p">(</span><span class="n">range_and_contained_float</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">test_square</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
+    <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">val</span>
+    <span class="n">rmin</span><span class="p">,</span> <span class="n">rmax</span> <span class="o">=</span> <span class="n">intervalframe</span><span class="o">.</span><span class="n">_square</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">contains</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="n">rmin</span><span class="p">,</span> <span class="n">rmax</span><span class="p">)</span>
+</pre></div>
+
+<p>This test generates a random float <code>b</code>, and two other floats <code>a</code> and <code>c</code> such
+that the interval <code>[a, c]</code> contains <code>b</code>. The test then checks that the result
+of the <code>square</code> operation on <code>b</code> is contained in the interval <code>[rmin, rmax]</code>
+returned by the abstract transfer function for the <code>square</code> operation.</p>
+<h3 id="peephole-rewrites">Peephole rewrites<a href="#peephole-rewrites" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The only optimization that Matt does in his implementation is a peephole
+optimization rule that removes <code>min</code> and <code>max</code> operations where the intervals
+of the arguments don't overlap. In that case, the optimizer statically can know
+which of the arguments will be the result of the operation. I implemented this
+peephole optimization in my implementation as well, but I also added a few more
+peephole optimizations that I thought would be useful.</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">Optimizer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">opt_neg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg0minimum</span><span class="p">,</span> <span class="n">arg0maximum</span><span class="p">):</span>
+        <span class="c1"># new: add peephole rule --x =&gt; x</span>
+        <span class="n">func</span><span class="p">,</span> <span class="n">arg0arg0</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resultops</span><span class="o">.</span><span class="n">get_func_and_args</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">neg</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">arg0arg0</span>
+        <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervalframe</span><span class="o">.</span><span class="n">_neg</span><span class="p">(</span><span class="n">arg0minimum</span><span class="p">,</span> <span class="n">arg0maximum</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_default</span><span class="p">(</span><span class="n">OPS</span><span class="o">.</span><span class="n">neg</span><span class="p">,</span> <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span><span class="p">,</span> <span class="n">arg0</span><span class="p">)</span>
+
+    <span class="nd">@symmetric</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">opt_min</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">,</span> <span class="n">arg0minimum</span><span class="p">,</span> <span class="n">arg0maximum</span><span class="p">,</span> <span class="n">arg1minimum</span><span class="p">,</span> <span class="n">arg1maximum</span><span class="p">):</span>
+        <span class="c1"># Matt's peephole rule</span>
+        <span class="k">if</span> <span class="n">arg0maximum</span> <span class="o">&lt;</span> <span class="n">arg1minimum</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">arg0</span> <span class="c1"># we can use the intervals to decide which argument will be returned</span>
+        <span class="c1"># new one by me: min(x, x) =&gt; x </span>
+        <span class="k">if</span> <span class="n">arg0</span> <span class="o">==</span> <span class="n">arg1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">arg0</span>
+        <span class="n">func</span><span class="p">,</span> <span class="n">arg0arg0</span><span class="p">,</span> <span class="n">arg0arg1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resultops</span><span class="o">.</span><span class="n">get_func_and_args</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+        <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervalframe</span><span class="o">.</span><span class="n">_max</span><span class="p">(</span><span class="n">arg0minimum</span><span class="p">,</span> <span class="n">arg0maximum</span><span class="p">,</span> <span class="n">arg1minimum</span><span class="p">,</span> <span class="n">arg1maximum</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_default</span><span class="p">(</span><span class="n">OPS</span><span class="o">.</span><span class="n">max</span><span class="p">,</span> <span class="n">minimum</span><span class="p">,</span> <span class="n">maximum</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span><span class="p">)</span>
+
+    <span class="o">...</span>
+</pre></div>
+
+<p>However, it turns out that all my attempts at adding other peephole
+optimization rules were not very useful. Most rules never fired, and the ones
+that did only had a small effect on the performance of the program. The only
+peephole optimization that I found to be useful was the one that Matt describes
+in his talk. Matt's <code>min</code>/<code>max</code> optimization were 96% of all rewrites that my
+peephole optimizer applied for the <code>prospero.vm</code> input. The remaining 4% of
+rewrites were (the percentages are of that 4%):</p>
+<div class="code"><pre class="code literal-block">--x =&gt; x                          4.65%
+(-x)**2 =&gt; x ** 2                 0.99%
+min(x, x) =&gt; x                   20.86%
+min(x, min(x, y)) =&gt;  min(x, y)  52.87%
+max(x, x) =&gt; x                   16.40%
+max(x, max(x, y)) =&gt; max(x, y)    4.23%
+</pre></div>
+
+<p>In the end it turned out that having these extra optimization rules made the
+total runtime of the system go up. Checking for the rewrites isn't free, and
+since they apply so rarely they don't pay for their own cost in terms of
+improved performance.</p>
+<p>There are some further rules that I tried that never fired at all:</p>
+<div class="code"><pre class="code literal-block">a <span class="gs">* 0 =&gt; 0</span>
+<span class="gs">a *</span> 1 =&gt; a
+a <span class="gs">* a =&gt; a *</span>* 2
+a <span class="gs">* -1 =&gt; -a</span>
+<span class="gs">a + 0 =&gt; a</span>
+<span class="gs">a - 0 =&gt; a</span>
+<span class="gs">x - x =&gt; 0</span>
+<span class="gs">abs(known positive number x) =&gt; x</span>
+<span class="gs">abs(known negative number x) =&gt; -x</span>
+<span class="gs">abs(-x) =&gt; abs(x)</span>
+<span class="gs">(-x) *</span>* 2 =&gt; x ** 2
+</pre></div>
+
+<p>This investigation is clearly way too focused on a single program and should be
+re-done with a larger set of example inputs, if this were an actually serious
+implementation.</p>
+<h3 id="demanded-information-optimization">Demanded Information Optimization<a href="#demanded-information-optimization" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>LLVM has an static analysis pass called 'demanded bits'. It is a backwards analysis that
+allows you to determine which bits of a value are actually used in the final
+result. This information can then be used in peephole optimizations. For
+example, if you have an expression that computes a value, but only the last
+byte of that value is used in the final result, you can optimize the expression
+to only compute the last byte.</p>
+<p>Here's an example. Let's say we first byte-swap a 64-bit int, and then mask off the last byte:</p>
+<div class="code"><pre class="code literal-block"><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">byteswap_then_mask</span><span class="p">(</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">a</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">byteswap</span><span class="p">(</span><span class="n">a</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xff</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+<p>In this case, the "demanded bits" of the <code>byteswap(a)</code> expression are
+<code>0b0...011111111</code>, which inversely means that we don't care about the upper 56
+bits. Therefore the whole expression can be optimized to <code>a &gt;&gt; 56</code>.</p>
+<p>For the Prospero challenge, we can observe that for the resulting pixel values, the value of
+the result is not used at all, only its sign. Essentially, every program ends
+implicitly with a <code>sign</code> operation that returns <code>0.0</code> for negative values and
+<code>1.0</code> for positive values. For clarity, I will show this <code>sign</code> operation in
+the rest of the section, even if it's not actually in the real code.</p>
+<p>This makes it possible to simplify certain min/max
+operations further. Here is an example of a program, together with the
+intervals of the variables:</p>
+<div class="code"><pre class="code literal-block"><span class="n">x</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">x</span><span class="w">     </span><span class="c1"># [0.1, 1]</span>
+<span class="n">y</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">y</span><span class="w">     </span><span class="c1"># [-1, 1]</span>
+<span class="n">m</span><span class="w"> </span><span class="nb">min</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="c1"># [-1, 1]</span>
+<span class="n">out</span><span class="w"> </span><span class="nb">sign</span><span class="w"> </span><span class="n">m</span>
+</pre></div>
+
+<p>This program can be optimized to:</p>
+<div class="code"><pre class="code literal-block"><span class="n">y</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">y</span>
+<span class="n">out</span><span class="w"> </span><span class="nb">sign</span><span class="w"> </span><span class="n">m</span>
+</pre></div>
+
+<p>Because that expression has the same result as the original expression: if <code>x &gt;
+0.1</code>, for the result of <code>min(x, y)</code> to be negative then <code>y</code> needs to be negative.</p>
+<p>Another, more complex, example is this:</p>
+<div class="code"><pre class="code literal-block"><span class="n">x</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">x</span><span class="w">        </span><span class="c1"># [1, 100]</span>
+<span class="n">y</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">y</span><span class="w">        </span><span class="c1"># [-10, 10]</span>
+<span class="n">z</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">z</span><span class="w">        </span><span class="c1"># [-100, 100]</span>
+<span class="n">m1</span><span class="w"> </span><span class="nb">min</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="n">y</span><span class="w">     </span><span class="c1"># [-10, 10]</span>
+<span class="n">m2</span><span class="w"> </span><span class="nb">max</span><span class="w"> </span><span class="n">z</span><span class="w"> </span><span class="n">out</span><span class="w">   </span><span class="c1"># [-10, 100]</span>
+<span class="n">out</span><span class="w"> </span><span class="nb">sign</span><span class="w"> </span><span class="n">m2</span>
+</pre></div>
+
+<p>Which can be optimized to this:</p>
+<div class="code"><pre class="code literal-block"><span class="n">y</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">y</span>
+<span class="n">z</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">z</span>
+<span class="n">m2</span><span class="w"> </span><span class="nb">max</span><span class="w"> </span><span class="n">z</span><span class="w"> </span><span class="n">y</span>
+<span class="n">out</span><span class="w"> </span><span class="nb">sign</span><span class="w"> </span><span class="n">m2</span>
+</pre></div>
+
+<p>This is because the sign of <code>min(x, y)</code> is the same as the sign of <code>y</code> if <code>x &gt;
+0</code>, and the sign of <code>max(z, min(x, y))</code> is thus the same as the sign of <code>max(z,
+y)</code>.</p>
+<p>To implement this optimization, I do a backwards pass over the program after
+the peephole optimization forward pass. For every <code>min</code> call I encounter, where
+one of the arguments is positive, I can optimize the <code>min</code> call away and
+replace it with the other argument. For <code>max</code> calls I simplify their arguments
+recursively.</p>
+<p>The code looks roughly like this:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">work_backwards</span><span class="p">(</span><span class="n">resultops</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">minvalues</span><span class="p">,</span> <span class="n">maxvalues</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">demand_sign_simplify</span><span class="p">(</span><span class="n">op</span><span class="p">):</span>
+        <span class="n">func</span><span class="p">,</span> <span class="n">arg0</span><span class="p">,</span> <span class="n">arg1</span> <span class="o">=</span> <span class="n">resultops</span><span class="o">.</span><span class="n">get_func_and_args</span><span class="p">(</span><span class="n">op</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">max</span><span class="p">:</span>
+            <span class="n">narg0</span> <span class="o">=</span> <span class="n">demand_sign_simplify</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">narg0</span> <span class="o">!=</span> <span class="n">arg0</span><span class="p">:</span>
+                <span class="n">resultops</span><span class="o">.</span><span class="n">setarg</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">narg0</span><span class="p">)</span>
+            <span class="n">narg1</span> <span class="o">=</span> <span class="n">demand_sign_simplify</span><span class="p">(</span><span class="n">arg1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">narg1</span> <span class="o">!=</span> <span class="n">arg1</span><span class="p">:</span>
+                <span class="n">resultops</span><span class="o">.</span><span class="n">setarg</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">narg1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">min</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">minvalues</span><span class="p">[</span><span class="n">arg0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">demand_sign_simplify</span><span class="p">(</span><span class="n">arg1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">minvalues</span><span class="p">[</span><span class="n">arg1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">demand_sign_simplify</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+            <span class="n">narg0</span> <span class="o">=</span> <span class="n">demand_sign_simplify</span><span class="p">(</span><span class="n">arg0</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">narg0</span> <span class="o">!=</span> <span class="n">arg0</span><span class="p">:</span>
+                <span class="n">resultops</span><span class="o">.</span><span class="n">setarg</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">narg0</span><span class="p">)</span>
+            <span class="n">narg1</span> <span class="o">=</span> <span class="n">demand_sign_simplify</span><span class="p">(</span><span class="n">arg1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">narg1</span> <span class="o">!=</span> <span class="n">arg1</span><span class="p">:</span>
+                <span class="n">resultops</span><span class="o">.</span><span class="n">setarg</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">narg1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">op</span>
+    <span class="k">return</span> <span class="n">demand_sign_simplify</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+</pre></div>
+
+<p>In my experiment, this optimization lets me remove 25% of all operations in
+prospero, at the various levels of my octree. I'll briefly look at performance
+results further down.</p>
+<h3 id="further-ideas-about-the-demanded-sign-simplification">Further ideas about the demanded sign simplification<a href="#further-ideas-about-the-demanded-sign-simplification" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>There is another idea how to short-circuit the evaluation of expressions that I
+tried briefly but didn't pursue to the end. Let's go back to the first example
+of the previous subsection, but with different intervals:</p>
+<div class="code"><pre class="code literal-block"><span class="n">x</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">x</span><span class="w">     </span><span class="c1"># [-1, 1]</span>
+<span class="n">y</span><span class="w"> </span><span class="k">var</span><span class="o">-</span><span class="n">y</span><span class="w">     </span><span class="c1"># [-1, 1]</span>
+<span class="n">m</span><span class="w"> </span><span class="nb">min</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="n">y</span><span class="w">   </span><span class="c1"># [-1, 1]</span>
+<span class="n">out</span><span class="w"> </span><span class="nb">sign</span><span class="w"> </span><span class="n">m</span>
+</pre></div>
+
+<p>Now we can't use the "demanded sign" trick in the optimizer, because neither
+<code>x</code> nor <code>y</code> are known positive. However, during <em>execution</em> of the program, if
+<code>x</code> turns out to be negative we can end the execution of this trace
+immediately, since we know that the result must be negative.</p>
+<p>So I experimented with adding <code>return_early_if_neg</code> flags to all operations
+with this property. The interpreter then checks whether the flag is set on an
+operation and if the result is negative, it stops the execution of the program
+early:</p>
+<div class="code"><pre class="code literal-block"><span class="n">x</span><span class="w"> </span><span class="nf">var</span><span class="o">-</span><span class="n">x</span><span class="o">[</span><span class="n">return_early_if_neg</span><span class="o">]</span>
+<span class="n">y</span><span class="w"> </span><span class="nf">var</span><span class="o">-</span><span class="n">y</span><span class="o">[</span><span class="n">return_early_if_neg</span><span class="o">]</span>
+<span class="n">m</span><span class="w"> </span><span class="nf">min</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="n">y</span>
+<span class="k">out</span><span class="w"> </span><span class="nf">sign</span><span class="w"> </span><span class="n">m</span>
+</pre></div>
+
+<p>This looked pretty promising, but it's also a trade-off because the cost of
+checking the flag and the value isn't zero. Here's a sketch to the change in the interpreter:</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">DirectFrame</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">program</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">program</span>
+        <span class="n">num_ops</span> <span class="o">=</span> <span class="n">program</span><span class="o">.</span><span class="n">num_operations</span><span class="p">()</span>
+        <span class="n">floatvalues</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="n">num_ops</span>
+        <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_ops</span><span class="p">):</span>
+            <span class="o">...</span>
+            <span class="k">if</span> <span class="n">func</span> <span class="o">==</span> <span class="n">OPS</span><span class="o">.</span><span class="n">var_x</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span>
+            <span class="o">...</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="mi">0</span>
+            <span class="k">if</span> <span class="n">program</span><span class="o">.</span><span class="n">get_flags</span><span class="p">(</span><span class="n">op</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">OPS</span><span class="o">.</span><span class="n">should_return_if_neg</span> <span class="ow">and</span> <span class="n">res</span> <span class="o">&lt;</span> <span class="mf">0.0</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">res</span>
+            <span class="n">floatvalues</span><span class="p">[</span><span class="n">op</span><span class="p">]</span> <span class="o">=</span> <span class="n">res</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">floatvalues</span><span class="p">[</span><span class="n">num_ops</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+</pre></div>
+
+<p>I implemented this in the RPython
+version, but didn't end up porting it to C, because it interferes with SIMD.</p>
+<h3 id="dead-code-elimination">Dead code elimination<a href="#dead-code-elimination" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Matt performs dead code elimination in his implementation by doing a single
+backwards pass over the program. This is a very simple and effective
+optimization, and I implemented it in my implementation as well. The dead code
+elimination pass is very simple: It starts by marking the result operation as
+used. Then it goes backwards over the program. If the current operation is
+used, its arguments are marked as used as well. Afterwards, all the operations
+that are not marked as used are removed from the program. The PyPy JIT actually
+performs dead code elimination on traces in exactly the same way (and I don't
+think we ever explained how this works on the blog), so I thought it was worth
+mentioning.</p>
+<p>Matt also performs register allocation as part of the backwards pass, but I
+didn't implement it because I wasn't too interested in that aspect.</p>
+<h3 id="random-testing-of-the-optimizer">Random testing of the optimizer<a href="#random-testing-of-the-optimizer" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>To make sure I didn't break anything in the optimizer, I implemented a
+test that generates random input programs and checks that the output of the
+optimizer is equivalent to the input program. The test generates random
+operations, random intervals for the operations and a random input value within
+that interval. It then runs the optimizer on the input program and checks that
+the output program has the same result as the input program. This is again
+implemented with <code>hypothesis</code>. Hypothesis' test case minimization feature is
+super useful for finding optimizer bugs. It's just not fun to analyze a problem
+on a many-thousand-operation input file, but Hypothesis often generated reduced
+test cases that were only a few operations long.</p>
+<h3 id="visualizing-programs">Visualizing programs<a href="#visualizing-programs" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>It's actually surprisingly annoying to visualize <code>prospero.vm</code> well, because
+it's quite a bit too large to just feed it into Graphviz. I made the problem
+slightly easier by grouping several operations together, where only the first
+operation in a group is used as the argument for more than one operation
+further in the program. This made it slightly more manageable for Graphviz. But
+it still wasn't a big enough improvement to be able to visualize all of
+<code>prospero.vm</code> in its unoptimized form at the top of the octree.</p>
+<p>Here's a visualization of the optimized <code>prospero.vm</code> at one of the octree
+levels:</p>
+<p><img alt="graph visualization of a part of the input program" src="../../../images/2025-image-prospero-dataflow.png"></p>
+<p>The result is on top, every node points to its arguments. The <code>min</code> and <code>max</code>
+operations form a kind of "spine" of the expression tree, because they are
+unions and intersection in the constructive solid geometry sense.</p>
+<p>I also wrote a function to visualize the octree recursion itself, the output
+looks like this:</p>
+<p><img alt="graph visualization of the octree recursion, zoomed out" src="../../../images/2025-image-octree-zoomed-out.png"></p>
+<p><img alt="graph visualization of the octree recursion, zoomed in" src="../../../images/2025-image-octree-zoomed-in.png"></p>
+<p>Green nodes are where the interval analysis determined that the output must be
+entirely outside the shape. Yellow nodes are where the octree recursion
+bottomed out.</p>
+<h3 id="c-implementation">C implementation<a href="#c-implementation" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>To achieve even faster performance, I decided to rewrite the implementation in
+C. While RPython is great for prototyping, it can be challenging to control
+low-level aspects of the code. The rewrite in C allowed me to experiment with
+several techniques I had been curious about:</p>
+<ul>
+<li>
+<a href="https://blog.reverberate.org/2021/04/21/musttail-efficient-interpreters.html"><code>musttail</code> optimization</a> for the interpreter.</li>
+<li>SIMD (Single Instruction, Multiple Data): Using Clang's
+  <a href="https://clang.llvm.org/docs/LanguageExtensions.html#vectors-and-extended-vectors"><code>ext_vector_type</code></a>, I process eight pixels at once using AVX (or some other
+  SIMD magic that I don't properly understand).</li>
+<li>Efficient struct packing: I packed the operations struct into just 8
+  bytes by limiting the maximum number of operations to 65,536, with the idea
+  of making the optimizer faster.</li>
+</ul>
+<p>I didn't rigorously study the performance impact of each of these techniques
+individually, so it's possible that some of them might not have contributed
+significantly. However, the rewrite was a fun exercise for me to explore these
+techniques. The code can be found
+<a href="https://github.com/cfbolz/pyfidget/blob/main/pyfidget/experiments.c">here</a>.</p>
+<h3 id="testing-the-c-implementation">Testing the C implementation<a href="#testing-the-c-implementation" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>At various points I had bugs in the C implementation, leading to a fun glitchy
+version of prospero:</p>
+<p><img alt="glitchy prospero" src="../../../images/2025-glitchy-prospero.png"></p>
+<p>To find these bugs, I used the same random testing approach as in the
+RPython version. I generated random input programs as strings in Python and
+checked that the output of the C implementation was equivalent to the output of
+the RPython implementation (simply by calling out to the shell and reading the
+generated image, then comparing pixels). This helped ensure that the C
+implementation was
+correct and didn't introduce any bugs. It was surprisingly tricky to get this
+right, for reasons that I didn't expect. At lot of them are related to the fact
+that in C I used <code>float</code> and Python uses <code>double</code> for its (Python) <code>float</code>
+type. This made the random tester find weird floating point corner cases where
+rounding behaviour between the widths was different.</p>
+<p>I solved those by using <code>double</code> in C when running the random tests by means of
+an <code>IFDEF</code>.</p>
+<p>It's super fun to watch the random program generator produce random images, here are a few:</p>
+<iframe width="560" height="560" src="https://www.youtube.com/embed/VqU5n3zzOjc" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+<h3 id="performance">Performance<a href="#performance" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Some very rough performance results on my laptop (an AMD Ryzen 7 PRO 7840U with
+32 GiB RAM running Ubuntu 24.04), comparing the RPython version, the C version
+(with and without demanded info), and Fidget (in <code>vm</code> mode, its JIT made things
+worse for me), both for 1024x1024 and 4096x4096 images:</p>
+<table>
+<thead><tr>
+<th>Implementation</th>
+<th>1024x1024</th>
+<th>4096x4096</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>RPython</td>
+<td>26.8ms</td>
+<td>75.0ms</td>
+</tr>
+<tr>
+<td>C (no demanded info)</td>
+<td>24.5ms</td>
+<td>45.0ms</td>
+</tr>
+<tr>
+<td>C (demanded info)</td>
+<td>18.0ms</td>
+<td>37.0ms</td>
+</tr>
+<tr>
+<td>Fidget</td>
+<td>10.8ms</td>
+<td>57.8ms</td>
+</tr>
+</tbody>
+</table>
+<p>The demanded info seem to help quite a bit, which was nice to see.</p>
+<h3 id="conclusion">Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>That's it! I had lots of fun with the challenge and have a whole bunch of other
+ideas I want to try out, thanks Matt for this interesting puzzle.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/toy-optimizer.html" rel="tag">toy-optimizer</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="../02/pypy-v7319-release.html" rel="prev" title="PyPy v7.3.19 release">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../06/rpython-gc-allocation-speed.html" rel="next" title="How fast can the RPython GC allocate?">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="Doing the Prospero-Challenge in RPython" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

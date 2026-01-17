@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="A Faster Python">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy (old posts, page 3) | PyPy</title>
+<link href="../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/blog/index-3.html">
+<link rel="icon" href="../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../favicon32x32.ico" sizes="32x32">
+<link rel="prev" href="index-4.html" type="text/html">
+<link rel="next" href="index-2.html" type="text/html">
+<!--[if lt IE 9]><script src="../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../assets/css/tipuesearch.css">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../index.html">
+                    <image id="toplogo" src="../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href=".">Index</a> </li>  
+                    <li> <a href="../categories/">Tags</a> </li>  
+                    <li> <a href="../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><div class="post">
+<div class="postindex">
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/02/python-finalizers-semantics-part-1-1196956834543115766.html" class="u-url">Python Finalizers Semantics, Part 1</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/02/python-finalizers-semantics-part-1-1196956834543115766.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-02-18T16:15:00Z" itemprop="datePublished" title="2008-02-18 16:15">2008-02-18 16:15</time></a>
+            </p>
+                <p class="commentline">2 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Python's garbage collection semantics is very much historically grown and
+implementation-driven. Samuele Pedroni therefore likes to call it the "'there
+is no such thing as too much chocolate'-approach to GC semantics" :-). In this
+two-part post series I am going to talk about the semantics of finalization
+(<cite>__del__</cite> methods) in CPython and PyPy.</p>
+<p>The current behaviour is mostly all a consequence of the fact that CPython uses
+reference counting for garbage collection. The first consequence is that if
+several objects die at the same time, their finalizers are called in a
+so-called <a class="reference" href="https://en.wikipedia.org/wiki/Topological_sort">topological order</a>, which is a feature that some GCs have that
+CPython offers by chance.  This ensures, that in a <tt class="docutils literal"><span class="pre">__del__</span></tt> method, all the
+attributes of the object didn't get their <tt class="docutils literal"><span class="pre">__del__</span></tt> called yet. A simple
+example:</p>
+<pre class="literal-block">
+class B(object):
+    def __init__(self, logfile):
+        self.logfile = logfile
+    def __del__(self):
+        self.logfile.write("done doing stuff")
+b = B(file("logfile.txt", "w"))
+</pre>
+<p>If the instance of <tt class="docutils literal"><span class="pre">B</span></tt> dies now, both it and the logfile are dead. They will
+get their <tt class="docutils literal"><span class="pre">__del__``s</span> <span class="pre">called</span> <span class="pre">and</span> <span class="pre">it's</span> <span class="pre">important</span> <span class="pre">that</span> <span class="pre">the</span> <span class="pre">file's</span> <span class="pre">``__del__</span></tt>
+gets called second, because otherwise the <tt class="docutils literal"><span class="pre">__del__</span></tt> of <tt class="docutils literal"><span class="pre">B</span></tt> would try to
+write to a closed file.</p>
+<p>The correct ordering happens completely automatically if you use reference
+counting: Setting <tt class="docutils literal"><span class="pre">b</span></tt> to None will decref the old value of <cite>b</cite>. This reduces
+the reference count of this instance to 0, so the finalizer will be called.
+After the <tt class="docutils literal"><span class="pre">__del__</span></tt> has finished, this object will be freed and all the
+objects it points to decrefed as well, which decreases the reference count of
+the file to 0 and call its `` __del__`` as well, which closes the file.</p>
+<p>The behaviour of PyPy's semispace and generational GCs wasn't very nice so far:
+it just called the finalizers in an essentially random order. Last week Armin
+came up with a somewhat <a class="reference" href="https://pypy.readthedocs.org/en/latest/discussion/finalizer-order.html">complicated algorithm</a> that solves this by emulating
+CPython's finalization order, which we subsequently implemented. So PyPy does
+what you expect now! The Boehm GC does a topological ordering by default, so it
+wasn't a problem there.</p>
+<p>A small twist on the above is when
+there is a cycle of objects involving finalizers:
+In this case a topological ordering is not possible, so that CPython refuses to
+guess the finalization order and <a class="reference" href="https://docs.python.org/lib/module-gc.html">puts such cycles</a> into <tt class="docutils literal"><span class="pre">gc.garbage</span></tt>. This
+would be very hard for PyPy to do, since our GC implementation is essentially
+independent from the Python interpreter. The same GCs work for our other
+interpreters after all too. Therefore we decided to break such a cycle at an
+arbitrary place, which doesn't sound too insane.  The insane thing is for
+a Python program to create a cycle of objects with finalizers <em>and</em> depend
+on the order in which the finalizers are called.  Don't do that :-)  (After
+all, CPython wouldn't even call the finalizers in this case.)</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-7169929424482555001">
+        <div class="comment-header">
+          <a name="comment-7169929424482555001"></a>
+            <span class="author">SamB</span> wrote on <span class="date">2015-03-15 05:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>The link to the "somewhat complicated algorithm" is a bit broken, but you can still get to it at <a href="https://web.archive.org/web/20101121225245/https://codespeak.net/pypy/dist/pypy/doc/discussion/finalizer-order.html" rel="nofollow">the web archive</a>.</p>
+        </div>
+      </div>
+      <div class="comment comment-2033729513328648855">
+        <div class="comment-header">
+          <a name="comment-2033729513328648855"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2015-03-30 08:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks, link updated.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/02/pypy-presence-on-various-conferences-in-6584680808789191759.html" class="u-url">PyPy presence on various conferences in the near future</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/02/pypy-presence-on-various-conferences-in-6584680808789191759.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-02-12T11:47:00Z" itemprop="datePublished" title="2008-02-12 11:47">2008-02-12 11:47</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hello! I will have the pleasure of presenting PyPy on various conferences in the near future. They're (in chronological order):
+
+</p>
+<ul>
+<li>Studencki Festiwal Informatyczny in Krakow, POLAND 6-8 March 2008. I think this might be only interesting for polish people (<a href="https://www.sfi.org.pl">website, in polish</a>)</li>
+
+<li>Pycon Chicago, IL, USA. 14-17 March 2008. There should be also a PyPy sprint afterwards, including newbie-friendly tutorial, everybody is welcome to join us!  (Provided that I'll get the US visa, which seems to be non-trivial issue for a polish citizen)</li>
+<li> RuPy, Poznan, POLAND 13-14 April 2008 (<a href="https://rupy.eu">website</a>). This is small, but very friendly Ruby and Python conference. Last year was amazing, I can strongly recommend to go there (Poznan is only 2h by train from Berlin also has its own airport).</li>
+</ul>
+
+Hope to see you at those places!<br><br>
+
+Cheers,<br>
+fijal
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-4087377274032208461">
+        <div class="comment-header">
+          <a name="comment-4087377274032208461"></a>
+            <span class="author">Michael Foord</span> wrote on <span class="date">2008-02-12 14:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hey - I'll be at both the Polish conferences talking about IronPython. I hope you will be talking in English!<br><br>Look forward to meeting up with you.<br><br>Michael Foord</p>
+        </div>
+      </div>
+      <div class="comment comment-4725469173374712533">
+        <div class="comment-header">
+          <a name="comment-4725469173374712533"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2008-02-12 14:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>Cheers Michael. Looking forward to see you!<br><br>At rupy definitely. At sfi it depends on them (I'll try to, also that I have noone to help me with slides in polish :)</p>
+        </div>
+      </div>
+      <div class="comment comment-7758701418951519628">
+        <div class="comment-header">
+          <a name="comment-7758701418951519628"></a>
+            <span class="author">Konrad</span> wrote on <span class="date">2008-02-15 23:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hey Fijal. <br><br>I think the Academic IT Festival in Cracow would be interesting not only for polish people. Large part of the talks will be given in English.<br><br>Here's the link to the english version of the festival website: https://www.sfi.org.pl/news<br><br>Konrad Delong, SFI :)</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/01/buildbots-and-better-platform-support-6965497451398110731.html" class="u-url">Buildbots and Better Platform Support</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/01/buildbots-and-better-platform-support-6965497451398110731.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-01-25T15:01:00Z" itemprop="datePublished" title="2008-01-25 15:01">2008-01-25 15:01</time></a>
+            </p>
+                <p class="commentline">1 comment</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>In the last days we improved platform-support of PyPy's Python interpreter.
+<a class="reference" href="https://jcalderone.livejournal.com/">Jean-Paul Calderone</a> has been tirelessly working for some time now on setting up a
+<a class="reference" href="https://buildbot.net/">buildbot</a> for translating and testing PyPy. So far the basic mechanisms are
+<a class="reference" href="https://pypy.intarweb.us/waterfall">working</a> and the buildbot is running on various machines, including some that
+Michael Schneider (bigdog) lets us use, one of them being a Windows machine,
+the other one with a 64bit Linux (lots of thanks to those two, you are
+awesome!).</p>
+<p>What is still missing is a nice way to visualize the test results to quickly see
+which tests have started failing on which platforms. There is a <a class="reference" href="https://pypy.intarweb.us/summary">prototype</a>
+already, which still needs some tweaking.</p>
+<p>The availability of these machines has triggered some much-needed bug-fixing in
+PyPy to make our Python interpreter work better on Windows and on 64 bit Linux.
+Maciek and Michael Schneider worked on this quite a bit last week, with the
+result that PyPy supports many more extension modules now on Windows and 64 bit
+Linux. Since we now have the buildbot the hope is that the support also won't
+disappear soon :-).</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-6739778467703649043">
+        <div class="comment-header">
+          <a name="comment-6739778467703649043"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2008-02-06 20:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Cool<br>I just found your blog and now I am going to read it every day:)<br>I love reading about the progress you guys are making on PyPy.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/01/pypy-keyboard-heatmap-4950995633665492453.html" class="u-url">PyPy Keyboard Heatmap</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/01/pypy-keyboard-heatmap-4950995633665492453.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-01-24T10:53:00Z" itemprop="datePublished" title="2008-01-24 10:53">2008-01-24 10:53</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Today I saw the <a class="reference" href="https://www.blendedtechnologies.com/visualization-tricks-generate-a-heatmap-of-your-keystrokes/">keyboard heatmap generator</a> on the <a class="reference" href="https://www.blendedtechnologies.com">Blended Technologies</a>
+blog. I threw all the PyPy code at it to see whether the heatmap looks any
+different than normal Python code. It doesn't:</p>
+<a href="https://2.bp.blogspot.com/_zICyAWqZbLA/R5hwvTYeysI/AAAAAAAAADk/Z-czsJp88fc/s1600-h/pypy-keypresses.jpg"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5158997331112020674" src="https://2.bp.blogspot.com/_zICyAWqZbLA/R5hwvTYeysI/AAAAAAAAADk/Z-czsJp88fc/s320/pypy-keypresses.jpg" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand;"></a>
+<p>So now the excuse "I can't contribute to PyPy because it needs all those special
+PyPy-keys" isn't working anymore :-).</p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/01/rpython-can-be-faster-than-c-2559071147541131237.html" class="u-url">RPython can be faster than C</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/01/rpython-can-be-faster-than-c-2559071147541131237.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-01-21T12:38:00Z" itemprop="datePublished" title="2008-01-21 12:38">2008-01-21 12:38</time></a>
+            </p>
+                <p class="commentline">14 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>(yes, C as in language, not c as in speed of light). I looked recently at the great computer language shootout, for some benchmarks and to make some speed comparisons. I use <a href="https://shootout.alioth.debian.org/gp4/benchmark.php?test=binarytrees&amp;lang=all">this</a> benchmark, modified it to be rpythonic-enough and compared speeds. The code is <a href="https://codespeak.net/svn/user/fijal/targetshootout.py">here</a> (the only change from the Python version was to create a class instead of tuple, so actually this version is <i>more</i> OO). Also the benchmark is very likely flawed because it favours better GCs :).<br>
+So, here we go:
+
+</p>
+<table>
+<tr>
+<td>Language:</td>
+<td>Time of run (for N=14):</td>
+</tr>
+<tr>
+<td>Python version running on Python 2.5.1, distribution</td>
+<td>25.5s</td>
+</tr>
+<tr>
+<td>Python version running on PyPy with generational GC</td>
+<td>45.5</td>
+</tr>
+<tr>
+<td>Python with psyco</td>
+<td>20s</td>
+</tr>
+<tr>
+<td>RPython translated to C using PyPy's generational GC</td>
+<td>0.42s</td>
+</tr>
+<tr>
+<td>compiling the Haskell version with GHC 6.6.1</td>
+<td>1.6s</td>
+</tr>
+<tr>
+<td>compiling the C version with gcc 4.1.2 -O3 -fomit-frame-pointer</td>
+<td>0.6s</td>
+</tr>
+</table>
+<br><br>
+
+Also worth noticing is that when using psyco with the original version (with tuples) it is very fast (2s).<br><br>
+
+So, PyPy's Python interpreter is 80% slower than CPython on this (not too horrible), but RPython is 40% faster than gcc here. Cool. The result is mostly due to our GC, which also proves that manual memory-management can be <i>slower</i> than garbage collection in some situations. Please note that this result does not mean that RPython is meant for <b>you</b>. It requires a completely different mindset than the one used to program in Python. <i>Don't say you weren't warned! :-)</i>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-2233468157482178641">
+        <div class="comment-header">
+          <a name="comment-2233468157482178641"></a>
+            <span class="author">Jonathan Ellis</span> wrote on <span class="date">2008-01-21 16:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>"It requires a completely different mindset than the one used to program in Python."<br><br>Can you elaborate?  "RPython for Python programmers" would be an excellent addition to the docs or this blog. :)</p>
+        </div>
+      </div>
+      <div class="comment comment-1866193735594487645">
+        <div class="comment-header">
+          <a name="comment-1866193735594487645"></a>
+            <span class="author">Michael Foord</span> wrote on <span class="date">2008-01-21 16:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>I agree with Jonathan. There are many Python programmers who would *love* to be able to write Python extensions with RPython.<br><br>I know that this is already possible, but there are two issues:<br><br>* Lack of documentation on programming with RPython (I realise that this is a moving target)<br>* Last I heard, the refcounting implementation made RPython extensions inefficient<br><br>If these two issues were resolved (or mostly resolved) then a lot more people might start using the PyPy toolchain.<br><br>Asides from my growsing, it looks like PyPy is becoming more impressive by the day. Congratulations.</p>
+        </div>
+      </div>
+      <div class="comment comment-6878620404584493138">
+        <div class="comment-header">
+          <a name="comment-6878620404584493138"></a>
+            <span class="author">Leonardo Santagada</span> wrote on <span class="date">2008-01-21 16:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>As of today you can't write CPython extensions in RPython.<br><br>Why not ask for the great computer language shootout to include RPython as one of their benchmarking languages? This could be a good and free advertising for the pypy project.</p>
+        </div>
+      </div>
+      <div class="comment comment-4803915553668560905">
+        <div class="comment-header">
+          <a name="comment-4803915553668560905"></a>
+            <span class="author">Silveira Neto</span> wrote on <span class="date">2008-01-21 16:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>mmm<br>0.42<br>42<br>The answer...</p>
+        </div>
+      </div>
+      <div class="comment comment-1679057019380130891">
+        <div class="comment-header">
+          <a name="comment-1679057019380130891"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2008-01-21 17:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi Michael,<br><br>Leonardo is correct, the extension compiler was removed from SVN in November. We had many discussions about this step, but eventually it turned out to be necessary for many reasons. The extcompiler never was that useful in the first place because the produced extensions weren't fast (one of the reasons being the bad refcounting indeed).<br><br>The other reasons were that the extcompiler was impossible to maintain and was actually <i>preventing</i> progress, because it kept code alive that we wanted to get rid off.<br><br>So at the moment you cannot use PyPy any more to produce CPython extensions, only standalone programs.<br><br>It's completely possible that the extcompiler will be reborn in the future, but at the moment our priorities are really to make PyPy a good Python and not do tons of things on the side.<br><br>Cheers,<br><br>Carl Friedrich</p>
+        </div>
+      </div>
+      <div class="comment comment-5040636442072863117">
+        <div class="comment-header">
+          <a name="comment-5040636442072863117"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2008-01-21 18:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>I would also say nowadays it's already possible to write extension modules in RPython... but just for PyPy, now for CPython :-).<br><br>Jokes apart, if someone is really interested in writing part of its application in RPython (despite our warnings :-)), targeting PyPy could be an interesting alternative, as long as you don't need external libraries and the speed gain is more than what you loose in other areas where PyPy is actually slower.</p>
+        </div>
+      </div>
+      <div class="comment comment-73623258163692113">
+        <div class="comment-header">
+          <a name="comment-73623258163692113"></a>
+            <span class="author">Justin</span> wrote on <span class="date">2008-01-21 21:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>I think a lot of people are interested in using RPython for performance reasons. But about nobody will leave CPython atm, because extension modules are not working.<br><br>At the moment, I wouldn't leave CPython since all I am doing is heavily based on scipy. And so my only option is (a) to wait PyPy being able to compile extensions for CPython or (b) PyPy making use of CPython extensions.<br><br>As long as this is not going to happen, I probably will not use RPython for serious projects. :/</p>
+        </div>
+      </div>
+      <div class="comment comment-4413697806677999824">
+        <div class="comment-header">
+          <a name="comment-4413697806677999824"></a>
+            <span class="author">Isaac Gouy</span> wrote on <span class="date">2008-01-25 17:11</span>:
+        </div>
+        <div class="comment-content">
+          <em>"Also the benchmark is very likely flawed because it favours better GCs :)"</em><br><br>Why would that be a flaw? <a href="https://shootout.alioth.debian.org/gp4sandbox/benchmark.php?test=binarytrees&amp;lang=all#about" rel="nofollow">Note: this is an adaptation of a benchmark for testing GC</a><br><br><br>Leonardo Santagada said <em>"Why not ask for the great computer language shootout to include RPython ..."</em><br><br><a href="https://shootout.alioth.debian.org/gp4sandbox/faq.php#acceptable" rel="nofollow">FAQ Why don't you include language X?</a>
+        </div>
+      </div>
+      <div class="comment comment-678918830729292900">
+        <div class="comment-header">
+          <a name="comment-678918830729292900"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2008-01-25 21:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>Once the RPython was translated to C by PyPy how did you compile the C?</p>
+        </div>
+      </div>
+      <div class="comment comment-3887525265919085904">
+        <div class="comment-header">
+          <a name="comment-3887525265919085904"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2008-01-25 21:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; Why would that be a flaw? Note: this is an adaptation of a benchmark for testing GC<br><br>I know, but I realised it after posting :) (We even have original somewhere around to compare gcs). Also, honestly a lot of python versions rely on libraries written in C, hence it took me a while that is "pure enough".<br><br>&gt; Once the RPython was translated to C by PyPy how did you compile the C?<br><br>With the very same options as bare gcc. -O3 -fomit-frame-pointer</p>
+        </div>
+      </div>
+      <div class="comment comment-7339225691796216345">
+        <div class="comment-header">
+          <a name="comment-7339225691796216345"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-01-28 20:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>Did you try any of the other computer language shootout benchmarks?</p>
+        </div>
+      </div>
+      <div class="comment comment-5942720140797805387">
+        <div class="comment-header">
+          <a name="comment-5942720140797805387"></a>
+            <span class="author">_</span> wrote on <span class="date">2008-02-14 03:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>More objects != OO.<br><br>Perhaps you meant to say that it more closely reflects the domain?<br><br>No, I don't know how I ended up on this blog post.</p>
+        </div>
+      </div>
+      <div class="comment comment-1884084792633767742">
+        <div class="comment-header">
+          <a name="comment-1884084792633767742"></a>
+            <span class="author">Ariel Balter</span> wrote on <span class="date">2009-10-15 04:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>How does RPython compare to Python Shedskin?</p>
+        </div>
+      </div>
+      <div class="comment comment-4442675677854997047">
+        <div class="comment-header">
+          <a name="comment-4442675677854997047"></a>
+            <span class="author">Patric Dexheimer</span> wrote on <span class="date">2010-09-01 15:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>"Can you elaborate? "RPython for Python programmers" would be an excellent addition to the docs or this blog. :)"<br><br>+1 on this.<br><br>Greetings from Brazil!</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/01/pypynet-goes-windows-forms-7031406830502864570.html" class="u-url">PyPy.NET goes Windows Forms</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/01/pypynet-goes-windows-forms-7031406830502864570.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-01-19T22:23:00Z" itemprop="datePublished" title="2008-01-19 22:23">2008-01-19 22:23</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <a href="https://4.bp.blogspot.com/_4gR6Ggu8oHQ/R5J41OiHR7I/AAAAAAAAACo/u8jr08QiCmo/s1600-h/winform.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5157317379122218930" src="https://4.bp.blogspot.com/_4gR6Ggu8oHQ/R5J41OiHR7I/AAAAAAAAACo/u8jr08QiCmo/s320/winform.png" style="float: right; margin: 0 0 10px 10px; cursor: pointer; cursor: hand;"></a>
+<p>After having spent the last few days on understanding PyPy's JIT,
+today I went back hacking the <cite>clr module</cite>.  As a result, it is now
+possible to import and use external assemblies from <a class="reference" href="https://codespeak.net/pypy/dist/pypy/doc/getting-started.html#translating-using-the-cli-backend">pypy-cli</a>,
+including <a class="reference" href="https://en.wikipedia.org/wiki/Windows_Forms">Windows Forms</a></p>
+<p>Here is a screenshot of the result you get by typing the following at
+the <a class="reference" href="https://codespeak.net/pypy/dist/pypy/doc/getting-started.html#translating-using-the-cli-backend">pypy-cli</a> interactive prompt:</p>
+<pre class="literal-block">
+&gt;&gt;&gt;&gt; import clr
+&gt;&gt;&gt;&gt; clr.AddReferenceByPartialName("System.Windows.Forms")
+&gt;&gt;&gt;&gt; clr.AddReferenceByPartialName("System.Drawing")
+&gt;&gt;&gt;&gt; from System.Windows.Forms import Application, Form, Label
+&gt;&gt;&gt;&gt; from System.Drawing import Point
+&gt;&gt;&gt;&gt;
+&gt;&gt;&gt;&gt; frm = Form()
+&gt;&gt;&gt;&gt; frm.Text = "The first pypy-cli Windows Forms app ever"
+&gt;&gt;&gt;&gt; lbl = Label()
+&gt;&gt;&gt;&gt; lbl.Text = "Hello World!"
+&gt;&gt;&gt;&gt; lbl.AutoSize = True
+&gt;&gt;&gt;&gt; lbl.Location = Point(100, 100)
+&gt;&gt;&gt;&gt; frm.Controls.Add(lbl)
+&gt;&gt;&gt;&gt; Application.Run(frm)
+</pre>
+<p>Unfortunately at the moment you can't do much more than this, because
+we still miss support for delegates and so it's not possibile to
+handle events. Still, it's a step in the right direction :-).</p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/01/improve-net-integration-2239651503641931440.html" class="u-url">Improve .NET Integration</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/01/improve-net-integration-2239651503641931440.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-01-19T10:50:00Z" itemprop="datePublished" title="2008-01-19 10:50">2008-01-19 10:50</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>A while ago Amit Regmi, a student from Canada, started working on the
+<a class="reference" href="https://codespeak.net/viewvc/pypy/branch/clr-module-improvements/?pathrev=50773">clr module improvements</a> branch as a university project.</p>
+<p>During the sprint Carl Friedrich, Paul and me worked more on it and
+brought it to a mergeable state.</p>
+<p>It adds a lot of new features to the <a class="reference" href="https://codespeak.net/pypy/dist/pypy/doc/clr-module.html">clr module</a>, which is the
+module that allows integration between <a class="reference" href="https://codespeak.net/pypy/dist/pypy/doc/getting-started.html#translating-using-the-cli-backend">pypy-cli</a> (aka PyPy.NET) and
+the surrounding .NET environment:</p>
+<blockquote>
+<ul class="simple">
+<li>full support to generic classes;</li>
+<li>a new importer hook, allowing things like <tt class="docutils literal"><span class="pre">from</span> <span class="pre">System</span> <span class="pre">import</span>
+<span class="pre">Math</span></tt> and so on;</li>
+<li>.NET classes that implements <tt class="docutils literal"><span class="pre">IEnumerator</span></tt> are treated
+as Python iterators; e.g. it's is possile to iterate over them
+with a <tt class="docutils literal"><span class="pre">for</span></tt> loop.</li>
+</ul>
+</blockquote>
+<p>This is an example of a pypy-cli session:</p>
+<pre class="literal-block">
+&gt;&gt;&gt;&gt; from System import Math
+&gt;&gt;&gt;&gt; Math.Abs(-42)
+42
+&gt;&gt;&gt;&gt; from System.Collections.Generic import List
+&gt;&gt;&gt;&gt; mylist = List[int]()
+&gt;&gt;&gt;&gt; mylist.Add(42)
+&gt;&gt;&gt;&gt; mylist.Add(43)
+&gt;&gt;&gt;&gt; mylist.Add("foo")
+Traceback (most recent call last):
+  File "&lt;console&gt;", line 1, in &lt;interactive&gt;
+TypeError: No overloads for Add could match
+&gt;&gt;&gt;&gt; mylist[0]
+42
+&gt;&gt;&gt;&gt; for item in mylist: print item
+42
+43
+</pre>
+<p>This is still to be considered an alpha version; there are few known
+bugs and probably a lot of unknown ones :-), so don't expect it to
+work in every occasion. Still, it's a considerable step towards real
+world :-).</p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/01/crashing-other-peoples-compilers-4574453763254909150.html" class="u-url">Crashing Other People's Compilers</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/01/crashing-other-peoples-compilers-4574453763254909150.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-01-18T21:57:00Z" itemprop="datePublished" title="2008-01-18 21:57">2008-01-18 21:57</time></a>
+            </p>
+                <p class="commentline">6 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Over the years PyPy has (ab?)used various external software for different
+purposes, and we've discovered bugs in nearly all of them, mostly by pushing them
+to their limits. For example, many compilers are not happy with 200MB of
+source in one file. The Microsoft C compiler has a limit of 65536 lines of code
+per file and the CLI was raising "System.InvalidProgramException: Method
+pypy.runtime.Constants:.cctor () is too complex.", where too complex probably
+means "too long". Just for fun, today we collected all projects we could think of
+in which we found bugs:</p>
+<blockquote>
+<ul class="simple">
+<li>
+<a class="reference" href="https://python.org">CPython</a> (lots)</li>
+<li>PyPy and the py-lib (surpise)</li>
+<li><a class="reference" href="https://python.net/crew/theller/ctypes/">ctypes</a></li>
+<li>
+<a class="reference" href="https://fabrice.bellard.free.fr/tcc/">TCC</a> (we gave up on it)</li>
+<li><a class="reference" href="https://www.hpl.hp.com/personal/Hans_Boehm/gc/">Boehm</a></li>
+<li><a class="reference" href="https://graphviz.org">Graphviz</a></li>
+<li><a class="reference" href="https://www.mono-project.com/Main_Page">Mono</a></li>
+<li>
+<a class="reference" href="https://llvm.org">LLVM</a> (lots)</li>
+<li><a class="reference" href="https://pythonnet.sourceforge.net/">Python.net</a></li>
+<li><a class="reference" href="https://msdn2.microsoft.com/en-us/library/496e4ekx(VS.71).aspx">the Microsoft IL assembler</a></li>
+<li><a class="reference" href="https://en.wikipedia.org/wiki/Visual_C%2B%2B">Microsoft's C compiler</a></li>
+<li><a class="reference" href="https://jasmin.sourceforge.net/">Jasmin</a></li>
+<li><a class="reference" href="https://jpype.sourceforge.net/">JPype</a></li>
+<li><a class="reference" href="https://nucular.sourceforge.net/">nucular</a></li>
+<li><a class="reference" href="https://twistedmatrix.com/trac/">Twisted</a></li>
+<li>the <a class="reference" href="https://en.wikipedia.org/wiki/HotSpot">JVM</a>, maybe</li>
+<li>
+<a class="reference" href="https://pygame.org">pygame</a> or <a class="reference" href="https://www.libsdl.org">SDL</a>
+</li>
+</ul>
+</blockquote>
+<p>So one could say that PyPy is really just the most expensive debugging tool
+ever :-).</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-6186267776077042274">
+        <div class="comment-header">
+          <a name="comment-6186267776077042274"></a>
+            <span class="author">Michael Hudson-Doyle</span> wrote on <span class="date">2008-01-19 10:53</span>:
+        </div>
+        <div class="comment-content">
+          <p>You know, the one piece of external software we most depend on is one we haven't found bugs in: gcc (at least, I can't remember any problems).  That's pretty impressive.<br><br>I think you can probably add gdb to the list though.</p>
+        </div>
+      </div>
+      <div class="comment comment-1731259098651610666">
+        <div class="comment-header">
+          <a name="comment-1731259098651610666"></a>
+            <span class="author">Alok</span> wrote on <span class="date">2008-01-20 13:16</span>:
+        </div>
+        <div class="comment-content">
+          <p>Can you, maybe, give a few examples of what you did. Linking to items about them if you wrote about it.</p>
+        </div>
+      </div>
+      <div class="comment comment-4629205348237131669">
+        <div class="comment-header">
+          <a name="comment-4629205348237131669"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2008-01-21 21:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>I'd be interested in knowing which projects were the most receptive to the bug reports.</p>
+        </div>
+      </div>
+      <div class="comment comment-1320124246636716883">
+        <div class="comment-header">
+          <a name="comment-1320124246636716883"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2008-01-21 22:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi Brett,<br><br>I think the project most receptive to bug reports is LLVM, where bugs that we find are usually fixed within a small number of days. I think in general Open Source projects react quite well, as you would expect. A negative example is graphviz, which still segfaults despite us producing a patch which fixes the problem.<br><br>Microsoft proves to be completely unapproachable, it seems <i>you</i> have to pay <i>them</i> if you want to report a bug (should be the other way round, of course :-)).</p>
+        </div>
+      </div>
+      <div class="comment comment-1808037234671416181">
+        <div class="comment-header">
+          <a name="comment-1808037234671416181"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2008-01-21 23:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Carl:<br><br>Thanks for the info, Carl. I have been contemplating trying to rely on them for compiling Python for testing purposes, especially with clang coming along (although I am waiting for them to address a bug I found =). Good to know they are responsive.<br><br>And yes, it is really unfortunate that Microsoft doesn't make reporting bugs easy, but I guess no one wants to deal with the number of reports they would most likely get. =)</p>
+        </div>
+      </div>
+      <div class="comment comment-5767127481722083798">
+        <div class="comment-header">
+          <a name="comment-5767127481722083798"></a>
+            <span class="author">/SiD</span> wrote on <span class="date">2008-02-13 22:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>Regarding Microsoft bug reports, there's <a href="https://connect.microsoft.com/VisualStudio/Feedback" rel="nofollow">Connect</a>. And I've got some degree of success with it.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/01/leysin-winter-sport-sprint-started-5478612778498579467.html" class="u-url">Leysin Winter Sport Sprint Started</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/01/leysin-winter-sport-sprint-started-5478612778498579467.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-01-14T19:59:00Z" itemprop="datePublished" title="2008-01-14 19:59">2008-01-14 19:59</time></a>
+            </p>
+                <p class="commentline">1 comment</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <a href="https://3.bp.blogspot.com/_zICyAWqZbLA/R4vB9rgbodI/AAAAAAAAADc/1qTQnl2jRdw/s1600-h/swiss.jpg"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5155427463850598866" src="https://3.bp.blogspot.com/_zICyAWqZbLA/R4vB9rgbodI/AAAAAAAAADc/1qTQnl2jRdw/s320/swiss.jpg" style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer;"></a>
+
+<p>The Leysin sprint has started since yesterday morning in the <a href="https://www.ermina.ch/cadre.html">usual location</a>. The view is spectacular (see photo) the weather mostly sunny. The following people are sprinting:
+</p>
+<ul>
+<li>Maciej Fijalkowski</li>
+<li>Armin Rigo</li>
+<li>Toby Watson</li>
+<li>Paul deGrandis</li>
+<li>Antonio Cuni</li>
+<li>Carl Friedrich Bolz</li>
+</ul>So it is a rather small sprint.<p>We started working on various features and performance improvements for the high level backends (JVM and .NET) and on implementing ctypes for PyPy. Later this week we plan to spend a few days on the JIT, because Anto and I both need to get into it for our respective university projects.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-416206495219332063">
+        <div class="comment-header">
+          <a name="comment-416206495219332063"></a>
+            <span class="author">ajaksu</span> wrote on <span class="date">2008-01-14 22:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>For those curious about what is going on: <a href="https://codespeak.net/pipermail/pypy-svn/2008-January/date.html" rel="nofollow">SVN commits</a><br><br>Great work, guys! :)</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/01/finding-gc-roots-using-llvm-or-parsing-1980376164990001937.html" class="u-url">Finding GC roots: using LLVM or parsing assembler files from GCC</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/01/finding-gc-roots-using-llvm-or-parsing-1980376164990001937.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-01-11T17:31:00Z" itemprop="datePublished" title="2008-01-11 17:31">2008-01-11 17:31</time></a>
+            </p>
+                <p class="commentline">5 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>PyPy contains a framework for writing custom Garbage Collectors, and a few simple GCs have been written in this framework. A common issue with all these GCs is how to find all the <span style="font-style: italic;">stack roots,</span> i.e. all the pointers to live GC-managed objects currently stored in local variables, in all the callers of the current function. The current solution is to maintain a custom <span style="font-style: italic;">shadow stack</span> of roots, where all functions push and pop copies of their local variables of type "GC pointer". Clearly this is an overhead. Can we remove it?</p>
+
+<p>LLVM has recently grown some support for this. By emitting markers in the LLVM source and with the help of a bit of custom C++ code, we can generate <span style="font-style: italic;">stack maps</span> for the functions compiled by LLVM.  Then, with 100% <span style="font-style: italic;">non-portable</span> code in our framework GC's root finding algorithm, we can walk the machine stack and locate where in each stack frame LLVM stores the GC pointers. (Yes, I mean <span style="font-style: italic;">non-portable:</span> LLVM offers no help for doing that.  Maybe it will at some point, though I didn't manage to explain why this is an issue to people working on  this in LLVM so far...).  I've tried that approach in the <a href="https://codespeak.net/svn/pypy/branch/llvmgcroot/">llvmgcroot</a> branch.  Over the manually-managed shadow stack, this gives speed improvements which are, very roughly, on the order of 5%.</p>
+
+<p>Note that this prevents some optimizations in LLVM, because it forces it to allocate all local variables of type "GC pointer" in the stack; it cannot keep them in registers and it must assume that they can be changed more or less at any time (as moving GCs do). Can we do better?</p>
+
+<p>Actually, yes.  We can even do better in the C backend, using a GCC hack.  GCC has this nice extension:
+</p>
+<pre>asm("bla", constrains);</pre>
+This is meant to generate assembler instructions directly from C. Internally, GCC considers the whole asm() as a single regular instruction of its intermediate language; the constrains are expressed in the same way as the constrains for all the prebuilt intermediate language instructions. They express things like input and output operands of the instruction, whether they can live in memory or in registers, whether the whole instruction has side-effects, etc. The nice thing about asm() is that it doesn't kill any optimization whatsoever in GCC - it's your job to make sure that you use the correct constrains.
+
+<p>So what I've tried in the <a href="https://codespeak.net/svn/pypy/branch/asmgcroot/">asmgcroot</a> branch is to use asm() as markers. In this branch, the C backend produces code like this after each function call, for each local variable containing a live GC pointer:</p>
+
+<pre>asm("/* GCROOT %0 */" : "=g"(<span style="font-style: italic;">localvar</span>) : "0"(<span style="font-style: italic;">localvar</span>) : "memory");</pre>
+
+<p>This causes GCC to emit the following line in the assembler file it generates:</p>
+
+<pre>/* GCROOT <span style="font-style: italic;">register-or-memory-containing-localvar</span> */</pre>
+
+<p>I won't go in the details of the asm() line above - the constrains are just enough to make sure that GCC doesn't optimize too much, but don't prevent most optimizations from occurring. For example, the <span style="font-style: italic;">localvar</span> can be in a register.</p>
+
+<p>The assembler will just ignore the line above; it is a comment. But what we can do is write our own tool parsing the assembler files. This tool locates the /* GCROOT */ comments and follows where the register or memory location in the comment comes from (to do this it must follow the control flow and data flow of the function). This allows it to build a stack map: for each <span style="font-style: italic;">call</span> instruction it knows exactly which registers and frame stack locations contain a live GC pointer. The stack map is then emitted in an extra assembler file that we link with the rest. As with LLVM above, the stack map is then used at run-time by non-portable code written in our GC's stack root tracker.</p>
+
+<p>Yes, that's rather insane. But at least, we don't need to modify the assembler file - just read it. If GCC is too clever in its optimizations, the custom parser will get lost and complain cleanly; but I think that it is relatively safe in the sense that GCC optimizations should not be able to make the custom parser produce wrong results.</p>
+
+<p>The branch is not merged because it's probably too insane to merge (not to mention, it's probably not portable to non-GCC compilers, and it is completely platform-specific). Still, it gives good results, better that the pure LLVM approach - on the order of 10% to 25% speed-ups for pypy-c.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1403536203977022275">
+        <div class="comment-header">
+          <a name="comment-1403536203977022275"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-01-11 21:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>How does Objective-C 2.0 handle this same problem?</p>
+        </div>
+      </div>
+      <div class="comment comment-5152655013078464933">
+        <div class="comment-header">
+          <a name="comment-5152655013078464933"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2008-01-12 09:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>Obviously it depends on the compiler, but the basic idea is that the natural place to support this is in the compiler itself.  For example, instead of parsing the assembler produced by GCC, it would probably be possible to extend GCC to cleanly generate stack maps.  (This is basically what I tried to do with LLVM, which gives a plug-in API to do that.)<br><br>After a bit of googling, GCC doesn't seem to support Objective-C 2.0 yet.  Moreover, the current Objective-C run-time library simply uses the conservative Boehm collector.</p>
+        </div>
+      </div>
+      <div class="comment comment-1642813680147746758">
+        <div class="comment-header">
+          <a name="comment-1642813680147746758"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-01-15 08:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>ObjC 2 does not use Boehm.  The collecting thread suspends other threads and conservatively scans their stacks.  It picks up values in registers by querying the kernel for the suspended thread state.  It depends heavily on Mach.</p>
+        </div>
+      </div>
+      <div class="comment comment-8249229776761838201">
+        <div class="comment-header">
+          <a name="comment-8249229776761838201"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-01-16 17:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>llvm-gcc fully supports inline asm, so you could use the same hack you use with GCC with your llvm backend.<br><br>Also, you might be interested in https://llvm.org/PR1917, which proposes a method of identifying GC pointers that doesn't disable most optimizations.</p>
+        </div>
+      </div>
+      <div class="comment comment-3298615952142193477">
+        <div class="comment-header">
+          <a name="comment-3298615952142193477"></a>
+            <span class="author">Barry Kelly</span> wrote on <span class="date">2010-04-08 21:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>To Anonymous saying Objective C 2 not using Boehm: that may be true (I don't know the details), but the Boehm GC also suspends other threads, conservatively scans their stacks and picks up values in registers using the OS.</p>
+        </div>
+      </div>
+         </div>
+
+</div>
+</div>
+<div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div></div>
+</main>
+</div>
+<div style="clear: both; width: 75%; margin: 1em auto;">
+        <nav class="postindexpager"><ul class="pager">
+<li class="previous">
+                <a href="index-4.html" rel="prev">Newer posts</a>
+            </li>
+            <li class="next">
+                <a href="index-2.html" rel="next">Older posts</a>
+            </li>
+        </ul></nav>
+</div>
+         
+                 <footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../assets/js/styles.js"></script></footer>
+</body>
+</html>

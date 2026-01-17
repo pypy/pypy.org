@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Improving SyntaxError in PyPy | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2018/04/improving-syntaxerror-in-pypy-5733639208090522433.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="../03/leysin-winter-sprint-2018-review-3988364248531980164.html" title="Leysin Winter Sprint 2018: review" type="text/html">
+<link rel="next" href="pypy27-and-pypy35-v60-dual-release-7416552143474607997.html" title="PyPy2.7 and PyPy3.5 v6.0 dual release" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Improving SyntaxError in PyPy">
+<meta property="og:url" content="https://www.pypy.org/posts/2018/04/improving-syntaxerror-in-pypy-5733639208090522433.html">
+<meta property="og:description" content="For the last year, my halftime job has been to teach non-CS uni students
+to program in Python. While doing that, I have been trying to see what common
+stumbling blocks exist for novice programmers. Th">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2018-04-10T11:03:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Improving SyntaxError in PyPy</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2018-04-10T11:03:00Z" itemprop="datePublished" title="2018-04-10 11:03">2018-04-10 11:03</time></a>
+            </p>
+                <p class="commentline">10 comments</p>
+
+                <p class="commentline">            <a href="improving-syntaxerror-in-pypy-5733639208090522433.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>For the last year, my halftime job has been to teach non-CS uni students
+to program in Python. While doing that, I have been trying to see what common
+stumbling blocks exist for novice programmers. There are many
+things that could be said here, but a common theme that emerges is
+hard-to-understand error messages. One source of such error messages,
+particularly when starting out, is <tt class="docutils literal">SyntaxErrors</tt>.</p>
+<p>PyPy's parser (mostly following the architecture of CPython) uses a
+regular-expression-based tokenizer with some cleverness to deal with
+indentation, and a simple LR(1) parser. Both of these components obviously
+produce errors for invalid syntax, but the messages are not very helpful. Often,
+the message is just "invalid syntax", without any hint of what exactly is wrong.
+In the last couple of weeks I have invested a little bit of effort to make them a
+tiny bit better. They will be part of the upcoming PyPy 6.0 release. Here are
+some examples of what changed.</p>
+<div class="section" id="missing-characters">
+<h1>Missing Characters<a href="#missing-characters" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>The first class of errors occurs when a token is missing, often there is only one
+valid token that the parser expects. This happens most commonly by leaving out
+the ':' after control flow statements (which is the syntax error I personally
+still make at least a few times a day). In such situations, the parser will now
+tell you which character it expected:</p>
+<pre class="code pycon literal-block">
+<span class="generic output">&gt;&gt;&gt;&gt; # before
+&gt;&gt;&gt;&gt; if 1
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">if</span> <span class="literal number integer">1</span>
+       <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # after
+&gt;&gt;&gt;&gt; if 1
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">if</span> <span class="literal number integer">1</span>
+       <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax (expected ':')</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+<p>Another example of this feature:</p>
+<pre class="code pycon literal-block">
+<span class="generic output">&gt;&gt;&gt;&gt; # before
+&gt;&gt;&gt;&gt; def f:
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">def</span> <span class="name function">f</span><span class="punctuation">:</span>
+        <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # after
+&gt;&gt;&gt;&gt; def f:
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">def</span> <span class="name function">f</span><span class="punctuation">:</span>
+         <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax (expected '(')</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+</div>
+<div class="section" id="parentheses">
+<h1>Parentheses<a href="#parentheses" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>Another source of errors are unmatched parentheses. Here, PyPy has always had
+slightly better error messages than CPython:</p>
+<pre class="code pycon literal-block">
+<span class="comment single"></span><span class="generic prompt">&gt;&gt;&gt; </span><span class="comment single"># CPython</span>
+<span class="generic prompt">&gt;&gt;&gt; </span><span class="punctuation">)</span>
+<span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">)</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # PyPy
+</span><span class="punctuation"></span><span class="generic prompt">&gt;&gt;&gt; </span><span class="punctuation">)</span>
+<span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">)</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">unmatched ')'</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+<p>The same is true for parentheses that are never closed (the call to <tt class="docutils literal">eval</tt> is
+needed to get the error, otherwise the repl will just wait for more input):</p>
+<pre class="code pycon literal-block">
+<span class="comment single"></span><span class="generic prompt">&gt;&gt;&gt; </span><span class="comment single"># CPython</span>
+<span class="generic prompt">&gt;&gt;&gt; </span><span class="name builtin">eval</span><span class="punctuation">(</span><span class="literal string single">'('</span><span class="punctuation">)</span>
+<span class="generic traceback"></span>  File <span class="name builtin">"&lt;string&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">(</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">unexpected EOF while parsing</span>
+<span class="generic output">&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # PyPy
+&gt;&gt;&gt;&gt; eval('(')
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;string&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">(</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">parenthesis is never closed</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+<p>What I have now improved is the case of parentheses that are matched wrongly:</p>
+<pre class="code pycon literal-block">
+<span class="generic output">&gt;&gt;&gt;&gt; # before
+&gt;&gt;&gt;&gt; (1,
+.... 2,
+.... ]
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">3</span>
+    <span class="punctuation">]</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # after
+&gt;&gt;&gt;&gt; (1,
+.... 2,
+.... ]
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">3</span>
+    <span class="punctuation">]</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">closing parenthesis ']' does not match opening parenthesis '(' on line 1</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+</div>
+<div class="section" id="conclusion">
+<h1>Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>Obviously these are just some very simple cases, and there is still a lot of
+room for improvement (one huge problem is that only a single <tt class="docutils literal">SyntaxError</tt> is
+ever shown per parse attempt, but fixing that is rather hard).</p>
+<p>If you have a favorite unhelpful SyntaxError message you love to hate, please
+tell us in the comments and we might try to improve it. Other kinds of
+non-informative error messages are also always welcome!</p>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../03/leysin-winter-sprint-2018-review-3988364248531980164.html" rel="prev" title="Leysin Winter Sprint 2018: review">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy27-and-pypy35-v60-dual-release-7416552143474607997.html" rel="next" title="PyPy2.7 and PyPy3.5 v6.0 dual release">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-2458219155505123971">
+        <div class="comment-header">
+          <a name="comment-2458219155505123971"></a>
+            <span class="author">stuaxo</span> wrote on <span class="date">2018-04-10 11:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is great, I've been thinking along these lines when it comes to python errors for a while.<br><br>This kind of improvements would be great for the long-suffering python web developers too.</p>
+        </div>
+      </div>
+      <div class="comment comment-4011598630142756327">
+        <div class="comment-header">
+          <a name="comment-4011598630142756327"></a>
+            <span class="author">stuaxo</span> wrote on <span class="date">2018-04-10 11:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>Despite my typo-ridden comment, English is my first language :(</p>
+        </div>
+      </div>
+      <div class="comment comment-4795341729166523752">
+        <div class="comment-header">
+          <a name="comment-4795341729166523752"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2018-04-10 16:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>I've seen people struggle with lambda.<br><br>&gt;&gt;&gt; lambda x: <br>  File "", line 1<br>    lambda x: <br>             ^<br>SyntaxError: invalid syntax<br></p>
+        </div>
+      </div>
+      <div class="comment comment-4591679718228283061">
+        <div class="comment-header">
+          <a name="comment-4591679718228283061"></a>
+            <span class="author">smurfix</span> wrote on <span class="date">2018-04-10 16:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>Upon a syntax error, you might want to scan forward until the next line with the current(ly-broken) statement's indent (or maybe until there's a dedent to below that level (except when already at top level, obviously)), then resume parsing.</p>
+        </div>
+      </div>
+      <div class="comment comment-5254338321985139805">
+        <div class="comment-header">
+          <a name="comment-5254338321985139805"></a>
+            <span class="author">André Roberge</span> wrote on <span class="date">2018-04-11 00:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>I applaud this initiative. This is something that I have attempted to do on https://reeborg.ca/reeborg.html (only for code run in the the editor, not for the repl). I also tried to provide translations when using languages other than English.  I think it would be great if you could somehow provide a hook to easily add translations.</p>
+        </div>
+      </div>
+      <div class="comment comment-5599091270368814656">
+        <div class="comment-header">
+          <a name="comment-5599091270368814656"></a>
+            <span class="author">Benjamin</span> wrote on <span class="date">2018-04-11 07:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>Missing commas between elements in data structures is probably my most common syntax error, especially when dealing with nested data structures or structures split across multiple lines. And while they're something I can recognize very easily, the actual error message isn't especially helpful, particularly when the next element after a missing comma is on the following line.</p>
+        </div>
+      </div>
+      <div class="comment comment-3553256019399345021">
+        <div class="comment-header">
+          <a name="comment-3553256019399345021"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2018-04-11 14:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks for the explanation. It all makes sense now that I know Python uses regular expressions in its parser. When Idle points to a random space character within the indentation, off to the left of a code block implemented in compliance with every recognized convention, boldly proclaiming "syntax error", I know precisely which vestigial anti-Pythonic Bell Labs holdover to resent. Again.</p>
+        </div>
+      </div>
+      <div class="comment comment-2432746306337813591">
+        <div class="comment-header">
+          <a name="comment-2432746306337813591"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2018-04-12 20:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>Everybody thanks for the suggestions! I've added these to my collections of things I might want to fix.<br><br>@smurfix there is a huge amount of scientific papers on approaches how to do stuff like that, I am currently working through them (slowly)<br><br>@Unknown do you have an example for this behaviour?</p>
+        </div>
+      </div>
+      <div class="comment comment-188104717791255547">
+        <div class="comment-header">
+          <a name="comment-188104717791255547"></a>
+            <span class="author">Noah F. San Tsorvutz</span> wrote on <span class="date">2018-04-13 19:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>Sorry for the 'unknown' status ... In fact, it happened again today. I can send a screenshot, if that will help, confirming the presence of a red highlighted space, among many seemingly non-offending spaces, within the left margin indentation. Let me see if it is still happening when I try to run that code ... No, that exact SNAFU has moved on, but I now have an example of a syntax error being highlighted within a comment. Is that interesting?<br></p>
+        </div>
+      </div>
+      <div class="comment comment-7692426643266392609">
+        <div class="comment-header">
+          <a name="comment-7692426643266392609"></a>
+            <span class="author">Amaroq Starwind</span> wrote on <span class="date">2018-05-10 19:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>I would love to see this get updated to Python 3.6.5. I'm currently using that for my programs, and even after looking at the changelogs between Python versions, I'm not sure what I'd lose by moving down to 3.5.3 so that I could use PyPy.<br><br>I'm also curious about things like IdleX and Anaconda. Would those be, hypothetically speaking, mergeable with PyPy?</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

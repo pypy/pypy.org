@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="A Faster Python">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy (old posts, page 5) | PyPy</title>
+<link href="../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/blog/index-5.html">
+<link rel="icon" href="../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../favicon32x32.ico" sizes="32x32">
+<link rel="prev" href="index-6.html" type="text/html">
+<link rel="next" href="index-4.html" type="text/html">
+<!--[if lt IE 9]><script src="../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../assets/css/tipuesearch.css">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../index.html">
+                    <image id="toplogo" src="../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href=".">Index</a> </li>  
+                    <li> <a href="../categories/">Tags</a> </li>  
+                    <li> <a href="../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><div class="post">
+<div class="postindex">
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/05/threads-and-gcs-1126087726480790112.html" class="u-url">Threads and GCs</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/05/threads-and-gcs-1126087726480790112.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-05-28T19:04:00Z" itemprop="datePublished" title="2008-05-28 19:04">2008-05-28 19:04</time></a>
+            </p>
+                <p class="commentline">10 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hi all,</p>
+
+<p>We can now compile a pypy-c that includes both thread support
+and one of our semi-advanced garbage collectors.  This means
+that threaded Python programs can now run not only with a
+better performance, but without the annoyances of the Boehm
+garbage collector.  (For example, Boehm doesn't like too much
+seeing large numbers of __del__(), and our implementation of
+ctypes uses them everywhere.)</p>
+
+<p>Magic translation command (example):</p>
+
+<p></p>
+<pre>   translate.py --thread --gc=hybrid targetpypystandalone --faassen --allworkingmodules</pre>
+
+<p>Note that multithreading in PyPy is based on a global
+interpreter lock, as in CPython.  I imagine that we will get
+rid of the global interpreter lock at some point in the future
+-- I can certainly see how this might be done in PyPy, unlike
+in CPython -- but it will be a lot of work nevertheless.  Given
+our current priorities, it will probably not occur soon unless
+someone steps in.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-9006312843051607594">
+        <div class="comment-header">
+          <a name="comment-9006312843051607594"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-05-29 00:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>How could GIL be removed from PyPy?</p>
+        </div>
+      </div>
+      <div class="comment comment-6289329603774522282">
+        <div class="comment-header">
+          <a name="comment-6289329603774522282"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2008-05-29 09:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>By using fine-grained locking: locking every dictionary and list while it is used.  This is what Jython does (or more precisely, what Jython asks the JVM to do for it).  This certainly comes with a performance penalty, so it would only pay off if you actually have and can use multiple CPUs -- which is fine in PyPy: you would just translate different pypy-c's depending on the use case.<br><br>This would be a pain to implement in CPython, in particular because of refcounting.  Even if the Py_INCREF and Py_DECREF macros were made thread-safe, all C-level APIs that manipulate borrowed references might have to be redesigned.</p>
+        </div>
+      </div>
+      <div class="comment comment-4796671256827968112">
+        <div class="comment-header">
+          <a name="comment-4796671256827968112"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-05-29 10:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>Pyprocessing may serve multi-core cpu needs for the time being, as it's an almost drop-in replacement for the threading module.<br><br>I think it uses ctypes, so it should work with pypy.</p>
+        </div>
+      </div>
+      <div class="comment comment-6307016626118231026">
+        <div class="comment-header">
+          <a name="comment-6307016626118231026"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2008-05-29 18:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>pyprocessing has it's own problems (not that threads has no problems at all :)<br><br>1. Memory usage, you need basically n times more memory when n is number of processes<br><br>2. you cannot pass arbitrary data between processes, just stuff that you can marshal/pickle which is a bit huge limitation.<br><br>3. on the other hand, multiple processes provides you better control, although not via threading drop-in replacement.<br><br>Cheers,<br>fijal</p>
+        </div>
+      </div>
+      <div class="comment comment-6960965864968677796">
+        <div class="comment-header">
+          <a name="comment-6960965864968677796"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-06-04 20:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>The live demos seem to be down... :(</p>
+        </div>
+      </div>
+      <div class="comment comment-3440035023734066320">
+        <div class="comment-header">
+          <a name="comment-3440035023734066320"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2008-06-05 02:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>Back online. Our test server is down as well, which makes it a bit hard to know stuff :(</p>
+        </div>
+      </div>
+      <div class="comment comment-6277756132305646554">
+        <div class="comment-header">
+          <a name="comment-6277756132305646554"></a>
+            <span class="author">Connelly Barnes</span> wrote on <span class="date">2008-06-13 00:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>In response to maciej, OSes that implement copy-on-write fork (Linux, but not Windows, unsure about Mac OS X), don't take n times more memory.  Fine-grained locking and an OpenMP-like syntax would be potentially useful.  Maybe you could get a student to prototype these for you.  But I'm sure someone will find a way to parallelize Python eventually, or we'll all switch to some other language, as the number of cores goes to infinity.</p>
+        </div>
+      </div>
+      <div class="comment comment-5415934324189450259">
+        <div class="comment-header">
+          <a name="comment-5415934324189450259"></a>
+            <span class="author">Connelly Barnes</span> wrote on <span class="date">2008-06-17 23:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>In my previous comment, I was partly wrong: COW reduces memory usage, however, in CPython the refcounting will cause the interpreter to write to every area of memory, so the reduction may not be that significant.  Also, IronPython supports fine-grained locks.</p>
+        </div>
+      </div>
+      <div class="comment comment-402454109929765141">
+        <div class="comment-header">
+          <a name="comment-402454109929765141"></a>
+            <span class="author">nekto0n</span> wrote on <span class="date">2008-06-24 23:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>Would it be better to lock not whole mutable object but just an element or slice(for lists) and not lock object for reading operations?<br>It's a common method used in DBMS. A small and fast realisation(if it's possible to create) in PyPy whould be great =)</p>
+        </div>
+      </div>
+      <div class="comment comment-2757612927370606949">
+        <div class="comment-header">
+          <a name="comment-2757612927370606949"></a>
+            <span class="author">Rushen Aly</span> wrote on <span class="date">2009-02-20 18:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Is there any calendar date for removal of GIL? or is it just a wish. Secondly, what is your speed aim compared with Java?<br>Thanks...<br>Rushen</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/05/progresses-on-cli-jit-backend-front-1021772190959551376.html" class="u-url">Progresses on the CLI JIT backend front</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/05/progresses-on-cli-jit-backend-front-1021772190959551376.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-05-28T14:10:00Z" itemprop="datePublished" title="2008-05-28 14:10">2008-05-28 14:10</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>In the last months, I've actively worked on the CLI backend for PyPy's
+JIT generator, whose goal is to automatically generate JIT compilers
+that produces .NET bytecode on the fly.</p>
+<p>The CLI JIT backend is far from be completed and there is still a lot
+of work to be done before it can handle the full PyPy's Python
+interpreter; nevertheless, yesterday I finally got the first .NET
+executable that contains a JIT for a very simple toy language called
+<a class="reference" href="https://codespeak.net/svn/pypy/dist/pypy/jit/tl/tlr.py">tlr</a>, which implements an interpreter for a minimal register based
+virtual machine with only 8 operations.</p>
+<p>To compile the tlr VM, follow these steps:</p>
+<blockquote>
+<ol class="arabic">
+<li>
+<p class="first">get a fresh checkout of the <a class="reference" href="https://codespeak.net/svn/pypy/branch/oo-jit/">oo-jit branch</a>, i.e. the branch
+where the CLI JIT development goes on:</p>
+<pre class="literal-block">
+$ svn co https://codespeak.net/svn/pypy/branch/oo-jit
+</pre>
+</li>
+<li>
+<p class="first">go to the <tt class="docutils literal"><span class="pre">oo-jit/pypy/jit/tl</span> <span class="pre">directory</span></tt>, and compile the tlr VM
+with the CLI backend and JIT enabled:</p>
+<pre class="literal-block">
+$ cd oo-jit/pypy/jit/tl/
+$ ../../translator/goal/translate.py -b cli --jit --batch targettlr
+</pre>
+</li>
+</ol>
+</blockquote>
+<p>The goal of our test program is to compute the square of a given
+number; since the only operations supported by the VM are addition and
+negation, we compute the result by doing repetitive additions; I won't
+describe the exact meaning of all the tlr bytecodes here, as they are
+quite self-documenting:</p>
+<pre class="literal-block">
+ALLOCATE,    3,   # make space for three registers
+MOV_A_R,     0,   # i = a
+MOV_A_R,     1,   # copy of 'a'
+
+SET_A,       0,
+MOV_A_R,     2,   # res = 0
+
+# 10:
+SET_A,       1,
+NEG_A,
+ADD_R_TO_A,  0,
+MOV_A_R,     0,   # i--
+
+MOV_R_A,     2,
+ADD_R_TO_A,  1,
+MOV_A_R,     2,   # res += a
+
+MOV_R_A,     0,
+JUMP_IF_A,  10,   # if i!=0: goto 10
+
+MOV_R_A,     2,
+RETURN_A          # return res
+</pre>
+<p>You can find the program also at the end of the <a class="reference" href="https://codespeak.net/svn/pypy/dist/pypy/jit/tl/tlr.py">tlr</a> module; to get an
+assembled version of the bytecode, ready to be interpreted, run this
+command:</p>
+<pre class="literal-block">
+$ python tlr.py assemble &gt; square.tlr
+</pre>
+<p>Now, we are ready to execute the code through the tlr VM; if you are
+using Linux/Mono, you can simply execute the <tt class="docutils literal"><span class="pre">targettlr-cli</span></tt> script
+that has been created for you; however, if you use Windows, you have
+to manually fish the executable inside the <tt class="docutils literal"><span class="pre">targettlr-cli-data</span></tt>
+directory:</p>
+<pre class="literal-block">
+# Linux
+$ ./targettlr-cli square.tlr 16
+256
+
+# Windows
+&gt; targettlr-cli-data\main.exe square.tlr 16
+256
+</pre>
+<p>Cool, our program computed the result correctly! But, how can we be
+sure that it really JIT compiled our code instead of interpreting it?
+To inspect the code that it's generated by our JIT compiler, we simply
+set the <tt class="docutils literal"><span class="pre">PYPYJITLOG</span></tt> environment variable to a filename, so that the
+JIT will create a .NET assembly containing all the code that has been
+generated by the JIT:</p>
+<pre class="literal-block">
+$ PYPYJITLOG=generated.dll ./targettlr-cli square.tlr 16
+256
+$ file generated.dll
+generated.dll: MS-DOS executable PE  for MS Windows (DLL) (console) Intel 80386 32-bit
+</pre>
+<p>Now, we can inspect the DLL with any IL disassembler, such as
+<tt class="docutils literal"><span class="pre">ilasm</span></tt> or <tt class="docutils literal"><span class="pre">monodis</span></tt>; here is an excerpt of the disassembled code,
+that shows how our <tt class="docutils literal"><span class="pre">square.tlr</span></tt> bytecode has been compiled to .NET
+bytecode:</p>
+<pre class="literal-block">
+.method public static  hidebysig default int32 invoke (object[] A_0, int32 A_1)  cil managed
+{
+    .maxstack 3
+    .locals init (int32 V_0, int32 V_1, int32 V_2, int32 V_3, int32 V_4, int32 V_5)
+
+    ldc.i4 -1
+    ldarg.1
+    add
+    stloc.1
+    ldc.i4 0
+    ldarg.1
+    add
+    stloc.2
+    IL_0010:  ldloc.1
+    ldc.i4.0
+    cgt.un
+    stloc.3
+    ldloc.3
+    brfalse IL_003b
+
+    ldc.i4 -1
+    ldloc.1
+    add
+    stloc.s 4
+    ldloc.2
+    ldarg.1
+    add
+    stloc.s 5
+    ldloc.s 5
+    stloc.2
+    ldloc.s 4
+    stloc.1
+    ldarg.1
+    starg 1
+
+    nop
+    nop
+    br IL_0010
+
+    IL_003b:  ldloc.2
+    stloc.0
+    br IL_0042
+
+    ldloc.0
+    ret
+}
+</pre>
+<p>If you know a bit IL, you can see that the code generated is not
+optimal, as there are some redundant operations like all those
+stloc/ldloc pairs; however, while not optimal, it is still quite good
+code, not much different to what you would get by writing the square
+algorithm directly in e.g. C#.</p>
+<p>As I said before, all of this is still work in progress and there is
+still much to be done. Stay tuned :-).</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-3714354903875274716">
+        <div class="comment-header">
+          <a name="comment-3714354903875274716"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-05-28 20:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>So the mono JIT would pick up that bytecode and further compile it to native code?<br><br>Also, what would be needed for doing the same thing for the JVM?</p>
+        </div>
+      </div>
+      <div class="comment comment-1842535854740215356">
+        <div class="comment-header">
+          <a name="comment-1842535854740215356"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2008-05-28 21:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>Yes, that's exactly the idea; in fact, the program run by virtual machines generated this way are double jit-ed.<br><br>Doing the same for the JVM won't be too hard, since most of the work we've done can be shared between the two JIT backends; unfortunately, at the moment the JVM backend is not as advanced as the CLI one, so before working on the JIT we would need more work on it.  But indeed, having a JIT backend for the JVM is in our plans.</p>
+        </div>
+      </div>
+      <div class="comment comment-8471780964306442017">
+        <div class="comment-header">
+          <a name="comment-8471780964306442017"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-05-29 10:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great. Can't wait for advanced piggybacking :)</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/05/more-windows-support-1747028151130099034.html" class="u-url">More windows support</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/05/more-windows-support-1747028151130099034.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-05-26T17:59:00Z" itemprop="datePublished" title="2008-05-26 17:59">2008-05-26 17:59</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Recently, thanks to Amaury Forgeot d'Arc and Michael Schneider, Windows became more of a first-class platform for PyPy's Python interpreter. Most RPython extension modules are now considered <a href="https://codespeak.net/pypy/dist/pypy/doc/config/objspace.allworkingmodules.html">working</a> (apart from some POSIX specific modules). Even CTypes now works on windows!
+<br><br>
+Next step would be to have better <a href="https://pypy.intarweb.us/">buildbot</a> support for all supported platforms (Windows, Linux and OS X), so we can control and react to regressions quickly. (Buildbot is maintained by <a href="https://jcalderone.livejournal.com/">JP Calderone</a>)
+<br><br>
+Cheers,<br>
+fijal</p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/05/s3-workshop-potsdam-2008-writeup-6610637452403831794.html" class="u-url">S3-Workshop Potsdam 2008 Writeup</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/05/s3-workshop-potsdam-2008-writeup-6610637452403831794.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-05-23T17:35:00Z" itemprop="datePublished" title="2008-05-23 17:35">2008-05-23 17:35</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Trying to give some notes about the <a class="reference" href="https://www.swa.hpi.uni-potsdam.de/s3/index.html">S3 Workshop</a> in Potsdam that several
+PyPyers and Spies (Armin, Carl Friedrich, Niko, Toon, Adrian) attended before
+the Berlin sprint.  We presented a <a class="reference" href="https://codespeak.net/svn/pypy/extradoc/paper/spy-s3.pdf">paper</a> about SPy there. Below are some mostly
+random note about my (Carl Friedrich's) impressions of the conference and some
+talk notes. Before that I'd like to give thanks to the organizers who did a
+great job. The workshop was well organized, the social events were wonderful (a
+very relaxing boat trip in the many lakes around Potsdam and a conference
+dinner).</p>
+<p>Video recordings of all the talks can be found on the <a class="reference" href="https://www.swa.hpi.uni-potsdam.de/s3/program/index.html">program page</a>.</p>
+<div class="section">
+<h2><a id="invited-talks" name="invited-talks">Invited Talks</a></h2>
+<p>"Late-bound Object Lambda Architectures" by Ian Piumarta was quite an inspiring
+talk about <a class="reference" href="../posts/2008/05/s3-workshop-potsdam-2008-writeup-6610637452403831794.html#vpri">VPRI</a>'s attempt at writing a flexible and understandable computing
+system in 20K lines of code. The talk was lacking a bit in technical details, so
+while it was inspiring I couldn't really say much about their implementation.
+Apart from that, I disagree with some of their goals, but that's the topic of
+another blog post.</p>
+<p id="vpri">"The Lively Kernel – A Self-supporting System on a Web Page" by Dan Ingalls. Dan
+Ingalls is one of the inventors of the original Smalltalk and of Squeak. He was
+talking about his latest work, the attempts of bringing a Squeak-like system to
+a web browser using JavaScript and SVG. To get some feel for what exactly <a class="reference" href="https://research.sun.com/projects/lively/">The
+Lively Kernel</a> is, it is easiest to just <a class="reference" href="https://livelykernel.sunlabs.com/0.8.5/index.xhtml">try it out</a> (only works in Safari
+and Firefox 3 above Beta 5 though). I guess in a sense the progress of the
+Lively Kernel over Squeak is not that great but Dan seems to be having fun.  Dan
+is an incredibly enthusiastic, friendly and positive person, it was really great
+meeting him. He even seemed to like some of the ideas in SPy.</p>
+<p>"On Sustaining Self" by Richard P. Gabriel was a sort of deconstructivist
+multi-media-show train wreck of a presentation that was a bit too weird for my
+taste. There was a lot of music, there were sections in the presentation
+where Richard discussed with an alter ego, whose part he had recorded in advance
+and mangled with a sound editor. There was a large bit of a documentary
+about <a class="reference" href="https://en.wikipedia.org/wiki/Levittown,_New_York">Levittown</a>. Even the introduction and the questions were weird, with Pascal
+Constanza staring down the audience, without saying a word (nobody dared to ask
+questions). I am not sure I saw the point of the presentation, apart from
+getting the audience to think, which probably worked. It seems that there are
+people (e.g. <a class="reference" href="https://chneukirchen.org/blog/archive/2008/05/workshop-on-self-sustaining-systems-2008.html">Christian Neukirchen</a>) that liked the presentation, though.</p>
+</div>
+<div class="section">
+<h2><a id="research-papers" name="research-papers">Research Papers</a></h2>
+<p>"SBCL - A Sanely Bootstrappable Common Lisp by Christophe Rhodes described the
+bootstrapping process of <a class="reference" href="https://sbcl.org">SBCL</a> (Steel Bank Common Lisp). SBCL can be bootstrapped
+by a variety of Common Lisps, not just by itself. SBCL contains a complete
+blueprint of the initial image instead of always getting the new image by
+carefully mutating the old one. This bootstrapping approach is sort of similar
+to that of PyPy.</p>
+<p>"Reflection for the Masses" by Charlotte Herzeel, Pascal Costanza, and Theo
+D'Hondt retraced some of the work of Brian Smith on reflection in Lisp. The
+talk was not very good, it was way too long (40 min), quite hard to understand
+because Charlotte Herzeel was talking in a very low voice. The biggest mistake
+in her talk was in my opinion that she spent too much time explaining a more or
+less standard meta-circular interpreter for Lisp and then running out of time
+when she was trying to explain the modifications. I guess it would have been a
+fair assumptions that large parts of the audience know such interpreters, so
+glossing over the details would have been fine. A bit of a pity, since the paper
+seems interesting.</p>
+<p>"Back to the Future in One Week - Implementing a Smalltalk VM in PyPy"
+by Carl Friedrich Bolz, Adrian Kuhn, Adrian Lienhard, Nicholas D. Matsakis,
+Oscar Nierstrasz, Lukas Renggli, Armin Rigo and Toon Verwaest, the paper with
+the longest author list. We just made everybody an author who was at the sprint
+in Bern. Our <a class="reference" href="https://codespeak.net/svn/pypy/extradoc/paper/spy-s3.pdf">paper</a> had more authors than all the other papers together :-). I
+gave the <a class="reference" href="https://codespeak.net/svn/pypy/extradoc/talk/s3-2008/talk.pdf">presentation</a> at the workshop, which went quite well, judging from the
+feedback I got.</p>
+<p>"Huemul - A Smalltalk Implementation" by Guillermo Adrián Molina. <a class="reference" href="https://www.guillermomolina.com.ar/huemul/">Huemul</a> is a
+Smalltalk implementation that doesn't contain an interpreter but directly
+compiles all methods to assembler (and also saves the assembler in the image).
+In addition, as much functionality (such as threading, GUI) as possible is
+delegated to libraries instead of reimplementing them in Smalltalk
+(as e.g. Squeak is doing). The approach seems to suffer from the usual problems
+of manually writing a JIT, e.g. the VM seems to segfault pretty often. Also I
+don't agree with some of the design decisions of the threading scheme, there is
+no automatic locking of objects at all, instead the user code is responsible for
+preventing concurrent accesses from messing up things (which even seems to lead
+to segfaults in the default image).</p>
+<p>"Are Bytecodes an Atavism?" by Theo D'Hondt argued that using AST-based
+interpreters can be as fast as bytecode-based interpreters which he proved by
+writing two AST-interpreters, one for <a class="reference" href="https://pico.vub.ac.be/">Pico</a> and one for Scheme. Both of these
+implementations seem to perform pretty well. Theo seems to have many similar
+views as PyPy, for example that writing simple straightforward interpreters is
+often preferable than writing complex (JIT-)compilers.</p>
+</div>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/05/berlin-sprint-finished-1597243123548564657.html" class="u-url">Berlin Sprint Finished</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/05/berlin-sprint-finished-1597243123548564657.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-05-23T11:52:00Z" itemprop="datePublished" title="2008-05-23 11:52">2008-05-23 11:52</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>The Berlin sprint is finished, below some notes on what we worked on during
+the last three days:</p>
+<blockquote>
+<ul class="simple">
+<li>Camillo worked tirelessly on the gameboy emulator with some occasional input
+by various people. He is making good progress, some test ROMs run now on the
+translated emulator. However, the graphics are still not completely working
+for unclear reasons. Since <a class="reference" href="https://www.internettablettalk.com/forums/showthread.php?t=13824">PyBoy</a> is already taken as a project name, we
+considered calling it PyGirl (another name proposition was "BoyBoy", but the
+implementation is not circular enough for that).</li>
+</ul>
+</blockquote>
+<blockquote>
+<ul class="simple">
+<li>On Monday Armin and Samuele fixed the problem with our multimethods so that
+the builtin shortcut works again (the builtin shortcut is an optimization
+that speeds up all operations on builtin non-subclassed types quite a bit).</li>
+<li>Antonio and Holger (who hasn't been on a sprint in a while, great to have you
+back!) worked on writing a conftest file (the plugin mechanism of py.test)
+that would allow us to run Django tests using py.test, which seems to be not
+completely trivial. They also fixed some bugs in PyPy's Python interpreter,
+e.g. related to dictionary subclassing.</li>
+<li>Karl started adding sound support to the RPython SDL-bindings, which will be
+needed both by the Gameboy emulator and eventually by the SPy VM.</li>
+<li>Armin and Maciek continued the work that Maciek had started a while ago of
+improving the speed of PyPy's IO operation. In the past, doing IO usually
+involved copying lots of memory around, which should have improved now. Armin
+and Maciek improved and then merged the first of the two branches that
+contained IO improvements, which speeds up IO on non-moving GCs (mostly the
+Boehm GC). Then they continued working on the hybrid-io branch which is
+supposed improve IO on the hybrid GC (which was partially designed exactly
+for this).</li>
+<li>Toon, Carl Friedrich finished cleaning up the SPy improvement branch and
+fixed all warnings that occur when you translate SPy there. An obscure bug in
+an optimization prevented them from getting working executables, which at
+this moment blocks the merging of that branch.</li>
+</ul>
+</blockquote>
+<p>By now everybody is home again (except for Anto, who booked his return flight
+two days too late, accidentally) and mostly resting. It was a good sprint, with
+some interesting results and several new people joining. And it was definitely
+the most unusual sprint location ever :-).</p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/05/berlin-sprint-day-1-2-8761821946764492267.html" class="u-url">Berlin Sprint Day 1 + 2</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/05/berlin-sprint-day-1-2-8761821946764492267.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-05-18T19:23:00Z" itemprop="datePublished" title="2008-05-18 19:23">2008-05-18 19:23</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>After having survived the S3-Workshop which took place in Potsdam on Thursday
+and Friday (a blog-post about this will follow later) we are now sitting in the
+c-base in Berlin, happily sprinting. Below are some notes on what progress we
+made so far:</p>
+<blockquote>
+<ul class="simple">
+<li>The Gameboy emulator in RPython that Camillo Bruni is working on for his
+Bachelor project at Uni Bern does now translate. It took him (assisted by
+various people) a while to figure out the translation errors (essentially
+because he wrote nice Python code that passed bound methods around, which the
+RTyper doesn't completely like).  Now that is fixed and the Gameboy emulator
+translates and runs a test ROM.  You cannot really see anything yet, because
+there is no graphics support in RPython.</li>
+<li>To get graphics support in RPython Armin and Karl started writing SDL
+bindings for RPython, which both the Gameboy emulator and the SPy VM need.
+They have basic stuff working, probably enough to support the Gameboy
+already.</li>
+<li>Alexander, Armin, Maciek and Samuele discussed how to approach separate
+compilation for RPython, which isn't easy because the RPython type analysis
+is a whole-program analysis.</li>
+<li>Stephan, Peter and Adrian (at least in the beginning) worked on making PyPy's
+<tt class="docutils literal"><span class="pre">stackless</span></tt> module more complete. They added channel preferences which
+change details of the scheduling semantics.</li>
+<li>Toon, Carl Friedrich and Adrian (a tiny bit) worked on SPy. There is a branch
+that Toon started a while ago which contains many improvements but is also
+quite unclear in many respects. There was some progress in cleaning that up.
+This involved implementing the Smalltalk process scheduler (Smalltalk really
+is an OS). There is still quite some work left though. While doing so, we
+discovered many funny facts about Squeak's implementation details (most of
+which are exposed to the user) in the process. I guess we should collect them
+and blog about them eventually.</li>
+<li>Samuele and Maciek improved the ctypes version of pysqlite that Gerhard
+Häring started.</li>
+<li>Armin, Samuele and Maciek found an obscure bug in the interaction between the
+builtin-type-shortcut that Armin recently implemented and our multimethod
+implementation. It's not clear which of the two are to blame, however it
+seems rather unclear how to fix the problem: Armin and Samuele are stuck in a
+discussion about how to approach a solution since a while and are hard to
+talk to.</li>
+<li>Stijn Timbermont, a Ph.D. student at the Vrije Universiteit Brussel who is
+visiting the sprint for two days was first looking at how our GCs are
+implemented to figure out whether he can use PyPy for some experiments. The
+answer to that seems to be no. Today he was hacking on a Pico interpreter
+(without knowing too much about Python) and is making some nice progress, it
+seems.</li>
+</ul>
+</blockquote>
+<p>Will try to blog more as the sprint progresses.</p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/05/general-performance-improvements-838741900863354293.html" class="u-url">General performance improvements</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/05/general-performance-improvements-838741900863354293.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-05-10T17:34:00Z" itemprop="datePublished" title="2008-05-10 17:34">2008-05-10 17:34</time></a>
+            </p>
+                <p class="commentline">11 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hi all,</p>
+
+<p>During the past two weeks we invested some more efforts on the
+baseline performance of pypy-c.  Some of the tweaks we did
+were just new ideas, and others were based on actual
+profiling.  The net outcome is that we now expect PyPy to be
+in the worst case twice as slow than CPython on real
+applications.  Here are some small-to-medium-size benchmark
+results.  The number is the execution time, normalized to 1.0
+for CPython 2.4:</p>
+
+<p></p>
+<ul>
+<li>
+<strong>1.90</strong> on templess (a simple templating language)</li>
+<li>
+<strong>1.49</strong> on gadfly (pure Python SQL database)</li>
+<li>
+<strong>1.49</strong> on translate.py (pypy's own translation toolchain)</li>
+<li>
+<strong>1.44</strong> on mako (another templating system)</li>
+<li>
+<strong>1.21</strong> on pystone</li>
+<li>
+<strong>0.78</strong> on richards</li>
+</ul>
+<p>(This is all without the JIT, as usual.  The JIT is not ready yet.)</p>
+
+<p>You can build yourself a pypy-c with this kind of speed with
+the magic command line (gcrootfinder is only for a 32-bit
+Linux machine):</p>
+
+<p></p>
+<pre>    pypy/translator/goal/translate.py --gc=hybrid --gcrootfinder=asmgcc targetpypystandalone --allworkingmodules --faassen</pre>
+
+<p>The main improvements come from:
+    
+</p>
+<ul>
+<li>A general shortcut for any operation between built-in objects:
+for example, a subtraction of two integers or floats now dispatches
+directly to the integer or float subtraction code, without looking up
+the '__sub__' in the class.</li>
+<li>A shortcut for getting attributes out of instances of user classes
+when the '__getattribute__' special method is not overridden.</li>
+<li>The so-called Hybrid Garbage Collector is now a
+three-generations collector.
+<a href="https://codespeak.net/pypy/dist/pypy/doc/garbage_collection.html">
+More about our GCs...</a>
+</li>
+<li>Some profiling showed bad performance in our implementation of
+the built-in id() -- a trivial function to write in CPython, but a lot
+more fun when you have a moving GC and your object's real address can
+change.</li>
+<li>The bytecode compiler's parser had a very slow linear search
+algorithm that we replaced with a dictionary lookup.</li>
+</ul>
+<p>These benchmarks are doing CPU-intensive operations. You can expect
+a similar blog post soon about the I/O performance, as the
+<code>io-improvements</code> branch gets closer to being merged
+<code>:-)</code>  The branch could also improve the speed of
+string operations, as used e.g. by the templating systems.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-2511547946359067622">
+        <div class="comment-header">
+          <a name="comment-2511547946359067622"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-05-10 20:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>We had the same problem with id() (called object_id()) in Rubinius. We currently hide an objects's ID inside it's metaclass (allocating one if there isn't one).<br><br>Where did you guys store it?</p>
+        </div>
+      </div>
+      <div class="comment comment-3474594539528628584">
+        <div class="comment-header">
+          <a name="comment-3474594539528628584"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-05-11 00:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>The ID is stored in a special dictionary (a normal dictionary specialized to be allocated so that the GC wont see it) that is used in the GC as a mapping from addresses to integers. This dict is updated when necessary (usually when collecting).</p>
+        </div>
+      </div>
+      <div class="comment comment-2973827785945462860">
+        <div class="comment-header">
+          <a name="comment-2973827785945462860"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2008-05-11 06:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wow. That sure is nice.</p>
+        </div>
+      </div>
+      <div class="comment comment-6873233863739148768">
+        <div class="comment-header">
+          <a name="comment-6873233863739148768"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-05-11 07:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>My my, that must be a huge dictionary.</p>
+        </div>
+      </div>
+      <div class="comment comment-7441149278025212551">
+        <div class="comment-header">
+          <a name="comment-7441149278025212551"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-05-11 09:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>The dictionary is of course only filled for objects that were used in an id() call.</p>
+        </div>
+      </div>
+      <div class="comment comment-5933661760437003340">
+        <div class="comment-header">
+          <a name="comment-5933661760437003340"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2008-05-11 09:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>There are actually two dictionaries, at least when using one of the generational GCs: one for the first generation objects and one for the rest.  The dictionary for the rest of the objects can probably get quite large, but it needs to be traversed once during each full collection only.  It seems that full collections are rare enough: the full dictionary updating doesn't stand out in profiled runs.<br><br>I didn't think about implementing id() at the language level, e.g. by extending the class of the object to add a field. <br>We can't really do that in RPython.  Moreover, that seems impractical for Python: if someone asks for the id() of an integer object, do all integers suddenly need to grow an 'id' field?</p>
+        </div>
+      </div>
+      <div class="comment comment-5605943787418740012">
+        <div class="comment-header">
+          <a name="comment-5605943787418740012"></a>
+            <span class="author">Daivd</span> wrote on <span class="date">2008-05-11 09:41</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great work!<br><br>I have a few questions not answered by the FAQ that I hope someone will be able to answer.<br><br>When might the JIT be ready enough? (no stress, just asking :)<br><br>How much faster are CPython 2.5, 2.6 and 3.0? That seems to be relevant to the statement "we now expect PyPy to be in the worst case twice as slow than CPython".<br><br>If I understand correctly, one of the purposes of PyPy is to make experimentation easier - so will making it compatible with 3.0 be fairly easy? Are there plans to do so?<br><br>Is PyPy expected to one day become a serious "competitor" to CPython, in that you might want to run it in production? Is there a time set for when it will be ready for use by the general public (i.e me ;)?</p>
+        </div>
+      </div>
+      <div class="comment comment-5789027349622540149">
+        <div class="comment-header">
+          <a name="comment-5789027349622540149"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2008-05-11 10:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>So, answering questions one by one:<br><br>JIT will be ready when it'll be ready, not earlier.<br><br>CPython 2.5 is slightly faster for some operations. No real difference there. 2.6 was optimized for certain operations, but as well, don't expect a huge difference. I think you can expect pypy to be in range of 2x for any cpython. 3.0 is not even sure how will look like, but certainly being ultra fast is not it's primary goal.<br><br>Regarding making pypy compatible with 3.0 - yes, that should be fairly easy although we don't have any immediate plans doing that.<br><br>The final date for making pypy production ready is not set (and this is a gradual process), but as you can see <a href="https://morepypy.blogspot.com/2008/03/bittorrent-on-pypy.html" rel="nofollow">here</a> and <a href="https://morepypy.blogspot.com/2008/02/running-pyglet-on-pypy.html" rel="nofollow">here</a> we're trying more and more to make it run existing applications.<br><br>Cheers,<br>fijal</p>
+        </div>
+      </div>
+      <div class="comment comment-6019119433776739396">
+        <div class="comment-header">
+          <a name="comment-6019119433776739396"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-05-11 10:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>Note that current benchmarks suggest that CPython 3.0 is yet much slower than CPython 2.x. It might be interesting to see whether this means that PyPy is much faster than CPython 3.0 running e.g. Pystone. <br>Of course this fact would not be very surprising, esp. given that PyPy does not implement any CPy3k features.</p>
+        </div>
+      </div>
+      <div class="comment comment-7381633538129806872">
+        <div class="comment-header">
+          <a name="comment-7381633538129806872"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2008-10-12 22:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>"JIT will be ready when it'll be ready, not earlier."<br><br>Alright, alright... we know.<br>But could you at least give us a very rough estimation for us, mere mortals? What does your heart tell you? :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-4721705338711564743">
+        <div class="comment-header">
+          <a name="comment-4721705338711564743"></a>
+            <span class="author">Spencer</span> wrote on <span class="date">2009-11-02 18:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>What kind of computations are done in richards? I.e., what sort of applications can expect better perfomance in PyPy than in CPy?</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/05/next-sprint-berlin-may-17-22nd-may-5362899847460267375.html" class="u-url">Next Sprint: Berlin, May 17-22nd May</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/05/next-sprint-berlin-may-17-22nd-may-5362899847460267375.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-05-04T16:49:00Z" itemprop="datePublished" title="2008-05-04 16:49">2008-05-04 16:49</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Our next PyPy sprint will take place in the crashed <a href="https://www.c-base.org/">c-base space station</a>, Berlin, Germany, Earth, Solar System.  This is a fully public sprint: newcomers (from all planets) are welcome.  Suggestion of topics (other topics are welcome too):</p>
+
+<ul>
+<li>work on PyPy's JIT generator: we are refactoring parts of the
+    compiling logic, in ways that may also allow generating better
+    machine code for loops (people or aliens with knowledge on
+    compilers and SSA, welcome)
+
+</li>
+<li>work on the SPy VM, PyPy's Squeak implementation, particularly the
+    graphics capabilities                                             
+
+</li>
+<li>work on PyPy's GameBoy emulator, which also needs graphics support
+                                                                      
+</li>
+<li>trying some large pure-Python applications or libraries on PyPy and
+    fixing the resulting bugs. Possibilities are Zope 3, Django and
+    others.
+</li>
+</ul>
+<p>For more information, see the <a href="https://codespeak.net/pypy/extradoc/sprintinfo/berlin-2008/announcement.html">full announcement</a>.
+</p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/04/googles-summer-of-code-4911168632727441622.html" class="u-url">Google's Summer of Code</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/04/googles-summer-of-code-4911168632727441622.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-04-22T17:09:00Z" itemprop="datePublished" title="2008-04-22 17:09">2008-04-22 17:09</time></a>
+            </p>
+                <p class="commentline">1 comment</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>PyPy got one proposal accepted for Google's <a class="reference" href="https://code.google.com/soc/2008/">Summer of Code</a> under the Python
+Software Foundation's umbrella.  We welcome <a class="reference" href="https://blog.brunogola.com.br/">Bruno Gola</a> into the PyPy
+community. He will work on supporting all Python 2.5 features in PyPy and will
+also update PyPy's standard library to support the modules that were modified
+or new in Python 2.5.</p>
+<p>Right now PyPy supports only Python 2.4 fully (some Python 2.5 features have
+already sneaked in, though).</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-4552244570100460103">
+        <div class="comment-header">
+          <a name="comment-4552244570100460103"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-04-22 18:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hello,<br><br>I'm very glad to work on PyPy project this summer (ok, this winter here in Brazil =))!<br><br>I hope this project helps to bring more people to the PyPy project, both users and developers =)<br><br>Thanks Google, PSF, PyPy and Carl for mentoring it!<br><br>Bruno</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2008/04/float-operations-for-jit-6499693696246367083.html" class="u-url">Float operations for JIT</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2008/04/float-operations-for-jit-6499693696246367083.html" rel="bookmark">
+            <time class="published dt-published" datetime="2008-04-17T11:08:00Z" itemprop="datePublished" title="2008-04-17 11:08">2008-04-17 11:08</time></a>
+            </p>
+                <p class="commentline">6 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Recently, we taught the JIT x86 backend how to produce code for the x87 floating point coprocessor. This means that JIT is able to nicely speed up float operations <b>(this this is not true for our Python interpreter yet - we did not integrate it yet)</b>. This is the first time we started going beyond what is feasible in <a href="https://psyco.sourceforge.net">psyco</a> - it would take a lot of effort to make floats working on top of psyco, way more than it will take on PyPy.
+<br><br>
+This work is in very early stage and lives on a <a href="https://codespeak.net/svn/pypy/branch/jit-hotpath">jit-hotpath branch</a>, which includes all our recent experiments on JIT compiler generation, including tracing JIT experiments and huge JIT refactoring.
+<br><br>
+Because we don't encode the Python's semantics in our JIT (which is really a JIT generator), it is expected that our Python interpreter with a JIT will become fast "suddenly", when our JIT generator is good enough. If this point is reached, we  would also get fast interpreters for Smalltalk or JavaScript with relatively low effort.
+<br><br>
+Stay tuned.
+<br><br>
+
+Cheers,<br>
+fijal</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-4215177333804756563">
+        <div class="comment-header">
+          <a name="comment-4215177333804756563"></a>
+            <span class="author">Michael Foord</span> wrote on <span class="date">2008-04-17 14:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>Having a fast implementation of Ruby written in Python would be very cool. :-p</p>
+        </div>
+      </div>
+      <div class="comment comment-1228802875236606907">
+        <div class="comment-header">
+          <a name="comment-1228802875236606907"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2008-04-18 07:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>Super cool!<br><br>Are you going to add SIMD stuff to the i386 backend?<br><br>Which is the main backend at the moment?  LLVM?<br><br>cheers,</p>
+        </div>
+      </div>
+      <div class="comment comment-6187709619317992047">
+        <div class="comment-header">
+          <a name="comment-6187709619317992047"></a>
+            <span class="author">jlg</span> wrote on <span class="date">2008-04-18 10:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>It would be amazing to run SciPy on PyPy with the JIT when this will be ready.</p>
+        </div>
+      </div>
+      <div class="comment comment-6734352927661825879">
+        <div class="comment-header">
+          <a name="comment-6734352927661825879"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-04-19 04:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>I'm interested in the choice of x87 as well. My understanding was that Intel (at least) was keeping x87 floating point around because of binary applications but that for single element floating point the SSE single-element instructions were the preferred option on any processor which supports SSE. (Unfortunately since they've got such different styles of programming I can understand if it's just that "older chips have to be supported, and we've only got enough programming manpower for 1 implementation".)</p>
+        </div>
+      </div>
+      <div class="comment comment-7234429822916634121">
+        <div class="comment-header">
+          <a name="comment-7234429822916634121"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2008-04-20 16:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>x87 because it's simpler and better documented. Right now would be ridiculously easy to reimplement it using SSE.</p>
+        </div>
+      </div>
+      <div class="comment comment-6322995253226647458">
+        <div class="comment-header">
+          <a name="comment-6322995253226647458"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2008-04-21 11:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>The main backend is the one for 386.  We have no working LLVM JIT backend: although llvm advertizes supporting JIT compilation, what it really provides is a regular compiler packaged as a library that can be used at run-time.  This is only suitable for some kinds of usages; for example, it couldn't be used to write a Java VM with good just-in-time optimizations (which need e.g. quick and lazy code generation and regeneration, polymorphic inline caches, etc.)</p>
+        </div>
+      </div>
+         </div>
+
+</div>
+</div>
+<div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div></div>
+</main>
+</div>
+<div style="clear: both; width: 75%; margin: 1em auto;">
+        <nav class="postindexpager"><ul class="pager">
+<li class="previous">
+                <a href="index-6.html" rel="prev">Newer posts</a>
+            </li>
+            <li class="next">
+                <a href="index-4.html" rel="next">Older posts</a>
+            </li>
+        </ul></nav>
+</div>
+         
+                 <footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../assets/js/styles.js"></script></footer>
+</body>
+</html>

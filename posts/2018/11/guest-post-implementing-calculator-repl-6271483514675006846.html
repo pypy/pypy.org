@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guest Post: Implementing a Calculator REPL in RPython | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2018/11/guest-post-implementing-calculator-repl-6271483514675006846.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="../09/inside-cpyext-why-emulating-cpython-c-8083064623681286567.html" title="Inside cpyext: Why emulating CPython C API is so Hard" type="text/html">
+<link rel="next" href="hello-everyone-at-pypy-we-are-trying-to-5336557946798583063.html" title="Funding for 64-bit Armv8-a support in PyPy" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Guest Post: Implementing a Calculator REPL in RPython">
+<meta property="og:url" content="https://www.pypy.org/posts/2018/11/guest-post-implementing-calculator-repl-6271483514675006846.html">
+<meta property="og:description" content="This is a tutorial style post that walks through using the RPython translation
+toolchain to create a REPL that executes basic math expressions. 
+
+We will do that by scanning the user's input into toke">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2018-11-15T08:06:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Guest Post: Implementing a Calculator REPL in RPython</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2018-11-15T08:06:00Z" itemprop="datePublished" title="2018-11-15 08:06">2018-11-15 08:06</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="guest-post-implementing-calculator-repl-6271483514675006846.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>This is a tutorial style post that walks through using the RPython translation
+toolchain to create a REPL that executes basic math expressions. </p>
+
+<p>We will do that by scanning the user's input into tokens, compiling those 
+tokens into bytecode and running that bytecode in our own virtual machine. Don't
+worry if that sounds horribly complicated, we are going to explain it step by
+step. </p>
+
+<p>This post is a bit of a diversion while on my journey to create a compliant 
+<a href="https://www.craftinginterpreters.com/the-lox-language.html">lox</a> implementation
+using the <a href="https://rpython.readthedocs.io">RPython translation toolchain</a>. The 
+majority of this work is a direct RPython translation of the low level C 
+guide from Bob Nystrom (<a href="https://twitter.com/munificentbob">@munificentbob</a>) in the
+excellent book <a href="https://www.craftinginterpreters.com">craftinginterpreters.com</a>
+specifically the chapters 14 – 17.</p>
+
+<h2 id="theroadahead">The road ahead<a href="#theroadahead" class="headerlink" title="Permalink to this heading">¶</a></h2>
+
+<p>As this post is rather long I'll break it into a few major sections. In each section we will
+have something that translates with RPython, and at the end it all comes together. </p>
+
+<ul>
+<li><a href="guest-post-implementing-calculator-repl-6271483514675006846.html#arepl">REPL</a></li>
+
+<li><a href="guest-post-implementing-calculator-repl-6271483514675006846.html#avirtualmachine">Virtual Machine</a></li>
+
+<li><a href="guest-post-implementing-calculator-repl-6271483514675006846.html#scanningthesource">Scanning the source</a></li>
+
+<li><a href="guest-post-implementing-calculator-repl-6271483514675006846.html#compilingexpressions">Compiling Expressions</a></li>
+
+<li><a href="guest-post-implementing-calculator-repl-6271483514675006846.html#endtoend">End to end</a></li>
+</ul>
+<h2 id="arepl">A REPL<a href="#arepl" class="headerlink" title="Permalink to this heading">¶</a></h2>
+
+<p>So if you're a Python programmer you might be thinking this is pretty trivial right?</p>
+
+<p>I mean if we ignore input errors, injection attacks etc couldn't we just do something
+like this:</p>
+
+<pre><code class="python">"""
+A pure python REPL that can parse simple math expressions
+"""
+while True:
+    print(eval(raw_input("&gt; ")))
+</code></pre>
+
+<p>Well it does appear to do the trick:</p>
+
+<pre><code class="nohighlight">$ python2 section-1-repl/main.py
+&gt; 3 + 4 * ((1.0/(2 * 3 * 4)) + (1.0/(4 * 5 * 6)) - (1.0/(6 * 7 * 8)))
+3.1880952381
+</code></pre>
+
+<p>So can we just ask RPython to translate this into a binary that runs magically
+faster?</p>
+
+<p>Let's see what happens. We need to add two functions for RPython to
+get its bearings (<code>entry_point</code> and <code>target</code>) and call the file <code>targetXXX</code>:</p>
+
+<p><a href="https://github.com/hardbyte/rpython-post/blob/master/section-1-repl/targetrepl1.py"><code>targetrepl1.py</code></a></p>
+
+<pre><code class="python language-python">def repl():
+    while True:
+        print eval(raw_input('&gt; '))
+
+
+def entry_point(argv):
+    repl()
+    return 0
+
+
+def target(driver, *args):
+    return entry_point, None
+</code></pre>
+
+<p>Which at translation time gives us this admonishment that accurately tells us
+we are trying to call a Python built-in <code>raw_input</code> that is unfortunately not 
+valid RPython.</p>
+
+<pre><code class="nohighlight">$ rpython ./section-1-repl/targetrepl1.py
+...SNIP...
+[translation:ERROR] AnnotatorError: 
+
+object with a __call__ is not RPython: &lt;built-in function raw_input&gt;
+Processing block:
+ block@18 is a &lt;class 'rpython.flowspace.flowcontext.SpamBlock'&gt; 
+ in (target1:2)repl 
+ containing the following operations: 
+       v0 = simple_call((builtin_function raw_input), ('&gt; ')) 
+       v1 = simple_call((builtin_function eval), v0) 
+       v2 = str(v1) 
+       v3 = simple_call((function rpython_print_item), v2) 
+       v4 = simple_call((function rpython_print_newline)) 
+</code></pre>
+
+<p>Ok so we can't use <code>raw_input</code> or <code>eval</code> but that doesn't faze us. Let's get 
+the input from a stdin stream and just print it out (no evaluation).</p>
+
+<p><a href="https://github.com/hardbyte/rpython-post/blob/master/section-1-repl/targetrepl2.py"><code>targetrepl2.py</code></a></p>
+
+<pre><code class="python language-python">from rpython.rlib import rfile
+
+LINE_BUFFER_LENGTH = 1024
+
+
+def repl(stdin):
+    while True:
+        print "&gt; ",
+        line = stdin.readline(LINE_BUFFER_LENGTH)
+        print line
+
+
+def entry_point(argv):
+    stdin, stdout, stderr = rfile.create_stdio()
+    try:
+        repl(stdin)
+    except:
+        return 0
+
+
+def target(driver, *args):
+    return entry_point, None
+</code></pre>
+
+<p>Translate <code>targetrepl2.py</code> – we can add an optimization level if we
+are so inclined:</p>
+
+<pre><code class="nohighlight">$ rpython --opt=2 section-1-repl/targetrepl2.py
+...SNIP...
+[Timer] Timings:
+[Timer] annotate                       ---  1.2 s
+[Timer] rtype_lltype                   ---  0.9 s
+[Timer] backendopt_lltype              ---  0.6 s
+[Timer] stackcheckinsertion_lltype     ---  0.0 s
+[Timer] database_c                     --- 15.0 s
+[Timer] source_c                       ---  1.6 s
+[Timer] compile_c                      ---  1.9 s
+[Timer] =========================================
+[Timer] Total:                         --- 21.2 s
+</code></pre>
+
+<p>No errors!? Let's try it out:</p>
+
+<pre><code class="nohighlight">$ ./target2-c 
+1 + 2
+&gt;  1 + 2
+
+^C
+</code></pre>
+
+<p>Ahh our first success – let's quickly deal with the flushing fail by using the 
+stdout stream directly as well. Let's print out the input in quotes:</p>
+
+<pre><code class="python language-python">from rpython.rlib import rfile
+
+LINE_BUFFER_LENGTH = 1024
+
+
+def repl(stdin, stdout):
+    while True:
+        stdout.write("&gt; ")
+        line = stdin.readline(LINE_BUFFER_LENGTH)
+        print '"%s"' % line.strip()
+
+
+def entry_point(argv):
+    stdin, stdout, stderr = rfile.create_stdio()
+    try:
+        repl(stdin, stdout)
+    except:
+        pass
+    return 0
+
+
+def target(driver, *args):
+    return entry_point, None
+</code></pre>
+
+<p>Translation works, and the test run too:</p>
+
+<pre><code class="nohighlight">$ ./target3-c 
+&gt; hello this seems better
+"hello this seems better"
+&gt; ^C
+</code></pre>
+
+<p>So we are in a good place with taking user input and printing output... What about
+the whole math evaluation thing we were promised? For that we are can probably leave
+our RPython REPL behind for a while and connect it up at the end.</p>
+
+<h2 id="avirtualmachine">A virtual machine<a href="#avirtualmachine" class="headerlink" title="Permalink to this heading">¶</a></h2>
+
+<p>A virtual machine is the execution engine of our basic math interpreter. It will be very simple,
+only able to do simple tasks like addition. I won't go into any depth to describe why we want
+a virtual machine, but it is worth noting that many languages including Java and Python make 
+this decision to compile to an intermediate bytecode representation and then execute that with
+a virtual machine. Alternatives are compiling directly to native machine code like (earlier versions of) the V8
+JavaScript engine, or at the other end of the spectrum executing an abstract syntax tree – 
+which is what the <a href="https://blog.plan99.net/graal-truffle-134d8f28fb69">Truffle approach to building VMs</a> is based on. </p>
+
+<p>We are going to keep things very simple. We will have a stack where we can push and pop values,
+we will only support floats, and our VM will only implement a few very basic operations.</p>
+
+<h3 id="opcodes">OpCodes<a href="#opcodes" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p>In fact our entire instruction set is:</p>
+
+<pre><code class="nohighlight">OP_CONSTANT
+OP_RETURN
+OP_NEGATE
+OP_ADD
+OP_SUBTRACT
+OP_MULTIPLY
+OP_DIVIDE
+</code></pre>
+
+<p>Since we are targeting RPython we can't use the nice <code>enum</code> module from the Python standard
+library, so instead we just define a simple class with class attributes.</p>
+
+<p>We should start to get organized, so we will create a new file 
+<a href="https://github.com/hardbyte/rpython-post/blob/master/section-2-vm/opcodes.py"><code>opcodes.py</code></a> and add this:</p>
+
+<pre><code class="python language-python">class OpCode:
+    OP_CONSTANT = 0
+    OP_RETURN = 1
+    OP_NEGATE = 2
+    OP_ADD = 3
+    OP_SUBTRACT = 4
+    OP_MULTIPLY = 5
+    OP_DIVIDE = 6
+</code></pre>
+
+<h3 id="chunks">Chunks<a href="#chunks" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p>To start with we need to get some infrastructure in place before we write the VM engine.</p>
+
+<p>Following <a href="https://www.craftinginterpreters.com/chunks-of-bytecode.html">craftinginterpreters.com</a>
+we start with a <code>Chunk</code> object which will represent our bytecode. In RPython we have access 
+to Python-esq lists so our <code>code</code> object will just be a list of <code>OpCode</code> values – which are 
+just integers. A list of ints, couldn't get much simpler.</p>
+
+<p><code>section-2-vm/chunk.py</code></p>
+
+<pre><code class="python language-python">class Chunk:
+    code = None
+
+    def __init__(self):
+        self.code = []
+
+    def write_chunk(self, byte):
+        self.code.append(byte)
+
+    def disassemble(self, name):
+        print "== %s ==\n" % name
+        i = 0
+        while i &lt; len(self.code):
+            i = disassemble_instruction(self, i)
+</code></pre>
+
+<p><em>From here on I'll only present minimal snippets of code instead of the whole lot, but 
+I'll link to the repository with the complete example code. For example the 
+various debugging including <code>disassemble_instruction</code> isn't particularly interesting
+to include verbatim. See the <a href="https://github.com/hardbyte/rpython-post/">github repo</a> for full details</em></p>
+
+<p>We need to check that we can create a chunk and disassemble it. The quickest way to do this
+is to use Python during development and debugging then every so often try to translate it.</p>
+
+<p>Getting the disassemble part through the RPython translator was a hurdle for me as I
+quickly found that many <code>str</code> methods such as <code>format</code> are not supported, and only very basic
+<code>%</code> based formatting is supported. I ended up creating helper functions for string manipulation
+such as:</p>
+
+<pre><code class="python language-python">def leftpad_string(string, width, char=" "):
+    l = len(string)
+    if l &gt; width:
+        return string
+    return char * (width - l) + string
+</code></pre>
+
+<p>Let's write a new <code>entry_point</code> that creates and disassembles a chunk of bytecode. We can
+set the target output name to <code>vm1</code> at the same time:</p>
+
+<p><a href="https://github.com/hardbyte/rpython-post/blob/master/section-2-vm/targetvm1.py"><code>targetvm1.py</code></a></p>
+
+<pre><code class="python language-python">def entry_point(argv):
+    bytecode = Chunk()
+    bytecode.write_chunk(OpCode.OP_ADD)
+    bytecode.write_chunk(OpCode.OP_RETURN)
+    bytecode.disassemble("hello world")
+    return 0
+
+def target(driver, *args):
+    driver.exe_name = "vm1"
+    return entry_point, None
+</code></pre>
+
+<p>Running this isn't going to be terribly interesting, but it is always nice to
+know that it is doing what you expect:</p>
+
+<pre><code class="nohighlight">$ ./vm1 
+== hello world ==
+
+0000 OP_ADD       
+0001 OP_RETURN    
+</code></pre>
+
+<h3 id="chunksofdata">Chunks of data<a href="#chunksofdata" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p>Ref: https://www.craftinginterpreters.com/chunks-of-bytecode.html#constants</p>
+
+<p>So our bytecode is missing a very crucial element – the values to operate on!</p>
+
+<p>As with the bytecode we can store these constant values as part of the chunk
+directly in a list. Each chunk will therefore have a constant data component,
+and a code component. </p>
+
+<p>Edit the <code>chunk.py</code> file and add the new instance attribute <code>constants</code> as an
+empty list, and a new method <code>add_constant</code>.</p>
+
+<pre><code class="python language-python">    def add_constant(self, value):
+        self.constants.append(value)
+        return len(self.constants) - 1
+</code></pre>
+
+<p>Now to use this new capability we can modify our example chunk
+to write in some constants before the <code>OP_ADD</code>:</p>
+
+<pre><code class="python language-python">    bytecode = Chunk()
+    constant = bytecode.add_constant(1.0)
+    bytecode.write_chunk(OpCode.OP_CONSTANT)
+    bytecode.write_chunk(constant)
+
+    constant = bytecode.add_constant(2.0)
+    bytecode.write_chunk(OpCode.OP_CONSTANT)
+    bytecode.write_chunk(constant)
+
+    bytecode.write_chunk(OpCode.OP_ADD)
+    bytecode.write_chunk(OpCode.OP_RETURN)
+
+    bytecode.disassemble("adding constants")
+</code></pre>
+
+<p>Which still translates with RPython and when run gives us the following disassembled
+bytecode:</p>
+
+<pre><code class="$ ./vm2 language-$ ./vm2">== adding constants ==
+
+0000 OP_CONSTANT  (00)        '1'
+0002 OP_CONSTANT  (01)        '2'
+0004 OP_ADD       
+0005 OP_RETURN
+</code></pre>
+
+<p>We won't go down the route of serializing the bytecode to disk, but this bytecode chunk
+(including the constant data) could be saved and executed on our VM later – like a Java
+<code>.class</code> file. Instead we will pass the bytecode directly to our VM after we've created
+it during the compilation process. </p>
+
+<h3 id="emulation">Emulation<a href="#emulation" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p>So those four instructions of bytecode combined with the constant value mapping
+<code>00 -&gt; 1.0</code> and <code>01 -&gt; 2.0</code> describes individual steps for our virtual machine
+to execute. One major point in favor of defining our own bytecode is we can 
+design it to be really simple to execute – this makes the VM really easy to implement.</p>
+
+<p>As I mentioned earlier this virtual machine will have a stack, so let's begin with that.
+Now the stack is going to be a busy little beast – as our VM takes instructions like 
+<code>OP_ADD</code> it will pop off the top two values from the stack, and push the result of adding 
+them together back onto the stack. Although dynamically resizing Python lists 
+are marvelous, they can be a little slow. RPython can take advantage of a constant sized
+list which doesn't make our code much more complicated.</p>
+
+<p>To do this we will define a constant sized list and track the <code>stack_top</code> directly. Note
+how we can give the RPython translator hints by adding assertions about the state that
+the <code>stack_top</code> will be in.</p>
+
+<pre><code class="python language-python">class VM(object):
+    STACK_MAX_SIZE = 256
+    stack = None
+    stack_top = 0
+
+    def __init__(self):
+        self._reset_stack()
+
+    def _reset_stack(self):
+        self.stack = [0] * self.STACK_MAX_SIZE
+        self.stack_top = 0
+
+    def _stack_push(self, value):
+        assert self.stack_top &lt; self.STACK_MAX_SIZE
+        self.stack[self.stack_top] = value
+        self.stack_top += 1
+
+    def _stack_pop(self):
+        assert self.stack_top &gt;= 0
+        self.stack_top -= 1
+        return self.stack[self.stack_top]
+
+    def _print_stack(self):
+        print "         ",
+        if self.stack_top &lt;= 0:
+            print "[]",
+        else:
+            for i in range(self.stack_top):
+                print "[ %s ]" % self.stack[i],
+        print
+</code></pre>
+
+<p>Now we get to the main event, the hot loop, the VM engine. Hope I haven't built it up to
+much, it is actually really simple! We loop until the instructions tell us to stop 
+(<code>OP_RETURN</code>), and dispatch to other simple methods based on the instruction.</p>
+
+<pre><code class="python language-python">    def _run(self):
+        while True:
+            instruction = self._read_byte()
+
+            if instruction == OpCode.OP_RETURN:
+                print "%s" % self._stack_pop()
+                return InterpretResultCode.INTERPRET_OK
+            elif instruction == OpCode.OP_CONSTANT:
+                constant = self._read_constant()
+                self._stack_push(constant)
+            elif instruction == OpCode.OP_ADD:
+                self._binary_op(self._stack_add)    
+</code></pre>
+
+<p>Now the <code>_read_byte</code> method will have to keep track of which instruction we are up 
+to. So add an instruction pointer (<code>ip</code>) to the VM with an initial value of <code>0</code>.
+Then <code>_read_byte</code> is simply getting the next bytecode (int) from the chunk's <code>code</code>:</p>
+
+<pre><code class="python language-python">    def _read_byte(self):
+        instruction = self.chunk.code[self.ip]
+        self.ip += 1
+        return instruction
+</code></pre>
+
+<p></p>
+
+<p>If the instruction is <code>OP_CONSTANT</code> we take the constant's address from the next byte
+of the chunk's <code>code</code>, retrieve that constant value and add it to the VM's stack.</p>
+
+<pre><code class="python language-python">    def _read_constant(self):
+        constant_index = self._read_byte()
+        return self.chunk.constants[constant_index]
+</code></pre>
+
+<p>Finally our first arithmetic operation <code>OP_ADD</code>, what it has to achieve doesn't 
+require much explanation: pop two values from the stack, add them together, push 
+the result. But since a few operations all have the same template we introduce a
+layer of indirection – or abstraction – by introducing a reusable <code>_binary_op</code> 
+helper method.</p>
+
+<pre><code class="python language-python">    @specialize.arg(1)
+    def _binary_op(self, operator):
+        op2 = self._stack_pop()
+        op1 = self._stack_pop()
+        result = operator(op1, op2)
+        self._stack_push(result)
+
+    @staticmethod
+    def _stack_add(op1, op2):
+        return op1 + op2
+</code></pre>
+
+<p></p>
+
+<p>Note we tell RPython to specialize <code>_binary_op</code> on the first argument. This causes
+RPython to make a copy of <code>_binary_op</code> for every value of the first argument passed,
+which means that each copy contains a call to a particular operator, which can then be
+inlined.</p>
+
+<p>To be able to run our bytecode the only thing left to do is to pass in the chunk 
+and call <code>_run()</code>:</p>
+
+<pre><code class="python language-python">    def interpret_chunk(self, chunk):
+        if self.debug_trace:
+            print "== VM TRACE =="
+        self.chunk = chunk
+        self.ip = 0
+        try:
+            result = self._run()
+            return result
+        except:
+            return InterpretResultCode.INTERPRET_RUNTIME_ERROR
+</code></pre>
+
+<p><a href="https://github.com/hardbyte/rpython-post/blob/master/section-2-vm/targetvm3.py"><code>targetvm3.py</code></a> connects the pieces:</p>
+
+<pre><code class="python language-python">def entry_point(argv):
+    bytecode = Chunk()
+    constant = bytecode.add_constant(1)
+    bytecode.write_chunk(OpCode.OP_CONSTANT)
+    bytecode.write_chunk(constant)
+    constant = bytecode.add_constant(2)
+    bytecode.write_chunk(OpCode.OP_CONSTANT)
+    bytecode.write_chunk(constant)
+    bytecode.write_chunk(OpCode.OP_ADD)
+    bytecode.write_chunk(OpCode.OP_RETURN)
+
+    vm = VM()
+    vm.interpret_chunk(bytecode)
+
+    return 0
+</code></pre>
+
+<p>I've added some trace debugging so we can see what the VM and stack is doing.</p>
+
+<p>The whole thing translates with RPython, and when run gives us:</p>
+
+<pre><code class="nohighlight">./vm3
+== VM TRACE ==
+          []
+0000 OP_CONSTANT  (00)        '1'
+          [ 1 ]
+0002 OP_CONSTANT  (01)        '2'
+          [ 1 ] [ 2 ]
+0004 OP_ADD       
+          [ 3 ]
+0005 OP_RETURN    
+3
+</code></pre>
+
+<p>Yes we just computed the result of <code>1+2</code>. Pat yourself on the back. </p>
+
+<p>At this point it is probably valid to check that the translated executable is actually
+faster than running our program directly in Python. For this trivial example under 
+<code>Python2</code>/<code>pypy</code> this <code>targetvm3.py</code> file runs in the 20ms – 90ms region, and the 
+compiled <code>vm3</code> runs in &lt;5ms. Something useful must be happening during the translation.</p>
+
+<p>I won't go through the code adding support for our other instructions as they are
+very similar and straightforward. Our VM is ready to execute our chunks of bytecode,
+but we haven't yet worked out how to take the entered expression and turn that into
+this simple bytecode. This is broken into two steps, scanning and compiling.</p>
+
+<h2 id="scanningthesource">Scanning the source<a href="#scanningthesource" class="headerlink" title="Permalink to this heading">¶</a></h2>
+
+<p><em>All the source for this section can be found in 
+<a href="https://github.com/hardbyte/rpython-post/blob/master/section-3-scanning">section-3-scanning</a>.</em></p>
+
+<p>The job of the scanner is to take the raw expression string and transform it into
+a sequence of tokens. This scanning step will strip out whitespace and comments, 
+catch errors with invalid token and tokenize the string. For example the input 
+<code>"( 1 + 2 )</code> would get tokenized into <code>LEFT_PAREN, NUMBER(1), PLUS, NUMBER(2), RIGHT_PAREN</code>.</p>
+
+<p>As with our <code>OpCodes</code> we will just define a simple Python class to define an <code>int</code>
+for each type of token:</p>
+
+<pre><code class="python language-python">class TokenTypes:
+    ERROR = 0
+    EOF = 1
+    LEFT_PAREN = 2
+    RIGHT_PAREN = 3
+    MINUS = 4
+    PLUS = 5
+    SLASH = 6
+    STAR = 7
+    NUMBER = 8
+</code></pre>
+
+<p>A token has to keep some other information as well – keeping track of the <code>location</code> and 
+<code>length</code> of the token will be helpful for error reporting. The <code>NUMBER</code> token clearly needs 
+some data about the value it is representing: we could include a copy of the source lexeme 
+(e.g. the string <code>2.0</code>), or parse the value and store that, or – what we will do in this 
+blog – use the <code>location</code> and <code>length</code> information as pointers into the original source 
+string. Every token type (except perhaps <code>ERROR</code>) will use this simple data structure: </p>
+
+<pre><code class="python language-python">class Token(object):
+
+    def __init__(self, start, length, token_type):
+        self.start = start
+        self.length = length
+        self.type = token_type
+</code></pre>
+
+<p>Our soon to be created scanner will create these <code>Token</code> objects which refer back to 
+addresses in some source. If the scanner sees the source <code>"( 1 + 2.0 )"</code> it would emit
+the following tokens:</p>
+
+<pre><code class="python language-python">Token(0, 1, TokenTypes.LEFT_PAREN)
+Token(2, 1, TokenTypes.NUMBER)
+Token(4, 1, TokenTypes.PLUS)
+Token(6, 3, TokenTypes.NUMBER)
+Token(10, 1, TokenTypes.RIGHT_PAREN)
+</code></pre>
+
+<h3 id="scanner">Scanner<a href="#scanner" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p>Let's walk through the scanner <a href="https://github.com/hardbyte/rpython-post/blob/master/section-3-scanning/scanner.py">implementation</a> method
+by method. The scanner will take the source and pass through it once, creating tokens
+as it goes.</p>
+
+<pre><code class="python language-python">class Scanner(object):
+
+    def __init__(self, source):
+        self.source = source
+        self.start = 0
+        self.current = 0
+</code></pre>
+
+<p>The <code>start</code> and <code>current</code> variables are character indices in the source string that point to 
+the current substring being considered as a token. </p>
+
+<p>For example in the string <code>"(51.05+2)"</code> while we are tokenizing the number <code>51.05</code>
+we will have <code>start</code> pointing at the <code>5</code>, and advance <code>current</code> character by character
+until the character is no longer part of a number. Midway through scanning the number 
+the <code>start</code> and <code>current</code> values might point to <code>1</code> and <code>4</code> respectively:</p>
+
+<table border="1" style="border-collapse: collapse;">
+<thead><tr>
+<th>0</th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
+<th>4</th>
+<th>5</th>
+<th>6</th>
+<th>7</th>
+<th>8</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"("</td>
+<td>"5"</td>
+<td>"1"</td>
+<td>"."</td>
+<td>"0"</td>
+<td>"5"</td>
+<td>"+"</td>
+<td>"2"</td>
+<td>")"</td>
+</tr>
+<tr>
+<td></td>
+<td> ^</td>
+<td></td>
+<td></td>
+<td> ^</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>From <code>current=4</code> the scanner peeks ahead and sees that the next character (<code>5</code>) is
+a digit, so will continue to advance.</p>
+
+<table border="1" style="border-collapse: collapse;">
+<thead><tr>
+<th>0</th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
+<th>4</th>
+<th>5</th>
+<th>6</th>
+<th>7</th>
+<th>8</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>"("</td>
+<td>"5"</td>
+<td>"1"</td>
+<td>"."</td>
+<td>"0"</td>
+<td>"5"</td>
+<td>"+"</td>
+<td>"2"</td>
+<td>")"</td>
+</tr>
+<tr>
+<td></td>
+<td> ^</td>
+<td></td>
+<td></td>
+<td></td>
+<td> ^</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>When the scanner peeks ahead and sees the <code>"+"</code> it will create the number
+token and emit it. The method that carry's out this tokenizing is <code>_number</code>:</p>
+
+<pre><code class="python language-python">    def _number(self):
+        while self._peek().isdigit():
+            self.advance()
+
+        # Look for decimal point
+        if self._peek() == '.' and self._peek_next().isdigit():
+            self.advance()
+            while self._peek().isdigit():
+                self.advance()
+
+        return self._make_token(TokenTypes.NUMBER)
+</code></pre>
+
+<p>It relies on a few helpers to look ahead at the upcoming characters:</p>
+
+<pre><code class="python language-python">    def _peek(self):
+        if self._is_at_end():
+            return '\0'
+        return self.source[self.current]
+
+    def _peek_next(self):
+        if self._is_at_end():
+            return '\0'
+        return self.source[self.current+1]
+
+    def _is_at_end(self):
+        return len(self.source) == self.current
+</code></pre>
+
+<p>If the character at <code>current</code> is still part of the number we want to call <code>advance</code>
+to move on by one character.</p>
+
+<pre><code class="python language-python">    def advance(self):
+        self.current += 1
+        return self.source[self.current - 1]
+</code></pre>
+
+<p>Once the <code>isdigit()</code> check fails in <code>_number()</code> we call <code>_make_token()</code> to emit the
+token with the <code>NUMBER</code> type.</p>
+
+<pre><code class="python language-python">    def _make_token(self, token_type):
+        return Token(
+            start=self.start,
+            length=(self.current - self.start),
+            token_type=token_type
+        )
+</code></pre>
+
+<p>Note again that the token is linked to an index address in the source, rather than 
+including the string value.</p>
+
+<p>Our scanner is pull based, a token will be requested via <code>scan_token</code>. First we skip 
+past whitespace and depending on the characters emit the correct token:</p>
+
+<pre><code class="python language-python">    def scan_token(self):
+        # skip any whitespace
+        while True:
+            char = self._peek()
+            if char in ' \r\t\n':
+                self.advance()
+            break
+
+        self.start = self.current
+
+        if self._is_at_end():
+            return self._make_token(TokenTypes.EOF)
+
+        char = self.advance()
+
+        if char.isdigit():
+            return self._number()
+
+        if char == '(':
+            return self._make_token(TokenTypes.LEFT_PAREN)
+        if char == ')':
+            return self._make_token(TokenTypes.RIGHT_PAREN)
+        if char == '-':
+            return self._make_token(TokenTypes.MINUS)
+        if char == '+':
+            return self._make_token(TokenTypes.PLUS)
+        if char == '/':
+            return self._make_token(TokenTypes.SLASH)
+        if char == '*':
+            return self._make_token(TokenTypes.STAR)
+
+        return ErrorToken("Unexpected character", self.current)
+</code></pre>
+
+<p></p>
+
+<p>If this was a real programming language we were scanning, this would be the point where we 
+add support for different types of literals and any language identifiers/reserved words.</p>
+
+<p>At some point we will need to parse the literal value for our numbers, but we leave that
+job for some later component, for now we'll just add a <code>get_token_string</code> helper. To make
+sure that RPython is happy to index arbitrary slices of <code>source</code> we add range assertions:</p>
+
+<pre><code class="python language-python">    def get_token_string(self, token):
+        if isinstance(token, ErrorToken):
+            return token.message
+        else:
+            end_loc = token.start + token.length
+            assert end_loc &lt; len(self.source)
+            assert end_loc &gt; 0
+            return self.source[token.start:end_loc]
+</code></pre>
+
+<p>A simple entry point can be used to test our scanner with a hard coded 
+source string:</p>
+
+<p><a href="https://github.com/hardbyte/rpython-post/blob/master/section-3-scanning/targetscanner1.py"><code>targetscanner1.py</code></a></p>
+
+<pre><code class="python language-python">from scanner import Scanner, TokenTypes, TokenTypeToName
+
+
+def entry_point(argv):
+
+    source = "(   1   + 2.0 )"
+
+    scanner = Scanner(source)
+    t = scanner.scan_token()
+    while t.type != TokenTypes.EOF and t.type != TokenTypes.ERROR:
+        print TokenTypeToName[t.type],
+        if t.type == TokenTypes.NUMBER:
+            print "(%s)" % scanner.get_token_string(t),
+        print
+        t = scanner.scan_token()
+    return 0
+</code></pre>
+
+<p>RPython didn't complain, and lo it works:</p>
+
+<pre><code class="nohighlight">$ ./scanner1 
+LEFT_PAREN
+NUMBER (1)
+PLUS
+NUMBER (2.0)
+RIGHT_PAREN
+</code></pre>
+
+<p>Let's connect our REPL to the scanner.</p>
+
+<p><a href="https://github.com/hardbyte/rpython-post/blob/master/section-3-scanning/targetscanner2.py"><code>targetscanner2.py</code></a></p>
+
+<pre><code class="python language-python">from rpython.rlib import rfile
+from scanner import Scanner, TokenTypes, TokenTypeToName
+
+LINE_BUFFER_LENGTH = 1024
+
+
+def repl(stdin, stdout):
+    while True:
+        stdout.write("&gt; ")
+        source = stdin.readline(LINE_BUFFER_LENGTH)
+
+        scanner = Scanner(source)
+        t = scanner.scan_token()
+        while t.type != TokenTypes.EOF and t.type != TokenTypes.ERROR:
+            print TokenTypeToName[t.type],
+            if t.type == TokenTypes.NUMBER:
+                print "(%s)" % scanner.get_token_string(t),
+            print
+            t = scanner.scan_token()
+
+
+def entry_point(argv):
+    stdin, stdout, stderr = rfile.create_stdio()
+    try:
+        repl(stdin, stdout)
+    except:
+        pass
+    return 0
+</code></pre>
+
+<p>With our REPL hooked up we can now scan tokens from arbitrary input:</p>
+
+<pre><code class="nohighlight">$ ./scanner2
+&gt; (3 *4) - -3
+LEFT_PAREN
+NUMBER (3)
+STAR
+NUMBER (4)
+RIGHT_PAREN
+MINUS
+MINUS
+NUMBER (3)
+&gt; ^C
+</code></pre>
+
+<h2 id="compilingexpressions">Compiling expressions<a href="#compilingexpressions" class="headerlink" title="Permalink to this heading">¶</a></h2>
+
+<h3 id="references">References<a href="#references" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<ul>
+<li>https://www.craftinginterpreters.com/compiling-expressions.html</li>
+
+<li>https://effbot.org/zone/simple-top-down-parsing.htm</li>
+</ul>
+<p>The final piece is to turn this sequence of tokens into our low level 
+bytecode instructions for the virtual machine to execute. Buckle up, 
+we are about to write us a compiler.</p>
+
+<p>Our compiler will take a single pass over the tokens using 
+<a href="https://en.wikipedia.org/wiki/Vaughan_Pratt">Vaughan Pratt’s</a> 
+parsing technique, and output a chunk of bytecode – if we do it
+right it will be compatible with our existing virtual machine.</p>
+
+<p>Remember the bytecode we defined above is really simple – by relying 
+on our stack we can transform a nested expression into a sequence of
+our bytecode operations.</p>
+
+<p>To make this more concrete let's go through by hand translating an
+expression into bytecode.</p>
+
+<p>Our source expression:</p>
+
+<pre><code class="nohighlight">(3 + 2) - (7 * 2)
+</code></pre>
+
+<p>If we were to make an abstract syntax tree we'd get something 
+like this:</p>
+
+<p><a href="https://4.bp.blogspot.com/-9mH1n1YF3rA/W-wxcRXRNPI/AAAAAAAAm5Y/PFqcPlOQ8KcSfIoxdDZHJO3Tby1vKqOKACPcBGAYYCw/s1600/ast.jpg"><img border="0" height="187" src="https://4.bp.blogspot.com/-9mH1n1YF3rA/W-wxcRXRNPI/AAAAAAAAm5Y/PFqcPlOQ8KcSfIoxdDZHJO3Tby1vKqOKACPcBGAYYCw/s400/ast.jpg" width="400"></a></p>
+
+<p>Now if we start at the first sub expression <code>(3+2)</code> we can clearly
+note from the first open bracket that we <em>must</em> see a close bracket,
+and that the expression inside that bracket <em>must</em> be valid on its 
+own. Not only that but regardless of the inside we know that the whole
+expression still has to be valid. Let's focus on this first bracketed
+expression, let our attention recurse into it so to speak.</p>
+
+<p>This gives us a much easier problem – we just want to get our virtual
+machine to compute <code>3 + 2</code>. In this bytecode dialect we would load the 
+two constants, and then add them with <code>OP_ADD</code> like so:  </p>
+
+<pre><code class="nohighlight">OP_CONSTANT  (00) '3.000000'
+OP_CONSTANT  (01) '2.000000'
+OP_ADD
+</code></pre>
+
+<p>The effect of our vm executing these three instructions is that sitting
+pretty at the top of the stack is the result of the addition. Winning.</p>
+
+<p>Jumping back out from our bracketed expression, our next token is <code>MINUS</code>,
+at this point we have a fair idea that it must be used in an infix position. 
+In fact whatever token followed the bracketed expression it <strong>must</strong> be a 
+valid infix operator, if not the expression is over or had a syntax error. </p>
+
+<p>Assuming the best from our user (naive), we handle <code>MINUS</code> the same way
+we handled the first <code>PLUS</code>. We've already got the first operand on the
+stack, now we compile the right operand and <strong>then</strong> write out the bytecode
+for <code>OP_SUBTRACT</code>.</p>
+
+<p>The right operand is another simple three instructions:</p>
+
+<pre><code class="nohighlight">OP_CONSTANT  (02) '7.000000'
+OP_CONSTANT  (03) '2.000000'
+OP_MULTIPLY
+</code></pre>
+
+<p>Then we finish our top level binary expression and write a <code>OP_RETURN</code> to
+return the value at the top of the stack as the execution's result. Our
+final hand compiled program is:</p>
+
+<pre><code class="nohighlight">OP_CONSTANT  (00) '3.000000'
+OP_CONSTANT  (01) '2.000000'
+OP_ADD
+OP_CONSTANT  (02) '7.000000'
+OP_CONSTANT  (03) '2.000000'
+OP_MULTIPLY
+OP_SUBTRACT
+OP_RETURN
+</code></pre>
+
+<p>Ok that wasn't so hard was it? Let's try make our code do that.</p>
+
+<p>We define a parser object which will keep track of where we are, and
+whether things have all gone horribly wrong:</p>
+
+<pre><code class="python language-python">class Parser(object):
+    def __init__(self):
+        self.had_error = False
+        self.panic_mode = False
+        self.current = None
+        self.previous = None
+</code></pre>
+
+<p>The compiler will also be a class, we'll need one of our <code>Scanner</code> instances
+to pull tokens from, and since the output is a bytecode <code>Chunk</code> let's go ahead
+and make one of those in our compiler initializer:</p>
+
+<pre><code class="python language-python">class Compiler(object):
+
+    def __init__(self, source):
+        self.parser = Parser()
+        self.scanner = Scanner(source)
+        self.chunk = Chunk()
+</code></pre>
+
+<p>Since we have this (empty) chunk of bytecode we will make a helper method
+to add individual bytes. Every instruction will pass from our compiler into
+an executable program through this simple .</p>
+
+<pre><code class="python language-python">    def emit_byte(self, byte):
+        self.current_chunk().write_chunk(byte)
+</code></pre>
+
+<p>To quote from Bob Nystrom on the Pratt parsing technique:</p>
+
+<blockquote>
+  <p>the implementation is a deceptively-simple handful of deeply intertwined code</p>
+</blockquote>
+
+<p>I don't actually think I can do justice to this section. Instead I suggest 
+reading his treatment in 
+<a href="https://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/">Pratt Parsers: Expression Parsing Made Easy</a>
+which explains the magic behind the parsing component. Our only major difference is 
+instead of creating an AST we are going to directly emit bytecode for our VM.</p>
+
+<p>Now that I've absolved myself from taking responsibility in explaining this somewhat
+tricky concept, I'll discuss some of the code from 
+<a href="https://github.com/hardbyte/rpython-post/blob/master/section-4-compiler/compiler.py"><code>compiler.py</code></a>, and walk through what happens 
+for a particular rule.</p>
+
+<p>I'll jump straight to the juicy bit the table of parse rules. We define a <code>ParseRule</code>
+for each token, and each rule comprises:</p>
+
+<ul>
+<li>an optional handler for when the token is as a <em>prefix</em> (e.g. the minus in <code>(-2)</code>),</li>
+
+<li>an optional handler for whet the token is used <em>infix</em> (e.g. the slash in <code>2/47</code>)</li>
+
+<li>a precedence value (a number that determines what is of higher precedence)</li>
+</ul>
+<pre><code class="python language-python">rules = [
+    ParseRule(None,              None,            Precedence.NONE),   # ERROR
+    ParseRule(None,              None,            Precedence.NONE),   # EOF
+    ParseRule(Compiler.grouping, None,            Precedence.CALL),   # LEFT_PAREN
+    ParseRule(None,              None,            Precedence.NONE),   # RIGHT_PAREN
+    ParseRule(Compiler.unary,    Compiler.binary, Precedence.TERM),   # MINUS
+    ParseRule(None,              Compiler.binary, Precedence.TERM),   # PLUS
+    ParseRule(None,              Compiler.binary, Precedence.FACTOR), # SLASH
+    ParseRule(None,              Compiler.binary, Precedence.FACTOR), # STAR
+    ParseRule(Compiler.number,   None,            Precedence.NONE),   # NUMBER
+]
+</code></pre>
+
+<p>These rules really are the magic of our compiler. When we get to a particular
+token such as <code>MINUS</code> we see if it is an infix operator and if so we've gone and
+got its first operand ready. At all times we rely on the relative precedence; consuming 
+everything with higher precedence than the operator we are currently evaluating.</p>
+
+<p>In the expression:</p>
+
+<pre><code class="nohighlight">2 + 3 * 4
+</code></pre>
+
+<p>The <code>*</code> has higher precedence than the <code>+</code>, so <code>3 * 4</code> will be parsed together
+as the second operand to the first infix operator (the <code>+</code>) which follows
+the <a href="https://en.wikipedia.org/wiki/Order_of_operations#Mnemonics">BEDMAS</a> 
+order of operations I was taught at high school.</p>
+
+<p>To encode these precedence values we make another Python object moonlighting
+as an enum:</p>
+
+<pre><code class="python language-python">class Precedence(object):
+    NONE = 0
+    DEFAULT = 1
+    TERM = 2        # + -
+    FACTOR = 3      # * /
+    UNARY = 4       # ! - +
+    CALL = 5        # ()
+    PRIMARY = 6
+</code></pre>
+
+<p>What happens in our compiler when turning <code>-2.0</code> into bytecode? Assume we've just 
+pulled the token <code>MINUS</code> from the scanner. Every expression <strong>has</strong> to start with some
+type of prefix – whether that is:</p>
+
+<ul>
+<li>a bracket group <code>(</code>, </li>
+
+<li>a number <code>2</code>, </li>
+
+<li>or a prefix unary operator <code>-</code>. </li>
+</ul>
+<p>Knowing that, our compiler assumes there is a <code>prefix</code> handler in the rule table – in
+this case it points us at the <code>unary</code> handler.</p>
+
+<pre><code class="python language-python">    def parse_precedence(self, precedence):
+        # parses any expression of a given precedence level or higher
+        self.advance()
+        prefix_rule = self._get_rule(self.parser.previous.type).prefix
+        prefix_rule(self)
+</code></pre>
+
+<p></p>
+
+<p><code>unary</code> is called:</p>
+
+<pre><code class="python language-python">    def unary(self):
+        op_type = self.parser.previous.type
+        # Compile the operand
+        self.parse_precedence(Precedence.UNARY)
+        # Emit the operator instruction
+        if op_type == TokenTypes.MINUS:
+            self.emit_byte(OpCode.OP_NEGATE)
+</code></pre>
+
+<p>Here – before writing the <code>OP_NEGATE</code> opcode we recurse back into <code>parse_precedence</code>
+to ensure that <em>whatever</em> follows the <code>MINUS</code> token is compiled – provided it has 
+higher precedence than <code>unary</code> – e.g. a bracketed group. 
+Crucially at run time this recursive call will ensure that the result is left 
+on top of our stack. Armed with this knowledge, the <code>unary</code> method just
+has to emit a single byte with the <code>OP_NEGATE</code> opcode.</p>
+
+<h3 id="testcompilation">Test compilation<a href="#testcompilation" class="headerlink" title="Permalink to this heading">¶</a></h3>
+
+<p>Now we can test our compiler by outputting disassembled bytecode
+of our user entered expressions. Create a new entry_point 
+<a href="https://github.com/hardbyte/rpython-post/blob/master/section-4-compiler/targetcompiler1.py"><code>targetcompiler</code></a>:</p>
+
+<pre><code class="python language-python">from rpython.rlib import rfile
+from compiler import Compiler
+
+LINE_BUFFER_LENGTH = 1024
+
+
+def entry_point(argv):
+    stdin, stdout, stderr = rfile.create_stdio()
+
+    try:
+        while True:
+            stdout.write("&gt; ")
+            source = stdin.readline(LINE_BUFFER_LENGTH)
+            compiler = Compiler(source, debugging=True)
+            compiler.compile()
+    except:
+        pass
+    return 0
+</code></pre>
+
+<p>Translate it and test it out:</p>
+
+<pre><code class="nohighlight">$ ./compiler1 
+&gt; (2/4 + 1/2)
+== code ==
+
+0000 OP_CONSTANT  (00) '2.000000'
+0002 OP_CONSTANT  (01) '4.000000'
+0004 OP_DIVIDE    
+0005 OP_CONSTANT  (02) '1.000000'
+0007 OP_CONSTANT  (00) '2.000000'
+0009 OP_DIVIDE    
+0010 OP_ADD       
+0011 OP_RETURN
+</code></pre>
+
+<p>Now if you've made it this far you'll be eager to finally connect everything
+together by executing this bytecode with the virtual machine.</p>
+
+<h2 id="endtoend">End to end<a href="#endtoend" class="headerlink" title="Permalink to this heading">¶</a></h2>
+
+<p>All the pieces slot together rather easily at this point, create a new 
+file <a href="https://github.com/hardbyte/rpython-post/blob/master/section-5-execution/targetcalc.py"><code>targetcalc.py</code></a> and define our 
+entry point:</p>
+
+<pre><code class="python language-python">from rpython.rlib import rfile
+from compiler import Compiler
+from vm import VM
+
+LINE_BUFFER_LENGTH = 4096
+
+
+def entry_point(argv):
+    stdin, stdout, stderr = rfile.create_stdio()
+    vm = VM()
+    try:
+        while True:
+            stdout.write("&gt; ")
+            source = stdin.readline(LINE_BUFFER_LENGTH)
+            if source:
+                compiler = Compiler(source, debugging=False)
+                compiler.compile()
+                vm.interpret_chunk(compiler.chunk)
+    except:
+        pass
+    return 0
+
+
+def target(driver, *args):
+    driver.exe_name = "calc"
+    return entry_point, None
+</code></pre>
+
+<p></p>
+
+<p>Let's try catch it out with a double negative:</p>
+
+<pre><code class="nohighlight">$ ./calc 
+&gt; 2--3
+== VM TRACE ==
+          []
+0000 OP_CONSTANT  (00) '2.000000'
+          [ 2.000000 ]
+0002 OP_CONSTANT  (01) '3.000000'
+          [ 2.000000 ] [ 3.000000 ]
+0004 OP_NEGATE    
+          [ 2.000000 ] [ -3.000000 ]
+0005 OP_SUBTRACT  
+          [ 5.000000 ]
+0006 OP_RETURN    
+5.000000
+</code></pre>
+
+<p>Ok well let's evaluate the first 50 terms of the 
+<a href="https://en.wikipedia.org/wiki/Pi#Infinite_series">Nilakantha Series</a>:</p>
+
+<pre><code class="nohighlight">$ ./calc
+&gt; 3 + 4 * ((1/(2 * 3 * 4)) + (1/(4 * 5 * 6)) - (1/(6 * 7 * 8)) + (1/(8 * 9 * 10)) - (1/(10 * 11 * 12)) + (1/(12 * 13 * 14)) - (1/(14 * 15 * 16)) + (1/(16 * 17 * 18)) - (1/(18 * 19 * 20)) + (1/(20 * 21 * 22)) - (1/(22 * 23 * 24)) + (1/(24 * 25 * 26)) - (1/(26 * 27 * 28)) + (1/(28 * 29 * 30)) - (1/(30 * 31 * 32)) + (1/(32 * 33 * 34)) - (1/(34 * 35 * 36)) + (1/(36 * 37 * 38)) - (1/(38 * 39 * 40)) + (1/(40 * 41 * 42)) - (1/(42 * 43 * 44)) + (1/(44 * 45 * 46)) - (1/(46 * 47 * 48)) + (1/(48 * 49 * 50)) - (1/(50 * 51 * 52)) + (1/(52 * 53 * 54)) - (1/(54 * 55 * 56)) + (1/(56 * 57 * 58)) - (1/(58 * 59 * 60)) + (1/(60 * 61 * 62)) - (1/(62 * 63 * 64)) + (1/(64 * 65 * 66)) - (1/(66 * 67 * 68)) + (1/(68 * 69 * 70)) - (1/(70 * 71 * 72)) + (1/(72 * 73 * 74)) - (1/(74 * 75 * 76)) + (1/(76 * 77 * 78)) - (1/(78 * 79 * 80)) + (1/(80 * 81 * 82)) - (1/(82 * 83 * 84)) + (1/(84 * 85 * 86)) - (1/(86 * 87 * 88)) + (1/(88 * 89 * 90)) - (1/(90 * 91 * 92)) + (1/(92 * 93 * 94)) - (1/(94 * 95 * 96)) + (1/(96 * 97 * 98)) - (1/(98 * 99 * 100)) + (1/(100 * 101 * 102)))
+
+== VM TRACE ==
+          []
+0000 OP_CONSTANT  (00) '3.000000'
+          [ 3.000000 ]
+0002 OP_CONSTANT  (01) '4.000000'
+...SNIP...
+0598 OP_CONSTANT  (101) '102.000000'
+          [ 3.000000 ] [ 4.000000 ] [ 0.047935 ] [ 1.000000 ] [ 10100.000000 ] [ 102.000000 ]
+0600 OP_MULTIPLY  
+          [ 3.000000 ] [ 4.000000 ] [ 0.047935 ] [ 1.000000 ] [ 1030200.000000 ]
+0601 OP_DIVIDE    
+          [ 3.000000 ] [ 4.000000 ] [ 0.047935 ] [ 0.000001 ]
+0602 OP_ADD       
+          [ 3.000000 ] [ 4.000000 ] [ 0.047936 ]
+0603 OP_MULTIPLY  
+          [ 3.000000 ] [ 0.191743 ]
+0604 OP_ADD       
+          [ 3.191743 ]
+0605 OP_RETURN    
+3.191743
+</code></pre>
+
+<p>We just executed 605 virtual machine instructions to compute pi to 1dp!</p>
+
+<p>This brings us to the end of this tutorial. To recap we've walked through the whole 
+compilation process: from the user providing an expression string on the REPL, scanning
+the source string into tokens, parsing the tokens while accounting for relative 
+precedence via a Pratt parser, generating bytecode, and finally executing the bytecode 
+on our own VM. RPython translated what we wrote into C and compiled it, meaning
+our resulting <code>calc</code> REPL is really fast.</p>
+
+<blockquote>
+  <p>“The world is a thing of utter inordinate complexity and richness and strangeness that is absolutely awesome.”</p>
+  
+  <p>― Douglas Adams </p>
+</blockquote>
+
+<p>Many thanks to Bob Nystrom for writing the book that inspired this post, and thanks to 
+Carl Friedrich and Matt Halverson for reviewing.</p>
+
+<p>― Brian (<a href="https://twitter.com/thorneynz">@thorneynzb</a>)</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../09/inside-cpyext-why-emulating-cpython-c-8083064623681286567.html" rel="prev" title="Inside cpyext: Why emulating CPython C API is so Hard">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="hello-everyone-at-pypy-we-are-trying-to-5336557946798583063.html" rel="next" title="Funding for 64-bit Armv8-a support in PyPy">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="Guest Post: Implementing a Calculator REPL in RPython" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

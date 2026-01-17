@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="A Faster Python">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy (old posts, page 28) | PyPy</title>
+<link href="../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/blog/index-28.html">
+<link rel="icon" href="../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../favicon32x32.ico" sizes="32x32">
+<link rel="prev" href="index-29.html" type="text/html">
+<link rel="next" href="index-27.html" type="text/html">
+<!--[if lt IE 9]><script src="../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../assets/css/tipuesearch.css">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../index.html">
+                    <image id="toplogo" src="../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href=".">Index</a> </li>  
+                    <li> <a href="../categories/">Tags</a> </li>  
+                    <li> <a href="../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><div class="post">
+<div class="postindex">
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2013/08/update-on-stm-8705514488940872802.html" class="u-url">Update on STM</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2013/08/update-on-stm-8705514488940872802.html" rel="bookmark">
+            <time class="published dt-published" datetime="2013-08-18T18:54:00Z" itemprop="datePublished" title="2013-08-18 18:54">2013-08-18 18:54</time></a>
+            </p>
+                <p class="commentline">7 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hi all,</p>
+
+<p>A quick update on Software Transactional Memory.  We are
+working on two fronts.</p>
+
+<p>On the one hand, the integration of the "c4" C library with PyPy is done
+and works well, but is still subject to improvements.  The "PyPy-STM"
+executable (without the JIT)
+seems to be stable, as far as it has been tested.  It runs a simple
+benchmark like Richards with a 3.2x slow-down over a regular JIT-less
+PyPy.</p>
+
+<p>The main factor of this slow-down: the numerous "barriers" in
+the code --- checks that are needed a bit everywhere to verify that a
+pointer to an object points to a recent enough version, and if not, to
+go to the most recent version.  These barriers are inserted automatically
+during the translation; there is no need for us to manually put 42 million
+barriers in the source code of PyPy.  But this automatic insertion uses a
+primitive algorithm right now, which usually ends up putting more barriers than the
+theoretical optimum.  I (Armin) am trying to improve that --- and progressing:
+last week the slow-down was around 4.5x.  This is done in the branch
+<a href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/stmgc-static-barrier">stmgc-static-barrier</a>.</p>
+
+<p>On the other hand, Remi is progressing on the JIT integration in
+the branch <a href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/stmgc-c4">stmgc-c4</a>. 
+This has been working in simple cases since a couple of weeks by now, but the
+resulting "PyPy-JIT-STM" often crashes.  This is because while the
+basics are not really hard, we keep hitting new issues that must be
+resolved.</p>
+
+<p>The basics are that whenever the JIT is about to generate
+assembler corresponding to a load or a store in a GC object, it must
+first generate a bit of extra assembler that corresponds to the barrier
+that we need.  This works fine by now (but could benefit from the same
+kind of optimizations described above, to reduce the number of barriers).
+The additional issues are all more subtle.  I will describe the current
+one as an example: it is how to write constant pointers inside the assembler.</p>
+
+<p>Remember that the STM library classifies objects as either
+"public" or "protected/private".  A "protected/private" object
+is one which has not been seen by another thread so far.
+This is essential as an optimization, because we know that no
+other thread will access our protected or private objects in parallel,
+and thus we are free to modify their content in place.  By contrast,
+public objects are frozen, and to do any change, we first need to
+build a different (protected) copy of the object.  See this
+<a href="../posts/2013/06/stm-on-drawing-board-1028082727566254104.html">blog
+post</a> for more details.</p>
+
+<p>So far so good, but the JIT will sometimes (actually often) hard-code
+constant pointers into the assembler it produces.  For example, this is the
+case when the Python code being JITted creates an instance of a known class;
+the corresponding assembler produced by the JIT will reserve the memory for
+the instance and then write the constant type pointer in it.  This type
+pointer is a GC object (in the simple model, it's the Python class object;
+in PyPy it's actually the "map" object, which is
+<a href="../posts/2011/03/controlling-tracing-of-interpreter-with_21-6524148550848694588.html">a different story</a>).</p>
+
+<p>The problem right now is that this constant pointer may point to a
+protected object.  This is a problem because the same piece of assembler
+can later be executed by a different thread.  If it does, then this
+different thread will create instances whose type pointer is bogus: looking
+like a protected object, but actually protected by a different thread.
+Any attempt to use this type pointer to change anything on the class
+itself will likely crash: the threads will all think they can safely change it
+in-place.  To fix this, we need to make sure we only write pointers to
+public objects in the assembler.  This is a bit involved because we need
+to ensure that there <i>is</i> a public version of the object to start with.</p>
+
+<p>When this is done, we will likely hit the next problem, and the next one;
+but at some point it should converge (hopefully!) and we'll give you our first
+PyPy-JIT-STM ready to try.  Stay tuned :-)</p>
+
+<p>A bientôt,</p>
+
+<p>Armin.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-6389834796906028011">
+        <div class="comment-header">
+          <a name="comment-6389834796906028011"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-08-19 11:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>*assembly</p>
+        </div>
+      </div>
+      <div class="comment comment-9085338239827648667">
+        <div class="comment-header">
+          <a name="comment-9085338239827648667"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2013-08-20 21:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks for the update; glad it's coming together! I'm really looking forward to seeing how it stacks up once the JIT work is complete.<br><br>Do you think that it'll be possible to ever get better than a 2x slowdown for serial operations? Or is that the minimal possible? Naively, it makes sense that it'll never be as fast, but if 1.5x or lower were possible, that would be very exciting.<br><br>Also, is the end goal that you would have a module you import to "turn on" STM? Or would it always be a separate build of pypy, just like JIT/JIT-less?</p>
+        </div>
+      </div>
+      <div class="comment comment-5211777373385768105">
+        <div class="comment-header">
+          <a name="comment-5211777373385768105"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2013-08-21 09:05</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Christopher: the slow-down we'll get is still unknown, but I fear it won't really go well under 2x.<br><br>I see it mainly as a separate build: either you want to run all these barrier instructions everywhere (which gives the slow-down) or not.  It could be possible in theory to have a version that has the barriers everywhere, but creates JIT-generated assembler that doesn't, and thus runs almost as fast as a regular PyPy as long as you don't "turn on" STM.  We will see if that makes sense.</p>
+        </div>
+      </div>
+      <div class="comment comment-3507422045925510245">
+        <div class="comment-header">
+          <a name="comment-3507422045925510245"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2013-08-21 09:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous: ah, thanks :-)  I think I now learned the difference between "assembler" and "assembly" in English, which was never quite clear to me.  Note that in french the same word ("assembleur") is used to mean both terms.</p>
+        </div>
+      </div>
+      <div class="comment comment-6106623681571194221">
+        <div class="comment-header">
+          <a name="comment-6106623681571194221"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2013-08-22 17:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin: Ah, I see. Well, from a user's perspective, what I most write in python these days is either GUI applications (for which I've never been able to use pypy due to lack of bindings, but that's another issue entirely), or for small services, for which pypy has provided a rather nice speed improvement.<br><br>In a perfect world, I'd be able to use pypy for both of these tasks, not using STM for my GUI applications, but turning it on for the services I write (well, once they reach a certain point where I'd gain something from concurrency).<br><br>I suspect having a separate build would make such a use-case awkward.<br><br>Also, my interest is a bit self-motivated; at work we current use node.js for a lot of our services. Pypy compares decently for a lot of our tasks, but it not 'clearly better'. Once STM is stable, however, several of our services that we've struggled scaling to multiple cores on node.js could be rewritten in pypy STM, and should scale much easier. (Manual process management is painful!)<br><br>Again, if pypy STM were a seperate build, we'd have to manage having both installed in the case where we have servers running services that need concurrency, or ones that work well enough with a very fast async implementation. Not impossible, just a bit awkward. :)<br><br>Either way, I'm pretty excited!</p>
+        </div>
+      </div>
+      <div class="comment comment-4877793269843688351">
+        <div class="comment-header">
+          <a name="comment-4877793269843688351"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2013-10-16 15:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>Are there any plans or experiments going on related to Hardware Transactional Memory?</p>
+        </div>
+      </div>
+      <div class="comment comment-5381354260304283933">
+        <div class="comment-header">
+          <a name="comment-5381354260304283933"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2013-10-16 15:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Ignacio Hernandez: for HTM, our position is still as described last year in: https://morepypy.blogspot.com/2012/08/multicore-programming-in-pypy-and.html</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2013/08/numpypy-status-update-3401163348519734658.html" class="u-url">NumPyPy Status Update</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/romain-guillebert.html">Romain Guillebert</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2013/08/numpypy-status-update-3401163348519734658.html" rel="bookmark">
+            <time class="published dt-published" datetime="2013-08-08T19:01:00Z" itemprop="datePublished" title="2013-08-08 19:01">2013-08-08 19:01</time></a>
+            </p>
+                <p class="commentline">2 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Hello everyone<br><br>
+As expected, nditer is a lot of work. I'm going to pause my work on it for now and focus on simpler and more important things, here is a list of what I implemented :<br></p>
+<ul>
+<li>Fixed a bug on 32 bit that made int32(123).dtype == dtype("int32") fail</li>
+<li>Fixed a bug on the pickling of array slices</li>
+<li>The external loop flag is implemented on the nditer class</li>
+<li>The c_index, f_index and multi_index flags are also implemented</li>
+<li>Add dtype("double") and dtype("str")</li>
+<li>C-style iteration is available for nditer</li>
+</ul>
+Cheers<br>
+Romain Guillebert
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-5711833937699682795">
+        <div class="comment-header">
+          <a name="comment-5711833937699682795"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2013-08-09 10:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>Nice work :)</p>
+        </div>
+      </div>
+      <div class="comment comment-1843488825524687105">
+        <div class="comment-header">
+          <a name="comment-1843488825524687105"></a>
+            <span class="author">Arne Babenhauserheide</span> wrote on <span class="date">2013-08-12 09:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>thanks for the update!</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2013/08/pypy-21-considered-armful-7177475722033479233.html" class="u-url">PyPy 2.1 - Considered ARMful</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/david-schneider.html">David Schneider</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2013/08/pypy-21-considered-armful-7177475722033479233.html" rel="bookmark">
+            <time class="published dt-published" datetime="2013-08-01T14:38:00Z" itemprop="datePublished" title="2013-08-01 14:38">2013-08-01 14:38</time></a>
+            </p>
+                <p class="commentline">9 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>We're pleased to announce PyPy 2.1, which targets version 2.7.3 of the Python<br>
+language. This is the first release with official support for ARM processors in the JIT.<br>
+This release also contains several bugfixes and performance improvements.</p>
+<p>You can download the PyPy 2.1 release here:</p>
+<blockquote><a class="reference external" href="https://pypy.org/download.html">https://pypy.org/download.html</a></blockquote>
+<p>We would like to thank the <a class="reference external" href="https://www.raspberrypi.org">Raspberry Pi Foundation</a> for supporting the work<br>
+to finish PyPy's ARM support.</p>
+<p>The first beta of PyPy3 2.1, targeting version 3 of the Python language, was<br>
+just released, more details can be found <a class="reference external" href="../posts/2013/07/pypy3-21-beta-1-8647445024868663902.html">here</a>.</p>
+<div class="section" id="what-is-pypy">
+<br><h3>What is PyPy?</h3>
+<p>PyPy is a very compliant Python interpreter, almost a drop-in replacement for
+CPython 2.7. It's fast (<a class="reference external" href="https://speed.pypy.org">pypy 2.1 and cpython 2.7.2</a> performance comparison)
+due to its integrated tracing JIT compiler.</p>
+<p>This release supports x86 machines running Linux 32/64, Mac OS X 64 or Windows
+32. This release also supports ARM machines running Linux 32bit - anything with
+<tt class="docutils literal">ARMv6</tt> (like the Raspberry Pi) or <tt class="docutils literal">ARMv7</tt> (like the Beagleboard,
+Chromebook, Cubieboard, etc.) that supports <tt class="docutils literal">VFPv3</tt> should work. Both
+hard-float <tt class="docutils literal">armhf/gnueabihf</tt> and soft-float <tt class="docutils literal">armel/gnueabi</tt> builds are
+provided. The <tt class="docutils literal">armhf</tt> builds for Raspbian are created using the Raspberry Pi
+<a class="reference external" href="https://github.com/raspberrypi">custom cross-compilation toolchain</a>
+based on <tt class="docutils literal"><span class="pre">gcc-arm-linux-gnueabihf</span></tt> and should work on <tt class="docutils literal">ARMv6</tt> and
+<tt class="docutils literal">ARMv7</tt> devices running Debian or Raspbian. The <tt class="docutils literal">armel</tt> builds are built
+using the <tt class="docutils literal"><span class="pre">gcc-arm-linux-gnuebi</span></tt> toolchain provided by Ubuntu and
+currently target <tt class="docutils literal">ARMv7</tt>.</p>
+<p>Windows 64 work is still stalling, we would welcome a volunteer
+to handle that.</p>
+</div>
+<div class="section" id="highlights">
+<h3>Highlights</h3>
+<ul class="simple">
+<li>JIT support for ARM, architecture versions 6 and 7, hard- and soft-float ABI</li>
+<li>Stacklet support for ARM</li>
+<li>Support for os.statvfs and os.fstatvfs on unix systems</li>
+<li>Improved logging performance</li>
+<li>Faster sets for objects</li>
+<li>Interpreter improvements</li>
+<li>During packaging, compile the CFFI based TK extension</li>
+<li>Pickling of numpy arrays and dtypes</li>
+<li>Subarrays for numpy</li>
+<li>Bugfixes to numpy</li>
+<li>Bugfixes to cffi and ctypes</li>
+<li>Bugfixes to the x86 stacklet support</li>
+<li>Fixed issue <a class="reference external" href="https://bugs.pypy.org/issue1533">1533</a>: fix an RPython-level OverflowError for space.float_w(w_big_long_number).</li>
+<li>Fixed issue <a class="reference external" href="https://bugs.pypy.org/issue1552">1552</a>: GreenletExit should inherit from BaseException.</li>
+<li>Fixed issue <a class="reference external" href="https://bugs.pypy.org/issue1537">1537</a>: numpypy __array_interface__</li>
+<li>Fixed issue <a class="reference external" href="https://bugs.pypy.org/issue1238">1238</a>: Writing to an SSL socket in PyPy sometimes failed with a "bad write retry" message.</li>
+</ul>
+<p>Cheers,</p>
+<p>David Schneider for the PyPy team.</p>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1905189088548712457">
+        <div class="comment-header">
+          <a name="comment-1905189088548712457"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-08-02 03:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>What about gevent support in this release? i am waiting for full support to switch to pypy on production</p>
+        </div>
+      </div>
+      <div class="comment comment-2971820661683206354">
+        <div class="comment-header">
+          <a name="comment-2971820661683206354"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2013-08-02 08:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>Some issues with gevent were fixed.  You need to try it out and report any remaining issues, if any.</p>
+        </div>
+      </div>
+      <div class="comment comment-5876815999030255820">
+        <div class="comment-header">
+          <a name="comment-5876815999030255820"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2013-08-02 08:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>If i read well, you did not use any ThumbEE instructions for your Arm support ? So there is room for improvement ?</p>
+        </div>
+      </div>
+      <div class="comment comment-2065064512862029791">
+        <div class="comment-header">
+          <a name="comment-2065064512862029791"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2013-08-02 09:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>ThumbEE is deprecated nowadays.</p>
+        </div>
+      </div>
+      <div class="comment comment-5244192344369052944">
+        <div class="comment-header">
+          <a name="comment-5244192344369052944"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2013-08-07 15:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>Has cdecimal been backported into either version of PyPy yet?  If not, any near-term plan to do so?</p>
+        </div>
+      </div>
+      <div class="comment comment-3310199858801772833">
+        <div class="comment-header">
+          <a name="comment-3310199858801772833"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2013-08-08 08:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>cdecimal is purely a speed gain.  On PyPy the pure Python decimal.py is accelerated by the JIT, though it is probably possible to gain some small extra factor by rewriting it directly in RPython.<br><br>If your problem is merely that project X has listed cdecimal in its dependencies, then we could add a "cdecimal.egg-info" file that says "yup, it's installed" and be done (assuming that the API is really the same one as decimal.py).</p>
+        </div>
+      </div>
+      <div class="comment comment-2764263903259560806">
+        <div class="comment-header">
+          <a name="comment-2764263903259560806"></a>
+            <span class="author">Amaury Forgeot d'Arc</span> wrote on <span class="date">2013-08-08 23:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>cdecimal is actually based on a C library (libmpdec). Maybe a ffi-based binding could give interesting results.</p>
+        </div>
+      </div>
+      <div class="comment comment-3914876655657100680">
+        <div class="comment-header">
+          <a name="comment-3914876655657100680"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-08-16 12:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>Importing sqlite3 <a href="https://forum.xbmc.org/showthread.php?tid=170921&amp;pid=1485579#pid1485579" rel="nofollow">incurs a huge delay</a> in the latest armhf jit nightly (15 August).</p>
+        </div>
+      </div>
+      <div class="comment comment-8751270314424410815">
+        <div class="comment-header">
+          <a name="comment-8751270314424410815"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-08-26 12:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>Will PyPy PPA be updated? https://launchpad.net/~pypy/+archive/ppa</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2013/07/pypy-demo-evening-in-london-august-27-3640213278969666664.html" class="u-url">PyPy Demo Evening in London, August 27, 2013</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2013/07/pypy-demo-evening-in-london-august-27-3640213278969666664.html" rel="bookmark">
+            <time class="published dt-published" datetime="2013-07-31T09:10:00Z" itemprop="datePublished" title="2013-07-31 09:10">2013-07-31 09:10</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>As promised in the <a class="reference external" href="../posts/2013/07/pypy-london-sprint-august-26-september-5156945690440578388.html">London sprint announcement</a> we are organising a PyPy demo
+evening during the London sprint on Tuesday, August 27 2013, 18:30-19:30 (BST). The
+description of the event is below. If you want to come, please register on the
+<a class="reference external" href="https://www.eventbrite.co.uk/event/7590686949">Eventbrite page</a>.</p>
+<hr class="docutils">
+<p>PyPy is a fast Python VM. Maybe you've never used PyPy and want to find out
+what use it might be for you? Or you and your organisation have been using it
+and you want to find out more about how it works under the hood? If so, this
+demo session is for you!</p>
+<p>Members of the PyPy team will give a series of lightning talks on PyPy: its
+benefits; how it works; research currently being undertaken to make it
+faster; and unusual uses it can be put to. Speakers will be available
+afterwards for informal discussions. This is the first time an event like
+this has been held in the UK, and is a unique opportunity to speak to core
+people. Speakers confirmed thus far include: Armin Rigo, <a class="reference external" href="https://baroquesoftware.com/">Maciej Fijałkowski</a>,
+<a class="reference external" href="https://cfbolz.de">Carl Friedrich Bolz</a>, <a class="reference external" href="https://lukasdiekmann.com/">Lukas Diekmann</a>, <a class="reference external" href="https://tratt.net/laurie/">Laurence Tratt</a>, <a class="reference external" href="https://eddbarrett.co.uk/">Edd Barrett</a>.</p>
+<p>The venue for this talk is the <a class="reference external" href="https://soft-dev.org/">Software Development Team</a>, King's College
+London. The main entrance is on the Strand, from where the room for the event
+will be clearly signposted. Travel directions can be found at
+<a class="reference external" href="https://www.kcl.ac.uk/campuslife/campuses/directions/strand.aspx">https://www.kcl.ac.uk/campuslife/campuses/directions/strand.aspx</a></p>
+<p>If you have any questions about the event, please contact <a class="reference external" href="mailto:laurie@tratt.net">Laurence Tratt</a></p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2013/07/pypy3-21-beta-1-8647445024868663902.html" class="u-url">PyPy3 2.1 beta 1</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/philip-jenvey.html">Philip Jenvey</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2013/07/pypy3-21-beta-1-8647445024868663902.html" rel="bookmark">
+            <time class="published dt-published" datetime="2013-07-30T21:35:00Z" itemprop="datePublished" title="2013-07-30 21:35">2013-07-30 21:35</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>We're pleased to announce the first beta of the upcoming 2.1 release of<br>
+PyPy3. This is the first release of PyPy which targets Python 3 (3.2.3)<br>
+compatibility.</p>
+<p>We would like to thank all of the people who <a class="reference external" href="../posts/2012/01/py3k-and-numpy-first-stage-thanks-to-3008917396290059758.html">donated</a> to the <a class="reference external" href="https://pypy.org/py3donate.html">py3k proposal</a><br>
+for supporting the work that went into this and future releases.</p>
+<p>You can download the PyPy3 2.1 beta 1 release here:</p>
+<blockquote><a class="reference external" href="https://pypy.org/download.html#pypy3-2-1-beta-1">https://pypy.org/download.html#pypy3-2-1-beta-1</a></blockquote>
+<div class="section" id="highlights">
+<h1>Highlights</h1>
+<ul class="simple">
+<li>The first release of PyPy3: support for Python 3, targetting CPython 3.2.3!<ul>
+<li>There are some <a class="reference external" href="https://bugs.pypy.org/issue?%40search_text=&amp;title=py3k&amp;%40columns=title&amp;keyword=&amp;id=&amp;%40columns=id&amp;creation=&amp;creator=&amp;release=&amp;activity=&amp;%40columns=activity&amp;%40sort=activity&amp;actor=&amp;priority=&amp;%40group=priority&amp;status=-1%2C1%2C2%2C3%2C4%2C5%2C6&amp;%40columns=status&amp;assignedto=&amp;%40columns=assignedto&amp;%40pagesize=50&amp;%40startwith=0&amp;%40queryname=&amp;%40old-queryname=&amp;%40action=search">known issues</a> including performance regressions (issues<br><a class="reference external" href="https://bugs.pypy.org/issue1540">#1540</a> &amp; <a class="reference external" href="https://bugs.pypy.org/issue1541">#1541</a>) slated to be resolved before the final release.</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="what-is-pypy">
+<h1>What is PyPy?</h1>
+<p>PyPy is a very compliant Python interpreter, almost a drop-in replacement for<br>
+CPython 2.7.3 or 3.2.3. It's fast due to its integrated tracing JIT compiler.</p>
+<p>This release supports x86 machines running Linux 32/64, Mac OS X 64 or Windows<br>
+32. Also this release supports ARM machines running Linux 32bit - anything with<br><tt class="docutils literal">ARMv6</tt> (like the Raspberry Pi) or <tt class="docutils literal">ARMv7</tt> (like Beagleboard,<br>
+Chromebook, Cubieboard, etc.) that supports <tt class="docutils literal">VFPv3</tt> should work.</p>
+<p>Windows 64 work is still stalling and we would welcome a volunteer to handle<br>
+that.</p>
+</div>
+<div class="section" id="how-to-use-pypy">
+<h1>How to use PyPy?</h1>
+<p>We suggest using PyPy from a <a class="reference external" href="https://www.virtualenv.org/en/latest/">virtualenv</a>. Once you have a virtualenv<br>
+installed, you can follow instructions from <a class="reference external" href="https://doc.pypy.org/en/latest/getting-started.html#installing-using-virtualenv">pypy documentation</a> on how<br>
+to proceed. This document also covers other <a class="reference external" href="https://doc.pypy.org/en/latest/getting-started.html#installing-pypy">installation schemes</a>.</p>
+<p>Cheers,<br>
+the PyPy team</p>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-6681224327606797596">
+        <div class="comment-header">
+          <a name="comment-6681224327606797596"></a>
+            <span class="author">Arne Babenhauserheide</span> wrote on <span class="date">2013-07-31 08:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is *really* cool!<br><br>Thank you for realizing pypy for python3! This should make it much easier to continue work on one of my projects (it was on hold, because pypy made it much faster, but I had to convert from python3 to python2 for running it, and that became a maintenance nightmare.</p>
+        </div>
+      </div>
+      <div class="comment comment-2268506055793727564">
+        <div class="comment-header">
+          <a name="comment-2268506055793727564"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-08-02 11:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>So how does one build PyPy3? It doesn't seem to be documented anywhere.</p>
+        </div>
+      </div>
+      <div class="comment comment-5724369982465531618">
+        <div class="comment-header">
+          <a name="comment-5724369982465531618"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-08-02 12:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>Sorry never mind. I thought it was being developed in the same codebase, but now I realize there's a separate branch for PyPy3 that must be used to build the Python3 version.<br></p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2013/07/pypy-21-beta-2-264349571160808803.html" class="u-url">PyPy 2.1 beta 2</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/david-schneider.html">David Schneider</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2013/07/pypy-21-beta-2-264349571160808803.html" rel="bookmark">
+            <time class="published dt-published" datetime="2013-07-26T10:33:00Z" itemprop="datePublished" title="2013-07-26 10:33">2013-07-26 10:33</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>We're pleased to announce the second beta of the upcoming 2.1 release of PyPy.<br>
+This beta adds one new feature to the 2.1 release and contains several bugfixes listed below.</p>
+<p>You can download the PyPy 2.1 beta 2 release here:</p>
+<blockquote><a class="reference external" href="https://pypy.org/download.html">https://pypy.org/download.html</a></blockquote>
+<div class="section" id="highlights">
+<h3>Highlights</h3>
+<ul class="simple">
+<li>Support for os.statvfs and os.fstatvfs on unix systems.</li>
+<li>Fixed issue <a class="reference external" href="https://bugs.pypy.org/issue1533">1533</a>: fix an RPython-level OverflowError for space.float_w(w_big_long_number).</li>
+<li>Fixed issue <a class="reference external" href="https://bugs.pypy.org/issue1552">1552</a>: GreenletExit should inherit from BaseException.</li>
+<li>Fixed issue <a class="reference external" href="https://bugs.pypy.org/issue1537">1537</a>: numpypy __array_interface__</li>
+<li>Fixed issue <a class="reference external" href="https://bugs.pypy.org/issue1238">1238</a>: Writing to an SSL socket in pypy sometimes failed with a "bad write retry" message.</li>
+<li>
+<a class="reference external" href="https://bitbucket.org/pypy/pypy/src/0c6eeae0316c11146f47fcf83e21e24f11378be1/?at=distutils-cppldflags">distutils</a>: copy CPython's implementation of customize_compiler, dont call<br>
+split on environment variables, honour CFLAGS, CPPFLAGS, LDSHARED and<br>
+LDFLAGS.</li>
+<li>During packaging, compile the CFFI tk extension.</li>
+</ul>
+</div>
+<div class="section" id="what-is-pypy">
+<h3>What is PyPy?</h3>
+<p>PyPy is a very compliant Python interpreter, almost a drop-in replacement for<br>
+CPython 2.7.3. It's fast due to its integrated tracing JIT compiler.</p>
+<p>This release supports x86 machines running Linux 32/64, Mac OS X 64 or Windows<br>
+32. Also this release supports ARM machines running Linux 32bit - anything with<br><tt class="docutils literal">ARMv6</tt> (like the Raspberry Pi) or <tt class="docutils literal">ARMv7</tt> (like Beagleboard,<br>
+Chromebook, Cubieboard, etc.) that supports <tt class="docutils literal">VFPv3</tt> should work.</p>
+<p>Windows 64 work is still stalling, we would welcome a volunteer<br>
+to handle that.</p>
+</div>
+<div class="section" id="how-to-use-pypy">
+<h3>How to use PyPy?</h3>
+<p>We suggest using PyPy from a <a class="reference external" href="https://www.virtualenv.org/en/latest/">virtualenv</a>. Once you have a virtualenv<br>
+installed, you can follow instructions from <a class="reference external" href="https://doc.pypy.org/en/latest/getting-started.html#installing-using-virtualenv">pypy documentation</a> on how<br>
+to proceed. This document also covers other <a class="reference external" href="https://doc.pypy.org/en/latest/getting-started.html#installing-pypy">installation schemes</a>.</p>
+<p>Cheers,<br>
+The PyPy Team.</p>
+</div>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2013/07/pypy-san-francisco-sprint-july-27th-2012-3064530444396960172.html" class="u-url">PyPy San Francisco Sprint July 27th 2013</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/alex.html">Alex</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2013/07/pypy-san-francisco-sprint-july-27th-2012-3064530444396960172.html" rel="bookmark">
+            <time class="published dt-published" datetime="2013-07-26T01:17:00Z" itemprop="datePublished" title="2013-07-26 01:17">2013-07-26 01:17</time></a>
+            </p>
+                <p class="commentline">2 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>The next PyPy sprint will be in San Francisco, California. It is a public<br>
+sprint, suitable for newcomers. It will run on Saturday July 27th.</p>
+<p>Some possible things people will be hacking on the sprint:</p>
+<ul class="simple">
+<li>running your software on PyPy</li>
+<li>making your software fast on PyPy</li>
+<li>improving PyPy's JIT</li>
+<li>improving Twisted on PyPy</li>
+<li>any exciting stuff you can think of</li>
+</ul>
+<p>If there are newcomers, we'll run an introduction to hacking on PyPy.</p>
+<p>Location<br>
+The sprint will be held at the Rackspace Office:</p>
+<p>620 Folsom St, Ste 100</p>
+<p>The doors will open at 10AM and run until 6PM.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-634428299685470809">
+        <div class="comment-header">
+          <a name="comment-634428299685470809"></a>
+            <span class="author">Garen</span> wrote on <span class="date">2013-07-26 04:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>s/2012/2013/;</p>
+        </div>
+      </div>
+      <div class="comment comment-6174863987319450103">
+        <div class="comment-header">
+          <a name="comment-6174863987319450103"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-07-30 11:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>You think you might get more folks if you gave more than 24 hours notice?<br><br>Just saying...<br></p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2013/07/pypy-london-sprint-august-26-september-5156945690440578388.html" class="u-url">PyPy London Sprint (August 26 - September 1 2013)</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2013/07/pypy-london-sprint-august-26-september-5156945690440578388.html" rel="bookmark">
+            <time class="published dt-published" datetime="2013-07-19T14:58:00Z" itemprop="datePublished" title="2013-07-19 14:58">2013-07-19 14:58</time></a>
+            </p>
+                <p class="commentline">5 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>The next PyPy sprint will be in London, United Kingdom for the first
+time. This is a fully public sprint. PyPy sprints are a very good way
+to get into PyPy development and no prior PyPy knowledge is necessary.</p>
+<h2>Goals and topics of the sprint</h2>
+<p>For newcomers:</p>
+<ul class="simple">
+<li>bring your application/library and we'll help you port it to PyPy,
+benchmark and profile</li>
+<li>come and write your favorite missing numpy function</li>
+<li>help us work on developer tools like jitviewer</li>
+</ul>
+<p>We'll also work on:</p>
+<ul class="simple">
+<li>refactoring the JIT optimizations</li>
+<li>STM and STM-related topics</li>
+<li>anything else attendees are interested in</li>
+</ul>
+<h2>Exact times</h2>
+<p>The work days should be August 26 - September 1 2013 (Monday-Sunday).
+The official plans are for people to arrive on the 26th, and
+to leave on the 2nd. There will be a break day in the middle.
+We'll typically start at 10:00 in the morning.</p>
+<h2>Location</h2>
+<p>The sprint will happen within a room of <a class="reference external" href="https://www.kcl.ac.uk/">King's College's</a> <a class="reference external" href="https://www.kcl.ac.uk/campuslife/campuses/strand/StrandCampusLocation.aspx">Strand
+Campus</a> in <a class="reference external" href="https://goo.gl/maps/Qz0zz">Central London, UK</a>. There are some travel instructions <a class="reference external" href="https://www.kcl.ac.uk/campuslife/campuses/directions/strand.aspx">how to
+get there</a>. We are being hosted by <a class="reference external" href="https://tratt.net/laurie">Laurence Tratt</a> and the <a class="reference external" href="https://soft-dev.org">Software
+Development Team</a>.</p>
+<h2>Demo Session</h2>
+<p>If you don't want to come to the full sprint, but still want to chat a
+bit, we are planning to have a demo session on Tuesday August 27. We
+will announce this separately on the blog. If you are interested, please
+leave a comment.</p>
+<h2>Registration</h2>
+<p>If you want to attend, please register by adding yourself to the
+"people.txt" file in Mercurial:</p>
+<pre class="literal-block">
+https://bitbucket.org/pypy/extradoc/
+https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/extradoc/sprintinfo/london-2013
+</pre>
+<p>or on the pypy-dev mailing list if you do not yet have check-in rights:</p>
+<pre class="literal-block">
+https://mail.python.org/mailman/listinfo/pypy-dev
+</pre>
+<p>Remember that you may need a (insert country here)-to-UK power adapter.
+Please note that UK is not within the Schengen zone, so non-EU and
+non-Switzerland citizens may require specific visa. Please check <a class="reference external" href="https://www.ukba.homeoffice.gov.uk/visas-immigration/do-you-need-a-visa/">travel
+regulations</a>. Also, the UK uses pound sterling (GBP).</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-4193024228648320035">
+        <div class="comment-header">
+          <a name="comment-4193024228648320035"></a>
+            <span class="author">griff</span> wrote on <span class="date">2013-07-19 15:05</span>:
+        </div>
+        <div class="comment-content">
+          <p>I'd be up for joining Andrew :)</p>
+        </div>
+      </div>
+      <div class="comment comment-2241696551486418827">
+        <div class="comment-header">
+          <a name="comment-2241696551486418827"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2013-07-19 15:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>Cannot quite get a week off for this, but would be very interested in the demo session on the Tuesday.<br></p>
+        </div>
+      </div>
+      <div class="comment comment-6510630177891660712">
+        <div class="comment-header">
+          <a name="comment-6510630177891660712"></a>
+            <span class="author">Daniel</span> wrote on <span class="date">2013-07-22 11:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>I would be very interested in the demo session on the Tuesday 27th.<br></p>
+        </div>
+      </div>
+      <div class="comment comment-3000348639525144017">
+        <div class="comment-header">
+          <a name="comment-3000348639525144017"></a>
+            <span class="author">Carin Robert</span> wrote on <span class="date">2013-08-24 07:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>Does the demo session happen on August 27th only? What are the timings?</p>
+        </div>
+      </div>
+      <div class="comment comment-2680843156493264875">
+        <div class="comment-header">
+          <a name="comment-2680843156493264875"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2013-08-24 10:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Carin: https://morepypy.blogspot.ch/2013/08/preliminary-london-demo-evening-agenda.html</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2013/07/software-transactional-memory-lisp-7777576128992250197.html" class="u-url">Software Transactional Memory lisp experiments</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2013/07/software-transactional-memory-lisp-7777576128992250197.html" rel="bookmark">
+            <time class="published dt-published" datetime="2013-07-12T10:07:00Z" itemprop="datePublished" title="2013-07-12 10:07">2013-07-12 10:07</time></a>
+            </p>
+                <p class="commentline">7 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+<p>As covered in <a class="reference external" href="../posts/2013/06/stm-on-drawing-board-1028082727566254104.html">the previous blog post</a>, the STM subproject of PyPy has been
+back on the drawing board. The result of this experiment is an STM-aware
+garbage collector written in C. This is finished by now, thanks to Armin's
+and Remi's work, we have a fully functional garbage collector and a STM system
+that can be used from any C program with enough effort. Using it is more than
+a little mundane, since you have to inserts write and read barriers by hand
+everywhere in your code that reads or writes to garbage collector controlled
+memory. In the PyPy integration, this manual work is done automatically
+by the STM transformation in the interpreter.</p>
+<p>However, to experiment some more, we created a minimal
+<a class="reference external" href="https://bitbucket.org/arigo/duhton">lisp-like/scheme-like interpreter</a>
+(called Duhton), that follows closely CPython's implementation strategy.
+For anyone familiar with CPython's source code, it should be pretty
+readable. This interpreter works like a normal and very basic lisp variant,
+however it comes with a <tt class="docutils literal">transaction</tt> builtin, that lets you spawn transactions
+using the STM system. We implemented a few demos that let you play with the
+transaction system. All the demos are running without conflicts, which means
+there are no conflicting writes to global memory and hence the demos are very
+amenable to parallelization. They exercise:</p>
+<ul class="simple">
+<li>arithmetics - <tt class="docutils literal">demo/many_sqare_roots.duh</tt>
+</li>
+<li>read-only access to globals - <tt class="docutils literal">demo/trees.duh</tt>
+</li>
+<li>read-write access to local objects - <tt class="docutils literal">demo/trees2.duh</tt>
+</li>
+</ul>
+<p>With the latter ones being very similar to the classic gcbench. STM-aware
+Duhton can be found in <a class="reference external" href="https://bitbucket.org/pypy/stmgc">the stmgc repo</a>, while the STM-less Duhton,
+that uses refcounting, can be found in <a class="reference external" href="https://bitbucket.org/arigo/duhton">the duhton repo</a> under the <tt class="docutils literal">base</tt>
+branch.</p>
+<p>Below are some benchmarks. Note that this is a little comparing apples to
+oranges since the single-threaded duhton uses refcounting GC vs generational
+GC for STM version. Future pypy benchmarks will compare more apples to apples.
+Moreover none of the benchmarks has any conflicts. Time is the total time
+that the benchmark took (not the CPU time) and there was very little variation
+in the consecutive runs (definitely below 5%).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="16%">
+<col width="30%">
+<col width="23%">
+<col width="16%">
+<col width="16%">
+</colgroup>
+<tbody valign="top">
+<tr>
+<td>benchmark</td>
+<td>1 thread (refcount)</td>
+<td>1 thread (stm)</td>
+<td>2 threads</td>
+<td>4 threads</td>
+</tr>
+<tr>
+<td>square</td>
+<td>1.9s</td>
+<td>3.5s</td>
+<td>1.8s</td>
+<td>0.9s</td>
+</tr>
+<tr>
+<td>trees</td>
+<td>0.6s</td>
+<td>1.0s</td>
+<td>0.54s</td>
+<td>0.28s</td>
+</tr>
+<tr>
+<td>trees2</td>
+<td>1.4s</td>
+<td>2.2s</td>
+<td>1.1s</td>
+<td>0.57s</td>
+</tr>
+</tbody>
+</table>
+<p>As you can see, the slowdown for STM vs single thread is significant
+(1.8x, 1.7x, 1.6x respectively), but still lower than 2x. However the speedup
+from running on multiple threads parallelizes the problem almost perfectly.</p>
+<p>While a significant milestone, we hope the next blog post will cover
+STM-enabled pypy that's fully working with JIT work ongoing.</p>
+<p>Cheers,<br>
+fijal on behalf of Remi Meier and Armin Rigo</p>
+<br><br>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-7303404958617814481">
+        <div class="comment-header">
+          <a name="comment-7303404958617814481"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-07-12 13:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>I hacked a bit; inserted likely hint on early exit on spinlock acquisition, Haswell xacquire/xrelease hints on spinlock acquisition and release, and compiled with Haswell optimized flags.<br><br>Resulting scaling from 1 to 4 threads for tests were 1.92, 1.87 and 1.88. I think that's already quite close to 2.<br><br>I think this is OK, but not extraordinary.</p>
+        </div>
+      </div>
+      <div class="comment comment-4444189776829350929">
+        <div class="comment-header">
+          <a name="comment-4444189776829350929"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-07-12 13:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>Just to clarify my above comment: those were average factors of scaling per doubling of threads. So, 4-thread version ran actually 3.67, 3.50 and 3.54 times faster than single-threaded version.</p>
+        </div>
+      </div>
+      <div class="comment comment-9024292149812054183">
+        <div class="comment-header">
+          <a name="comment-9024292149812054183"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2013-07-12 13:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>Cool that you hacked on it!  Note however that spinlock acquisition is not a blocker in these examples --- we implement STM mostly without locks, and locks are acquired rarely.  Running independent code without getting STM conflicts means that each thread will in practice only acquire its own lock.  And a single global lock is used for major GC --- but there, the large amount of work done means that using the Haswell xacquire/xrelease hints is just counterproductive.<br><br>"Resulting scaling from 1 to 4 threads" doesn't mean anything, as in some examples it scales perfectly, and in other examples it doesn't scale at all (as expected).</p>
+        </div>
+      </div>
+      <div class="comment comment-619252368933687858">
+        <div class="comment-header">
+          <a name="comment-619252368933687858"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-07-12 13:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>All your arguments are valid, and I didn't really expect much from hinting, just decided to try. It would seem that Haswell is still inching towards higher multicore scalability - probably thanks to improved atomic and fence ops in general. It's a benefit for those workloads that should conceptually scale well...</p>
+        </div>
+      </div>
+      <div class="comment comment-2740970907269201992">
+        <div class="comment-header">
+          <a name="comment-2740970907269201992"></a>
+            <span class="author">Glen Newton</span> wrote on <span class="date">2013-07-13 18:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>You really need to go above 4 threads: 8,16,32, and 64 at least. Then plot out the overhead of the STM related to this level of threading. If your benchmark is too small, alter it so that it makes sense to try and solve it with 64 threads.</p>
+        </div>
+      </div>
+      <div class="comment comment-6455731373660603980">
+        <div class="comment-header">
+          <a name="comment-6455731373660603980"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2013-07-14 06:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>@glen: we're focusing right now on the machines we have, which are standard Intels with 4, 8, or at most 12 cores.  I believe it is interesting too, and it's what people have right now in their own desktop or laptop computers.  Obviously the scalability to larger numbers of cores is important as well, but we can't simply disregard any result involving less than 64 cores.</p>
+        </div>
+      </div>
+      <div class="comment comment-44534362025771065">
+        <div class="comment-header">
+          <a name="comment-44534362025771065"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-07-17 17:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is a really great news.<br><br>Wish you all the best with further work!</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2013/07/pypy-21-beta-1351105697755187196.html" class="u-url">PyPy 2.1 beta</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/david-schneider.html">David Schneider</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2013/07/pypy-21-beta-1351105697755187196.html" rel="bookmark">
+            <time class="published dt-published" datetime="2013-07-11T10:36:00Z" itemprop="datePublished" title="2013-07-11 10:36">2013-07-11 10:36</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>We're pleased to announce the first beta of the upcoming 2.1 release of PyPy. This beta contains many bugfixes and improvements, numerous improvements to the numpy in pypy effort. The main feature being that the ARM processor support is not longer considered alpha level.<br><br>
+We would like to thank the <a class="reference external" href="https://www.raspberrypi.org/">Raspberry Pi Foundation</a> for supporting the work to finish PyPy's ARM support.<br><br><br>
+You can download the PyPy 2.1 beta release here:<br></p>
+<blockquote>
+<a class="reference external" href="https://pypy.org/download.html">https://pypy.org/download.html</a>
+</blockquote>
+<div class="section" id="highlights">
+<h3>
+<br>
+</h3>
+<h3>
+Highlights</h3>
+<ul class="simple">
+<li>Bugfixes to the ARM JIT backend, so that ARM is now an officially<br>
+supported processor architecture</li>
+<li>Stacklet support on ARM</li>
+<li>Interpreter improvements</li>
+<li>Various numpy improvements</li>
+<li>Bugfixes to cffi and ctypes</li>
+<li>Bugfixes to the stacklet support</li>
+<li>Improved logging performance</li>
+<li>Faster sets for objects</li>
+</ul>
+</div>
+<div class="section" id="what-is-pypy">
+<h3>
+<br>
+</h3>
+<h3>
+What is PyPy?</h3>
+PyPy is a very compliant Python interpreter, almost a drop-in replacement for CPython 2.7.3. It's fast due to its integrated tracing JIT compiler. This release supports x86 machines running Linux 32/64, Mac OS X 64 or Windows 32. Also this release supports ARM machines running Linux 32bit - anything with <tt class="docutils literal">ARMv6</tt> (like the Raspberry Pi) or <tt class="docutils literal">ARMv7</tt> (like Beagleboard, Chromebook, Cubieboard, etc.) that supports <tt class="docutils literal">VFPv3</tt> should work. Both hard-float <tt class="docutils literal">armhf/gnueabihf</tt> and soft-float <tt class="docutils literal">armel/gnueabi</tt> builds are provided. <tt class="docutils literal">armhf</tt> builds for Raspbian are created using the Raspberry Pi<br><a class="reference external" href="https://github.com/raspberrypi">custom cross-compilation toolchain</a> based on <tt class="docutils literal"><span class="pre">gcc-arm-linux-gnueabihf</span></tt> and should work on <tt class="docutils literal">ARMv6 </tt>and <tt class="docutils literal">ARMv7</tt> devices running Debian or Raspbian. <tt class="docutils literal">armel</tt> builds are built using the <tt class="docutils literal"><span class="pre">gcc-arm-linux-gnuebi</span></tt> toolchain provided by Ubuntu and currently target <tt class="docutils literal">ARMv7</tt>.<br><br>
+Windows 64 work is still stalling, we would welcome a volunteer to handle that.</div>
+<div class="section" id="how-to-use-pypy">
+<h3>
+<br>
+</h3>
+<h3>
+How to use PyPy?</h3>
+We suggest using PyPy from a <a class="reference external" href="https://www.virtualenv.org/en/latest/">virtualenv</a>. Once you have a virtualenv installed, you can follow instructions from <a class="reference external" href="https://doc.pypy.org/en/latest/getting-started.html#installing-using-virtualenv">pypy documentation</a> on how to proceed. This document also covers other <a class="reference external" href="https://doc.pypy.org/en/latest/getting-started.html#installing-pypy">installation schemes</a>.<br><br>
+Cheers,<br><br>
+the PyPy team.</div>
+    </div>
+    </article>
+</div>
+</div>
+<div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div></div>
+</main>
+</div>
+<div style="clear: both; width: 75%; margin: 1em auto;">
+        <nav class="postindexpager"><ul class="pager">
+<li class="previous">
+                <a href="index-29.html" rel="prev">Newer posts</a>
+            </li>
+            <li class="next">
+                <a href="index-27.html" rel="next">Older posts</a>
+            </li>
+        </ul></nav>
+</div>
+         
+                 <footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../assets/js/styles.js"></script></footer>
+</body>
+</html>

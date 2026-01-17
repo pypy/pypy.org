@@ -1,0 +1,795 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about guestpost)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/guestpost.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:35 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>Guest Post: Final Encoding in RPython Interpreters</title><link>https://www.pypy.org/posts/2024/11/guest-post-final-encoding-in-rpython.html</link><dc:creator>Corbin</dc:creator><description>&lt;h3 id="introduction"&gt;Introduction&lt;/h3&gt;
+&lt;p&gt;This post started as a quick note summarizing a recent experiment I carried
+out upon a small RPython interpreter by rewriting it in an uncommon style. It
+is written for folks who have already written some RPython and want to take a
+deeper look at interpreter architecture.&lt;/p&gt;
+&lt;p&gt;Some experiments are about finding solutions to problems. This experiment is
+about taking a solution which is already well-understood and applying it in
+the context of RPython to find a new approach. As we will see, there is no
+real change in functionality or the number of clauses in the interpreter; it's
+more like a comparison between endo- and exoskeletons, a different arrangement
+of equivalent bones and plates.&lt;/p&gt;
+&lt;h3 id="overview"&gt;Overview&lt;/h3&gt;
+&lt;p&gt;An RPython interpreter for a programming language generally does three or four
+things, in order:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Read and parse input programs&lt;/li&gt;
+&lt;li&gt;Encode concrete syntax as abstract syntax&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;Optionally&lt;/em&gt;, optimize or reduce the abstract syntax&lt;/li&gt;
+&lt;li&gt;Evaluate the abstract syntax: read input data, compute, print output data,
+   etc.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Today we'll look at abstract syntax. Most programming languages admit a
+&lt;a href="https://en.wikipedia.org/wiki/Parse_tree"&gt;concrete parse tree&lt;/a&gt; which is
+readily abstracted to provide an &lt;a href="https://en.wikipedia.org/wiki/Abstract_syntax_tree"&gt;abstract syntax
+tree&lt;/a&gt; (AST). The AST is
+usually encoded with the &lt;em&gt;initial&lt;/em&gt; style of encoding. An initial encoding can
+be transformed into any other encoding for the same AST, looks like a
+hierarchy of classes, and is implemented as a static structure on the heap.&lt;/p&gt;
+&lt;p&gt;In contrast, there is also a &lt;em&gt;final&lt;/em&gt; encoding. A final encoding can be
+transformed into by any other encoding, looks like an interface for the
+actions of the interpreter, and is implemented as an unwinding structure on
+the stack. From the RPython perspective, Python builtin modules like &lt;code&gt;os&lt;/code&gt; or
+&lt;code&gt;sys&lt;/code&gt; are final encodings for features of the operating system; the underlying
+implementation is different when translated or untranslated, but the interface
+used to access those features does not change.&lt;/p&gt;
+&lt;p&gt;In RPython, an initial encoding is built from a hierarchy of classes. Each
+class represents a type of tree nodes, corresponding to a parser production in
+the concrete parse tree. Each class instance therefore represents an
+individual tree node. The fields of a class, particularly those filled during
+&lt;code&gt;.__init__()&lt;/code&gt;, store pre-computed properties of each node; methods can be used
+to compute node properties on demand. This seems like an obvious and simple
+approach; what other approaches could there be? We need an example.&lt;/p&gt;
+&lt;h3 id="final-encoding-of-brainfuck"&gt;Final Encoding of Brainfuck&lt;/h3&gt;
+&lt;p&gt;We will consider &lt;a href="https://esolangs.org/wiki/Brainfuck"&gt;Brainfuck&lt;/a&gt;, a simple
+Turing-complete programming language. An example Brainfuck program might be:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;[&lt;/span&gt;&lt;span class="nb"&gt;-&lt;/span&gt;&lt;span class="k"&gt;]&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;This program is built from a loop and a decrement, and sets a cell to zero. In
+an initial encoding which follows the &lt;a href="https://esolangs.org/wiki/Algebraic_Brainfuck"&gt;algebraic semantics of
+Brainfuck&lt;/a&gt;, the program could
+be expressed by applying class constructors to build a structure on the heap:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="n"&gt;Loop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;A final encoding is similar, except that class constructors are replaced by
+methods, the structure is built on the stack, and we are parameterized over
+the choice of class:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;lambda&lt;/span&gt; &lt;span class="bp"&gt;cls&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="bp"&gt;cls&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;loop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;cls&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;In ordinary Python, transforming between these would be trivial, and mostly is
+a matter of passing around the appropriate class. Indeed, initial and final
+encodings are equivalent; we'll return to that fact later. However, in RPython,
+all of the types must line up, and classes must be determined before
+translation. We'll need to monomorphize our final encodings, using some
+RPython tricks later on. Before that, let's see what an actual Brainfuck
+interface looks like, so that we can cover all of the difficulties with final
+encoding.&lt;/p&gt;
+&lt;p&gt;Before we embark, please keep in mind that local code doesn't know what &lt;code&gt;cls&lt;/code&gt;
+is. There's no type-safe way to inspect an arbitrary semantic domain. In the
+initial-encoded version, we can ask &lt;code&gt;isinstance(bf, Loop)&lt;/code&gt; to see whether an
+AST node is a loop, but there simply isn't an equivalent for final-encoded
+ASTs. So, there is an implicit challenge to think about: how do we evaluate a
+program in an arbitrary semantic domain? For bonus points, how do we optimize
+a program without inspecting the types of its AST nodes?&lt;/p&gt;
+&lt;p&gt;What follows is a dissection of
+&lt;a href="https://github.com/rpypkgs/rpypkgs/blob/d439d225b79ac82e009a5f1cd1c670f00356464c/bf/bf.py"&gt;this&lt;/a&gt;
+module at the given revision. Readers may find it satisfying to read the
+entire interpreter top to bottom first; it is less than 300 lines.&lt;/p&gt;
+&lt;h4 id="core-functionality"&gt;Core Functionality&lt;/h4&gt;
+&lt;p&gt;Final encoding is given as methods on an interface. These five methods
+correspond precisely to the summands of the algebra of Brainfuck.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;BF&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;object&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="c1"&gt;# Other methods elided&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;pass&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;right&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;pass&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;input&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;pass&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;output&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;pass&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;loop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;pass&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Note that the &lt;code&gt;.loop()&lt;/code&gt; method takes another program as an argument.
+Initial-encoded ASTs have other initial-encoded ASTs as fields on class
+instances; final-encoded ASTs have other final-encoded ASTs as parameters
+to interface methods. RPython infers all of the types, so the reader has to
+know that &lt;code&gt;i&lt;/code&gt; is usually an integer while &lt;code&gt;bfs&lt;/code&gt; is a sequence of Brainfuck
+operations.&lt;/p&gt;
+&lt;p&gt;We're using a class to implement this functionality. Later, we'll treat it as
+a mixin, rather than a superclass, to avoid typing problems.&lt;/p&gt;
+&lt;h4 id="monoid"&gt;Monoid&lt;/h4&gt;
+&lt;p&gt;In order to optimize input programs, we'll need to represent the underlying
+&lt;a href="https://en.wikipedia.org/wiki/Monoid"&gt;monoid&lt;/a&gt; of Brainfuck programs. To do
+this, we add the signature for a monoid:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;BF&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;object&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="c1"&gt;# Other methods elided&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;unit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;pass&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;pass&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;This is technically a &lt;a href="https://en.wikipedia.org/wiki/Magma_(algebra)"&gt;unital
+magma&lt;/a&gt;, since RPython doesn't
+support algebraic laws, but we will enforce the algebraic laws later on during
+optimization. We also want to make use of the folklore that &lt;a href="https://en.wikipedia.org/wiki/Free_monoid"&gt;free
+monoids&lt;/a&gt; are lists, allowing
+callers to pass a list of actions which we'll reduce with recursion:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;BF&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;object&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="c1"&gt;# Other methods elided&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;joinList&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="ow"&gt;not&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;unit&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+        &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;
+        &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+            &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;joinList&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[:&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]),&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;joinList&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;:]))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;&lt;code&gt;.joinList()&lt;/code&gt; is a little bulky to implement, but Wirth's principle applies:
+the interpreter is shorter with it than without it.&lt;/p&gt;
+&lt;h4 id="idioms"&gt;Idioms&lt;/h4&gt;
+&lt;p&gt;Finally, our interface includes a few high-level idioms, like the zero program
+shown earlier, which are defined in terms of low-level behaviors. In an
+initial encoding, these could be defined as module-level functions; here, we
+define them on the mixin class &lt;code&gt;BF&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;BF&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;object&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="c1"&gt;# Other methods elided&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;zero&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;loop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;move&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;scalemove&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;move2&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;j&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;scalemove2&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;j&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;scalemove&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;loop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;joinList&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;
+            &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;right&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;right&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;)]))&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;scalemove2&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;j&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;t&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;loop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;joinList&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;
+                &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;right&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;right&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;j&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;
+                &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;t&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;right&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;j&lt;/span&gt;&lt;span class="p"&gt;)]))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;h3 id="interface-oriented-architecture"&gt;Interface-oriented Architecture&lt;/h3&gt;
+&lt;h4 id="applying-interfaces"&gt;Applying Interfaces&lt;/h4&gt;
+&lt;p&gt;Now, we hack at RPython's object model until everything translates. First,
+consider the task of pretty-printing. For Brainfuck, we'll simply regurgitate
+the input program as a Python string:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;AsStr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;object&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;import_from_mixin&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;BF&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;unit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s2"&gt;""&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s1"&gt;'+'&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt; &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="s1"&gt;'-'&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;right&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s1"&gt;'&amp;gt;'&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt; &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="s1"&gt;'&amp;lt;'&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;loop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s1"&gt;'['&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;']'&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;input&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s1"&gt;','&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;output&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s1"&gt;'.'&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Via &lt;code&gt;rlib.objectmodel.import_from_mixin&lt;/code&gt;, no stressing with covariance of
+return types is required. Instead, we shift from a Java-esque view of classes
+and objects, to an OCaml-ish view of prebuilt classes and constructors.
+&lt;code&gt;AsStr&lt;/code&gt; is monomorphic, and any caller of it will have to create their own
+covariance somehow. For example, here are the first few lines of the parsing
+function:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="nd"&gt;@specialize&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;argtype&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;parse&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;ops&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;unit&lt;/span&gt;&lt;span class="p"&gt;()]&lt;/span&gt;
+    &lt;span class="c1"&gt;# Parser elided to preserve the reader's attention&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;By invoking &lt;code&gt;rlib.objectmodel.specialize.argtype&lt;/code&gt;, we make copies of the
+parsing function, up to one per call site, based on our choice of semantic
+domain. &lt;a href="https://okmij.org/ftp/tagless-final/"&gt;Oleg&lt;/a&gt; calls these "symantics"
+but I prefer "domain" in code. Also, note how the parsing stack starts with
+the unit of the monoid, which corresponds to the empty input string; the
+parser will repeatedly use the monoidal join to build up a parsed expression
+without inspecting it. Here's a small taste of that:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;char&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;char&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s1"&gt;'+'&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;ops&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;ops&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="n"&gt;char&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s1"&gt;'-'&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;ops&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;ops&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="c1"&gt;# and so on&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;The reader may feel justifiably mystified; what breaks if we don't add these
+magic annotations? Well, the translator will throw &lt;code&gt;UnionError&lt;/code&gt; because the
+low-level types don't match. RPython only wants to make one copy of functions
+like &lt;code&gt;parse()&lt;/code&gt; in its low-level representation, and each copy of &lt;code&gt;parse()&lt;/code&gt;
+will be compiled to monomorphic machine code. In this interpreter, in order to
+support parsing to an optimized string and also parsing to an evaluator, we
+need two copies of &lt;code&gt;parse()&lt;/code&gt;. &lt;strong&gt;It is okay to not fully understand this at
+first.&lt;/strong&gt;&lt;/p&gt;
+&lt;h4 id="composing-interfaces"&gt;Composing Interfaces&lt;/h4&gt;
+&lt;p&gt;Earlier, we noted that an interpreter can optionally optimize input programs
+after parsing. To support this, we'll precompose a &lt;a href="https://en.wikipedia.org/wiki/Peephole_optimization"&gt;peephole
+optimizer&lt;/a&gt; onto an
+arbitrary domain. We could also postcompose with a parser instead, but that
+sounds more difficult. Here are the relevant parts:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;makePeephole&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;cls&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;domain&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;cls&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;stripDomain&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;joinList&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;t&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;t&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;
+    &lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;Peephole&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;object&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;import_from_mixin&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;BF&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;unit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;
+        &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;
+        &lt;span class="c1"&gt;# Actual definition elided... for now...&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;Peephole&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;stripDomain&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Don't worry about the actual optimization yet. What's important here is the
+pattern of initialization of semantic domains. &lt;code&gt;makePeephole&lt;/code&gt; is an
+&lt;a href="https://en.wikipedia.org/wiki/Standard_ML"&gt;SML&lt;/a&gt;-style functor on semantic
+domains: given a final encoding of Brainfuck, it produces another final
+encoding of Brainfuck which incorporates optimizations. The helper
+&lt;code&gt;stripDomain&lt;/code&gt; is a finalizer which performs the extraction from the
+optimizer's domain to the underlying &lt;code&gt;cls&lt;/code&gt; that was passed in at translation
+time. For example, let's optimize pretty-printing:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="n"&gt;AsStr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;finishStr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;makePeephole&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;AsStr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Now, it only takes one line to parse and print an optimized AST without ever
+building it on the heap. To be pedantic, fragments of the output string will
+be heap-allocated, but the AST's node structure will only ever be
+stack-allocated. Further, to be shallow, the parser is written to prevent
+malicious input from causing a stack overflow, and this forces it to maintain
+a heap-allocated RPython list of intermediate operations inside loops.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="nb"&gt;print&lt;/span&gt; &lt;span class="n"&gt;finishStr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;parse&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;text&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;AsStr&lt;/span&gt;&lt;span class="p"&gt;()))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;h3 id="performance"&gt;Performance&lt;/h3&gt;
+&lt;p&gt;But is it fast? Yes. It's faster than the prior version, which was
+initial-encoded, and also faster than Andrew Brown's classic version (&lt;a href="https://pypy.org/posts/2011/04/tutorial-writing-interpreter-with-pypy-3785910476193156295.html"&gt;part
+1&lt;/a&gt;,
+&lt;a href="https://pypy.org/posts/2011/04/tutorial-part-2-adding-jit-8121732841568309472.html"&gt;part
+2&lt;/a&gt;).
+Since Brown's interpreter does not perform much optimization, we will focus on
+how final encoding can outperform initial encoding.&lt;/p&gt;
+&lt;h4 id="jit"&gt;JIT&lt;/h4&gt;
+&lt;p&gt;First, why is it faster than the same interpreter with initial encoding? Well,
+it still has initial encoding from the JIT's perspective! There is an &lt;code&gt;Op&lt;/code&gt;
+class with a hierarchy of subclasses implementing individual behaviors. A
+sincere tagless-final student, or those who remember &lt;a href="https://pyvideo.org/pycon-us-2012/stop-writing-classes.html"&gt;Stop Writing Classes
+(2012, Pycon
+US)&lt;/a&gt;, will
+recognize that the following classes could be plain functions, and should
+think of the classes as a concession to RPython's lack of support for lambdas
+with closures rather than an initial encoding. We aren't ever going to
+directly typecheck any &lt;code&gt;Op&lt;/code&gt;, but the JIT will generate typechecking guards
+anyway, so we effectively get a fully-promoted AST inlined into each JIT
+trace. First, some simple behaviors:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;Op&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;object&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="n"&gt;_immutable_&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="kc"&gt;True&lt;/span&gt;
+
+&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;_Input&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Op&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;_immutable_&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="kc"&gt;True&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;runOn&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;ord&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;
+&lt;span class="n"&gt;Input&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;_Input&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+
+&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;_Output&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Op&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;_immutable_&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="kc"&gt;True&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;runOn&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;write&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;chr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;]))&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;
+&lt;span class="n"&gt;Output&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;_Output&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+
+&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;Add&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Op&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;_immutable_&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="kc"&gt;True&lt;/span&gt;
+    &lt;span class="n"&gt;_immutable_fields_&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;"imm"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="fm"&gt;__init__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;imm&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;imm&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;imm&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;runOn&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;imm&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;The JIT does technically have less information than before; it no longer knows
+that a sequence of immutable operations is immutable enough to be worth
+unrolling, but a bit of &lt;code&gt;rlib.jit.unroll_safe&lt;/code&gt; fixes that:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;Seq&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Op&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;_immutable_&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="kc"&gt;True&lt;/span&gt;
+    &lt;span class="n"&gt;_immutable_fields_&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;"ops[*]"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="fm"&gt;__init__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ops&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ops&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;ops&lt;/span&gt;
+    &lt;span class="nd"&gt;@unroll_safe&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;runOn&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;op&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ops&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;op&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;runOn&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Finally, the JIT entry point is at the head of each loop, just like with prior
+interpreters. Since Brainfuck doesn't support mid-loop jumps, there's no
+penalty for only allowing merge points at the head of the loop.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;Loop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Op&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;_immutable_&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="kc"&gt;True&lt;/span&gt;
+    &lt;span class="n"&gt;_immutable_fields_&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;"op"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="fm"&gt;__init__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;op&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;op&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;op&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;runOn&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;op&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;op&lt;/span&gt;
+        &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;]:&lt;/span&gt;
+            &lt;span class="n"&gt;jitdriver&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;jit_merge_point&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;op&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="n"&gt;op&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="n"&gt;position&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;op&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;runOn&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;position&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;That's the end of the implicit challenge. There's no secret to it; just
+evaluate the AST. Here's part of the semantic domain for evaluation, as well
+as the "functor" to optimize it. In &lt;code&gt;AsOps.join()&lt;/code&gt; are the &lt;em&gt;only&lt;/em&gt;
+&lt;code&gt;isinstance()&lt;/code&gt; calls in the entire interpreter! This is acceptable because
+&lt;code&gt;Seq&lt;/code&gt; is effectively a type wrapper for an RPython list, so that a list of
+operations is also an operation; its list is initial-encoded and available for
+inspection.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;AsOps&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;object&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;import_from_mixin&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;BF&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;unit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;Shift&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="nb"&gt;isinstance&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;Seq&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt; &lt;span class="nb"&gt;isinstance&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;Seq&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+            &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;Seq&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ops&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ops&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="nb"&gt;isinstance&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;Seq&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;Seq&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ops&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;
+        &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="nb"&gt;isinstance&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;Seq&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;Seq&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ops&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;Seq&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;
+    &lt;span class="c1"&gt;# Other methods elided!&lt;/span&gt;
+
+&lt;span class="n"&gt;AsOps&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;finishOps&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;makePeephole&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;AsOps&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;And finally here is the actual top-level code to evaluate the input program.
+As before, once everything is composed, the actual invocation only takes one
+line.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="n"&gt;tape&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;bytearray&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"&lt;/span&gt;&lt;span class="se"&gt;\x00&lt;/span&gt;&lt;span class="s2"&gt;"&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;cells&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="n"&gt;finishOps&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;parse&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;text&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;AsOps&lt;/span&gt;&lt;span class="p"&gt;()))&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;runOn&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;tape&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;h4 id="peephole-optimization"&gt;Peephole Optimization&lt;/h4&gt;
+&lt;p&gt;Our peephole optimizer is an &lt;a href="https://en.wikipedia.org/wiki/Abstract_interpretation"&gt;abstract
+interpreter&lt;/a&gt; with one
+instruction of lookahead/rewrite buffer. It implements the aforementioned
+algebraic laws of the Brainfuck monoid. It also implements idiom recognition
+for loops. First, the abstract interpreter. The abstract domain has six
+elements:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;class&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nc"&gt;AbstractDomain&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;object&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;pass&lt;/span&gt;
+&lt;span class="n"&gt;meh&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;aLoop&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;aZero&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;theIdentity&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;anAdd&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;aRight&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;AbstractDomain&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;6&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;We'll also tag everything with an integer, so that &lt;code&gt;anAdd&lt;/code&gt; or &lt;code&gt;aRight&lt;/code&gt; can be
+exact annotations. &lt;em&gt;This&lt;/em&gt; is the actual &lt;code&gt;Peephole.join()&lt;/code&gt; method:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="ow"&gt;not&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;
+    &lt;span class="n"&gt;rv&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;[:]&lt;/span&gt;
+    &lt;span class="n"&gt;bfHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;immHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;rv&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;pop&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;bf&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;imm&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;theIdentity&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="k"&gt;continue&lt;/span&gt;
+        &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;aLoop&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;aLoop&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="k"&gt;continue&lt;/span&gt;
+        &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;theIdentity&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;bfHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;immHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;bf&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;imm&lt;/span&gt;
+        &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;anAdd&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;aZero&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;bfHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;immHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;bf&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;imm&lt;/span&gt;
+        &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;anAdd&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;anAdd&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;immHead&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="n"&gt;imm&lt;/span&gt;
+            &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;immHead&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;bfHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;plus&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;immHead&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="n"&gt;rv&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;bfHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;immHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;rv&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;pop&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+            &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="n"&gt;bfHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;unit&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+                &lt;span class="n"&gt;adHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;theIdentity&lt;/span&gt;
+        &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;aRight&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;aRight&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;immHead&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="n"&gt;imm&lt;/span&gt;
+            &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;immHead&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;bfHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;right&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;immHead&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="n"&gt;rv&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;bfHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;immHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;rv&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;pop&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+            &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="n"&gt;bfHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;unit&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+                &lt;span class="n"&gt;adHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;theIdentity&lt;/span&gt;
+        &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;rv&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;append&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="n"&gt;bfHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;immHead&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+            &lt;span class="n"&gt;bfHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;immHead&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;bf&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;imm&lt;/span&gt;
+    &lt;span class="n"&gt;rv&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;append&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="n"&gt;bfHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;adHead&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;immHead&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;rv&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;If this were to get much longer, then &lt;a href="https://pypy.org/posts/2024/10/jit-peephole-dsl.html"&gt;implementing a
+DSL&lt;/a&gt; would be worth it,
+but this is a short-enough method to inline. The abstract interpretation is
+assumed by induction for the left-hand side of the join, save for the final
+instruction, which is loaded into a rewrite register. Each instruction on the
+right-hand side is inspected exactly once. The logic for &lt;code&gt;anAdd&lt;/code&gt; followed by
+&lt;code&gt;anAdd&lt;/code&gt; is exactly the same as for &lt;code&gt;aRight&lt;/code&gt; followed by &lt;code&gt;aRight&lt;/code&gt; because they
+both have underlying &lt;a href="https://en.wikipedia.org/wiki/Abelian_group"&gt;Abelian
+groups&lt;/a&gt; given by the integers.
+The rewrite register is carefully pushed onto and popped off from the
+left-hand side in order to cancel out &lt;code&gt;theIdentity&lt;/code&gt;, which itself is merely a
+unifier for &lt;code&gt;anAdd&lt;/code&gt; or &lt;code&gt;aRight&lt;/code&gt; of 0.&lt;/p&gt;
+&lt;p&gt;Note that we generate a lot of garbage. For example, parsing a string of &lt;em&gt;n&lt;/em&gt;
+'+' characters will cause the peephole optimizer to allocate &lt;em&gt;n&lt;/em&gt; instances of
+the underlying &lt;code&gt;domain.plus()&lt;/code&gt; action, from &lt;code&gt;domain.plus(1)&lt;/code&gt; up to
+&lt;code&gt;domain.plus(n)&lt;/code&gt;. An older initial-encoded version of this interpreter used
+&lt;a href="https://en.wikipedia.org/wiki/Hash_consing"&gt;hash consing&lt;/a&gt; to avoid ever
+building an op more than once, even loops. It appears more efficient to
+generate lots of immutable garbage than to repeatedly hash inputs and search
+mutable hash tables, at least for optimizing Brainfuck incrementally during
+parsing.&lt;/p&gt;
+&lt;p&gt;Finally, let's look at idiom recognition. RPython lists are initial-coded, so
+we can dispatch based on the length of the list, and then inspect the abstract
+domains of each action.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;isConstAdd&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bf&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt; &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;bf&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;anAdd&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt; &lt;span class="n"&gt;bf&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;oppositeShifts&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bf1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;bf2&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;bf1&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;bf2&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;aRight&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt; &lt;span class="n"&gt;bf1&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;bf2&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;oppositeShifts2&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bf1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;bf2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;bf3&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bf1&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;bf2&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;bf3&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;aRight&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt;
+            &lt;span class="n"&gt;bf1&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;bf2&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;bf3&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;loop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;bf&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;imm&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;ad&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;anAdd&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt; &lt;span class="n"&gt;imm&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+            &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;zero&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;aZero&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt;
+    &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;isConstAdd&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt;
+            &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;anAdd&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt;
+            &lt;span class="n"&gt;oppositeShifts&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;])):&lt;/span&gt;
+            &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;scalemove&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]),&lt;/span&gt; &lt;span class="n"&gt;aLoop&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;isConstAdd&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt;
+            &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;anAdd&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt;
+            &lt;span class="n"&gt;oppositeShifts&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;])):&lt;/span&gt;
+            &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;scalemove&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]),&lt;/span&gt; &lt;span class="n"&gt;aLoop&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt;
+    &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;6&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;isConstAdd&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt;
+            &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;anAdd&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt;
+            &lt;span class="n"&gt;oppositeShifts2&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="p"&gt;])):&lt;/span&gt;
+            &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;scalemove2&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt;
+                                       &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt;
+                                       &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]),&lt;/span&gt; &lt;span class="n"&gt;aLoop&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;isConstAdd&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt;
+            &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="n"&gt;anAdd&lt;/span&gt; &lt;span class="ow"&gt;and&lt;/span&gt;
+            &lt;span class="n"&gt;oppositeShifts2&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="p"&gt;])):&lt;/span&gt;
+            &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;scalemove2&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt;
+                                       &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt;
+                                       &lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]),&lt;/span&gt; &lt;span class="n"&gt;aLoop&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;domain&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;loop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;stripDomain&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bfs&lt;/span&gt;&lt;span class="p"&gt;)),&lt;/span&gt; &lt;span class="n"&gt;aLoop&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;This ends the bonus question. How do we optimize an unknown semantic domain?
+We must maintain an abstract context which describes elements of the domain.
+In initial encoding, we ask an AST about itself. In final encoding, we already
+know everything relevant about the AST.&lt;/p&gt;
+&lt;p&gt;The careful reader will see that I didn't really answer that opening question
+in the JIT section. Because the JIT still ranges over the same operations as
+before, it can't really be slower; but why is it now faster? Because the
+optimizer is now slightly better in a few edge cases. It performs the same
+optimizations as before, but the rigor of abstract interpretation causes it to
+emit slightly better operations to the JIT backend.&lt;/p&gt;
+&lt;p&gt;Concretely, improving the optimizer can shorten pretty-printed programs. The
+&lt;a href="https://bbgauge.info/"&gt;Busy Beaver Gauge&lt;/a&gt; measures the length of programs
+which search for solutions to mathematical problems. After implementing and
+debugging the final-encoded interpreter, I found that two of my entries on the
+&lt;a href="https://bbgauge.info/brainfuck.html"&gt;Busy Beaver Gauge for Brainfuck&lt;/a&gt; had
+become shorter by about 2%. (Most other entries are already hand-optimized
+according to the standard algebra and have no optimization opportunities.)&lt;/p&gt;
+&lt;h3 id="discussion"&gt;Discussion&lt;/h3&gt;
+&lt;p&gt;Given that initial and final encodings are equivalent, and noting that
+RPython's toolchain is written to prefer initial encodings, what did we
+actually gain? Did we gain anything?&lt;/p&gt;
+&lt;p&gt;One obvious downside to final encoding in RPython is interpreter size. The
+example interpreter shown here is a rewrite of an initial-encoded interpreter
+which can be seen
+&lt;a href="https://github.com/rpypkgs/rpypkgs/blob/659c8a26d428a1e04fdff614b28e464a50d4647b/bf/bf.py"&gt;here&lt;/a&gt;
+for comparison. Final encoding adds about 20% more code in this case.&lt;/p&gt;
+&lt;p&gt;Final encoding is not necessarily more code than initial encoding, though. All
+AST encodings in interpreters are subject to the &lt;a href="https://en.wikipedia.org/wiki/Expression_problem"&gt;Expression
+Problem&lt;/a&gt;, which states that
+there is generally a quadratic amount of code required to implement multiple
+behaviors for an AST with multiple types of nodes; specifically, &lt;em&gt;n&lt;/em&gt; behaviors
+for &lt;em&gt;m&lt;/em&gt; types of nodes require &lt;em&gt;n&lt;/em&gt; × &lt;em&gt;m&lt;/em&gt; methods. Initial encodings improve the
+cost of adding new types of nodes; final encodings improve the cost of adding
+new behaviors. Final encoding may tend to win in large codebases for mature
+languages, where the language does not change often but new behaviors are added
+frequently and maintained for long periods.&lt;/p&gt;
+&lt;p&gt;Optimizations in final encoding require a bit of planning. The
+abstract-interpretation approach is solid but relies upon the monoid and its
+algebraic laws. In the worst case, an entire class hierarchy could be required
+to encode the abstraction.&lt;/p&gt;
+&lt;p&gt;It is remarkable to find &lt;strong&gt;a 2% improvement in residual program size&lt;/strong&gt; merely
+by reimplementing an optimizer as an abstract interpreter respecting the
+algebraic laws. This could be the most important lesson for compiler
+engineers, if it happens to generalize.&lt;/p&gt;
+&lt;p&gt;Final encoding was popularized via the tagless-final movement in OCaml and
+Scala, including famously in a series of tutorials by &lt;a href="https://okmij.org/ftp/tagless-final/"&gt;Kiselyov et
+al&lt;/a&gt;. A "tag", in this jargon, is a
+runtime identifier for an object's type or class; a tagless encoding
+effectively doesn't allow &lt;code&gt;isinstance()&lt;/code&gt; at all. In the above presentation,
+tags could be hacked in, but were not materially relevant to most steps. Tags
+were required for the final evaluation step, though, and the tagless-final
+insight is that certain type systems can express type-safe evaluation without
+those tags. We won't go further in this direction because tags also
+communicate valuable information to the JIT.&lt;/p&gt;
+&lt;h4 id="summarizing-table"&gt;Summarizing Table&lt;/h4&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Initial Encoding&lt;/th&gt;
+&lt;th&gt;Final Encoding&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;hierarchy of classes&lt;/td&gt;
+&lt;td&gt;signature of interfaces&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;class constructors&lt;/td&gt;
+&lt;td&gt;method calls&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;built on the heap&lt;/td&gt;
+&lt;td&gt;built on the stack&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;traversals allocate stack&lt;/td&gt;
+&lt;td&gt;traversals allocate heap&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;tags are available with &lt;code&gt;isinstance()&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;tags are only available through hacks&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;cost of adding a new AST node: one class&lt;/td&gt;
+&lt;td&gt;cost of adding a new AST node: one method on every other class&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;cost of adding a new behavior: one method on every other class&lt;/td&gt;
+&lt;td&gt;cost of adding a new behavior: one class&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id="credits"&gt;Credits&lt;/h3&gt;
+&lt;p&gt;Thanks to folks in &lt;code&gt;#pypy&lt;/code&gt; on Libera Chat: arigato for the idea, larstiq for
+pushing me to write it up, and cfbolz and mattip for reviewing and finding
+mistakes. The original IRC discussion leading to this blog post is available
+&lt;a href="https://gist.github.com/MostAwesomeDude/fd86ad2d2e38af7aa67b6e548aabe008"&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;This interpreter is part of the &lt;a href="https://github.com/rpypkgs/rpypkgs"&gt;rpypkgs&lt;/a&gt;
+suite, a Nix flake for RPython interpreters. Readers with Nix installed can
+run this interpreter directly from the flake:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;$&lt;span class="w"&gt; &lt;/span&gt;nix-prefetch-url&lt;span class="w"&gt; &lt;/span&gt;https://github.com/MG-K/pypy-tutorial-ko/raw/refs/heads/master/mandel.b
+$&lt;span class="w"&gt; &lt;/span&gt;nix&lt;span class="w"&gt; &lt;/span&gt;run&lt;span class="w"&gt; &lt;/span&gt;github:rpypkgs/rpypkgs#bf&lt;span class="w"&gt; &lt;/span&gt;--&lt;span class="w"&gt; &lt;/span&gt;/nix/store/ngnphbap9ncvz41d0fkvdh61n7j2bg21-mandel.b
+&lt;/pre&gt;&lt;/div&gt;</description><category>guestpost</category><guid>https://www.pypy.org/posts/2024/11/guest-post-final-encoding-in-rpython.html</guid><pubDate>Thu, 14 Nov 2024 08:42:36 GMT</pubDate></item><item><title>Guest Post: How PortaOne uses PyPy for high-performance processing, connecting over 1B of phone calls every month</title><link>https://www.pypy.org/posts/2024/08/portaone.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;The PyPy project is always happy to hear about industrial use  and deployments
+of PyPy. For the &lt;a href="https://www.pypy.org/posts/2024/03/fixing-bug-incremental-gc.html"&gt;GC bug
+finding&lt;/a&gt;
+task earlier this year, we collaborated with PortaOne and we're super happy
+that Serhii Titov, head of the QA department at PortaOne, was up to writing
+this guest post to describe their use and experience with the project.&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id="what-does-portaone-do"&gt;What does PortaOne do?&lt;/h3&gt;
+&lt;p&gt;We at &lt;a href="https://www.portaone.com/"&gt;PortaOne Inc.&lt;/a&gt; allow telecom operators to
+launch new services (or provide existing services more efficiently) using our
+VoIP platform (PortaSIP) and our real-time charging system (PortaBilling),
+which provides additional features for cloud PBX, such as call transfer,
+queues, interactive voice response (IVR) and more. At this moment our support
+team manages several thousand servers with our software installed in 100
+countries, through which over 500 telecommunication service providers connect
+millions of end users every day. The unique thing about PortaOne is that we
+supply the source code of our product to our customers - something unheard of
+in the telecom world! Thus we attract "telco innovators", who use our APIs to
+build around the system and the source code to create unique tweaks of
+functionality, which produces amazing products.&lt;/p&gt;
+&lt;p&gt;At the core of PortaSIP is the middle-ware component (the proper name for it is
+"B2BUA", but that probably does not say much to anyone outside of experts in
+VoIP), which implements the actual handling of SIP calls, messages, etc. and
+all added features (for instance, trying to send a call via telco operators
+through which the cost per minute is lower). It has to be fast (since even a
+small delay in establishing a call is noticed by a customer), reliable
+(everyone hates when a call drops or cannot be completed) and yet easily
+expandable with new functionality. This is why we decided to use Python as
+opposed to C/C++ or similar programming languages, which are often used in
+telecom equipment.&lt;/p&gt;
+&lt;p&gt;The B2BUA component is a batch of similar Python processes that are looped
+inside a
+&lt;a href="https://docs.python.org/3.10/library/asyncore.html"&gt;&lt;code&gt;asyncore.dispatcher&lt;/code&gt;&lt;/a&gt;
+wrapper. The load balancing between these Python processes is done by our
+stateless SIP proxy server written in C++. All our sockets are served by this
+B2BUA. We have our custom client-wrappers around &lt;code&gt;pymysql&lt;/code&gt;, &lt;code&gt;redis&lt;/code&gt;,
+&lt;code&gt;cassandra-driver&lt;/code&gt; and &lt;code&gt;requests&lt;/code&gt; to communicate with external services. Some
+of the Python processes use &lt;a href="https://cffi.readthedocs.io/en/stable/"&gt;&lt;code&gt;cffi&lt;/code&gt;&lt;/a&gt;
+wrappers around C-code to improve their performance (examples: an Oracle DB
+driver, a client to a radius server, a custom C logger).&lt;/p&gt;
+&lt;p&gt;The I/O operations that block the main thread of the Python processes are
+processed in sub-threads. We have custom wrappers  around &lt;code&gt;threading.Thread&lt;/code&gt;
+and also &lt;code&gt;asyncore.dispatcher&lt;/code&gt;. The results of such operations are returned to
+the main thread.&lt;/p&gt;
+&lt;h3 id="improving-our-performance-with-pypy"&gt;Improving our performance with PyPy&lt;/h3&gt;
+&lt;p&gt;We started with CPython and then in 2014 switched to PyPy because it was
+faster. Here's an exact quote from our first testing notes: "PyPy gives
+significant performance boost, ~50%". Nowadays, after years of changes in all
+the software involved, PyPy still gives us +50% boost compared to CPython.&lt;/p&gt;
+&lt;p&gt;Taking care of real time traffic for so many people around the globe is
+something we're really proud of. I hope the PyPy team can be proud of it as
+well, as the PyPy product is a part of this solution.&lt;/p&gt;
+&lt;h3 id="finding-a-garbage-collector-bug-stage-1-the-gc-hooks"&gt;Finding a garbage collector bug: stage 1, the GC hooks&lt;/h3&gt;
+&lt;p&gt;However our path with PyPy wasn't perfectly smooth. There were very rare cases
+of crashes on PyPy that we weren't able to catch. That's because to make
+coredump useful we needed to switch to PyPy with debug, but we cannot let it
+run in that mode on a production system for an extended period of time, and we
+did not have any STR (steps-to-reproduce) to make PyPy crash again in our lab.
+That's why we kept (and still keep) both interpreters installed just in case,
+and we would switch to CPython if we noticed it happening.&lt;/p&gt;
+&lt;p&gt;At the time of updating PyPy from 3.5 to 3.6 our QA started noticing those
+crashes more often, but we still had no luck with STR or collecting proper
+coredumps with debug symbols. Then it became even worse after our development
+played with the &lt;a href="https://doc.pypy.org/en/latest/gc_info.html"&gt;Garbage Collector's
+options&lt;/a&gt; to increase performance
+of our middleware component. The crashes started to affect our regular
+performance testing (controlled by QA manager Yevhenii Bovda). At that point it
+was decided that we can no longer live like that and so we started an intense
+investigation.&lt;/p&gt;
+&lt;p&gt;During the first stage of our investigation (following the best practice of
+troubleshooting) we narrowed down the issue as much as we could. So, it was not
+our code, it was definitely somewhere in PyPy. Eventually our SIP software
+engineer &lt;a href="https://github.com/Yevhenii-Yatchenko"&gt;Yevhenii Yatchenko&lt;/a&gt; found out
+that this bug is connected with the use of our &lt;a href="https://doc.pypy.org/en/latest/gc_info.html#gc-hooks"&gt;custom hooks in the
+GC&lt;/a&gt;. Yevhenii created
+ticket &lt;a href="https://github.com/pypy/pypy/issues/4899"&gt;#4899&lt;/a&gt; and within 2-3 days we
+got a fix from a &lt;a href="https://github.com/cfbolz"&gt;member of the PyPy team&lt;/a&gt;, in true open-source fashion.&lt;/p&gt;
+&lt;h3 id="finding-a-garbage-collector-bug-stage-2-the-real-bug"&gt;Finding a garbage collector bug: stage 2, the real bug&lt;/h3&gt;
+&lt;p&gt;Then came stage 2. In parallel with the previous ticket, Yevhenii created
+&lt;a href="https://github.com/pypy/pypy/issues/4900"&gt;#4900&lt;/a&gt; that we still see failing
+with coredumps quite often, and they are not connected to GC custom hooks. In a
+nutshell, it took us dozens of back and forward emails, three Zoom sessions and
+four versions of a patch to solve the issue. During the last iteration we got a
+new set of options to try and a new version of the patch. Surprisingly, that
+helped! What a relief! So, the next logical step was to remove all debug
+options and run PyPy only with the patch. Unfortunately, it started to fail
+again and we came to the obvious conclusion that what will help us is not a
+patch, but one of options we were testing out. At that point we found out that
+&lt;a href="https://doc.pypy.org/en/latest/gc_info.html#environment-variables"&gt;&lt;code&gt;PYPY_GC_MAX_PINNED=0&lt;/code&gt;&lt;/a&gt;
+is a necessary and sufficient condition to solve our issue. This points to
+another bug in the garbage collector, somehow related to object pinning.&lt;/p&gt;
+&lt;p&gt;Here's our current state: we have to add &lt;code&gt;PYPY_GC_MAX_PINNED=0&lt;/code&gt;, but we do not
+face the crashes anymore.&lt;/p&gt;
+&lt;h3 id="conclusion-and-next-steps"&gt;Conclusion and next steps&lt;/h3&gt;
+&lt;p&gt;Gratitude is extended to Carl for his invaluable assistance in resolving the
+nasty bugss, because it seems we're the only ones who suffered from the last
+one and we really did not want to fall back to CPython due to its performance
+disadvantage.&lt;/p&gt;
+&lt;p&gt;Serhii Titov, head of the QA department at PortaOne Inc.&lt;/p&gt;
+&lt;p&gt;P.S. If you are a perfectionist and at this point you have mixed feelings and
+you are still bothered by the question "But there might still be a bug in the
+GC, what about that?" - Carl has some ideas about it and he will sort it out
+(we will help with the testing/verification part).&lt;/p&gt;</description><category>casestudy</category><category>guestpost</category><guid>https://www.pypy.org/posts/2024/08/portaone.html</guid><pubDate>Thu, 29 Aug 2024 09:00:00 GMT</pubDate></item><item><title>Natural Language Processing for Icelandic with PyPy: A Case Study</title><link>https://www.pypy.org/posts/2022/02/nlp-icelandic-case-study.html</link><dc:creator>Vilhjálmur Þorsteinsson</dc:creator><description>&lt;section id="natural-language-processing-for-icelandic-with-pypy-a-case-study"&gt;
+&lt;h2&gt;Natural Language Processing for Icelandic with PyPy: A Case Study&lt;/h2&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://en.wikipedia.org/wiki/Icelandic_language"&gt;Icelandic&lt;/a&gt; is one
+of the smallest languages of the world, with about 370.000 speakers. It
+is a language in the Germanic family, most similar to Norwegian, Danish
+and Swedish, but closer to the original &lt;a class="reference external" href="https://en.wikipedia.org/wiki/Old_Norse"&gt;Old
+Norse&lt;/a&gt; spoken throughout
+Scandinavia until about the 14th century CE.&lt;/p&gt;
+&lt;p&gt;As with other small languages, there are &lt;a class="reference external" href="https://www.theguardian.com/world/2018/feb/26/icelandic-language-battles-threat-of-digital-extinction"&gt;worries that the language may
+not
+survive&lt;/a&gt;
+in a digital world, where all kinds of fancy applications are developed
+first - and perhaps only - for the major languages. Voice assistants,
+chatbots, spelling and grammar checking utilities, machine translation,
+etc., are increasingly becoming staples of our personal and professional
+lives, but if they don’t exist for Icelandic, Icelanders will gravitate
+towards English or other languages where such tools are readily
+available.&lt;/p&gt;
+&lt;p&gt;Iceland is a technology-savvy country, with &lt;a class="reference external" href="https://ourworldindata.org/grapher/share-of-individuals-using-the-internet?tab=table"&gt;world-leading adoption
+rates of the
+Internet&lt;/a&gt;,
+PCs and smart devices, and a thriving software industry. So the
+government figured that it would be worthwhile to fund a &lt;a class="reference external" href="https://aclanthology.org/2020.lrec-1.418.pdf"&gt;5-year
+plan&lt;/a&gt; to build natural
+language processing (NLP) resources and other infrastructure for the
+Icelandic language. The project focuses on collecting data and
+developing open source software for a range of core applications, such
+as tokenization, vocabulary lookup, n-gram statistics, part-of-speech
+tagging, named entity recognition, spelling and grammar checking, neural
+language models and speech processing.&lt;/p&gt;
+&lt;hr class="docutils"&gt;
+&lt;p&gt;My name is Vilhjálmur Þorsteinsson, and I’m the founder and CEO of a
+software startup &lt;a class="reference external" href="https://mideind.is/english.html"&gt;Miðeind&lt;/a&gt; in Reykjavík,
+Iceland, that employs 10 software engineers and linguists and focuses on
+NLP and AI for the Icelandic language. The company participates in the
+government’s language technology program, and has contributed
+significantly to the program’s core tools (e.g., a tokenizer and a
+parser), spelling and grammar checking modules, and a neural machine
+translation stack.&lt;/p&gt;
+&lt;p&gt;When it came to a choice of programming languages and development tools
+for the government program, the requirements were for a major, well
+supported, vendor-and-OS-agnostic FOSS platform with a large and diverse
+community, including in the NLP space. The decision to select Python as
+a foundational language for the project was a relatively easy one. That
+said, there was a bit of trepidation around the well known fact that
+CPython can be slow for inner-core tasks, such as tokenization and
+parsing, that can see heavy workloads in production.&lt;/p&gt;
+&lt;p&gt;I first became aware of PyPy in early 2016 when I was developing a
+crossword game &lt;a class="reference external" href="https://github.com/mideind/Netskrafl"&gt;Netskrafl&lt;/a&gt; in Python 2.7
+for Google App Engine. I had a utility program that compressed a
+dictionary into a Directed Acyclic Word Graph and was taking 160
+seconds  to run on CPython 2.7, so I tried PyPy and to my amazement saw
+a 4x speedup (down to 38 seconds), with literally no effort besides
+downloading the PyPy runtime.&lt;/p&gt;
+&lt;p&gt;This led me to select PyPy as the default Python interpreter for my
+company’s Python development efforts as well as for our production
+websites and API servers, a role in which it remains to this day. We
+have followed PyPy’s upgrades along the way, being just about to migrate
+our minimally required language version from 3.6 to 3.7.&lt;/p&gt;
+&lt;p&gt;In NLP, speed and memory requirements can be quite important for
+software usability. On the other hand, NLP logic and algorithms are
+often complex and challenging to program, so programmer productivity and
+code clarity are also critical success factors. A pragmatic approach
+balances these factors, avoids premature optimization and seeks a
+careful compromise between maximal run-time efficiency and minimal
+programming and maintenance effort.&lt;/p&gt;
+&lt;p&gt;Turning to our use cases, our Icelandic text
+tokenizer &lt;a class="reference external" href="https://github.com/mideind/Tokenizer"&gt;"Tokenizer"&lt;/a&gt; is fairly light,
+runs tight loops and performs a large number of small, repetitive
+operations. It runs very well on PyPy’s JIT and has not required further
+optimization.&lt;/p&gt;
+&lt;p&gt;Our Icelandic parser &lt;a class="reference external" href="https://github.com/mideind/GreynirPackage"&gt;Greynir&lt;/a&gt;
+(known on PyPI as &lt;a class="reference external" href="https://pypi.org/project/reynir/"&gt;reynir&lt;/a&gt;) is,
+if I may say so myself, a piece of work. It &lt;a class="reference external" href="https://aclanthology.org/R19-1160.pdf"&gt;parses natural language
+text&lt;/a&gt; according to a
+&lt;a class="reference external" href="https://github.com/mideind/GreynirPackage/blob/master/src/reynir/Greynir.grammar"&gt;hand-written context-free
+grammar&lt;/a&gt;,
+using an &lt;a class="reference external" href="https://en.wikipedia.org/wiki/Earley_parser"&gt;Earley-type
+algorithm&lt;/a&gt; as &lt;a class="reference external" href="https://www.sciencedirect.com/science/article/pii/S0167642309000951"&gt;enhanced
+by Scott and
+Johnstone&lt;/a&gt;.
+The CFG contains almost 7,000 nonterminals and 6,000 terminals, and the
+parser handles ambiguity as well as left, right and middle recursion. It
+returns a packed parse forest for each input sentence, which is then
+pruned by a scoring heuristic down to a single best result tree.&lt;/p&gt;
+&lt;p&gt;This parser was originally coded in pure Python and turned out to be
+unusably slow when run on CPython - but usable on PyPy, where it was
+3-4x faster. However, when we started applying it to heavier production
+workloads, it  became apparent that it needed to be faster still. We
+then proceeded to convert the innermost Earley parsing loop from Python
+to &lt;a class="reference external" href="https://github.com/mideind/GreynirPackage/blob/master/src/reynir/eparser.cpp"&gt;tight
+C++&lt;/a&gt;
+and to call it from PyPy via
+&lt;a class="reference external" href="https://cffi.readthedocs.io/en/latest/"&gt;CFFI&lt;/a&gt;, with callbacks for
+token-terminal matching functions (“business logic”) that remained on
+the Python side. This made the parser much faster (on the order of 100x
+faster than the original on CPython) and quick enough for our production
+use cases. Even after moving much of the heavy processing to C++ and using CFFI, PyPy still gives a significant speed boost over CPython.&lt;/p&gt;
+&lt;p&gt;Connecting C++ code with PyPy proved to be quite painless using CFFI,
+although we had to figure out a few &lt;a class="reference external" href="https://github.com/mideind/GreynirPackage/blob/master/src/reynir/eparser_build.py"&gt;magic incantations in our build
+module&lt;/a&gt;
+to make it compile smoothly during setup from source on Windows and
+MacOS in addition to Linux. Of course, we build binary PyPy and CPython
+wheels for the most common targets so most users don’t have to worry
+about setup requirements.&lt;/p&gt;
+&lt;p&gt;With the positive experience from the parser project, we proceeded to
+take a similar approach for two other core NLP packages: our compressed
+vocabulary package &lt;a class="reference external" href="https://github.com/mideind/BinPackage"&gt;BinPackage&lt;/a&gt;
+(known on PyPI as &lt;a class="reference external" href="https://pypi.org/project/islenska/"&gt;islenska&lt;/a&gt;) and our
+trigrams database package &lt;a class="reference external" href="https://github.com/mideind/Icegrams"&gt;Icegrams&lt;/a&gt;.
+These packages both take large text input (3.1 million word forms with
+inflection data in the vocabulary case; 100 million tokens in the
+trigrams case) and compress it into packed binary structures. These
+structures are then memory-mapped at run-time using
+&lt;a class="reference external" href="https://docs.python.org/3/library/mmap.html"&gt;mmap&lt;/a&gt; and queried via
+Python functions with a lookup time in the microseconds range. The
+low-level data structure navigation is &lt;a class="reference external" href="https://github.com/mideind/Icegrams/blob/master/src/icegrams/trie.cpp"&gt;done in
+C++&lt;/a&gt;,
+called from Python via CFFI. The ex-ante preparation, packing,
+bit-fiddling and data structure generation is fast enough with PyPy, so
+we haven’t seen a need to optimize that part further.&lt;/p&gt;
+&lt;p&gt;To showcase our tools, we host public (and open source) websites such as
+&lt;a class="reference external" href="https://greynir.is/"&gt;greynir.is&lt;/a&gt; for our parsing, named entity
+recognition and query stack and
+&lt;a class="reference external" href="https://yfirlestur.is/"&gt;yfirlestur.is&lt;/a&gt; for our spell and grammar
+checking stack. The server code on these sites is all Python running on
+PyPy using &lt;a class="reference external" href="https://flask.palletsprojects.com/en/2.0.x/"&gt;Flask&lt;/a&gt;,
+wrapped in &lt;a class="reference external" href="https://gunicorn.org/"&gt;gunicorn&lt;/a&gt; and hosted on
+&lt;a class="reference external" href="https://www.nginx.com/"&gt;nginx&lt;/a&gt;. The underlying database is
+&lt;a class="reference external" href="https://www.postgresql.org/"&gt;PostgreSQL&lt;/a&gt; accessed via
+&lt;a class="reference external" href="https://www.sqlalchemy.org/"&gt;SQLAlchemy&lt;/a&gt; and
+&lt;a class="reference external" href="https://pypi.org/project/psycopg2cffi/"&gt;psycopg2cffi&lt;/a&gt;. This setup
+has served us well for 6 years and counting, being fast, reliable and
+having helpful and supporting communities.&lt;/p&gt;
+&lt;p&gt;As can be inferred from the above, we are avid fans of PyPy and
+commensurately thankful for the great work by the PyPy team over the
+years. PyPy has enabled us to use Python for a larger part of our
+toolset than CPython alone would have supported, and its smooth
+integration with C/C++ through CFFI has helped us attain a better
+tradeoff between performance and programmer productivity in our
+projects. We wish for PyPy a great and bright future and also look
+forward to exciting related developments on the horizon, such as
+&lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt;.&lt;/p&gt;
+&lt;/section&gt;</description><category>casestudy</category><category>guestpost</category><guid>https://www.pypy.org/posts/2022/02/nlp-icelandic-case-study.html</guid><pubDate>Sun, 06 Feb 2022 15:00:00 GMT</pubDate></item></channel></rss>

@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>An Efficient and Elegant Regular Expression Matcher in Python | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2010/05/efficient-and-elegant-regular-2727904462179540436.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="running-wxpython-on-top-of-pypy-52246787415886751.html" title="Running wxPython on top of pypy" type="text/html">
+<link rel="next" href="pypy-in-googles-summer-of-code-2010-5321939902318322352.html" title="PyPy in Google's Summer of Code 2010" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="An Efficient and Elegant Regular Expression Matcher in Python">
+<meta property="og:url" content="https://www.pypy.org/posts/2010/05/efficient-and-elegant-regular-2727904462179540436.html">
+<meta property="og:description" content="Two weeks ago, I was at the Workshop Programmiersprachen und Rechenkonzepte,
+a yearly meeting of German programming language researchers. At the workshop,
+Frank Huch and Sebastian Fischer gave a reall">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2010-05-21T13:34:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">An Efficient and Elegant Regular Expression Matcher in Python</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2010-05-21T13:34:00Z" itemprop="datePublished" title="2010-05-21 13:34">2010-05-21 13:34</time></a>
+            </p>
+                <p class="commentline">11 comments</p>
+
+                <p class="commentline">            <a href="efficient-and-elegant-regular-2727904462179540436.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Two weeks ago, I was at the Workshop <a class="reference external" href="https://www-ps.informatik.uni-kiel.de/fg214/Honnef2010/">Programmiersprachen und Rechenkonzepte</a>,
+a yearly meeting of German programming language researchers. At the workshop,
+<a class="reference external" href="https://www-ps.informatik.uni-kiel.de/~fhu/">Frank Huch</a> and <a class="reference external" href="https://www-ps.informatik.uni-kiel.de/~sebf/">Sebastian Fischer</a> gave a really <a class="reference external" href="https://www-ps.informatik.uni-kiel.de/fg214/Honnef2010/Abstracts/Fischer.pdf">excellent talk</a> about an
+elegant regular expression matcher written in Haskell. One design goal of the
+matcher was to run in time linear to the length of the input string (i.e.
+without backtracking) and linear in the size of the regular expression. The
+memory use should also only be linear in the regular expression.</p>
+<p>During the workshop, some of the Haskell people and me then implemented the
+algorithm in (R)Python. Involved were Frank, Sebastian, <a class="reference external" href="https://www.bayceer.uni-bayreuth.de/mod/de/mitarbeiter/mit/mitarbeiter_detail.php?id_obj=59348">Baltasar Trancón y
+Widemann</a>, <a class="reference external" href="https://www.informatik.uni-kiel.de/prog/mitarbeiter/bernd-brassel/">Bernd Braßel</a> and <a class="reference external" href="https://www.informatik.uni-kiel.de/prog/mitarbeiter/fabian-reck/">Fabian Reck</a>.</p>
+<p>In this blog post I want to describe this implementation and show the code of
+it, because it is quite simple. In a later post I will show what optimizations
+PyPy can perform on this matcher and also do some benchmarks.</p>
+<p><strong>A Note on terminology:</strong> In the rest of the post "regular expression" is meant
+in the <a class="reference external" href="https://en.wikipedia.org/wiki/Regular_expressions#Formal_language_theory">Computer Science sense</a>, not in the <a class="reference external" href="https://en.wikipedia.org/wiki/Regular_expressions#POSIX_.28Portable_Operating_System_Interface_.5Bfor_Unix.5D.29">POSIX sense</a>. Most importantly, that
+means that back-references are not allowed.</p>
+<p><strong>Another note:</strong> This algorithm could not be used to implement PyPy's <tt class="docutils literal">re</tt>
+module! So it won't help to speed up this currently rather slow implementation.</p>
+<div class="section" id="implementing-regular-expression-matchers">
+<h2>Implementing Regular Expression Matchers<a href="#implementing-regular-expression-matchers" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>There are two typical approaches to implement regular expression. A naive one is
+to use a back-tracking implementation, which can lead to exponential matching
+times given a sufficiently evil regular expression.</p>
+<p>The other, more complex one, is to transform the regular expression into a
+<a class="reference external" href="https://en.wikipedia.org/wiki/Nondeterministic_finite_state_machine">non-deterministic finite automaton</a> (NFA) and then transform the NFA into a
+<a class="reference external" href="https://en.wikipedia.org/wiki/Deterministic_finite_automaton">deterministic finite automaton</a> (DFA). A DFA can be used to efficiently match
+a string, the problem of this approach is that turning an NFA into a DFA can
+lead to exponentially large automatons.</p>
+<p>Given this problem of potential memory explosion, a more sophisticated approach
+to matching is to not construct the DFA fully, but instead use the NFA for
+matching. This requires some care, because it is necessary to keep track of
+which set of states the automaton is in (it is not just one state, because the
+automaton is non-deterministic).</p>
+<p>The algorithm described here is essentially equivalent to this approach, however
+it does not need an intermediate NFA and represents a state of a corresponding
+DFA as marked regular expression (represented as a tree of nodes). For many
+details about an alternative approach to implement regular expressions
+efficiently, see <a class="reference external" href="https://swtch.com/~rsc/regexp/">Russ Cox excellent article collection</a>.</p>
+</div>
+<div class="section" id="the-algorithm">
+<h2>The Algorithm<a href="#the-algorithm" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>In the algorithm the regular expression is represented as a tree of nodes. The
+leaves of the nodes can match exactly one character (or the epsilon node, which
+matches the empty string). The inner nodes of the tree combine other nodes in
+various ways, like alternative, sequence or repetition. Every node in the tree
+can potentially have a mark. The meaning of the mark is that a node is marked,
+if that sub-expression matches the string seen so far.</p>
+<p>The basic approach of the algorithm is that for every character of the input
+string the regular expression tree is walked and a number of the nodes in the
+regular expression are marked. At the end of the string, if the top-level node
+is marked, the string matches, otherwise it does not. At the beginning of the
+string, one mark gets shifted into the regular expression from the top, and then
+the marks that are in the regex already are shifted around for every additional
+character.</p>
+<p>Let's start looking at some code, and an example to make this clearer. The base
+class of all regular expression nodes is this:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Regex</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, empty):
+        <span style="color: #0099FF; font-style: italic;"># empty denotes whether the regular expression</span>
+        <span style="color: #0099FF; font-style: italic;"># can match the empty string</span>
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>empty <span style="color: #555555;">=</span> empty
+        <span style="color: #0099FF; font-style: italic;"># mark that is shifted through the regex</span>
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> <span style="color: #336666;">False</span>
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">reset</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #CC3300; font-style: italic;">""" reset all marks in the regular expression """</span>
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> <span style="color: #336666;">False</span>
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        <span style="color: #CC3300; font-style: italic;">""" shift the mark from left to right, matching character c."""</span>
+        <span style="color: #0099FF; font-style: italic;"># _shift is implemented in the concrete classes</span>
+        marked <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>_shift(c, mark)
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> marked
+        <span style="color: #006699; font-weight: bold;">return</span> marked
+</pre></div>
+<p>The <tt class="docutils literal">match</tt> function which checks whether a string matches a regex is:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">match</span>(re, s):
+    <span style="color: #006699; font-weight: bold;">if</span> <span style="color: #000000; font-weight: bold;">not</span> s:
+        <span style="color: #006699; font-weight: bold;">return</span> re<span style="color: #555555;">.</span>empty
+    <span style="color: #0099FF; font-style: italic;"># shift a mark in from the left</span>
+    result <span style="color: #555555;">=</span> re<span style="color: #555555;">.</span>shift(s[<span style="color: #FF6600;">0</span>], <span style="color: #336666;">True</span>)
+    <span style="color: #006699; font-weight: bold;">for</span> c <span style="color: #000000; font-weight: bold;">in</span> s[<span style="color: #FF6600;">1</span>:]:
+        <span style="color: #0099FF; font-style: italic;"># shift the internal marks around</span>
+        result <span style="color: #555555;">=</span> re<span style="color: #555555;">.</span>shift(c, <span style="color: #336666;">False</span>)
+    re<span style="color: #555555;">.</span>reset()
+    <span style="color: #006699; font-weight: bold;">return</span> result
+</pre></div>
+<p>The most important subclass of <tt class="docutils literal">Regex</tt> is <tt class="docutils literal">Char</tt>, which matches one
+concrete character:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Char</span>(Regex):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, c):
+        Regex<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, <span style="color: #336666;">False</span>)
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>c <span style="color: #555555;">=</span> c
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        <span style="color: #006699; font-weight: bold;">return</span> mark <span style="color: #000000; font-weight: bold;">and</span> c <span style="color: #555555;">==</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>c
+</pre></div>
+<p>Shifting the mark through <tt class="docutils literal">Char</tt> is easy: a <tt class="docutils literal">Char</tt> instance retains a mark
+that is shifted in when the current character is the same as that in the
+instance.</p>
+<p>Another easy case is that of the empty regular expression <tt class="docutils literal">Epsilon</tt>:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Epsilon</span>(Regex):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>):
+        Regex<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, empty<span style="color: #555555;">=</span><span style="color: #336666;">True</span>)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">False</span>
+</pre></div>
+<p><tt class="docutils literal">Epsilons</tt> never get a mark, but they can match the empty string.</p>
+<div class="section" id="alternative">
+<h3>Alternative<a href="#alternative" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Now the more interesting cases remain. First we define an abstract base class
+<tt class="docutils literal">Binary</tt> for the case of composite regular expressions with two children, and
+then the first subclass <tt class="docutils literal">Alternative</tt> which matches if either of two regular
+expressions matches the string (usual regular expressions syntax <tt class="docutils literal">a|b</tt>).</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Binary</span>(Regex):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, left, right, empty):
+        Regex<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, empty)
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left <span style="color: #555555;">=</span> left
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>right <span style="color: #555555;">=</span> right
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">reset</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left<span style="color: #555555;">.</span>reset()
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>right<span style="color: #555555;">.</span>reset()
+        Regex<span style="color: #555555;">.</span>reset(<span style="color: #336666;">self</span>)
+
+<span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Alternative</span>(Binary):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, left, right):
+        empty <span style="color: #555555;">=</span> left<span style="color: #555555;">.</span>empty <span style="color: #000000; font-weight: bold;">or</span> right<span style="color: #555555;">.</span>empty
+        Binary<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, left, right, empty)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        marked_left  <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left<span style="color: #555555;">.</span>shift(c, mark)
+        marked_right <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>right<span style="color: #555555;">.</span>shift(c, mark)
+        <span style="color: #006699; font-weight: bold;">return</span> marked_left <span style="color: #000000; font-weight: bold;">or</span> marked_right
+</pre></div>
+<p>An <tt class="docutils literal">Alternative</tt> can match the empty string, if either of its children can.
+Similarly, shifting a mark into an <tt class="docutils literal">Alternative</tt> shifts it into both its
+children. If either of the children are marked afterwards, the <tt class="docutils literal">Alternative</tt>
+is marked too.</p>
+<p>As an example, consider the regular expression <tt class="docutils literal">a|b|c</tt>, which would be
+represented by the objects <tt class="docutils literal"><span class="pre">Alternative(Alternative(Char('a'),</span> <span class="pre">Char('b')),</span> <span class="pre">Char('c'))</span></tt>.
+Matching the string <tt class="docutils literal">"a"</tt> would lead to the following marks in
+the regular expression objects (green nodes are marked, white ones are
+unmarked):</p>
+
+<img alt="alternativea.gif" src="https://2.bp.blogspot.com/_zICyAWqZbLA/S_Z-iZKY-8I/AAAAAAAAAKY/ShzkzFqaQgo/s1600/alternativea.gif"><p>At the start of the process, no node is marked. Then the first char is matched,
+which adds a mark to the <tt class="docutils literal"><span class="pre">Char('a')</span></tt> node, and the mark will propagate up the
+two <tt class="docutils literal">Alternative</tt> nodes.</p>
+</div>
+<div class="section" id="repetition">
+<h3>Repetition<a href="#repetition" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The two remaining classes are slightly trickier. <tt class="docutils literal">Repetition</tt> is used to match
+a regular expression any number of times (usual regular expressions syntax
+<tt class="docutils literal">a*</tt>):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Repetition</span>(Regex):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, re):
+        Regex<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, <span style="color: #336666;">True</span>)
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>re <span style="color: #555555;">=</span> re
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>re<span style="color: #555555;">.</span>shift(c, mark <span style="color: #000000; font-weight: bold;">or</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>marked)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">reset</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>re<span style="color: #555555;">.</span>reset()
+        Regex<span style="color: #555555;">.</span>reset(<span style="color: #336666;">self</span>)
+</pre></div>
+<p>A <tt class="docutils literal">Repetition</tt> can always match the empty string. The mark is shifted into the
+child, but if the <tt class="docutils literal">Repetition</tt> is already marked, this will be shifted into
+the child as well, because the <tt class="docutils literal">Repetition</tt> could match a second time.</p>
+<p>As an example, consider the regular expression <tt class="docutils literal">(a|b|c)*</tt> matching the string
+<tt class="docutils literal">abcbac</tt>:</p>
+<img alt="repetition.gif" src="https://4.bp.blogspot.com/_zICyAWqZbLA/S_Z-itgZvbI/AAAAAAAAAKg/vYe5CQxPUOo/s1600/repetition.gif"><p>For every character, one of the alternatives matches, thus the repetition matches
+as well.</p>
+</div>
+<div class="section" id="sequence">
+<h3>Sequence<a href="#sequence" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The only missing class is that for sequences of expressions, <tt class="docutils literal">Sequence</tt> (usual
+regular expressions syntax <tt class="docutils literal">ab</tt>):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Sequence</span>(Binary):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, left, right):
+        empty <span style="color: #555555;">=</span> left<span style="color: #555555;">.</span>empty <span style="color: #000000; font-weight: bold;">and</span> right<span style="color: #555555;">.</span>empty
+        Binary<span style="color: #555555;">.</span>__init__(<span style="color: #336666;">self</span>, left, right, empty)
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">_shift</span>(<span style="color: #336666;">self</span>, c, mark):
+        old_marked_left <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left<span style="color: #555555;">.</span>marked
+        marked_left <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left<span style="color: #555555;">.</span>shift(c, mark)
+        marked_right <span style="color: #555555;">=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>right<span style="color: #555555;">.</span>shift(
+            c, old_marked_left <span style="color: #000000; font-weight: bold;">or</span> (mark <span style="color: #000000; font-weight: bold;">and</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>left<span style="color: #555555;">.</span>empty))
+        <span style="color: #006699; font-weight: bold;">return</span> (marked_left <span style="color: #000000; font-weight: bold;">and</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>right<span style="color: #555555;">.</span>empty) <span style="color: #000000; font-weight: bold;">or</span> marked_right
+</pre></div>
+<p>A <tt class="docutils literal">Sequence</tt> can be empty only if both its children are empty. The mark
+handling is a bit delicate. If a mark is shifted in, it will be shifted to the
+left child regular expression. If that left child is already marked <em>before the
+shift</em>, that mark is shifted to the right child. If the left child can match the
+empty string, the right child gets the mark shifted in as well.</p>
+<p>The whole sequence matches (i.e. is marked), if the left child is marked after
+the shift and if the right child can match the empty string, or if the right
+child is marked.</p>
+<p>Consider the regular expression <tt class="docutils literal">abc</tt> matching the string <tt class="docutils literal">abcd</tt>. For the
+first three characters, the marks wander from left to right, when the <tt class="docutils literal">d</tt> is
+reached, the matching fails.</p>
+<img alt="sequence.gif" src="https://1.bp.blogspot.com/_zICyAWqZbLA/S_Z-iyBRDCI/AAAAAAAAAKo/Kam1Jvk_02s/s1600/sequence.gif">
+</div>
+<div class="section" id="more-complex-example">
+<h3>More Complex Example<a href="#more-complex-example" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>As a more complex example, consider the expression <tt class="docutils literal"><span class="pre">((abc)*|(abcd))(d|e)</span></tt>
+matching the string <tt class="docutils literal">abcabcabcd</tt>.</p>
+<img alt="complex.gif" src="https://3.bp.blogspot.com/_zICyAWqZbLA/S_Z-iy43N0I/AAAAAAAAAKw/BbRQTkidcJM/s1600/complex.gif"><p>Note how the two branches of the first alternative match the first <tt class="docutils literal">abc</tt> in
+parallel, until it becomes clear that only the left alternative <tt class="docutils literal">(abc)*</tt> can
+work.</p>
+</div>
+<div class="section" id="complexity">
+<h3>Complexity<a href="#complexity" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The <tt class="docutils literal">match</tt> function above loops over the entire string without going back and
+forth. Each iteration goes over the whole tree every time. Thus the complexity
+of the algorithm is <tt class="docutils literal">O(m*n)</tt> where <tt class="docutils literal">m</tt> is the size of the regular expression
+and <tt class="docutils literal">n</tt> is the length of the string.</p>
+</div>
+</div>
+<div class="section" id="summary-outlook">
+<h2>Summary &amp; Outlook<a href="#summary-outlook" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>So, what have we achieved now? The code shown here can match regular expressions
+with the desired complexity. It is also not much code. By itself, the Python
+code shown above is not terribly efficient. In the next post I will show how the
+JIT generator can be used to make the simple matcher shown above really fast.</p>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="running-wxpython-on-top-of-pypy-52246787415886751.html" rel="prev" title="Running wxPython on top of pypy">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy-in-googles-summer-of-code-2010-5321939902318322352.html" rel="next" title="PyPy in Google's Summer of Code 2010">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-8883343992294452019">
+        <div class="comment-header">
+          <a name="comment-8883343992294452019"></a>
+            <span class="author">Marius Gedminas</span> wrote on <span class="date">2010-05-21 16:41</span>:
+        </div>
+        <div class="comment-content">
+          <p>Have you seen Russ Cox's <a href="https://swtch.com/~rsc/regexp/" rel="nofollow">series of articles</a> about regular expressions?<br><br><a href="https://blog.chromium.org/2009/02/irregexp-google-chromes-new-regexp.html" rel="nofollow">Google Chrome's regexp library</a> is also interesting.<br><br>Google appears to have put a lot of research in efficient regexp algorithms while paying attention to backwards-compatibility concerns, as existing applications often rely on backtracking.</p>
+        </div>
+      </div>
+      <div class="comment comment-8607436175890535732">
+        <div class="comment-header">
+          <a name="comment-8607436175890535732"></a>
+            <span class="author">kay schluehr</span> wrote on <span class="date">2010-05-21 20:26</span>:
+        </div>
+        <div class="comment-content">
+          <i>Most importantly, that means that back-references are not allowed.</i><br><br><a href="https://fiber-space.de/wordpress/?p=1441" rel="nofollow">Limited backreferences</a> can be integrated within this pattern matching scheme. General backreferences are only possible with backtracking but unless you want to solve NP complete problems using POSIX style regexps they might not be necessary.
+        </div>
+      </div>
+      <div class="comment comment-512257614429575287">
+        <div class="comment-header">
+          <a name="comment-512257614429575287"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2010-05-21 21:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>Marius: The Russ Cox site is linked from the article :-).<br><br>Kay: Thanks for the link, will check it out.</p>
+        </div>
+      </div>
+      <div class="comment comment-9167802587183477558">
+        <div class="comment-header">
+          <a name="comment-9167802587183477558"></a>
+            <span class="author">Thomas</span> wrote on <span class="date">2010-05-21 22:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>I do not use regular expressions very heavily and am very new to pypy in general (1.2 works pretty good for me on my pure python code).  From this article I don't see a full explaination why this basic algorithm couldn't be used for pypy.  Is it primarily due to concerns about backward compatiblity or something more interesting?  I am looking forward to the article to come about applying the JIT.</p>
+        </div>
+      </div>
+      <div class="comment comment-717066989714752693">
+        <div class="comment-header">
+          <a name="comment-717066989714752693"></a>
+            <span class="author">Benjamin Peterson</span> wrote on <span class="date">2010-05-22 20:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Thomas Python's re library requires backtracking.</p>
+        </div>
+      </div>
+      <div class="comment comment-9119922668849821891">
+        <div class="comment-header">
+          <a name="comment-9119922668849821891"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2010-05-23 00:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is just beautiful, I hope some version of this will be available for PyPy users: sandboxing + non-pathological REs sounds like a nice combo.</p>
+        </div>
+      </div>
+      <div class="comment comment-9076179592515644706">
+        <div class="comment-header">
+          <a name="comment-9076179592515644706"></a>
+            <span class="author">Damian Cugley</span> wrote on <span class="date">2010-05-24 16:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>Though these regexes can't be used as a drop-in replacement for the re module, if there were strikingly faster it might be worth having them as an alternative. The backtracking features are so seldom required that a faster, non-backtracking algorithm might prove popular with people who worry about matching speed.</p>
+        </div>
+      </div>
+      <div class="comment comment-3693825132003837399">
+        <div class="comment-header">
+          <a name="comment-3693825132003837399"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2010-05-25 12:53</span>:
+        </div>
+        <div class="comment-content">
+          <p>It would be fun to read an article where you take the real Python regexes and apply PyPy's JIT code generation to them, i.e. when you call re.compile(...), you'd get native code out of it, specialized for the regex being compiled. After all, haven't you used the JIT on "toy" languages before? Regexes are a "toy" language, albeit a useful one..</p>
+        </div>
+      </div>
+      <div class="comment comment-1868100412814771630">
+        <div class="comment-header">
+          <a name="comment-1868100412814771630"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2010-05-25 14:21</span>:
+        </div>
+        <div class="comment-content">
+          <p>Anonymous2: Yes, but PyPy's current implementation of the re module is a bit of a mess, and not really fast. It's rather unclear how easy/possible it would be to generate a good JIT for it.</p>
+        </div>
+      </div>
+      <div class="comment comment-6172653337906375267">
+        <div class="comment-header">
+          <a name="comment-6172653337906375267"></a>
+            <span class="author">Unhelpful</span> wrote on <span class="date">2010-06-04 21:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>Instead of a "special" interpreter for REs in RPython, and a JIT for it, what about "compiling" REs to Python bytecode, and letting the existing PyPy JIT trace and compile them if they end up being used often enough? This is probably slower in the case of lots of throwaway REs that are used once, but when a few REs are used repeatedly it ought to work.</p>
+        </div>
+      </div>
+      <div class="comment comment-5088051433078506939">
+        <div class="comment-header">
+          <a name="comment-5088051433078506939"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2017-11-21 15:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>"As an example, consider the regular expression a|b|c, which would be represented by the objects Alternative(Alternative(Char('a'), Char('b')), Char('c'))"<br><br>But how to create such a representation, when you scan input regex literal by literal?</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

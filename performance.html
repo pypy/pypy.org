@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Performance | PyPy</title>
+<link href="assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="rss.xml">
+<link rel="canonical" href="https://www.pypy.org/performance.html">
+<link rel="icon" href="favicon2.ico" sizes="16x16">
+<link rel="icon" href="favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="assets/css/tipuesearch.css">
+<meta name="author" content="The PyPy Team">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Performance">
+<meta property="og:url" content="https://www.pypy.org/performance.html">
+<meta property="og:description" content="Contents
+
+Profiling: vmprof
+Optimization strategy
+Micro-tuning tips
+
+
+This document collects strategies, tactics and tricks for making your
+code run faster under PyPy.  Many of these are also useful h">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2019-12-28T16:14:02Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="index.html">
+                    <image id="toplogo" src="images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="features.html">What is PyPy?</a> </li>  
+                    <li> <a href="compat.html">Compatibility</a> </li>  
+                    <li> <a href="#">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="blog/">Index</a> </li>  
+                    <li> <a href="categories/">Tags</a> </li>  
+                    <li> <a href="archive.html">Archive by year</a> </li>  
+                    <li> <a href="rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text storypage" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Performance</a></h1>
+
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+    <nav class="contents" id="contents" role="doc-toc"><p class="topic-title"><a class="reference internal" href="performance.html#top">Contents</a></p>
+<ul class="simple">
+<li><p><a class="reference internal" href="performance.html#profiling-vmprof" id="toc-entry-1">Profiling: vmprof</a></p></li>
+<li><p><a class="reference internal" href="performance.html#optimization-strategy" id="toc-entry-2">Optimization strategy</a></p></li>
+<li><p><a class="reference internal" href="performance.html#micro-tuning-tips" id="toc-entry-3">Micro-tuning tips</a></p></li>
+</ul></nav><p>This document collects strategies, tactics and tricks for making your
+code run faster under PyPy.  Many of these are also useful hints for
+stock Python and other languages.  For contrast, we also describe some
+CPython (stock Python) optimizations that are not needed in PyPy.</p>
+<hr class="docutils">
+<section id="profiling-vmprof"><span id="profiling"></span><span id="profiler"></span><h2><a class="toc-backref" href="performance.html#toc-entry-1" role="doc-backlink">Profiling: vmprof</a><a href="#profiling-vmprof" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>As a general rule, when considering performance issues, follow these
+three points: first <em>measure</em> them (it is counter-productive to fight
+imaginary performance issues); then <em>profile</em> your code (it is useless
+to optimize the wrong parts).  Only optimize then.</p>
+<p>PyPy 2.6 introduced <a class="reference external" href="https://vmprof.readthedocs.org/">vmprof</a>, a very-low-overhead statistical profiler.
+The standard, non-statistical <code class="docutils literal">cProfile</code> is also supported, and can be
+enabled without turning off the JIT.  We do recommend vmprof anyway
+because turning on cProfile can distort the result (sometimes massively,
+though hopefully this should not be too common).</p>
+</section><hr class="docutils">
+<section id="optimization-strategy"><h2><a class="toc-backref" href="performance.html#toc-entry-2" role="doc-backlink">Optimization strategy</a><a href="#optimization-strategy" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>These suggestions apply to all computer languages.  They're here as
+reminders of things to try before any Python or PyPy-specific tweaking.</p>
+<section id="build-a-regression-test-suite"><h3>Build a regression-test suite<a href="#build-a-regression-test-suite" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Before you start tuning, build a regression-test suite for your code.
+This front-loads a significant amount of work, but it means you can
+try lots of optimizations without worrying so much about introducing
+functional bugs.</p>
+</section><section id="measure-don-t-guess"><h3>Measure, don't guess<a href="#measure-don-t-guess" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Human beings are bad at guessing or intuiting where the hotspots in code are.
+Measure, don't guess; use a <a class="reference internal" href="performance.html#profiler">profiler</a> to pin down the 20% of the
+code where the code is spending 80% of its time, then speed-tune that.</p>
+<p>Measuring will save you a lot of effort wasted on tuning parts of the code
+that aren't actually bottlenecks.</p>
+<p>As you tune, re-profile frequently  so you can see how the hottest spots
+are shifting around.</p>
+</section><section id="i-o-bound-is-different-from-compute-bound"><h3>I/O-bound is different from compute-bound<a href="#i-o-bound-is-different-from-compute-bound" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Be aware of the difference between code that is compute-bound (slow
+because it's doing a huge number of instructions) and code that is I/O
+bound (slow because of disk or network delays).</p>
+<p>Expect to get most of your gains from optimizing compute-bound code.
+It's usually (though not always) a sign that you're near the end of
+worthwhile tuning when <a class="reference internal" href="performance.html#profiling">profiling</a> shows that the bulk of the
+application's time is spent on network and disk I/O.</p>
+</section><section id="tune-your-algorithms-first"><h3>Tune your algorithms first<a href="#tune-your-algorithms-first" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Generally, when your code is doing things that are O(n**2) or larger
+in the size of your data set, the cost of those operations is going
+to swamp any small gains you can pick up with the tricks we describe
+here.</p>
+<p>Tune your algorithms first.  It's time to think about applying our
+list of micro-tuning tips  <em>after</em> you think you've optimized out
+intrinsically expensive operations.</p>
+<p>That said, be prepared for the possibility that you will discover
+better-hidden algorithmic problems as you micro-tune.  Likely
+you will go through this cycle more than once.</p>
+</section><section id="focus-on-tight-loops"><h3>Focus on tight loops<a href="#focus-on-tight-loops" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>It's extremely common for high time costs to lurk within some
+innocuous-looking code inside a tight loop - especially in code
+that does something like a searching/matching/lookup operation
+or any kind of graph traversal.</p>
+<p>Probably the most common kind of performance-killer in compute-bound
+code is an O(n**2) operation that is disguised by being some sort of
+O(n) lookup or match inside an O(n) loop.</p>
+<p>Another common time-sink is relatively expensive common-setup
+operations that are performed inside tight loops but could be moved
+to before they start.  (For a representative case of this, see the
+micro-tuning tip on regexp compilation.)</p>
+</section><section id="smaller-is-faster"><h3>Smaller is faster<a href="#smaller-is-faster" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Modern computers have multiple levels of memory caching, some directly
+on the processor chip.  Causing a cache miss at any level incurs a
+performance penalty proportional to random-access time for the next
+outward (and much slower) layer of cache.</p>
+<p>Accordingly, smaller is faster.  Programs or routines with a small
+enough working set to fit inside a fast cache will be as fast as
+that cache is. To make your code fast, reduce the length of the
+series of Python or JIT-compiler opcodes it generates by making
+it simpler.</p>
+<p>The tradeoff here is that algorithmic tuning often trades time for
+space - that is, it increases the size of an algorithm's working set
+by including pre-computations or tables or reverse maps in order to
+avoid O(n**2) operations.</p>
+<p>It's impossible to predict in advance where the sweet spot in that
+tradeoff will be.  You have to try different things and measure -
+which takes us right back to "Measure, don't guess".  And another
+function of your regression test suite can be as a speed benchmark.</p>
+</section></section><hr class="docutils">
+<section id="micro-tuning-tips"><h2><a class="toc-backref" href="performance.html#toc-entry-3" role="doc-backlink">Micro-tuning tips</a><a href="#micro-tuning-tips" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>These are in no particular order.</p>
+<section id="keep-it-simple"><h3>Keep it simple<a href="#keep-it-simple" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Simple is better than complex. The PyPy JIT is not very smart; the
+simpler your code is the better it will run. Here again, though, you face
+a tradeoff: you may need to pay with more algorithmic complexity in order
+to avoid brute-force operations that are O(n**2) or worse.</p>
+<p>Write plain-vanilla code in plain-vanilla ways. The PyPy JIT has many
+productions that optimize a common usage pattern against an uncommon
+usage pattern.</p>
+</section><section id="global-variables"><h3>Global variables<a href="#global-variables" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>In CPython, global variables and functions (including package imports)
+are much more expensive to reference than locals; avoid them.  (This
+is also good modularity practice).</p>
+<p>The cost of CPython global references is high enough that, for example, if you
+have code in a frequently-visited inner loop that uses int() a lot, it
+may be worthwhile to create a local copy of the reference with "int =
+int" in an enclosing block.</p>
+<p>However, this in <em>not</em> true in JITted PyPy code. The "int = int" hack
+won't buy you performance, it's just an extra copy.  The modularity
+reason for avoiding globals are still valid.</p>
+</section><section id="regular-expressions"><h3>Regular expressions<a href="#regular-expressions" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Regular-expression compilation is expensive.  If the regexp pattern in
+a search, match, or replace operation is static (doesn't mutate at
+runtime) refactor so it's only done once.</p>
+<p>If the regexp compilation is in a class method, consider doing it as
+the initializer of a regexp-valued static (shared) class member and
+using that class member in your operation.</p>
+<p>If the regexp compilation is in a free function, consider moving it
+to module level and referencing the resulting regexp object
+(but see the warning above about global variables).</p>
+</section><section id="old-vs-new-style-classes"><h3>Old- vs. new-style classes<a href="#old-vs-new-style-classes" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>New-style classes allow faster attribute access and take up less core
+per instance than old-style classes.  Much of this advantage may be
+lost, however, if attribute names are not constant. For example: x.a
+= y or even setattr(x, 'a', y) will be much faster than a dynamic
+version: setattr(x, 'a' + some_variable, y).</p>
+<p>Classes that inherit from both new- and old-style classes are
+<em>extremely</em> slow; avoid at all costs.</p>
+<p>In PyPy, isinstance() called against an old-style class was very slow
+until 2.0.</p>
+</section><section id="string-concatenation-is-expensive"><h3>String concatenation is expensive<a href="#string-concatenation-is-expensive" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>In CPython, you may want to replace:</p>
+<div class="code"><pre class="code python"><a id="rest_code_cd34a4070b7146099b805d156de2bc94-1" name="rest_code_cd34a4070b7146099b805d156de2bc94-1" href="performance.html#rest_code_cd34a4070b7146099b805d156de2bc94-1"></a><span class="n">s</span> <span class="o">=</span> <span class="n">head</span> <span class="o">+</span> <span class="n">body</span> <span class="o">+</span> <span class="n">maybe</span> <span class="o">+</span> <span class="n">tail</span>
+</pre></div>
+<p>with the admittedly less readable:</p>
+<div class="code"><pre class="code python"><a id="rest_code_1263f88acd474d75b51f42a134b7e7f6-1" name="rest_code_1263f88acd474d75b51f42a134b7e7f6-1" href="performance.html#rest_code_1263f88acd474d75b51f42a134b7e7f6-1"></a><span class="n">s</span> <span class="o">=</span> <span class="s2">"</span><span class="si">%(head)s%(body)s%(maybe)s%(tail)s</span><span class="s2">"</span> <span class="o">%</span> <span class="nb">locals</span><span class="p">()</span>
+</pre></div>
+<p>or even:</p>
+<div class="code"><pre class="code python"><a id="rest_code_fc68bff25d8b4c4e8533ea0f18fe7fbb-1" name="rest_code_fc68bff25d8b4c4e8533ea0f18fe7fbb-1" href="performance.html#rest_code_fc68bff25d8b4c4e8533ea0f18fe7fbb-1"></a><span class="n">s</span> <span class="o">=</span> <span class="s2">"</span><span class="si">{head}{body}{maybe}{tail}</span><span class="s2">"</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="nb">locals</span><span class="p">())</span>
+</pre></div>
+<p>Both of the latter forms avoid multiple-allocation overhead.
+But PyPy's JIT makes the overhead of intermediate concatenations
+go away in linear code that keeps the number of concatenations
+small, bound and constant.  (And <code class="docutils literal">locals()</code> is rather slow
+with PyPy's JIT.)</p>
+<p>On the other hand, in code like this with a string-valued foo() function:</p>
+<div class="code"><pre class="code python"><a id="rest_code_2026905af41f4f5ba4dd98b2ab6ff7ed-1" name="rest_code_2026905af41f4f5ba4dd98b2ab6ff7ed-1" href="performance.html#rest_code_2026905af41f4f5ba4dd98b2ab6ff7ed-1"></a><span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">mylist</span><span class="p">:</span>
+<a id="rest_code_2026905af41f4f5ba4dd98b2ab6ff7ed-2" name="rest_code_2026905af41f4f5ba4dd98b2ab6ff7ed-2" href="performance.html#rest_code_2026905af41f4f5ba4dd98b2ab6ff7ed-2"></a>    <span class="n">s</span> <span class="o">+=</span> <span class="n">foo</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</pre></div>
+<p>the JIT cannot optimize out intermediate copies.  This code is
+actually quadratic in the total size of the mylist strings due to
+repeated string copies of ever-larger prefix segments.  (Such code
+is always fine for bytearrays, because in this case <code class="docutils literal">+=</code> is an
+in-place operation.)</p>
+<p>This:</p>
+<div class="code"><pre class="code python"><a id="rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-1" name="rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-1" href="performance.html#rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-1"></a><span class="n">parts</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-2" name="rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-2" href="performance.html#rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-2"></a><span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">mylist</span><span class="p">:</span>
+<a id="rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-3" name="rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-3" href="performance.html#rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-3"></a>    <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">foo</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+<a id="rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-4" name="rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-4" href="performance.html#rest_code_c8bfe04de90b4d7898b56b9d8cd03bfd-4"></a><span class="n">s</span> <span class="o">=</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span>
+</pre></div>
+<p>can be much faster because all the string concatenation in the last
+line creates exactly one new string object with one C-level copy
+sequence (and list operations are relatively cheap).</p>
+</section><section id="frame-introspection-and-tracing-are-slow"><h3>Frame introspection and tracing are slow<a href="#frame-introspection-and-tracing-are-slow" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Certain function calls can disable PyPy's speed options over
+stretches of surrounding code called "JIT scopes".</p>
+<p>A JIT like PyPy's works based on the assumption that the only thing
+worth optimizing are loops that are executed often. Whenever the
+interpreter enters a loop in the interpreted program, the JIT records
+what the interpreter does, creating a trace. This trace is optimized,
+compiled to machine code and executed when the loop is hit with the
+conditions observed during tracing.  This trace is one kind of JIT scope.</p>
+<p>Another kind of JIT scope that matters is a function, considered as
+a unit for inlining.</p>
+<p>Note that a JIT scope is a run-time phenomenon, not a compile-time
+one.  It's not confined by source-code module boundaries.  A library-
+or foreign-module call in a frequently-called loop or inlined function
+will be part of its JIT scope.</p>
+<p>locals(), globals(), sys._getframe(), sys.exc_info(), and sys.settrace
+work in PyPy, but they incur a performance penalty that can be huge by
+disabling the JIT over the enclosing JIT scope.</p>
+<p><em>(Thanks Eric S. Raymond for the text above)</em></p>
+<section id="insider-s-point-of-view"><h4>Insider's point of view<a href="#insider-s-point-of-view" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>This section describes performance issues from the point of view of
+insiders of the project; it should be particularly interesting if you
+plan to contribute in that area.</p>
+<p>One of the goals of the PyPy project is to provide a fast and compliant
+python interpreter. Some of the ways we achieve this are by providing a
+high-performance garbage collector (GC) and a high-performance
+Just-in-Time compiler (JIT).  Results of comparing PyPy and CPython can
+be found on the <a class="reference external" href="http://speed.pypy.org">speed website</a>. Those benchmarks are not a random
+collection: they are a combination of real-world Python programs ---
+benchmarks originally included with the (now dead) Unladen Swallow
+project --- and benchmarks for which we found PyPy to be slow (and improved).
+Consult the descriptions of each for details.</p>
+<p>The JIT, however, is not a magic bullet. There are several characteristics
+that might surprise people who are not used to JITs in
+general or to the PyPy JIT in particular.  The JIT is generally good at
+speeding up straight-forward Python code that spends a lot of time in the
+bytecode dispatch loop, i.e., running actual Python code --- as opposed
+to running things that only are invoked by Python code.  Good
+examples include numeric calculations or any kind of heavily
+object-oriented program.  Bad examples include doing computations with
+large longs --- which is performed by unoptimizable support code.  When the
+JIT cannot help, PyPy is generally slower than CPython.</p>
+<p>More specifically, the JIT is known not to work on:</p>
+<ul class="simple">
+<li><p><strong>Tests</strong>: The ideal unit tests execute each piece of tested code
+once.  This leaves no time for the JIT to warm up.</p></li>
+<li><p><strong>Really short-running scripts</strong>: A rule of thumb is if something runs below
+0.2s the JIT has no chance, but it depends a lot on the program in question.
+In general, make sure you warm up your program before running benchmarks, if
+you're measuring something long-running like a server.  The time required
+to warm up the JIT varies; give it at least a couple of seconds.  (PyPy's
+JIT takes an especially long time to warm up.)</p></li>
+<li><p><strong>Long-running runtime functions</strong>: These are the functions provided
+by the runtime of PyPy that do a significant amount of work.
+PyPy's runtime is generally not as optimized as CPython's and we expect those
+functions to take somewhere between the same time as CPython to twice as long.
+This includes, for example, computing with longs, or sorting large lists.
+A counterexample is regular expressions: although they take time, they
+come with their own JIT.</p></li>
+</ul>
+<p>Unrelated things that we know PyPy to be slow at (note that we're probably
+working on it):</p>
+<ul class="simple">
+<li><p><strong>CPython C extension modules</strong>: Any C extension module recompiled
+with PyPy takes a very large hit in performance.  PyPy supports C
+extension modules solely to provide basic functionality.
+If the extension module is for speedup purposes only, then it
+makes no sense to use it with PyPy at the moment.  Instead, remove it
+and use a native Python implementation, which also allows opportunities
+for JIT optimization.  If the extension module is
+both performance-critical and an interface to some C library, then it
+might be worthwhile to consider rewriting it as a pure Python version
+that uses <a class="reference external" href="http://cffi.readthedocs.org/">CFFI</a> for the interface.</p></li>
+<li><p><strong>Missing RPython modules</strong>: A few modules of the standard library
+(like <code class="docutils literal">csv</code> and <code class="docutils literal">cPickle</code>) are written in C in CPython, but written
+natively in pure Python in PyPy.  Sometimes the JIT is able to do a
+good job on them, and sometimes not.  In most cases (like <code class="docutils literal">csv</code> and
+<code class="docutils literal">cPickle</code>), we're slower than CPython, with the notable exception of
+<code class="docutils literal">json</code> and <code class="docutils literal">heapq</code>.</p></li>
+<li><p><strong>Abuse of itertools</strong>: The itertools module is often "abused" in the
+sense that it is used for the wrong purposes.  From our point of view,
+itertools is great if you have iterations over millions of items, but
+not for most other cases.  It gives you 3 lines in functional style
+that replace 10 lines of Python loops (longer but arguably much easier
+to read).  The pure Python version is generally not slower even on
+CPython, and on PyPy it allows the JIT to work much better --- simple
+Python code is fast.  The same argument also applies to <code class="docutils literal">filter()</code>,
+<code class="docutils literal">reduce()</code>, and to some extend <code class="docutils literal">map()</code> (although the simple case
+is JITted), and to all usages of the <code class="docutils literal">operator</code> module we can think
+of.</p></li>
+<li><p><strong>Ctypes</strong>: Ctypes is slower than on CPython.  Consider <a class="reference external" href="http://cffi.readthedocs.org/">CFFI</a> or <a class="reference external" href="https://hpyproject.org/">HPy</a>
+instead which have special paths inside the JIT.</p></li>
+</ul>
+<p>We generally consider things that are slower on PyPy than CPython to be bugs
+of PyPy.  If you find some issue that is not documented here,
+please report it to our <a class="reference external" href="https://github.com/pypy/pypy/issues">bug tracker</a> for investigation.</p>
+</section></section></section>
+</div>
+    
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

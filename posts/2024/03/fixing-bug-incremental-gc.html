@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixing a Bug in PyPy's Incremental GC | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2024/03/fixing-bug-incremental-gc.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="CF Bolz-Tereick">
+<link rel="prev" href="../01/pypy-v7315-release.html" title="PyPy v7.3.15 release" type="text/html">
+<link rel="next" href="../04/pypy-v7316-release.html" title="PyPy v7.3.16 release" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Fixing a Bug in PyPy's Incremental GC">
+<meta property="og:url" content="https://www.pypy.org/posts/2024/03/fixing-bug-incremental-gc.html">
+<meta property="og:description" content="Introduction
+Since last summer, I've been looking on and off into a weird and hard to
+reproduce crash bug in PyPy. It was
+manifesting only on CI, and it seemed to always happen in the AST rewriting
+ph">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2024-03-26T19:14:09Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Fixing a Bug in PyPy's Incremental GC</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/cf-bolz-tereick.html">CF Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2024-03-26T19:14:09Z" itemprop="datePublished" title="2024-03-26 19:14">2024-03-26 19:14</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="fixing-bug-incremental-gc.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <h2 id="introduction">Introduction<a href="#introduction" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Since last summer, I've been looking on and off into a weird and hard to
+reproduce <a href="https://github.com/pypy/pypy/issues/3959">crash bug in PyPy</a>. It was
+manifesting only on CI, and it seemed to always happen in the AST rewriting
+phase of <a href="https://pytest.org">pytest</a>, the symptoms being that PyPy would crash
+with a segfault. All my attempts to reproduce it locally failed, and my
+attempts to try to understand the problem by dumping the involved ASTs lead
+nowhere.</p>
+<p>A few weeks ago, we got <a href="https://github.com/PyO3/pyo3/issues/3766">two more</a>
+<a href="https://github.com/orgs/pypy/discussions/4923">bug reports</a>, the last one by
+the authors of the <a href="https://nanobind.readthedocs.io/">nanobind</a> binding
+generator, with the same symptoms: crash in AST rewriting, only on CI. I
+decided to make a more serious push to try to find the bug this time.
+Ultimately the problem turned out to be several bugs in PyPy's garbage
+collector (GC) that had been there since its inception in
+<a href="../../2013/10/incremental-garbage-collector-in-pypy-8956893523842234676.html">2013</a>.
+Understanding the
+situation turned out to be quite involved, additionally complicated by this
+being the first time that I was working on this particular aspect of PyPy's GC.
+Since the bug was so much work to find, I thought I'd write a blog post about
+it.</p>
+<p>The blog post consists of three parts: first a chronological description of
+what I did to find the bug, a technical explanation of what goes wrong, some
+reflections on the bug (and then a bonus bug I also found in the process).</p>
+<h2 id="finding-the-bug">Finding the Bug<a href="#finding-the-bug" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>I started from the failing <a href="https://github.com/wjakob/nanobind/actions/runs/8234561874/job/22516568891">nanobind CI
+runs</a>
+that ended with a segfault of the PyPy interpreter. This was only an
+intermittent problem, not every run was failing. When I tried to just run the
+test suite locally, I couldn't get it to fail. Therefore at first I tried to
+learn more about what was happening by looking on the CI runners.</p>
+<h3 id="running-on-ci">Running on CI<a href="#running-on-ci" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>I forked the nanobind repo and hacked the CI script in order to get it to use a
+PyPy build with <a href="https://doc.pypy.org/en/latest/build.html#making-a-debug-build-of-pypy">full debug information and more assertions turned on</a>. In order
+to increase the probability of seeing the crash I added an otherwise unused
+<a href="https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs">matrix</a>
+variable to the CI script that just contained 32 parameters. This means every
+build is done 32 times (sorry Github for wasting your CPUs 😕). With that
+amount of repetition, I got at least one job of every build that was crashing.</p>
+<p>Then I added the <code>-Xfaulthandler</code> option to the PyPy command which will use the
+<a href="https://docs.python.org/3.11/library/faulthandler.html">faulthandler</a> module
+try to print a Python stacktrace if the VM segfaults to confirm that PyPy was
+indeed crashing in the <a href="https://docs.python.org/3/library/ast.html">AST</a>
+<a href="https://github.com/pytest-dev/pytest/blob/main/src/_pytest/assertion/rewrite.py">rewriting
+phase</a>
+of pytest, which pytest uses for <a href="https://docs.pytest.org/en/7.1.x/how-to/assert.html#asserting-with-the-assert-statement">nicer
+assertions</a>.
+I experimented with hacking our faulthandler implementation to also give me a
+C-level callstack, but that didn't work as well as I hoped.</p>
+<p>Then I tried to run <a href="https://sourceware.org/gdb/">gdb</a> on CI to try to get it
+to print a C callstack at the crash point. You can get gdb to execute commands
+as if typed at the prompt with the <code>-ex</code> commandline option, I used something
+like this:</p>
+<div class="code"><pre class="code literal-block">gdb -ex "set confirm off" -ex "set pagination off" -ex \
+    "set debuginfod enabled off" -ex run -ex where -ex quit \
+    --args &lt;command&gt; &lt;arguments&gt;
+</pre></div>
+
+<p>But unfortunately the crash never occurred when running in gdb.</p>
+<p>Afterwards I tried the next best thing, which was configuring the CI runner to
+<a href="https://github.com/itamarst/gha-upload-cores">dump a core file and upload it as a build
+artifact</a>, which worked. Looking
+at the cores locally only sort of worked, because I am running a different
+version of Ubuntu than the CI runners. So I used
+<a href="https://mxschmitt.github.io/action-tmate/">tmate</a> to be able to log into the
+CI runner after a crash and interactively used gdb there. Unfortunately what I
+learned from that was that the bug was some kind of <strong>memory corruption</strong>,
+which is always incredibly unpleasant to debug. Basically the header word of a
+Python object had been corrupted somehow at the point of the crash, which means
+that it's <a href="https://en.wikipedia.org/wiki/Virtual_method_table">vtable</a> wasn't
+usable any more.</p>
+<p>(Sidenote: <a href="../../2009/10/gc-improvements-6174120095428192954.html#unifying-the-vtable-ptr-with-the-gc-header">PyPy doesn't really use a vtable
+pointer</a>,
+instead it uses half a word in the header for the vtable, and the other half
+for flags that the GC needs to keep track of the state of the object.
+Corrupting all this is still bad.)</p>
+<h3 id="reproducing-locally">Reproducing Locally<a href="#reproducing-locally" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>At that point it was clear that I had to push to reproduce the problem on my
+laptop, to allow me to work on the problem more directly and not to always have
+to go via the CI runner. Memory corruption bugs often have a lot of randomness
+(depending on which part of memory gets modified, things might crash or more
+likely just happily keep running). Therefore I decided to try to brute-force
+reproducing the crash by simply running the tests many many times. Since the
+crash happened in the AST rewriting phase of pytest, and that happens only if
+no <a href="https://stackoverflow.com/questions/2998215/if-python-is-interpreted-what-are-pyc-files">pyc
+files</a>
+of the bytecode-compiled rewritten ASTs exist, I made sure to delete them
+before every test run.</p>
+<p>To repeat the test runs I used
+<a href="https://tratt.net/laurie/src/multitime/">multitime</a>, which is a simple program
+that runs a command repeatedly. It's meant for lightweight benchmarking
+purposes, but it also halts the execution of the command if that command exits
+with an error (and it sleeps a small random time between runs, which might help
+with randomizing the situation, maybe). Here's a demo:</p>
+<script src="https://asciinema.org/a/648877.js" id="asciicast-648877" async="true"></script><p>(<a href="https://bernsteinbear.com/">Max</a> pointed out
+<a href="https://github.com/silentbicycle/autoclave">autoclave</a> to me when reviewing
+this post, which is a more dedicated tool for this job.)</p>
+<p>Thankfully, running the tests repeatedly eventually lead to a crash, solving my
+"only happens on CI" problem. I then tried various variants to exclude possible
+sources of errors. The first source of errors to exclude in PyPy bugs is the
+just-in-time compiler, so I reran the tests with <code>--jit off</code> to see whether I
+could still get it to crash, and thankfully I eventually could (JIT bugs are
+often very annoying).</p>
+<p>Next source of bugs to exclude where C-extensions. Since those were the tests
+of nanobind, a framework for creating C-extension modules I was a bit worried
+that the bug might be in our emulation of CPython's C-API. But running PyPy
+with the <code>-v</code> option (which will print all the imports as they happen)
+confirmed that at the point of crash no C-extension had been imported yet.</p>
+<h3 id="using-rr">Using <code>rr</code>
+<a href="#using-rr" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>I still couldn't get the bug to happen in GDB, so the tool I tried next was
+<a href="https://rr-project.org/">rr, the "reverse debugger"</a>. rr can record the execution of a program and
+later replay it arbitrarily often. This gives you a time-traveling debugger
+that allows you to execute the program backwards in addition to forwards.
+Eventually I managed to get the crash to happen when running the tests with
+<code>rr record --chaos</code> (<code>--chaos</code> randomizes some decisions that rr takes, to try to
+increase the chance of reproducing bugs).</p>
+<p>Using rr well is quite hard, and I'm not very good at it. The main approach I
+use with rr to debug memory corruption is to replay the crash, then set a
+<a href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Set-Watchpoints.html">watchpoint</a>
+for the corrupted memory location, then use the command <code>reverse-continue</code> to
+find the place in the code that mutated the memory location. <code>reverse-continue</code>
+is like <code>continue</code>, except that it will execute the program backwards from the
+current point. Here's a little demo of this:</p>
+<script src="https://asciinema.org/a/648814.js" id="asciicast-648814" async="true"></script><p>Doing this for my bug revealed that the object that was being corrupted was
+erroneously collected by the garbage collector. For some reason the GC had
+wrongly decided that the object was no longer reachable and therefore put the
+object into a freelist by writing a pointer to the next entry in the freelist
+into the first word of the object, overwriting the object's header. The next
+time the object was used things crashed.</p>
+<h3 id="side-quest-wrong-gc-assertions">Side-quest: wrong GC assertions<a href="#side-quest-wrong-gc-assertions" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>At this point in the process, I got massively side-tracked. PyPy's GC has a
+number of debug modes that you can optionally turn on. Those slow down the
+program execution a lot, but they should in theory help to understand why the
+GC goes wrong. When I turned them on, I was getting a failing assertion really
+early in the test execution, complaining about an invariant violation in the GC
+logic. At first this made me very happy. I thought that this would help me fix
+the bug more quickly.</p>
+<p>Extremely frustratingly, after two days of work I concluded that the assertion
+logic itself was wrong. I have fixed that in the meantime too, the details
+of that are in the bonus section at the end of the post.</p>
+<h3 id="using-gdb-scripting-to-find-the-real-bug">Using GDB scripting to find the real bug<a href="#using-gdb-scripting-to-find-the-real-bug" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>After that disaster I went back to the earlier rr recording without GC assertions
+and tried to understand in more detail why the GC decided to free an object
+that was still being referenced. To be able to do that I used the <a href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Python-API.html">GDB Python
+scripting
+API</a> to
+write some helper commands to understand the state of the GC heap (rr is an
+extension of GDB, so the GDB scripting API works in rr too).</p>
+<p>The first (small) helper command I wrote with the GDB scripting API was a way
+to pretty-print the currently active GC flags of a random PyPy object, starting
+just from the pointer. The more complex command I wrote was an object tracer,
+which follows pointers to GC objects starting from a root object to explore the
+object graph. The object tracer isn't complete, it doesn't deal with all the
+complexities of PyPy's GC. But it was good enough to help me with my problem, I
+found out that the corrupted object was stored in an array.</p>
+<p>As an example, here's a function that uses the GDB API to walk one of the
+helper data structures of the GC, a stack of pointers:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">walk_addr_stack</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">""" walk an instance of the AddressStack class (which is a linked list of</span>
+<span class="sd">    arrays of 1019 pointers).</span>
+
+<span class="sd">    the first of the arrays is only partially filled with used_in_last_chunk</span>
+<span class="sd">    items, all the other chunks are full."""</span>
+    <span class="k">if</span> <span class="n">obj</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">code</span> <span class="o">==</span> <span class="n">gdb</span><span class="o">.</span><span class="n">TYPE_CODE_PTR</span><span class="p">:</span>
+        <span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">dereference</span><span class="p">()</span>
+    <span class="n">used_in_last_chunk</span> <span class="o">=</span> <span class="n">lookup</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"used_in_last_chunk"</span><span class="p">)</span>
+    <span class="n">chunk</span> <span class="o">=</span> <span class="n">lookup</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"inst_chunk"</span><span class="p">)</span><span class="o">.</span><span class="n">dereference</span><span class="p">()</span>
+    <span class="k">while</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">items</span> <span class="o">=</span> <span class="n">lookup</span><span class="p">(</span><span class="n">chunk</span><span class="p">,</span> <span class="s2">"items"</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">used_in_last_chunk</span><span class="p">):</span>
+            <span class="k">yield</span> <span class="n">items</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">chunk</span> <span class="o">=</span> <span class="n">lookup</span><span class="p">(</span><span class="n">chunk</span><span class="p">,</span> <span class="s2">"next"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">chunk</span><span class="p">:</span>
+            <span class="k">break</span>
+        <span class="n">chunk</span> <span class="o">=</span> <span class="n">chunk</span><span class="o">.</span><span class="n">dereference</span><span class="p">()</span>
+        <span class="n">used_in_last_chunk</span> <span class="o">=</span> <span class="mi">1019</span>
+</pre></div>
+
+<p>The full file of supporting code I wrote can be found in <a href="https://gist.github.com/cfbolz/13cadcbbef321d93fc9790dff6f60a6a">this
+gist</a>. This is
+pretty rough throw-away code, however.</p>
+<p>In the following recording I show a staged debugging session with some of the
+extra commands I wrote with the Python API. The details aren't important, I
+just wanted to give a bit of a flavor of what inspecting objects looks like:</p>
+<script src="https://asciinema.org/a/648889.js" id="asciicast-648889" async="true"></script><p>The next step was to understand why the array content wasn't being correctly
+traced by the GC, which I eventually managed with some <a href="https://www.fayewilliams.com/2011/07/13/gdb-conditional-breakpoints/">conditional
+breakpoints</a>,
+more watchpoints, and using <code>reverse-continue</code>. It turned out to be a bug that
+occurs when the content of one array was memcopied into another array. The
+technical details of why the array wasn't traced correctly are described in
+detail in the next section.</p>
+<h3 id="writing-a-unit-test">Writing a unit test<a href="#writing-a-unit-test" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>To try to make sure I really understood the bug correctly I then wrote a GC
+unit test that shows the problem. Like most of PyPy, our GC is written in
+RPython, a (somewhat strange) subset/dialect of Python2, which can be compiled
+to C code. However, since it is also valid Python2 code, it can be <a href="../../2022/04/how-is-pypy-tested.html">unit-tested
+on top of a Python2
+implementation</a>
+(which is one of the reasons why we keep maintaining PyPy2).</p>
+<p>In the GC unit tests you have a lot of control about what order things happen
+in, e.g. how objects are allocated, when garbage collection phases happen, etc.
+After some trying I managed to write a test that crashes with the same kind of
+memory corruption that my original crash exhibited: an object that is still
+reachable via an array is collected by the GC. To give you a flavor of what
+this kind of test looks like, here's an (edited for clarity) version of the
+test I eventually managed to write</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">test_incrementality_bug_arraycopy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">malloc</span><span class="p">(</span><span class="n">VAR</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span> <span class="c1"># first array</span>
+    <span class="c1"># the stackroots list emulates the C stack</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">stackroots</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+    <span class="n">target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">malloc</span><span class="p">(</span><span class="n">VAR</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span> <span class="c1"># second array</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">stackroots</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+    <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">malloc</span><span class="p">(</span><span class="n">S</span><span class="p">)</span> <span class="c1"># unrelated object, will be collected</span>
+    <span class="n">node</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="c1"># store reference into source array, calling the write barrier</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">writearray</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
+    <span class="n">val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gc</span><span class="o">.</span><span class="n">collect_step</span><span class="p">()</span>
+    <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stackroots</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="c1"># reload arrays, they might have moved</span>
+    <span class="n">target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stackroots</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="c1"># this GC step traces target</span>
+    <span class="n">val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gc</span><span class="o">.</span><span class="n">collect_step</span><span class="p">()</span>
+
+    <span class="c1"># emulate what a memcopy of arrays does</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gc</span><span class="o">.</span><span class="n">writebarrier_before_copy</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">res</span>
+    <span class="n">target</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">source</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="c1"># copy two elements of the arrays</span>
+    <span class="n">target</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">source</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="c1"># now overwrite the reference to node in source</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">writearray</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">lltype</span><span class="o">.</span><span class="n">nullptr</span><span class="p">(</span><span class="n">S</span><span class="p">))</span>
+    <span class="c1"># this GC step traces source</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">gc</span><span class="o">.</span><span class="n">collect_step</span><span class="p">()</span>
+    <span class="c1"># some more collection steps, crucially target isn't traced again</span>
+    <span class="c1"># but node is deleted</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gc</span><span class="o">.</span><span class="n">collect_step</span><span class="p">()</span>
+    <span class="c1"># used to crash, node got collected</span>
+    <span class="k">assert</span> <span class="n">target</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">x</span> <span class="o">==</span> <span class="mi">5</span>
+</pre></div>
+
+<p>One of the good properties of testing our GC that way is that all the memory is
+emulated. The crash in the last line of the test isn't a segfault at all,
+instead you get a nice exception saying that you tried to access a freed chunk
+of memory and you can then debug this with a python2 debugger.</p>
+<h3 id="fixing-the-bug">Fixing the Bug<a href="#fixing-the-bug" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>With the unit test in hand, fixing the test was relatively straightforward (the
+diff in its simplest form is anyway only a <a href="https://github.com/pypy/pypy/commit/78bbeb93471b5f38438004e971f4b4f84ab17a84">single line
+change</a>).
+After this first version of my fix, I
+<a href="https://github.com/pypy/pypy/issues/4925#issuecomment-2014459454">talked to Armin
+Rigo</a> who
+helped me find different case that was still wrong, in the same area of the
+code.</p>
+<p>I also got help by the developers at <a href="https://portaone.com/">PortaOne</a>
+who are using PyPy on their servers and had seen some <a href="https://github.com/pypy/pypy/issues/4900">mysterious PyPy
+crashes</a>
+recently, that looked related to the GC. They did test deployments of my fixes
+in their various stages to their servers to try to see whether stability
+improved for them. Unfortunately in the end it turned out that their crashes
+are an unrelated GC bug related to object pinning, which we haven't resolved
+yet.</p>
+<h3 id="writing-a-gc-fuzzerproperty-based-test">Writing a GC fuzzer/property based test<a href="#writing-a-gc-fuzzerproperty-based-test" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Finding bugs in the GC is always extremely disconcerting, particularly since
+this one managed to hide for so long (more than ten years!). Therefore I wanted
+to use these bugs as motivation to try to find more problems in PyPy's GC. Given
+the ridiculous effectiveness of fuzzing, I used
+<a href="https://hypothesis.readthedocs.io/en/latest/">hypothesis</a> to write a
+property-based test. Every test performs a sequence of randomly chosen steps
+from the following list:</p>
+<ul>
+<li>allocate an object</li>
+<li>read a random field from a random object</li>
+<li>write a random reference into a random object</li>
+<li>drop a random stack reference</li>
+<li>perform one GC step</li>
+<li>allocate an array</li>
+<li>read a random index from a random array</li>
+<li>write to an array</li>
+<li>memcopy between two arrays</li>
+</ul>
+<p>This approach of doing a sequence of steps is pretty close to the <a href="https://hypothesis.readthedocs.io/en/latest/stateful.html">stateful
+testing</a> approach of
+hypothesis, but I just implemented it manually with the <a href="https://hypothesis.readthedocs.io/en/latest/data.html#drawing-interactively-in-tests">data
+strategy</a>.</p>
+<p>Every one of those steps is always performed on both the tested GC, and on some
+regular Python objects. The Python objects provide the "ground truth" of what
+the heap should look like, so we can compare the state of the GC objects
+with the state of the Python objects to find out whether the GC made a mistake.</p>
+<p>In order to check whether the test is actually useful, I reverted my bug fixes
+and made sure that the test re-finds both the spurious GC assertion error and the
+problems with memcopying an array.</p>
+<p>In addition, the test also found corner cases in my fix. There was a situation
+that I hadn't accounted for, which the test found after eventually.
+I also plan on adding a bunch of other GC features as steps in the
+test to stress them too (for example weakrefs, identity hashes, pinning, maybe
+finalization).</p>
+<p>At the point of publishing this post, the fixes got merged to the 2.7/3.9/3.10
+branches of PyPy, and will be part of the next release (v7.3.16).</p>
+<h2 id="the-technical-details-of-the-bug">The technical details of the bug<a href="#the-technical-details-of-the-bug" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>In order to understand the technical details of the bug, I need to give some
+background explanations about PyPy's GC.</p>
+<h3 id="pypys-incremental-gc">PyPy's incremental GC<a href="#pypys-incremental-gc" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>PyPy uses an incremental generational mark-sweep GC. It's
+<a href="https://en.wikipedia.org/wiki/Tracing_garbage_collection#Generational_GC_(ephemeral_GC)">generational</a>
+and therefore has minor collections (where only young objects get collected)
+and major collections (collecting long-lived objects eventually, using a
+<a href="https://en.wikipedia.org/wiki/Tracing_garbage_collection#Na%C3%AFve_mark-and-sweep">mark-and-sweep</a>
+algorithm). Young objects are allocated in a nursery using a
+bump-pointer allocator, which makes allocation quite efficient. They are moved
+out of the nursery by minor collections. In order to find references from old
+to young objects the GC uses a write barrier to detect writes into old objects.</p>
+<p>The GC is also
+<a href="https://en.wikipedia.org/wiki/Tracing_garbage_collection#Stop-the-world_vs._incremental_vs._concurrent">incremental</a>,
+which means that its major collections aren't done all at once (which would
+lead to long pauses). Instead, major collections are sliced up into small
+steps, which are done directly after a minor collection (the GC isn't
+<em>concurrent</em> though, which would mean that the GC does work in a separate
+thread).</p>
+<p>The incremental GC uses <a href="https://en.wikipedia.org/wiki/Tracing_garbage_collection#Tri-color_marking">tri-color
+marking</a>
+to reason about the reachable part of the heap during the marking phase, where
+every old object can be:</p>
+<ul>
+<li>black: already marked, reachable, definitely survives the collection</li>
+<li>grey: will survive, but still needs to be marked</li>
+<li>white: potentially dead</li>
+</ul>
+<p>The color of every object is encoded by setting flags
+in the object header.</p>
+<p>The GC maintains the <strong>invariant</strong> that black objects must never point to white
+objects. At the start of a major collection cycle the stack roots are turned
+gray. During the mark phase of a major collection cycle, the GC will trace gray
+objects, until
+none are left. To trace a gray object, all the objects it references have to be
+marked grey if they are white so far. After a grey object is traced, it can be
+marked black (because all the referenced objects are now either black or gray).
+Eventually, there are no gray objects left. At that point (because no white
+object can be reached from a black one) all the white objects are known to be
+unreachable and can therefore be freed.</p>
+<p>The GC is incremental because every collection step will only trace a limited
+number of gray objects, before giving control back to the program. This leads to
+a problem: if an already traced (black) object is changed between two marking
+steps of the GC, the program can mutate that object and write a new reference
+into one of its fields. This could lead to an invariant violation, if the
+referenced object is white. Therefore, the GC uses the write barrier (which it
+needs anyway to find references from old to young objects) to mark all black
+objects that are modified gray, and then trace them again at one of the
+later collection steps.</p>
+<h3 id="the-special-write-barrier-of-memcopy">The special write barrier of memcopy<a href="#the-special-write-barrier-of-memcopy" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Arrays use a different kind of write barrier than normal objects. Since they
+can be arbitrarily large, tracing them can take a long time. Therefore it's
+potentially wasteful to trace them fully at a minor collection. To fix this,
+the array write barrier keeps more granular information about which parts of
+the array have been modified since the last collection step. Then only the
+modified parts of the array need to be traced, not the whole array.</p>
+<p>In addition, there is another optimization for arrays, which is that memcopy is
+treated specially by the GC. If memcopy is implemented by simply writing a loop
+that copies the content of one array to the other, that will invoke the write
+barrier every single loop iteration for the write of every array element,
+costing a lot of overhead. Here's some pseudo-code:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">arraycopy</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">source_start</span><span class="p">,</span> <span class="n">dest_start</span><span class="p">,</span> <span class="n">length</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">length</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">source</span><span class="p">[</span><span class="n">source_start</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span>
+        <span class="n">dest</span><span class="p">[</span><span class="n">dest_start</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span> <span class="c1"># &lt;- write barrier inserted here</span>
+</pre></div>
+
+<p>Therefore the GC has a special memcopy-specific
+write barrier that will perform the GC logic once before the memcopy loop, and
+then use a regular (typically SIMD-optimized) memcopy implementation from
+<code>libc</code>. Roughly like this:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">arraycopy</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">source_start</span><span class="p">,</span> <span class="n">dest_start</span><span class="p">,</span> <span class="n">length</span><span class="p">):</span>
+    <span class="n">gc_writebarrier_before_array_copy</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">source_start</span><span class="p">,</span> <span class="n">dest_start</span><span class="p">,</span> <span class="n">length</span><span class="p">)</span>
+    <span class="n">raw_memcopy</span><span class="p">(</span><span class="n">cast_to_voidp</span><span class="p">(</span><span class="n">source</span><span class="p">)</span> <span class="o">+</span> <span class="n">source_start</span><span class="p">,</span>
+                <span class="n">cast_to_voidp</span><span class="p">(</span><span class="n">dest</span><span class="p">)</span> <span class="o">+</span> <span class="n">dest_start</span><span class="p">,</span>
+                <span class="n">sizeof</span><span class="p">(</span><span class="n">itemtype</span><span class="p">(</span><span class="n">source</span><span class="p">))</span> <span class="o">*</span> <span class="n">length</span><span class="p">)</span>
+</pre></div>
+
+<p>(this is really a rough sketch. The <a href="https://github.com/pypy/pypy/blob/789f964fff59c722b0872abcdc56d2b1373a9f3b/rpython/rlib/rgc.py#L365">real
+code</a>
+is much more complicated.)</p>
+<h3 id="the-bug">The bug<a href="#the-bug" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The bugs turned out to be precisely in this memcopy write barrier. When we
+implemented the current GC, we adapted our previous GC, which was a
+generational mark-sweep GC but <em>not</em> incremental. We started with most of the
+previous GC's code, including the write barriers. The regular write barriers
+were adapted to the new incremental assumptions, in particular the need for the
+write barrier to also turn black objects back to gray when they are modified
+during a marking phase. This was simply not done at all for the memcopy write
+barrier, at least in two of the code paths. Fixing this problem fixes the unit
+tests and stops the crashes.</p>
+<h2 id="reflections">Reflections<a href="#reflections" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>The way the bug was introduced is really typical. A piece of code (the memcopy
+write barrier) was written under a set of assumptions. Then those assumptions
+changed later. Not all the code pieces that relied on these assumptions to be
+correct were updated. It's pretty hard to prevent this in all situations.</p>
+<p>I still think we could have done more to prevent the bug occurring. Writing a
+property-based test for the GC would have been a good idea given the complexity
+of the GC, and definitely something we did in other parts of our code at the
+time (just using the <code>random</code> module mostly, we started using hypothesis
+later).</p>
+<p>It's a bit of a mystery to me why this bug managed to be undetected for so
+long. Memcopy happens in a lot of pretty core operations of e.g. lists in
+Python (<code>list.extend</code>, to name just one example). To speculate, I would suspect
+that all the other preconditions for the bug occurring made it pretty rare:</p>
+<ul>
+<li>the content of an old list that is not yet marked needs to be copied into
+  another old list that is marked already</li>
+<li>the source of the copy needs to also store an object that has no other
+  references</li>
+<li>the source of the copy then needs to be overwritten with other data</li>
+<li>then the next collection steps need to be happening at the right points</li>
+<li>...</li>
+</ul>
+<p>Given the complexity of the GC logic I also wonder whether some lightweight
+formal methods would have been a good idea. Formalizing some of the core
+invariants in <a href="https://en.wikipedia.org/wiki/B-Method">B</a> or
+<a href="https://en.wikipedia.org/wiki/TLA%2B">TLA+</a> and then <a href="https://en.wikipedia.org/wiki/Model_checking">model
+checking</a> them up to some number
+of
+objects would have found this problem pretty quickly. There are also correctness
+proofs for GC algorithms in some research papers, but I don't have a good
+overview of the literature to point to any that are particularly good or bad.
+Going such a more formal route might have fixed this and probably a whole bunch
+of other bugs, but of course it's a pretty expensive (and tedious) approach.</p>
+<p>While it was super annoying to track this down, it was definitely good to learn
+a bit more about how to use rr and the GDB scripting interface.</p>
+<h2 id="bonus-section-the-wrong-assertion">Bonus Section: The Wrong Assertion<a href="#bonus-section-the-wrong-assertion" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Some more technical information about the wrong assertion is in this section.</p>
+<h3 id="background-pre-built-objects">Background: pre-built objects<a href="#background-pre-built-objects" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>PyPy's VM-building bootstrapping process can "freeze" a bunch of heap objects
+into the final binary. This allows the VM to start up quickly, because those
+frozen objects are loaded by the OS as part of the binary.</p>
+<p>Those frozen pre-built objects are parts of the 'roots' of the garbage
+collector and need to be traced. However, tracing all the pre-built objects at
+every collection would be very expensive, because there are a lot of them
+(about 150,000 in a PyPy 3.10 binary). Tracing them all is also not necessary,
+because most of them are never modified. Unmodified pre-built objects can only reference
+other pre-built objects, which can never be deallocated anyway. Therefore we
+have an optimization that uses the write barrier (which we need anyway to find
+old-to-young pointers) to notice when a pre-built object gets modified for the
+very first time. If that happens, it gets added to the set of pre-built objects
+that gets counted as a root, and is traced as a root at collections
+from then on.</p>
+<h3 id="the-wrong-assertion">The wrong assertion<a href="#the-wrong-assertion" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The assertion that triggered when I turned on the GC debug mode was saying that
+the GC found a reference from a black to a white object, violating its
+invariant. Unmodified pre-built objects count as black, and they aren't roots,
+because they can only ever reference other pre-built objects. However, when a
+pre-built object gets modified for the first time, it becomes part of the root
+set and will be marked gray. This logic works fine.</p>
+<p>The wrong assertion triggers if a pre-built object is mutated for the very
+first time in the middle of an incremental marking phase. While the pre-built
+object gets added to the root set just fine, and will get traced before the
+marking phase ends, this is encoded slightly differently for pre-built objects,
+compared to "regular" old objects. Therefore, the invariant checking code
+wrongly reported a black-&gt;white pointer in this situation.</p>
+<p>To fix it I also wrote a unit test checking the problem, made sure that the GC
+hypothesis test also found the bug, and then fixed the wrong assertion to take
+the color encoding of pre-built objects into account.</p>
+<p>The bug managed to be invisible because we don't tend to turn on the GC
+assertions very often. We only do that when we find a GC bug, which is of
+course also when we need it the most to be correct.</p>
+<h2 id="acknowledgements">Acknowledgements<a href="#acknowledgements" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Thanks to Matti Picus, Max Bernstein, Wouter van Heyst for giving me feedback on drafts of the
+post. Thanks to Armin Rigo for reviewing the code and pointing out holes in my
+thinking. Thanks to the original reporters of the various forms of the bug,
+including Lily Foote, David Hewitt, Wenzel Jakob.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../01/pypy-v7315-release.html" rel="prev" title="PyPy v7.3.15 release">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../04/pypy-v7316-release.html" rel="next" title="PyPy v7.3.16 release">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="Fixing a Bug in PyPy's Incremental GC" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

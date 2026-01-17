@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy faster than C on a carefully crafted example | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2011/02/pypy-faster-than-c-on-carefully-crafted-5614784244310486765.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Maciej Fijalkowski">
+<link rel="prev" href="../01/jit-backend-for-arm-processors-5994810755839586463.html" title="A JIT Backend for ARM Processors" type="text/html">
+<link rel="next" href="pypy-san-franciso-bay-area-tour-2011-6179180737090334330.html" title="The PyPy San Franciso Bay Area Tour 2011" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="PyPy faster than C on a carefully crafted example">
+<meta property="og:url" content="https://www.pypy.org/posts/2011/02/pypy-faster-than-c-on-carefully-crafted-5614784244310486765.html">
+<meta property="og:description" content="Good day everyone.
+Recent round of optimizations, especially loop invariant code motion
+has been very good for small to medium examples. There is work ongoing to
+make them scale to larger ones, howeve">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2011-02-04T11:30:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">PyPy faster than C on a carefully crafted example</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2011-02-04T11:30:00Z" itemprop="datePublished" title="2011-02-04 11:30">2011-02-04 11:30</time></a>
+            </p>
+                <p class="commentline">30 comments</p>
+
+                <p class="commentline">            <a href="pypy-faster-than-c-on-carefully-crafted-5614784244310486765.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Good day everyone.</p>
+<p>Recent round of optimizations, especially <a class="reference external" href="../01/loop-invariant-code-motion-1998392217676829154.html">loop invariant code motion</a>
+has been very good for small to medium examples. There is work ongoing to
+make them scale to larger ones, however there are few examples worth showing
+how well they perform. This one following example, besides getting benefits
+from loop invariants, also shows a difference between static and dynamic
+compilation. In fact, after applying all the optimizations C does, only a
+JIT can use the extra bit of runtime information to run even faster.</p>
+<p>The example is as follows. First Python. I create two files, x.py:</p>
+<pre class="literal-block">
+def add(a, b):
+  return a + b
+</pre>
+<p>And y.py:</p>
+<pre class="literal-block">
+from x import add
+
+def main():
+    i = 0
+    a = 0.0
+    while i &lt; 1000000000:
+        a += 1.0
+        add(a, a)
+        i += 1
+
+main()
+</pre>
+<p>For C, x.c:</p>
+<pre class="literal-block">
+double add(double a, double b)
+{
+  return a + b;
+}
+</pre>
+<p>and y.c:</p>
+<pre class="literal-block">
+double add(double a, double b);
+
+int main()
+{
+  int i = 0;
+  double a = 0;
+  while (i &lt; 1000000000) {
+    a += 1.0;
+    add(a, a);
+    i++;
+  }
+}
+</pre>
+<p>Results?</p>
+<ul class="simple">
+<li><b>1.97s - PyPy</b></li>
+<li><b>3.07s - C</b></li>
+</ul>
+Compilation options:
+<ul class="simple">
+<li>PyPy trunk (386ed41eae0c), running pypy-c y.py</li>
+<li>C - gcc -O3 (GCC 4.4.5 shipped with Ubuntu Maverick)</li>
+</ul>
+<p>Hence, PyPy 50% faster than C on this carefully crafted example. The reason
+is obvious - static compiler can't inline across file boundaries. In C,
+you can somehow circumvent that, however, it wouldn't anyway work
+with shared libraries. In Python however, even when the whole import system
+is completely dynamic, the JIT can dynamically find out what can be inlined.
+That example would work equally well for Java and other decent JITs, it's
+however good to see we work in the same space :-)</p>
+<p>Cheers,<br>
+fijal</p>
+<p>EDIT: Updated GCC version</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../01/jit-backend-for-arm-processors-5994810755839586463.html" rel="prev" title="A JIT Backend for ARM Processors">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy-san-franciso-bay-area-tour-2011-6179180737090334330.html" rel="next" title="The PyPy San Franciso Bay Area Tour 2011">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-6547040650574693929">
+        <div class="comment-header">
+          <a name="comment-6547040650574693929"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-02-04 11:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; The reason is obvious - static compiler can't inline across file boundaries.<br><br>That's what link-time optimizations are for, which where added to GCC in 2009; however, your point concerning shared libaries is valid...</p>
+        </div>
+      </div>
+      <div class="comment comment-5013726738997449018">
+        <div class="comment-header">
+          <a name="comment-5013726738997449018"></a>
+            <span class="author">Zeev</span> wrote on <span class="date">2011-02-04 11:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>I added a printf("%f\n",a) to the end of the file so the compiler wouldn't optimize the whole thing away. On my Cure 2 Duo 2.33Ghz, I got for gcc -O3:<br><br>1000000000.000000<br><br>real    0m4.396s<br>user    0m4.386s<br>sys     0m0.007s<br><br>and for gcc -O3 -flto -fwhole-program:<br><br><br>1000000000.000000                                                                                                                                                                                                                            <br><br>real    0m1.312s<br>user    0m1.308s<br>sys     0m0.003s</p>
+        </div>
+      </div>
+      <div class="comment comment-7850956845269895581">
+        <div class="comment-header">
+          <a name="comment-7850956845269895581"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-02-04 11:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great work!<br><br>Now you just have to identify and remove dead code in your jit. Then you could remove the call to 'add' altogether.</p>
+        </div>
+      </div>
+      <div class="comment comment-6186528421540923397">
+        <div class="comment-header">
+          <a name="comment-6186528421540923397"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-02-04 12:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>In this strange example, in our JIT, the call to 'add' is indeed removed because of inlining, and then the addition that occurs in there is removed because of dead code elimination.</p>
+        </div>
+      </div>
+      <div class="comment comment-3433905986088415657">
+        <div class="comment-header">
+          <a name="comment-3433905986088415657"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-02-04 12:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Zeev yes, but C equivalent of Python import is indeed shared libraries, where -fwhole-program no longer works.</p>
+        </div>
+      </div>
+      <div class="comment comment-4222189793884283924">
+        <div class="comment-header">
+          <a name="comment-4222189793884283924"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-02-04 13:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin note that even when the result is accumulated (addition is not removed, although the call is still inlined), PyPy is still faster. Not as much though: 2.5s vs 3.0s</p>
+        </div>
+      </div>
+      <div class="comment comment-4181609366337359509">
+        <div class="comment-header">
+          <a name="comment-4181609366337359509"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-02-04 13:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>For completeness's sake, what's the output of `gcc --version` in your example?</p>
+        </div>
+      </div>
+      <div class="comment comment-8729683441027446333">
+        <div class="comment-header">
+          <a name="comment-8729683441027446333"></a>
+            <span class="author">klauss</span> wrote on <span class="date">2011-02-04 14:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Not to mention specialization: python's (and pypy's) add() can add pretty much anything - strings if you will.<br><br>The JIT will inline a specialized version particular to the call site, whereas C can only apply generalized optimizations.</p>
+        </div>
+      </div>
+      <div class="comment comment-2915353682016960888">
+        <div class="comment-header">
+          <a name="comment-2915353682016960888"></a>
+            <span class="author">Greg Milner</span> wrote on <span class="date">2011-02-05 02:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>Everyone knows Python runs faster than C...<br><br>By about 6 weeks.</p>
+        </div>
+      </div>
+      <div class="comment comment-3906702322431482598">
+        <div class="comment-header">
+          <a name="comment-3906702322431482598"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-02-05 13:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>There's another simple case where pypy could (in principle) do very much better than standard C: turn pow(x, i) into sqrt(x*x*x) if i == 3/2, and other reductions.  In practice if you don't know what i is at compiletime you often bundle the simplifications into a function (at the cost of some ifs) but a JIT could do a very nice job on this automagically whenever i is fixed, which it usually is.</p>
+        </div>
+      </div>
+      <div class="comment comment-2660555958255370128">
+        <div class="comment-header">
+          <a name="comment-2660555958255370128"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-02-06 14:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>You wrote: "PyPy 50% faster than C on this carefully crafted example".<br><br>The truth is: PyPy is 35% faster than the C code (using C as the baseline), because it completes in 65% of the time required by the C version.<br><br>The C code takes 50% more time to execute (is slower by 50%, 1.5x slower) than the PyPy code (using PyPy as the baseline).</p>
+        </div>
+      </div>
+      <div class="comment comment-2530451800553246683">
+        <div class="comment-header">
+          <a name="comment-2530451800553246683"></a>
+            <span class="author">haypo</span> wrote on <span class="date">2011-02-08 22:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>Test with gcc (Debian 20110126-0ubuntu1) 4.6.0 20110126 (experimental) [trunk revision 169285]: "/usr/lib/gcc-snapshot/bin/gcc [OPTIONS] x.c y.c -o x &amp;&amp; time ./x". OPTIONS=-O0: 10.1s; OPTIONS=-O3: 9.1s; OPTIONS=-O3 -flto: 0.002s. Woops, 0.002 second? I checked: the result is correct :-) LTO rocks!</p>
+        </div>
+      </div>
+      <div class="comment comment-7633989743197771887">
+        <div class="comment-header">
+          <a name="comment-7633989743197771887"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-02-09 06:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>@haypo print the result so the loop don't get removed as dead code. Besides, the problem is really the fact that's -flto is unfair since python imports more resemble shared libraries than statically-compiled files.</p>
+        </div>
+      </div>
+      <div class="comment comment-2889902815854842835">
+        <div class="comment-header">
+          <a name="comment-2889902815854842835"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-05-05 06:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>In general, if you want to compare the performance of languages, you're actually supposed to try to write the *fastest* implementation in each language.  Not just some arbitrary one.<br><br>In this example, the program has no output, so both implementations are crap and could be made a lot faster.<br><br>Come up with a program that has testable output, and see if someone can't comment with a C program that's faster than your python.</p>
+        </div>
+      </div>
+      <div class="comment comment-2461218623296910468">
+        <div class="comment-header">
+          <a name="comment-2461218623296910468"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-12-01 00:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>RIDICULOUS!</p>
+        </div>
+      </div>
+      <div class="comment comment-5703253608854348293">
+        <div class="comment-header">
+          <a name="comment-5703253608854348293"></a>
+            <span class="author">Eric</span> wrote on <span class="date">2012-11-20 15:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>Pypy isn't faster than C, even on this example for multiple reasons:<br><br>First it's conceptual: C is almost as optimized as assembly (it's often referred to as a super assembler) so even if Pypy ends-up generating some assembly code, it has first to evaluate the runtime environment to figure out the type of variables and emit assembly code, and all this process is not free... so Pypy can only asymptotically reach the same level as C and assembly.<br><br>Second, the test is flawed: I did a slight modification that shouldn't change the results: I've inlined the add() in both python and C. Oh! surprise: Pypy keeps the same time whereas C is 4x faster than before (without inlining).<br><br>So to make it fair, we need to use the best capabilities of both languages:<br>- python: I'm sure the author provided the best python implementation, and the fact that inlining add() doesn't change results kinda proves this)<br>- C: when you inline the function you get:<br><br>[code]<br><br>static inline double add_double(double a, double b) {<br>  return a + b;<br>}<br><br>int main()<br>{<br>  unsigned int i;<br>  double a = 0.0;<br><br>  for (i = 0; i &lt; N; i++) {<br>    a += 1.0;<br>    add_double(a, a);<br>  }<br>  printf("%f\n", a);<br>}<br><br>[/code]<br><br>Results:<br>  C inlined: 1.10s<br>  C: 3.98s<br>  Pypy inlined: 3.30s<br>  Pypy: 3.28s<br><br>Conclusion:<br>- When using the right C code, on the same example C is 3 times faster than Pypy.<br>- As demonstrated, the statement that Pypy is faster than C is simply biased by a not optimizsed C code.</p>
+        </div>
+      </div>
+      <div class="comment comment-8668464377001730942">
+        <div class="comment-header">
+          <a name="comment-8668464377001730942"></a>
+            <span class="author">Staff</span> wrote on <span class="date">2012-11-21 06:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Eric This post is not trying to argue that Python is "better" or even faster than C. It is just pointing out that certain classes of optimizations (i.e. whole program optimizations) come naturally to the PyPy JIT.  <br><br>This is, of course, only one small facet of why a program runs fast. The author admits that it is a contrived example to illustrate the point.<br><br>Taking the point to an extreme, one could see a PyPy program run faster than a C program if the C program made many calls to simple shared libraries. For example, if one dynamically links a C stdlib into their program, and uses it heavily, the equivalent python code may conceivably run faster.</p>
+        </div>
+      </div>
+      <div class="comment comment-5517713403085287663">
+        <div class="comment-header">
+          <a name="comment-5517713403085287663"></a>
+            <span class="author">Eric</span> wrote on <span class="date">2012-11-21 14:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>Please read the title of this article again: "<i>PyPy <b>faster than C</b> on a carefully crafted example</i>"<br><br>Based on a specific example or not it doesn't matter, I'm simply not comfortable with reading strong statement like this that are obvioulsy false to any serious computer scientist and misleading to beginners. It's false because it's the conclusion of a test which is biased.<br><br><b>The root of benchmarking is to get rid of any bias</b><br>In this case the obvious bias is that Pypy is optimized and C isn't (as demonstrated above with inline functions).<br><br>You can't transpose only what you want in real life and not the other: your argument that in real life the C could use external library hence be slower is valid, but then you have to compare with real life Python scripts which can't be as much optimized by Pypy as this crafted example. So in real life you get a C code that may be slowed down a bit by dynamic linking, and python scripts that are much slower because Pypy isn't ready to match C speed for everything (yet).<br><br>If you want to use a crafted Python example, you have to compare it to a crafted C example, so that you can compare apples with apples.<br><br>All that is methodology, that said JIT is quite powerful and it's impressive in itself to beat CPython by a large margin.<br></p>
+        </div>
+      </div>
+      <div class="comment comment-354498782860915813">
+        <div class="comment-header">
+          <a name="comment-354498782860915813"></a>
+            <span class="author">keegano</span> wrote on <span class="date">2013-02-06 22:53</span>:
+        </div>
+        <div class="comment-content">
+          <p>Eric: Your comments about "real life" are irrelevant - the post is about a specific, contrived example. I don't think anyone would argue that a high-level, garbage-collected language like python could ever beat out C in general - it's simply a demonstration that, in a very specific instance, equivalent code in python and C can run faster in python because of the JIT making optimizations that can't occur at compile time.</p>
+        </div>
+      </div>
+      <div class="comment comment-4905285822985156121">
+        <div class="comment-header">
+          <a name="comment-4905285822985156121"></a>
+            <span class="author">Eric</span> wrote on <span class="date">2013-02-06 23:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>You're assuming that python is faster even on this crafted example, but keep in mind that this comparison is biased because the C version isn't optimal.</p>
+        </div>
+      </div>
+      <div class="comment comment-2637708137141797331">
+        <div class="comment-header">
+          <a name="comment-2637708137141797331"></a>
+            <span class="author">Eric</span> wrote on <span class="date">2013-02-06 23:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>you're assuming that python is faster even on this crafted example, but keep in mind that this comparison is biased because the C version isn't optimal.</p>
+        </div>
+      </div>
+      <div class="comment comment-8696113330242639387">
+        <div class="comment-header">
+          <a name="comment-8696113330242639387"></a>
+            <span class="author">Staff</span> wrote on <span class="date">2013-02-07 01:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>stop feeding this troll</p>
+        </div>
+      </div>
+      <div class="comment comment-1752276717722972607">
+        <div class="comment-header">
+          <a name="comment-1752276717722972607"></a>
+            <span class="author">Eric</span> wrote on <span class="date">2013-02-07 10:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>point taken, but do update the article to take into account my remark: both the title and the conclusion of the "demonstration" are false, even on a contrived example as you barely can't find any C code that would be slower than the code generated by your JIT for the simple reason that C is really too close to assembly and that JIT adds an overhead.</p>
+        </div>
+      </div>
+      <div class="comment comment-261341680642203204">
+        <div class="comment-header">
+          <a name="comment-261341680642203204"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2013-02-07 10:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hey Eric.<br><br>Your argument is incredibly flawed. You can compile faster version of assembler (or is C the fastest assembler ever?) if you try hard enough. Why not?</p>
+        </div>
+      </div>
+      <div class="comment comment-7915919417549668442">
+        <div class="comment-header">
+          <a name="comment-7915919417549668442"></a>
+            <span class="author">Eric</span> wrote on <span class="date">2013-02-07 10:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>Please don't digress, what I say is simple:<br>The article states that Pypy generates code faster than C on a crafted example.<br>I demonstrate there is a more optimized C code that the author's one, hence that the whole article is wrong... end of the story.<br></p>
+        </div>
+      </div>
+      <div class="comment comment-6883373547469571610">
+        <div class="comment-header">
+          <a name="comment-6883373547469571610"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2013-02-07 10:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>No, it's a reasonable piece of C. You don't inline your printf code, do you? dynamic linking is a thing that people use.</p>
+        </div>
+      </div>
+      <div class="comment comment-8387866530411076430">
+        <div class="comment-header">
+          <a name="comment-8387866530411076430"></a>
+            <span class="author">Eric</span> wrote on <span class="date">2013-02-09 11:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>You're right, people very often use dynamic linking. However the following is not a reasonable piece of Python code:<br><br>def add(a, b): return a + b<br><br>People rarely use that and more importantly they don't write a loop that calls it 1 billion times.<br><br>The point is that the reasoning spans two levels (hence is flawed/biased):<br>- in Python the author took a crafted piece of Python that is not meaningful in real life because it has the property to do what he wants at the Pypy level<br>- in C the author uses a very common mechanism that isn't fully optimized (not as much as Python/Ppy is optimized).<br><br>I know you will not agree since you're all proud that "Pypy is faster than C" (lol it's nonsense even on a "crafted example") but you have to compare apples with apples.</p>
+        </div>
+      </div>
+      <div class="comment comment-4479384152902342489">
+        <div class="comment-header">
+          <a name="comment-4479384152902342489"></a>
+            <span class="author">Dvd Fo</span> wrote on <span class="date">2013-09-20 18:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Eric what you don't understand is the point of the article. The actual point is to demonstrate a nice property of PyPy JIT, which is able to generate fast code when it can. Comparing to C in this manner proves that PyPy's generated machine code is relevant with regard to speed.<br>Of course this example is fragile because it relies on suboptimal C code, but this serves only to prove the point about PyPy.</p>
+        </div>
+      </div>
+      <div class="comment comment-2174510732199016419">
+        <div class="comment-header">
+          <a name="comment-2174510732199016419"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-12-07 06:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Eric... Non sense.. Are you a ambassador for C ?</p>
+        </div>
+      </div>
+      <div class="comment comment-4668352774687149243">
+        <div class="comment-header">
+          <a name="comment-4668352774687149243"></a>
+            <span class="author">Eric</span> wrote on <span class="date">2013-12-07 08:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>Do argue if you disagree, don't troll.<br><br>I think everything have been said already anyway.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GC improvements | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2009/10/gc-improvements-6174120095428192954.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="first-pypy-cli-jit-benchmarks-6698484455072589492.html" title="First pypy-cli-jit benchmarks" type="text/html">
+<link rel="next" href="../11/hi-all-this-week-i-worked-on-improving-6515977421244851229.html" title="Logging and nice graphs" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="GC improvements">
+<meta property="og:url" content="https://www.pypy.org/posts/2009/10/gc-improvements-6174120095428192954.html">
+<meta property="og:description" content="In the last week, I (Armin) have been taking some time off the
+JIT work to improve our GCs.  More precisely, our GCs now take
+one or two words less for every object.  This further reduce the
+memory us">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2009-10-16T14:27:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">GC improvements</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2009-10-16T14:27:00Z" itemprop="datePublished" title="2009-10-16 14:27">2009-10-16 14:27</time></a>
+            </p>
+                <p class="commentline">31 comments</p>
+
+                <p class="commentline">            <a href="gc-improvements-6174120095428192954.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>In the last week, I (Armin) have been taking some time off the
+JIT work to improve our GCs.  More precisely, our GCs now take
+one or two words less for every object.  This further reduce the
+memory usage of PyPy, as we will show at the end.</p>
+
+<h2 id="background-information-rpython-object-model">Background information: RPython object model<a href="#background-information-rpython-object-model" class="headerlink" title="Permalink to this heading">¶</a></h2>
+
+<p>We first need to understand the RPython object model as
+implemented by our GCs and our C backend.  (Note that the
+object model of the Python interpreter is built on top of
+that, but is more complicated -- e.g. Python-level objects
+are much more flexible than RPython objects.)</p>
+
+<p>Consider these two RPython classes:</p>
+    
+<pre>
+class A:
+    def __init__(self, x):
+        self.x = x
+    def f(self):
+        return self.x * 42
+
+class B(A):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+    def f(self):
+        return self.x + self.y
+</pre>
+
+<p>The instances of A and B look like this in memory (all cells
+are one word):</p>
+
+<p></p>
+<table border="1"><tr>
+<td>GC header</td>
+<td>vtable ptr of A</td>
+<td>hash</td>
+<td>x</td>
+</tr></table>
+<p></p>
+<table border="1"><tr>
+<td>GC header</td>
+<td>vtable ptr of B</td>
+<td>hash</td>
+<td>x</td>
+<td>y</td>
+</tr></table>
+<p>The first word, the GC header, describes the layout.  It
+encodes on half a word the shape of the object, including where it
+contains further pointers, so that the GC can trace it.  The
+other half contains GC flags (e.g. the mark bit of a
+mark-and-sweep GC).</p>
+
+<p>The second word is used for method dispatch.  It is similar to a
+C++ vtable pointer.  It points to static data that is mostly a
+table of methods (as function pointers), containing e.g. the method f
+of the example.</p>
+
+<p>The hash field is not necessarily there; it is only present in classes
+whose hash is ever taken in the RPython program (which includes being
+keys in a dictionary).  It is an "identity hash": it works like
+object.__hash__() in Python, but it cannot just be the address of
+the object in case of a GC that moves objects around.</p>
+
+<p>Finally, the x and y fields are, obviously, used to store the value
+of the fields.  Note that instances of B can be used in places that
+expect a pointer to an instance of A.</p>
+
+<h2 id="unifying-the-vtable-ptr-with-the-gc-header">Unifying the vtable ptr with the GC header<a href="#unifying-the-vtable-ptr-with-the-gc-header" class="headerlink" title="Permalink to this heading">¶</a></h2>
+
+<p>The first idea of saving a word in every object is the observation
+that both the vtable ptr and the GC header store information about
+the class of the object.  Therefore it is natural to try to only have
+one of them.  The problem is that we still need bits for the GC flags,
+so the field that we have to remove is the vtable pointer.</p>
+
+<p>This means that method dispatch needs to be more clever: it
+cannot directly read the vtable ptr, but needs to compute it
+from the half-word of the GC header.  Fortunately, this can be
+done with no extra instruction on the assembler level.  Here is
+how things will look like in the end, assuming a 32-bit x86
+machine (but note that as usual we just generate portable C).</p>
+
+<p>The trick for achieving efficiency is that we store all
+vtables together in memory, and make sure that they don't take
+more than 256 KB in total (16 bits, plus 2 bits of alignment).
+Here is how the assembler code (produced by the normal C
+compiler, e.g. gcc) for calling a method looks like.  Before
+the change:</p>
+
+<pre>
+MOV EDX, [EAX + 4]               # load the vtable ptr from object EAX
+MOV EDX, [EDX + method_offset]   # load the function pointer from the vtable
+CALL EDX
+</pre>
+
+<p>Instead, we now have:</p>
+
+<pre>
+MOVZX EDX, [EAX]     # load the 16-bit part of the GC header from EAX
+MOV EDX, [vtable_start + 4*EDX + method_offset]
+CALL EDX
+</pre>
+
+<p>Note that the complex addressing scheme done by the second MOV
+is still just one instruction: the vtable_start and
+method_offset are constants, so they are combined.  And as the
+vtables are anyway aligned at a word boundary, we can use
+4*EDX to address them, giving us 256 KB instead of just 64 KB
+of vtables.</p>
+
+<h2 id="optimizing-the-hash-field">Optimizing the hash field<a href="#optimizing-the-hash-field" class="headerlink" title="Permalink to this heading">¶</a></h2>
+
+<p>In PyPy's Python interpreter, all application-level objects
+are represented as an instance of some subclass of W_Root.
+Since all of these objects could potentially be stored in a
+dictionary by the application Python program, all these
+objects need a hash field.  Of course, in practice, only a
+fraction of all objects in a Python program end up having
+their hash ever taken.  Thus this field of W_Root is wasted
+memory most of the time.</p>
+
+<p>(Up to now, we had a hack in place to save the hash field
+on a few classes like W_IntegerObject, but that meant that
+the Python expression ``object.__hash__(42)'' would raise
+a TypeError in PyPy.)</p>
+
+<p>The solution we implemented now (done by some Java GCs, among
+others) is to add a hash field to an object when the
+(identity) hash of that object is actually taken.  This means
+that we had to enhance our GCs to support this.  When objects
+are allocated, we don't reserve any space for the hash:</p>
+
+object at 0x74B028
+<table border="1"><tr>
+<td>...00...</td>
+<td>x</td>
+<td>y</td>
+</tr></table>
+<p>When the hash of an object is taken, we use its current memory
+address, and set a flag in the GC header saying that this
+particular object needs a hash:</p>
+
+object at 0x74B028
+<table border="1"><tr>
+<td>...01...</td>
+<td>x</td>
+<td>y</td>
+</tr></table>
+<p>If the GC needs to move the object to another memory location,
+it will make the new version of the object bigger, i.e. it
+will also allocate space for the hash field:</p>
+
+object at 0x825F60
+<table border="1"><tr>
+<td>...11...</td>
+<td>x</td>
+<td>y</td>
+<td>0x74B028</td>
+</tr></table>
+<p>This hash field is immediately initialized with the old memory
+address, which is the hash value that we gave so far for the
+object.  To not disturb the layout of the object, we always
+put the extra hash field at the end.  Of course, once set,
+the hash value does not change even if the object needs to
+move again.</p>
+
+<h2 id="results">Results<a href="#results" class="headerlink" title="Permalink to this heading">¶</a></h2>
+
+<p>Running the following program on PyPy's Python interpreter
+with n=4000000:</p>
+
+<pre>
+def make_linked_list(n):
+    a = None
+    i = 0
+    while i &lt; n:
+        b = X()
+        b.next = a
+        a = b
+        i += 1
+</pre>
+
+<p>the two optimizations together save 32 MB of RAM (i.e. 8 bytes
+per object).  The version of PyPy we measured this with was built
+as follows:</p>
+
+<pre>
+./translate.py --gcremovetypeptr targetpypystandalone --objspace-std-withsharingdict
+</pre>
+
+<p>The total amount of RAM used on a 32-bit Linux is 247 MB,
+completing in 10.3 seconds.  On CPython, it consumes 684 MB
+and takes 89 seconds to complete...  This nicely shows that
+our GCs are much faster at allocating objects, and that our
+objects can be much smaller than CPython's.</p>
+
+<p>Armin Rigo &amp; Carl Friedrich Bolz</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="first-pypy-cli-jit-benchmarks-6698484455072589492.html" rel="prev" title="First pypy-cli-jit benchmarks">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../11/hi-all-this-week-i-worked-on-improving-6515977421244851229.html" rel="next" title="Logging and nice graphs">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-4138744294808123446">
+        <div class="comment-header">
+          <a name="comment-4138744294808123446"></a>
+            <span class="author">Shahms</span> wrote on <span class="date">2009-10-16 16:53</span>:
+        </div>
+        <div class="comment-content">
+          <p>Not really GC related and you may have covered this in another post, but how does PyPy handle id() in a world where the object may move?  Is the hash field reused for this when necessary as well?  If so, how do you deal with the possibility of another object being allocated at the same address as the original object?  If not, how do you avoid having an object's id() change when it's moved?</p>
+        </div>
+      </div>
+      <div class="comment comment-2560461028198237210">
+        <div class="comment-header">
+          <a name="comment-2560461028198237210"></a>
+            <span class="author">kbob</span> wrote on <span class="date">2009-10-16 17:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>Very nice.  Using the address for the hash value was especially clever.  But how random are those hash values?</p>
+        </div>
+      </div>
+      <div class="comment comment-6764762434532667269">
+        <div class="comment-header">
+          <a name="comment-6764762434532667269"></a>
+            <span class="author">Alex</span> wrote on <span class="date">2009-10-16 19:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>kbob:  If PyPy is anything like CPython the randomness isn't so important.  The CPython dictionary hash collision resolution strategy is extremely efficient, even amongst hashes with very similar values.</p>
+        </div>
+      </div>
+      <div class="comment comment-8563199730015491812">
+        <div class="comment-header">
+          <a name="comment-8563199730015491812"></a>
+            <span class="author">Lucian</span> wrote on <span class="date">2009-10-16 19:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is all sorts of cool. I can't wait for a mostly-production-ready PyPy with JIT.<br><br>On a somewhat related note, how do the JIT and ctypes interact right now, if at all?</p>
+        </div>
+      </div>
+      <div class="comment comment-6996458863074526402">
+        <div class="comment-header">
+          <a name="comment-6996458863074526402"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2009-10-16 19:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>Shams: Excellent question! The implementation of id that we have is basically a weak key dict mapping objects to ids on demand. This has the fun side-effect that the ids of PyPy's object start with 1 on count up from there.<br><br>This is rather inefficient (e.g. your garbage collections become linearly slower the more objects you have that have their id taken), but there is not much else you can do. Jython uses a similar solution. For this reason, calling id a lot is essentially discouraged in code you want to run on PyPy.</p>
+        </div>
+      </div>
+      <div class="comment comment-8759579803973381607">
+        <div class="comment-header">
+          <a name="comment-8759579803973381607"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2009-10-16 19:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>kbob: I think they should be random enough. You get a collision if you ask the hash of object a, then a collection happens that moves a, then you ask object b for its hash and object b happens to be in the place where object a was before. That sounds unlikely.<br><br>If you write contrived code that has a loop that repeatedly allocates an object, asks its hash by putting it into a dict and then forces a nursery collection, you can get collision: all those objects will be at the beginning of the nursery when their hash is taken. Unlikely again to occur in practise.</p>
+        </div>
+      </div>
+      <div class="comment comment-3521139735744920154">
+        <div class="comment-header">
+          <a name="comment-3521139735744920154"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2009-10-16 19:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>Alex: you are right. We use exactly CPython's algorithm for implementing dicts, so having bad hash functions is not a big problem. However, if you really have hash value collisions (e.g. everything hashes to 1) your dict still degenerates to essentially a linear search.</p>
+        </div>
+      </div>
+      <div class="comment comment-5086560234154354172">
+        <div class="comment-header">
+          <a name="comment-5086560234154354172"></a>
+            <span class="author">Skandalfo</span> wrote on <span class="date">2009-10-16 20:05</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wow! You guys that you are my computing heroes.<br><br>Whenever I talk to other people about your project, I always state you are the best example I can imagine of REAL innovation in computer languages.<br><br>That said, I gather the only thing making id() different from hash() is that you need to guarantee that the values for live objects are always unique.<br><br>You could just use the same strategy as with the hash, sticking the id value along the object the next time the object is moved by the GC.<br><br>Meanwhile, from the time id() is called to the time the object is moved, you can just temporarily store an {address: id} mapping somewhere. Entries would be removed from the map once the objects get moved. From then on the id would be attached to the object.<br><br>If GC cycles are frequent, the map doesn't have to grow too large.<br><br>I don't know if the need for id reuse after the id space gets exhausted is important or not. Once you get to the end of the space, you would have to scan the map and heap to find a convenient "hole" to reuse, I suppose.</p>
+        </div>
+      </div>
+      <div class="comment comment-307720489198582034">
+        <div class="comment-header">
+          <a name="comment-307720489198582034"></a>
+            <span class="author">Shahms</span> wrote on <span class="date">2009-10-16 20:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks, Carl.  Following up what Skandalfo said, (although this is probably a poor forum for such discussions), it seems like you could reuse the hash field for id as well.  Given that the minimum size for a Python object is &gt; 1 byte, you should have at least that much space for offsetting the hash/id. As the GC/allocator has to store information about addresses and blocks anyway it should be a relatively simple matter of building and maintaining a bloom filter of offsets in use for a particular base address.<br><br>Of course, this also constraints the addresses at which Python objects may be allocated and the lower bits in the address may already be used for other purposes...</p>
+        </div>
+      </div>
+      <div class="comment comment-2893985594264539038">
+        <div class="comment-header">
+          <a name="comment-2893985594264539038"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2009-10-16 20:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Skandalof, Shahms: I guess there are possible ways to make id a bit faster than what we have now. What we have now is well-tested and works reasonably enough. I assume anyway that there is not too much Python code whose performance depends critically on having an extremely efficient implementation of id (and if there is, I am prepared to ask the author to rewrite the code instead :-) ).</p>
+        </div>
+      </div>
+      <div class="comment comment-4743519438810038405">
+        <div class="comment-header">
+          <a name="comment-4743519438810038405"></a>
+            <span class="author">Skandalfo</span> wrote on <span class="date">2009-10-16 20:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>Shahms: I confess I don't understand your proposal. Do you mean you can have at most as many live objects as the available address space divided by the object alignment?<br><br>When I talked about id space I wasn't referring to the memory required to store the per-object id value, but the fact that if you assign the id values using sequential values, and those values are, for instance, 64 bit integers, you could theoretically create and destroy a lot of objects in a long lived process and the sequence would wrap around.<br><br>About making hash/id the same, I've just checked that CPython does indeed use the id() value as the value returned by the default hash() implementation.<br><br>You could just do the same, and use the id value as the "master" one. For hash() you would just call id(). This allows you to use just one value attached to the objects for both functions.<br><br>The cost of that approach would be having to assign an id immediately (having to put it into the temporary map, then having to look it up in the map until the next time the object is moved) for the call to hash() (with no call to id()) too.<br><br>The good thing compared to the weak key dict, is that the temporary map doesn't need to be garbage collected at all. The entries are removed when objects are moved (or collected).</p>
+        </div>
+      </div>
+      <div class="comment comment-935270509823463314">
+        <div class="comment-header">
+          <a name="comment-935270509823463314"></a>
+            <span class="author">Shahms</span> wrote on <span class="date">2009-10-16 20:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>Carl, no doubt you're right.  I know that I can probably count the number of times I've needed to use id() on one hand and I'm pretty sure the vast majority of those cases was sticking an-hashable object in a dict.</p>
+        </div>
+      </div>
+      <div class="comment comment-939338816408069972">
+        <div class="comment-header">
+          <a name="comment-939338816408069972"></a>
+            <span class="author">Skandalfo</span> wrote on <span class="date">2009-10-16 20:53</span>:
+        </div>
+        <div class="comment-content">
+          <p>Carl, Shahms: I couldn't agree more about id() not being important.<br><br>Probably Guido should have refrained from making it available in CPython at the time. I suppose it was just easy to add it to the language with the memory allocation model of CPython. The fact is that I don't really see any use for id() once you have the "is" operator and the hash() method...</p>
+        </div>
+      </div>
+      <div class="comment comment-8747417424663324570">
+        <div class="comment-header">
+          <a name="comment-8747417424663324570"></a>
+            <span class="author">Michael Hudson-Doyle</span> wrote on <span class="date">2009-10-16 22:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>Yay, I remember talking about removing the gc type pointer, oh, about 3.5 years ago :)  Cool that it got done, sounds like a neat pair of hacks.</p>
+        </div>
+      </div>
+      <div class="comment comment-4729760952106351632">
+        <div class="comment-header">
+          <a name="comment-4729760952106351632"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2009-10-17 01:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Lucian:<br><br>ctypes and JIT works just fine together.</p>
+        </div>
+      </div>
+      <div class="comment comment-7865452285925058195">
+        <div class="comment-header">
+          <a name="comment-7865452285925058195"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-10-17 09:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>Doesn't deepcopy use id() a lot? I remember once using deepcopy on a complicated structure, resulting in thousands of id() calls.</p>
+        </div>
+      </div>
+      <div class="comment comment-502798326186827138">
+        <div class="comment-header">
+          <a name="comment-502798326186827138"></a>
+            <span class="author">RonnyPfannschmidt</span> wrote on <span class="date">2009-10-17 10:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>what about pickle - as far as i remember its memo code for dealing with object cycles is using id, too</p>
+        </div>
+      </div>
+      <div class="comment comment-5176703414200677688">
+        <div class="comment-header">
+          <a name="comment-5176703414200677688"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2009-10-17 16:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>Too bad for the current implementation of pickle and deepcopy.  The fault in that case is CPython's general view that id() is cheap, despite repeated attempts to convince them otherwise.  These attempts have been done notably by guys from Jython, even before PyPy time; indeed id() is a mess for any implementation apart from CPython's simple non-moving GC).<br><br>A suitable replacement would be e.g. a 'collections.identitydict' type, if someone feels like going Yet Another Time to python-dev with this issue.</p>
+        </div>
+      </div>
+      <div class="comment comment-8752552790881908676">
+        <div class="comment-header">
+          <a name="comment-8752552790881908676"></a>
+            <span class="author">Marius Gedminas</span> wrote on <span class="date">2009-10-17 22:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>When I was writing <a href="https://mg.pov.lt/objgraph/" rel="nofollow">objgraph</a> I saw no way of traversing arbitrary object graphs without using id().<br><br>collections.identitydict sounds like a nice idea.  Has anyone written a PEP for it?</p>
+        </div>
+      </div>
+      <div class="comment comment-8744316541446985068">
+        <div class="comment-header">
+          <a name="comment-8744316541446985068"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-10-18 09:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>Is there any possibility to translate pypy under OSX 10.6 as 32bit? Translation works but I get an "ValueError: bad marshal data" when running pypy-c. I assume that is due to the fact that I got a 64bit binary.</p>
+        </div>
+      </div>
+      <div class="comment comment-8592258030787825626">
+        <div class="comment-header">
+          <a name="comment-8592258030787825626"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2009-10-18 18:49</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous:<br><br>Try deleting all your .pyc files and see what happens.</p>
+        </div>
+      </div>
+      <div class="comment comment-5752853702762801202">
+        <div class="comment-header">
+          <a name="comment-5752853702762801202"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2009-10-19 10:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>Marius: as I said, feel free to :-)  but the current situation is, no, not as far as I know.</p>
+        </div>
+      </div>
+      <div class="comment comment-5651059578076147039">
+        <div class="comment-header">
+          <a name="comment-5651059578076147039"></a>
+            <span class="author">klaussfreire</span> wrote on <span class="date">2009-10-19 16:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wouldn't it free up the GC from all that burden if only a set of live ids were kept? (ie: no weak dict)<br><br>So, when you get an id() call, you check the object to see if there's a cached id (much like the hash hack) - if not, you generate a random (or sequential) unused id and store it both in the "live ids" set and in the object's structure, as done with hash values.<br><br>So, successive calls to id() would be as fast as in CPython, and garbage collection would be fast too (only an extra set deletion per object whose id was obtained).<br><br>In fact, this set could be implemented as a bit array with "free lists", which could be very very efficient, given that its size will be bound by the number of live objects.</p>
+        </div>
+      </div>
+      <div class="comment comment-8122338287648204923">
+        <div class="comment-header">
+          <a name="comment-8122338287648204923"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2009-10-21 08:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>Claudio: this doesn't work (unless I misunderstood).  You cannot add a field like the hash field at any point in time, but only during collections when the object moves.</p>
+        </div>
+      </div>
+      <div class="comment comment-1558437326706983881">
+        <div class="comment-header">
+          <a name="comment-1558437326706983881"></a>
+            <span class="author">klaussfreire</span> wrote on <span class="date">2009-10-21 13:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>Yes, I've been thinking about that too.<br><br>But that can be patched - the weak key dict could still be used for those objects that haven't been collected yet. Since addition of the id would most likely happen in the nursery, or the first generation at most (big assumption), I don't think the dict would grow very big even under heavy id() usage.</p>
+        </div>
+      </div>
+      <div class="comment comment-5527715439287612568">
+        <div class="comment-header">
+          <a name="comment-5527715439287612568"></a>
+            <span class="author">omul cu 6233</span> wrote on <span class="date">2009-11-02 21:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wohoo, nice performance</p>
+        </div>
+      </div>
+      <div class="comment comment-554411241418185276">
+        <div class="comment-header">
+          <a name="comment-554411241418185276"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2010-04-14 15:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>I'm astonished a bit by your need to pack vtables together within 256KB. How many bits do you need for mark-and-sweep marking or similar stuff? The usual solution I've seen for this is to use the low two bits of the vtable pointer for flags, usually, and mask them off when reading the vtable pointer. Would it work here?<br><br>If that isn't enough, then you have to pack vtables together as you do (maybe in a bigger space if you can use more bits).</p>
+        </div>
+      </div>
+      <div class="comment comment-8264193420134666882">
+        <div class="comment-header">
+          <a name="comment-8264193420134666882"></a>
+            <span class="author">PJE</span> wrote on <span class="date">2010-09-22 18:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>I can think of one place where I use a lot of id() calls, and that's in PEAK-Rules' generic function implementation, for indexing "is" tests.<br><br>For example, if you have a bunch of methods that test if "x is Something" (for different values of Something), then a dictionary of id()'s is used to identify which of these tests went off.  While the total number of Somethings isn't likely to be high, the weakref dict in PyPy means that every 'x' the function is called with will end up burning memory and speed to hold an id forever.<br><br>While it's perhaps the case that I could avoid this by using a linear search (ugh) in cases where the number of Somethings is small, it's an example of a place where id() makes an operation neat, fast, and simple in regular Python.<br><br>Of course, if there were another way to put arbitrary (i.e possibly-unhashable, comparable only by identity) objects in a dictionary, and then determine whether a given object was one of them, that'd certainly be a suitable substitute.<br><br>Or, if PyPI offered a temp_id() that would simply let you *check* identity, without forcing the object to hold onto it, that'd work fine too.  Say, if there was a has_id() that told you if an id() is outstanding for the object already, or a get_id() that returned None for an object whose id() had never been taken.<br><br>With an API like that, I could prevent memory/speed blowup by not having each call of the function adding more objects to PyPy's id() dict.<br><br>(Heck, perhaps such an API should be added across Python versions, i.e., to CPython and Jython as well.)</p>
+        </div>
+      </div>
+      <div class="comment comment-5805635183672605635">
+        <div class="comment-header">
+          <a name="comment-5805635183672605635"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2010-09-22 18:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>@PJE PyPy offers collections.identity_dict, or something similar which would have the effect how you like (but internally doesn't use id operation, just the object identity).</p>
+        </div>
+      </div>
+      <div class="comment comment-845509913398361197">
+        <div class="comment-header">
+          <a name="comment-845509913398361197"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-05-07 02:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>This program in C# takes 589 miliseconds, and 52 MB RAM. 17x faster, 4.75x less RAM.</p>
+        </div>
+      </div>
+      <div class="comment comment-2577386069974257578">
+        <div class="comment-header">
+          <a name="comment-2577386069974257578"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-09-15 10:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>And in assembly it will be even faster and smaller.  <br><br>Python has many lovely attributes, but efficiency is not its primary virtue.  That said, making it more efficient is still a plus, which this work is doing</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,2449 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="A Faster Python">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy (old posts, page 38) | PyPy</title>
+<link href="../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/blog/index-38.html">
+<link rel="icon" href="../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../favicon32x32.ico" sizes="32x32">
+<link rel="prev" href="index-39.html" type="text/html">
+<link rel="next" href="index-37.html" type="text/html">
+<!--[if lt IE 9]><script src="../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../assets/css/tipuesearch.css">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../index.html">
+                    <image id="toplogo" src="../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href=".">Index</a> </li>  
+                    <li> <a href="../categories/">Tags</a> </li>  
+                    <li> <a href="../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><div class="post">
+<div class="postindex">
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2018/09/inside-cpyext-why-emulating-cpython-c-8083064623681286567.html" class="u-url">Inside cpyext: Why emulating CPython C API is so Hard</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2018/09/inside-cpyext-why-emulating-cpython-c-8083064623681286567.html" rel="bookmark">
+            <time class="published dt-published" datetime="2018-09-21T16:32:00Z" itemprop="datePublished" title="2018-09-21 16:32">2018-09-21 16:32</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <br><div class="document" id="inside-cpyext-why-emulating-cpython-c-api-is-so-hard">
+<tt class="docutils literal">cpyext</tt> is PyPy's subsystem which provides a compatibility
+layer to compile and run CPython C extensions inside PyPy.  Often people ask
+why a particular C extension doesn't work or is very slow on PyPy.
+Usually it is hard to answer without going into technical details. The goal of
+this blog post is to explain some of these technical details, so that we can
+simply link here instead of explaining again and again :).<br>
+From a 10.000 foot view, <tt class="docutils literal">cpyext</tt> is PyPy's version of <tt class="docutils literal">"Python.h"</tt>. Every time
+you compile an extension which uses that header file, you are using <tt class="docutils literal">cpyext</tt>.
+This includes extension explicitly written in C (such as <tt class="docutils literal">numpy</tt>) and
+extensions which are generated from other compilers/preprocessors
+(e.g. <tt class="docutils literal">Cython</tt>).<br>
+At the time of writing, the current status is that most C extensions "just
+work". Generally speaking, you can simply <tt class="docutils literal">pip install</tt> them,
+provided they use the public, <a class="reference external" href="https://docs.python.org/2/c-api/index.html">official C API</a> instead of poking at private
+implementation details.  However, the performance of cpyext is generally
+poor. A Python program which makes heavy use of <tt class="docutils literal">cpyext</tt> extensions
+is likely to be slower on PyPy than on CPython.<br>
+Note: in this blog post we are talking about Python 2.7 because it is still
+the default version of PyPy: however most of the implementation of <tt class="docutils literal">cpyext</tt> is
+shared with PyPy3, so everything applies to that as well.<br><div class="section" id="c-api-overview">
+<h1>
+C API Overview</h1>
+In CPython, which is written in C, Python objects are represented as <tt class="docutils literal">PyObject*</tt>,
+i.e. (mostly) opaque pointers to some common "base struct".<br>
+CPython uses a very simple memory management scheme: when you create an
+object, you allocate a block of memory of the appropriate size on the heap.
+Depending on the details, you might end up calling different allocators, but
+for the sake of simplicity, you can think that this ends up being a call to
+<tt class="docutils literal">malloc()</tt>. The resulting block of memory is initialized and casted to to
+<tt class="docutils literal">PyObject*</tt>: this address never changes during the object lifetime, and the
+C code can freely pass it around, store it inside containers, retrieve it
+later, etc.<br>
+Memory is managed using reference counting. When you create a new reference to
+an object, or you discard a reference you own, you have to <a class="reference external" href="https://docs.python.org/2/c-api/refcounting.html#c.Py_INCREF">increment</a> or
+<a class="reference external" href="https://docs.python.org/2/c-api/refcounting.html#c.Py_DECREF">decrement</a> the reference counter accordingly. When the reference counter goes to
+0, it means that the object is no longer used and can safely be
+destroyed. Again, we can simplify and say that this results in a call to
+<tt class="docutils literal">free()</tt>, which finally releases the memory which was allocated by <tt class="docutils literal">malloc()</tt>.<br>
+Generally speaking, the only way to operate on a <tt class="docutils literal">PyObject*</tt> is to call the
+appropriate API functions. For example, to convert a given <tt class="docutils literal">PyObject*</tt> to a C
+integer, you can use <a class="reference external" href="https://docs.python.org/2/c-api/int.html#c.PyInt_AsLong">PyInt_AsLong()</a>; to add two objects together, you can
+call <a class="reference external" href="https://docs.python.org/2/c-api/number.html#c.PyNumber_Add">PyNumber_Add()</a>.<br>
+Internally, PyPy uses a similar approach. All Python objects are subclasses of
+the RPython <tt class="docutils literal">W_Root</tt> class, and they are operated by calling methods on the
+<tt class="docutils literal">space</tt> singleton, which represents the interpreter.<br>
+At first, it looks very easy to write a compatibility layer: just make
+<tt class="docutils literal">PyObject*</tt> an alias for <tt class="docutils literal">W_Root</tt>, and write simple RPython functions
+(which will be translated to C by the RPython compiler) which call the
+<tt class="docutils literal">space</tt> accordingly:<br><pre class="code python literal-block"><span class="keyword">def</span> <span class="name function">PyInt_AsLong</span><span class="punctuation">(</span><span class="name">space</span><span class="punctuation">,</span> <span class="name">o</span><span class="punctuation">):</span>
+    <span class="keyword">return</span> <span class="name">space</span><span class="operator">.</span><span class="name">int_w</span><span class="punctuation">(</span><span class="name">o</span><span class="punctuation">)</span>
+
+<span class="keyword">def</span> <span class="name function">PyNumber_Add</span><span class="punctuation">(</span><span class="name">space</span><span class="punctuation">,</span> <span class="name">o1</span><span class="punctuation">,</span> <span class="name">o2</span><span class="punctuation">):</span>
+    <span class="keyword">return</span> <span class="name">space</span><span class="operator">.</span><span class="name">add</span><span class="punctuation">(</span><span class="name">o1</span><span class="punctuation">,</span> <span class="name">o2</span><span class="punctuation">)</span>
+</pre>
+Actually, the code above is not too far from the real
+implementation. However, there are tons of gory details which make it much
+harder than it looks, and much slower unless you pay a lot of attention
+to performance.</div>
+<div class="section" id="the-pypy-gc">
+<h1>
+The PyPy GC</h1>
+To understand some of <tt class="docutils literal">cpyext</tt> challenges, you need to have at least a rough
+idea of how the PyPy GC works.<br>
+Contrarily to the popular belief, the "Garbage Collector" is not only about
+collecting garbage: instead, it is generally responsible for all memory
+management, including allocation and deallocation.<br>
+Whereas CPython uses a combination of malloc/free/refcounting to manage
+memory, the PyPy GC uses a completely different approach. It is designed
+assuming that a dynamic language like Python behaves the following way:<br><blockquote>
+<ul class="simple">
+<li>You create, either directly or indirectly, lots of objects.</li>
+<li>Most of these objects are temporary and very short-lived. Think e.g. of
+doing <tt class="docutils literal">a + b + c</tt>: you need to allocate an object to hold the temporary
+result of <tt class="docutils literal">a + b</tt>, then it dies very quickly because you no longer need it
+when you do the final <tt class="docutils literal">+ c</tt> part.</li>
+<li>Only small fraction of the objects survive and stay around for a while.</li>
+</ul>
+</blockquote>
+So, the strategy is: make allocation as fast as possible; make deallocation of
+short-lived objects as fast as possible; find a way to handle the remaining
+small set of objects which actually survive long enough to be important.<br>
+This is done using a <strong>Generational GC</strong>: the basic idea is the following:<br><blockquote>
+<ol class="arabic simple">
+<li>We have a nursery, where we allocate "young objects" very quickly.</li>
+<li>When the nursery is full, we start what we call a "minor collection".<ul>
+<li>We do a quick scan to determine the small set of objects which survived so
+far</li>
+<li>We <strong>move</strong> these objects out of the nursery, and we place them in the
+area of memory which contains the "old objects". Since the address of the
+objects changes, we fix all the references to them accordingly.</li>
+</ul>
+</li>
+</ol>
+<ol class="arabic simple" start="4">
+<li>now the nursery contains only objects which "died young". We can
+discard all of them very quickly, reset the nursery, and use the same area
+of memory to allocate new objects from now.</li>
+</ol>
+</blockquote>
+In practice, this scheme works very well and it is one of the reasons why PyPy
+is much faster than CPython.  However, careful readers have surely noticed
+that this is a problem for <tt class="docutils literal">cpyext</tt>. On one hand, we have PyPy objects which
+can potentially move and change their underlying memory address; on the other
+hand, we need a way to represent them as fixed-address <tt class="docutils literal">PyObject*</tt> when we
+pass them to C extensions.  We surely need a way to handle that.</div>
+<div class="section" id="pyobject-in-pypy">
+<h1>
+<tt class="docutils literal">PyObject*</tt> in PyPy</h1>
+Another challenge is that sometimes, <tt class="docutils literal">PyObject*</tt> structs are not completely
+opaque: there are parts of the public API which expose to the user specific
+fields of some concrete C struct. For example the definition of <a class="reference external" href="https://docs.python.org/2/c-api/typeobj.html">PyTypeObject</a>
+which exposes many of the <tt class="docutils literal">tp_*</tt> slots to the user.
+Since the low-level layout of PyPy <tt class="docutils literal">W_Root</tt> objects is completely different
+than the one used by CPython, we cannot simply pass RPython objects to C; we
+need a way to handle the difference.<br>
+So, we have two issues so far: objects can move, and incompatible
+low-level layouts. <tt class="docutils literal">cpyext</tt> solves both by decoupling the RPython and the C
+representations. We have two "views" of the same entity, depending on whether
+we are in the PyPy world (the movable <tt class="docutils literal">W_Root</tt> subclass) or in the C world
+(the non-movable <tt class="docutils literal">PyObject*</tt>).<br><tt class="docutils literal">PyObject*</tt> are created lazily, only when they are actually needed. The
+vast majority of PyPy objects are never passed to any C extension, so we don't
+pay any penalty in that case. However, the first time we pass a <tt class="docutils literal">W_Root</tt> to
+C, we allocate and initialize its <tt class="docutils literal">PyObject*</tt> counterpart.<br>
+The same idea applies also to objects which are created in C, e.g. by calling
+<a class="reference external" href="https://docs.python.org/2/c-api/allocation.html#c.PyObject_New">PyObject_New()</a>. At first, only the <tt class="docutils literal">PyObject*</tt> exists and it is
+exclusively managed by reference counting. As soon as we pass it to the PyPy
+world (e.g. as a return value of a function call), we create its <tt class="docutils literal">W_Root</tt>
+counterpart, which is managed by the GC as usual.<br>
+Here we start to see why calling cpyext modules is more costly in PyPy than in
+CPython. We need to pay some penalty for all the conversions between
+<tt class="docutils literal">W_Root</tt> and <tt class="docutils literal">PyObject*</tt>.<br>
+Moreover, the first time we pass a <tt class="docutils literal">W_Root</tt> to C we also need to allocate
+the memory for the <tt class="docutils literal">PyObject*</tt> using a slowish "CPython-style" memory
+allocator. In practice, for all the objects which are passed to C we pay more
+or less the same costs as CPython, thus effectively "undoing" the speedup
+guaranteed by PyPy's Generational GC under normal circumstances.</div>
+<div class="section" id="maintaining-the-link-between-w-root-and-pyobject">
+<h1>
+Maintaining the link between <tt class="docutils literal">W_Root</tt> and <tt class="docutils literal">PyObject*</tt>
+</h1>
+We now need a way to convert between <tt class="docutils literal">W_Root</tt> and <tt class="docutils literal">PyObject*</tt> and
+vice-versa; also, we need to to ensure that the lifetime of the two entities
+are in sync. In particular:<br><blockquote>
+<ol class="arabic simple">
+<li>as long as the <tt class="docutils literal">W_Root</tt> is kept alive by the GC, we want the
+<tt class="docutils literal">PyObject*</tt> to live even if its refcount drops to 0;</li>
+<li>as long as the <tt class="docutils literal">PyObject*</tt> has a refcount greater than 0, we want to
+make sure that the GC does not collect the <tt class="docutils literal">W_Root</tt>.</li>
+</ol>
+</blockquote>
+The <tt class="docutils literal">PyObject*</tt> ⇨ <tt class="docutils literal">W_Root</tt> link is maintained by the special field
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/parse/cpyext_object.h#lines-5">ob_pypy_link</a> which is added to all <tt class="docutils literal">PyObject*</tt>. On a 64 bit machine this
+means that all <tt class="docutils literal">PyObject*</tt> have 8 bytes of overhead, but then the
+conversion is very quick, just reading the field.<br>
+For the other direction, we generally don't want to do the same: the
+assumption is that the vast majority of <tt class="docutils literal">W_Root</tt> objects will never be
+passed to C, and adding an overhead of 8 bytes to all of them is a
+waste. Instead, in the general case the link is maintained by using a
+dictionary, where <tt class="docutils literal">W_Root</tt> are the keys and <tt class="docutils literal">PyObject*</tt> the values.<br>
+However, for a <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/pyobject.py#lines-66">few selected</a> <tt class="docutils literal">W_Root</tt> subclasses we <strong>do</strong> maintain a
+direct link using the special <tt class="docutils literal">_cpy_ref</tt> field to improve performance. In
+particular, we use it for <tt class="docutils literal">W_TypeObject</tt> (which is big anyway, so a 8 bytes
+overhead is negligible) and <tt class="docutils literal">W_NoneObject</tt>. <tt class="docutils literal">None</tt> is passed around very
+often, so we want to ensure that the conversion to <tt class="docutils literal">PyObject*</tt> is very
+fast. Moreover it's a singleton, so the 8 bytes overhead is negligible as
+well.<br>
+This means that in theory, passing an arbitrary Python object to C is
+potentially costly, because it involves doing a dictionary lookup.  We assume
+that this cost will eventually show up in the profiler: however, at the time
+of writing there are other parts of <tt class="docutils literal">cpyext</tt> which are even more costly (as we
+will show later), so the cost of the dict lookup is never evident in the
+profiler.</div>
+<div class="section" id="crossing-the-border-between-rpython-and-c">
+<h1>
+Crossing the border between RPython and C</h1>
+There are two other things we need to care about whenever we cross the border
+between RPython and C, and vice-versa: exception handling and the GIL.<br>
+In the C API, exceptions are raised by calling <a class="reference external" href="https://docs.python.org/2/c-api/exceptions.html#c.PyErr_SetString">PyErr_SetString()</a> (or one of
+<a class="reference external" href="https://docs.python.org/2/c-api/exceptions.html#exception-handling">many other functions</a> which have a similar effect), which basically works by
+creating an exception value and storing it in some global variable. The
+function then signals that an exception has occurred by returning an error value,
+usually <tt class="docutils literal">NULL</tt>.<br>
+On the other hand, in the PyPy interpreter, exceptions are propagated by raising the
+RPython-level <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/interpreter/error.py#lines-20">OperationError</a> exception, which wraps the actual app-level
+exception values. To harmonize the two worlds, whenever we return from C to
+RPython, we need to check whether a C API exception was raised and if so turn it
+into an <tt class="docutils literal">OperationError</tt>.<br>
+We won't dig into details of <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-205">how the GIL is handled in cpyext</a>.
+For the purpose of this post, it is enough to know that whenever we enter
+C land, we store the current thread id into a global variable which is
+accessible also from C; conversely, whenever we go back from RPython to C, we
+restore this value to 0.<br>
+Similarly, we need to do the inverse operations whenever you need to cross the
+border between C and RPython, e.g. by calling a Python callback from C code.<br>
+All this complexity is automatically handled by the RPython function
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-1757">generic_cpy_call</a>. If you look at the code you see that it takes care of 4
+things:<br><blockquote>
+<ol class="arabic simple">
+<li>Handling the GIL as explained above.</li>
+<li>Handling exceptions, if they are raised.</li>
+<li>Converting arguments from <tt class="docutils literal">W_Root</tt> to <tt class="docutils literal">PyObject*</tt>.</li>
+<li>Converting the return value from <tt class="docutils literal">PyObject*</tt> to <tt class="docutils literal">W_Root</tt>.</li>
+</ol>
+</blockquote>
+So, we can see that calling C from RPython introduce some overhead.
+Can we measure it?<br>
+Assuming that the conversion between <tt class="docutils literal">W_Root</tt> and <tt class="docutils literal">PyObject*</tt> has a
+reasonable cost (as explained by the previous section), the overhead
+introduced by a single border-cross is still acceptable, especially if the
+callee is doing some non-negligible amount of work.<br>
+However this is not always the case. There are basically three problems that
+make (or used to make) <tt class="docutils literal">cpyext</tt> super slow:<br><blockquote>
+<ol class="arabic simple">
+<li>Paying the border-crossing cost for trivial operations which are called
+very often, such as <tt class="docutils literal">Py_INCREF</tt>.</li>
+<li>Crossing the border back and forth many times, even if it's not strictly
+needed.</li>
+<li>Paying an excessive cost for argument and return value conversions.</li>
+</ol>
+</blockquote>
+The next sections explain in more detail each of these problems.</div>
+<div class="section" id="avoiding-unnecessary-roundtrips">
+<h1>
+Avoiding unnecessary roundtrips</h1>
+Prior to the <a class="reference external" href="../posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html">2017 Cape Town Sprint</a>, <tt class="docutils literal">cpyext</tt> was horribly slow, and we were
+well aware of it: the main reason was that we never really paid too much
+attention to performance. As explained in the blog post, emulating all the
+CPython quirks is basically a nightmare, so better to concentrate on
+correctness first.<br>
+However, we didn't really know <strong>why</strong> it was so slow. We had theories and
+assumptions, usually pointing at the cost of conversions between <tt class="docutils literal">W_Root</tt>
+and <tt class="docutils literal">PyObject*</tt>, but we never actually measured it.<br>
+So, we decided to write a set of <a class="reference external" href="https://github.com/antocuni/cpyext-benchmarks">cpyext microbenchmarks</a> to measure the
+performance of various operations.  The result was somewhat surprising: the
+theory suggests that when you do a cpyext C call, you should pay the
+border-crossing costs only once, but what the profiler told us was that we
+were paying the cost of <tt class="docutils literal">generic_cpy_call</tt> several times more than what we expected.<br>
+After a bit of investigation, we discovered this was ultimately caused by our
+"correctness-first" approach. For simplicity of development and testing, when
+we started <tt class="docutils literal">cpyext</tt> we wrote everything in RPython: thus, every single API call
+made from C (like the omnipresent <a class="reference external" href="https://docs.python.org/2/c-api/arg.html#c.PyArg_ParseTuple">PyArg_ParseTuple()</a>, <a class="reference external" href="https://docs.python.org/2/c-api/int.html#c.PyInt_AsLong">PyInt_AsLong()</a>, etc.)
+had to cross back the C-to-RPython border. This was especially daunting for
+very simple and frequent operations like <tt class="docutils literal">Py_INCREF</tt> and <tt class="docutils literal">Py_DECREF</tt>,
+which CPython implements as a single assembly instruction!<br>
+Another source of slow down was the implementation of <tt class="docutils literal">PyTypeObject</tt> slots.
+At the C level, these are function pointers which the interpreter calls to do
+certain operations, e.g. <a class="reference external" href="https://docs.python.org/2/c-api/typeobj.html#c.PyTypeObject.tp_new">tp_new</a> to allocate a new instance of that type.<br>
+As usual, we have some magic to implement slots in RPython; in particular,
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-362">_make_wrapper</a> does the opposite of <tt class="docutils literal">generic_cpy_call</tt>: it takes a
+RPython function and wraps it into a C function which can be safely called
+from C, handling the GIL, exceptions and argument conversions automatically.<br>
+This was very handy during the development of cpyext, but it might result in
+some bad nonsense; consider what happens when you call the following C
+function:<br><pre class="code C literal-block"><span class="keyword">static</span> <span class="name">PyObject</span><span class="operator">*</span> <span class="name function">foo</span><span class="punctuation">(</span><span class="name">PyObject</span><span class="operator">*</span> <span class="name">self</span><span class="punctuation">,</span> <span class="name">PyObject</span><span class="operator">*</span> <span class="name">args</span><span class="punctuation">)</span>
+<span class="punctuation">{</span>
+    <span class="name">PyObject</span><span class="operator">*</span> <span class="name">result</span> <span class="operator">=</span> <span class="name">PyInt_FromLong</span><span class="punctuation">(</span><span class="literal number integer">1234</span><span class="punctuation">);</span>
+    <span class="keyword">return</span> <span class="name">result</span><span class="punctuation">;</span>
+<span class="punctuation">}</span>
+</pre>
+<ol class="arabic simple">
+<li>you are in RPython and do a cpyext call to <tt class="docutils literal">foo</tt>: <strong>RPython-to-C</strong>;</li>
+<li>
+<tt class="docutils literal">foo</tt> calls <tt class="docutils literal">PyInt_FromLong(1234)</tt>, which is implemented in RPython:
+<strong>C-to-RPython</strong>;</li>
+<li>the implementation of <tt class="docutils literal">PyInt_FromLong</tt> indirectly calls
+<tt class="docutils literal">PyIntType.tp_new</tt>, which is a C function pointer: <strong>RPython-to-C</strong>;</li>
+<li>however, <tt class="docutils literal">tp_new</tt> is just a wrapper around an RPython function, created
+by <tt class="docutils literal">_make_wrapper</tt>: <strong>C-to-RPython</strong>;</li>
+<li>finally, we create our RPython <tt class="docutils literal">W_IntObject(1234)</tt>; at some point
+during the <strong>RPython-to-C</strong> crossing, its <tt class="docutils literal">PyObject*</tt> equivalent is
+created;</li>
+<li>after many layers of wrappers, we are again in <tt class="docutils literal">foo</tt>: after we do
+<tt class="docutils literal">return result</tt>, during the <strong>C-to-RPython</strong> step we convert it from
+<tt class="docutils literal">PyObject*</tt> to <tt class="docutils literal">W_IntObject(1234)</tt>.</li>
+</ol>
+Phew! After we realized this, it was not so surprising that <tt class="docutils literal">cpyext</tt> was very
+slow :). And this was a simplified example, since we are not passing a
+<tt class="docutils literal">PyObject*</tt> to the API call. When we do, we need to convert it back and
+forth at every step.  Actually, I am not even sure that what I described was
+the exact sequence of steps which used to happen, but you get the general
+idea.<br>
+The solution is simple: rewrite as much as we can in C instead of RPython,
+to avoid unnecessary roundtrips. This was the topic of most of the Cape Town
+sprint and resulted in the <tt class="docutils literal"><span class="pre">cpyext-avoid-roundtrip</span></tt> branch, which was
+eventually <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/cpyext_avoid-roundtrip">merged</a>.<br>
+Of course, it is not possible to move <strong>everything</strong> to C: there are still
+operations which need to be implemented in RPython. For example, think of
+<tt class="docutils literal">PyList_Append</tt>: the logic to append an item to a list is complex and
+involves list strategies, so we cannot replicate it in C.  However, we
+discovered that a large subset of the C API can benefit from this.<br>
+Moreover, the C API is <strong>huge</strong>. While we invented this new way of writing
+<tt class="docutils literal">cpyext</tt> code, we still need to
+convert many of the functions to the new paradigm.  Sometimes the rewrite is
+not automatic
+or straighforward. <tt class="docutils literal">cpyext</tt> is a delicate piece of software, so it happens often
+that we make a mistake and end up staring at a segfault in gdb.<br>
+However, the most important takeaway is that the performance improvements we got
+from this optimization are impressive, as we will detail later.</div>
+<div class="section" id="conversion-costs">
+<h1>
+Conversion costs</h1>
+The other potential big source of slowdown is the conversion of arguments
+between <tt class="docutils literal">W_Root</tt> and <tt class="docutils literal">PyObject*</tt>.<br>
+As explained earlier, the first time you pass a <tt class="docutils literal">W_Root</tt> to C, you need to
+allocate its <tt class="docutils literal">PyObject*</tt> counterpart. Suppose you have a <tt class="docutils literal">foo</tt> function
+defined in C, which takes a single int argument:<br><pre class="code python literal-block"><span class="keyword">for</span> <span class="name">i</span> <span class="operator word">in</span> <span class="name builtin">range</span><span class="punctuation">(</span><span class="name">N</span><span class="punctuation">):</span>
+    <span class="name">foo</span><span class="punctuation">(</span><span class="name">i</span><span class="punctuation">)</span>
+</pre>
+To run this code, you need to create a different <tt class="docutils literal">PyObject*</tt> for each value
+of <tt class="docutils literal">i</tt>: if implemented naively, it means calling <tt class="docutils literal">N</tt> times <tt class="docutils literal">malloc()</tt>
+and <tt class="docutils literal">free()</tt>, which kills performance.<br>
+CPython has the very same problem, which is solved by using a <a class="reference external" href="https://en.wikipedia.org/wiki/Free_list">free list</a> to
+<a class="reference external" href="https://github.com/python/cpython/blob/2.7/Objects/intobject.c#L16">allocate ints</a>. So, what we did was to simply <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/commit/d8754ab9ba6371c83eaeb80cdf8cc13a37ee0c89">steal the code</a> from CPython
+and do the exact same thing. This was also done in the
+<tt class="docutils literal"><span class="pre">cpyext-avoid-roundtrip</span></tt> branch, and the benchmarks show that it worked
+perfectly.<br>
+Every type which is converted often to <tt class="docutils literal">PyObject*</tt> must have a very fast
+allocator. At the moment of writing, PyPy uses free lists only for ints and
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/commit/35e2fb9903f2483940d7970bd83ce8c65aa1c1a3">tuples</a>: one of the next steps on our TODO list is certainly to use this
+technique with more types, like <tt class="docutils literal">float</tt>.<br>
+Conversely, we also need to optimize the conversion from <tt class="docutils literal">PyObject*</tt> to
+<tt class="docutils literal">W_Root</tt>: this happens when an object is originally allocated in C and
+returned to Python. Consider for example the following code:<br><pre class="code python literal-block"><span class="keyword namespace">import</span> <span class="name namespace">numpy</span> <span class="keyword namespace">as</span> <span class="name namespace">np</span>
+<span class="name">myarray</span> <span class="operator">=</span> <span class="name">np</span><span class="operator">.</span><span class="name">random</span><span class="operator">.</span><span class="name">random</span><span class="punctuation">(</span><span class="name">N</span><span class="punctuation">)</span>
+<span class="keyword">for</span> <span class="name">i</span> <span class="operator word">in</span> <span class="name builtin">range</span><span class="punctuation">(</span><span class="name builtin">len</span><span class="punctuation">(</span><span class="name">arr</span><span class="punctuation">)):</span>
+    <span class="name">myarray</span><span class="punctuation">[</span><span class="name">i</span><span class="punctuation">]</span>
+</pre>
+At every iteration, we get an item out of the array: the return type is a an
+instance of <tt class="docutils literal">numpy.float64</tt> (a numpy scalar), i.e. a <tt class="docutils literal">PyObject'*</tt>: this is
+something which is implemented by numpy entirely in C, so completely
+opaque to <tt class="docutils literal">cpyext</tt>. We don't have any control on how it is allocated,
+managed, etc., and we can assume that allocation costs are the same as on
+CPython.<br>
+As soon as we return these <tt class="docutils literal">PyObject*</tt> to Python, we need to allocate
+their <tt class="docutils literal">W_Root</tt> equivalent. If you do it in a small loop like in the example
+above, you end up allocating all these <tt class="docutils literal">W_Root</tt> inside the nursery, which is
+a good thing since allocation is super fast (see the section above about the
+PyPy GC).<br>
+However, we also need to keep track of the <tt class="docutils literal">W_Root</tt> to <tt class="docutils literal">PyObject*</tt> link.
+Currently, we do this by putting all of them in a dictionary, but it is very
+inefficient, especially because most of these objects die young and thus it
+is wasted work to do that for them.  Currently, this is one of the biggest
+unresolved problem in <tt class="docutils literal">cpyext</tt>, and it is what causes the two microbenchmarks
+<tt class="docutils literal">allocate_int</tt> and <tt class="docutils literal">allocate_tuple</tt> to be very slow.<br>
+We are well aware of the problem, and we have a plan for how to fix it. The
+explanation is too technical for the scope of this blog post as it requires a
+deep knowledge of the GC internals to be understood, but the details are
+<a class="reference external" href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/extradoc/planning/cpyext.txt#L27">here</a>.</div>
+<div class="section" id="c-api-quirks">
+<h1>
+C API quirks</h1>
+Finally, there is another source of slowdown which is beyond our control. Some
+parts of the CPython C API are badly designed and expose some of the
+implementation details of CPython.<br>
+The major example is reference counting. The <tt class="docutils literal">Py_INCREF</tt> / <tt class="docutils literal">Py_DECREF</tt> API
+is designed in such a way which forces other implementation to emulate
+refcounting even in presence of other GC management schemes, as explained
+above.<br>
+Another example is borrowed references. There are API functions which <strong>do
+not</strong> incref an object before returning it, e.g. <a class="reference external" href="https://docs.python.org/2/c-api/list.html#c.PyList_GetItem">PyList_GetItem()</a>.  This is
+done for performance reasons because we can avoid a whole incref/decref pair,
+if the caller needs to handle the returned item only temporarily: the item is
+kept alive because it is in the list anyway.<br>
+For PyPy, this is a challenge: thanks to <a class="reference external" href="../posts/2011/10/more-compact-lists-with-list-strategies-8229304944653956829.html">list strategies</a>, lists are often
+represented in a compact way. For example, a list containing only integers is
+stored as a C array of <tt class="docutils literal">long</tt>.  How to implement <tt class="docutils literal">PyList_GetItem</tt>? We
+cannot simply create a <tt class="docutils literal">PyObject*</tt> on the fly, because the caller will never
+decref it and it will result in a memory leak.<br>
+The current solution is very inefficient. The first time we do a
+<tt class="docutils literal">PyList_GetItem</tt>, we <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/listobject.py#lines-28">convert</a> the <strong>whole</strong> list to a list of
+<tt class="docutils literal">PyObject*</tt>. This is bad in two ways: the first is that we potentially pay a
+lot of unneeded conversion cost in case we will never access the other items
+of the list. The second is that by doing that we lose all the performance
+benefit granted by the original list strategy, making it slower for the
+rest of the pure-python code which will manipulate the list later.<br><tt class="docutils literal">PyList_GetItem</tt> is an example of a bad API because it assumes that the list
+is implemented as an array of <tt class="docutils literal">PyObject*</tt>: after all, in order to return a
+borrowed reference, we need a reference to borrow, don't we?<br>
+Fortunately, (some) CPython developers are aware of these problems, and there
+is an ongoing project to <a class="reference external" href="https://pythoncapi.readthedocs.io/">design a better C API</a> which aims to fix exactly
+this kind of problem.<br>
+Nonetheless, in the meantime we still need to implement the current
+half-broken APIs. There is no easy solution for that, and it is likely that
+we will always need to pay some performance penalty in order to implement them
+correctly.<br>
+However, what we could potentially do is to provide alternative functions
+which do the same job but are more PyPy friendly: for example, we could think
+of implementing <tt class="docutils literal">PyList_GetItemNonBorrowed</tt> or something like that: then, C
+extensions could choose to use it (possibly hidden inside some macro and
+<tt class="docutils literal">#ifdef</tt>) if they want to be fast on PyPy.</div>
+<div class="section" id="current-performance">
+<h1>
+Current performance</h1>
+During the whole blog post we claimed <tt class="docutils literal">cpyext</tt> is slow. How
+slow it is, exactly?<br>
+We decided to concentrate on <a class="reference external" href="https://github.com/antocuni/cpyext-benchmarks">microbenchmarks</a> for now. It should be evident
+by now there are simply too many issues which can slow down a <tt class="docutils literal">cpyext</tt>
+program, and microbenchmarks help us to concentrate on one (or few) at a
+time.<br>
+The microbenchmarks measure very simple things, like calling functions and
+methods with the various calling conventions (no arguments, one arguments,
+multiple arguments); passing various types as arguments (to measure conversion
+costs); allocating objects from C, and so on.<br>
+Here are the results from the old PyPy 5.8 relative and normalized to CPython
+2.7, the lower the better:<br><br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://4.bp.blogspot.com/-5QV9jBfeXfo/W6UOCRA9YqI/AAAAAAAABX4/H2zgbv_XFQEHD4Lb2lj5Ve4Ob_YMuSXLwCLcBGAs/s1600/pypy58.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="480" src="https://4.bp.blogspot.com/-5QV9jBfeXfo/W6UOCRA9YqI/AAAAAAAABX4/H2zgbv_XFQEHD4Lb2lj5Ve4Ob_YMuSXLwCLcBGAs/s640/pypy58.png" width="640"></a>
+</div>
+<br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://www.blogger.com/blogger.g?blogID=3971202189709462152" style="margin-left: 1em; margin-right: 1em;"></a>
+</div>
+<div class="separator" style="clear: both; text-align: center;">
+<a href="https://www.blogger.com/blogger.g?blogID=3971202189709462152" style="margin-left: 1em; margin-right: 1em;"></a>
+</div>
+<br>
+PyPy was horribly slow everywhere, ranging from 2.5x to 10x slower. It is
+particularly interesting to compare <tt class="docutils literal">simple.noargs</tt>, which measures the cost
+of calling an empty function with no arguments, and <tt class="docutils literal">simple.onearg(i)</tt>,
+which measures the cost calling an empty function passing an integer argument:
+the latter is ~2x slower than the former, indicating that the conversion cost
+of integers is huge.<br>
+PyPy 5.8 was the last release before the famous Cape Town sprint, when we
+started to look at cpyext performance seriously. Here are the performance data for
+PyPy 6.0, the latest release at the time of writing:<br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://1.bp.blogspot.com/-MRkRoxtCeOE/W6UOL5txl1I/AAAAAAAABX8/i0ZiOyS2MOgiSyxFAyMOkKcB6xqjSihBACLcBGAs/s1600/pypy60.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="480" src="https://1.bp.blogspot.com/-MRkRoxtCeOE/W6UOL5txl1I/AAAAAAAABX8/i0ZiOyS2MOgiSyxFAyMOkKcB6xqjSihBACLcBGAs/s640/pypy60.png" width="640"></a>
+</div>
+<br><br>
+The results are amazing! PyPy is now massively faster than before, and for
+most benchmarks it is even faster than CPython: yes, you read it correctly:
+PyPy is faster than CPython at doing CPython's job, even considering all the
+extra work it has to do to emulate the C API.  This happens thanks to the JIT,
+which produces speedups high enough to counterbalance the slowdown caused by
+cpyext.<br>
+There are two microbenchmarks which are still slower though: <tt class="docutils literal">allocate_int</tt>
+and <tt class="docutils literal">allocate_tuple</tt>, for the reasons explained in the section about
+<a class="reference internal" href="https://www.blogger.com/blogger.g?blogID=3971202189709462152#conversion-costs">Conversion costs</a>.</div>
+<div class="section" id="next-steps">
+<h1>
+Next steps</h1>
+Despite the spectacular results we got so far, <tt class="docutils literal">cpyext</tt> is still slow enough to
+kill performance in most real-world code which uses C extensions extensively
+(e.g., the omnipresent numpy).<br>
+Our current approach is something along these lines:<br><blockquote>
+<ol class="arabic simple">
+<li>run a real-world small benchmark which exercises cpyext</li>
+<li>measure and find the major bottleneck</li>
+<li>write a corresponding microbenchmark</li>
+<li>optimize it</li>
+<li>repeat</li>
+</ol>
+</blockquote>
+On one hand, this is a daunting task because the C API is huge and we need to
+tackle functions one by one.  On the other hand, not all the functions are
+equally important, and is is enough to optimize a relatively small subset to
+improve many different use cases.<br>
+Where a year ago we announced we have a working answer to run c-extension in
+PyPy, we now have a clear picture of what are the performance bottlenecks, and
+we have developed some technical solutions to fix them. It is "only" a matter
+of tackling them, one by one.  It is worth noting that most of the work was
+done during two sprints, for a total 2-3 person-months of work.<br>
+We think this work is important for the Python ecosystem. PyPy has established
+a baseline for performance in pure python code, providing an answer for the
+"Python is slow" detractors. The techniques used to make <tt class="docutils literal">cpyext</tt> performant
+will let PyPy become an alternative for people who mix C extensions with
+Python, which, it turns out, is just about everyone, in particular those using
+the various scientific libraries. Today, many developers are forced to seek
+performance by converting code from Python to a lower language. We feel there
+is no reason to do this, but in order to prove it we must be able to run both
+their python and their C extensions performantly, then we can begin to educate
+them how to write JIT-friendly code in the first place.<br>
+We envision a future in which you can run arbitrary Python programs on PyPy,
+with the JIT speeding up the pure Python parts and the C parts running as fast
+as today: the best of both worlds!</div>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-8304134191082279078">
+        <div class="comment-header">
+          <a name="comment-8304134191082279078"></a>
+            <span class="author">AlbertMietus</span> wrote on <span class="date">2018-09-22 08:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks fo this nice article!<br><br>—Albert</p>
+        </div>
+      </div>
+      <div class="comment comment-3520388495855845072">
+        <div class="comment-header">
+          <a name="comment-3520388495855845072"></a>
+            <span class="author">Pixy Misa</span> wrote on <span class="date">2018-09-22 09:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great work guys!  I should benchmark some of my apps again - a couple of things that were dependent on C extensions didn't show much speedup previously.</p>
+        </div>
+      </div>
+      <div class="comment comment-970515122157794012">
+        <div class="comment-header">
+          <a name="comment-970515122157794012"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2018-09-22 15:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great work man !</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html" class="u-url">The First 15 Years of PyPy — a Personal Retrospective</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html" rel="bookmark">
+            <time class="published dt-published" datetime="2018-09-09T14:50:00Z" itemprop="datePublished" title="2018-09-09 14:50">2018-09-09 14:50</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>A few weeks ago I (=Carl Friedrich Bolz-Tereick) gave a <a class="reference external" href="https://conf.researchr.org/event/ecoop-issta-2018/icooolps-2018-papers-tbd-15-years-of-pypy-a-retrospective">keynote</a> at ICOOOLPS in
+Amsterdam with the above title. I was very happy to have been given that
+opportunity, since a number of our papers have been published at ICOOOLPS,
+including the very first one I published when I'd just started my PhD. I decided
+to turn the talk manuscript into a (longish) blog post, to make it available to a wider audience.
+Note that this blog post describes my personal recollections and research, it is
+thus necessarily incomplete and coloured by my own experiences.</p>
+<p>PyPy has turned 15 years old this year, so I decided that that's a good reason
+to dig into and talk about the history of the project so far. I'm going to do
+that using the lens of how performance developed over time, which is from
+something like 2000x slower than CPython, to roughly 7x faster. In this post
+I am going to present the history of the project, and also talk about some
+lessons that we learned.</p>
+<p>The post does not make too many assumptions about any prior knowledge of what
+PyPy is, so if this is your first interaction with it, welcome! I have tried to
+sprinkle links to earlier blog posts and papers into the writing, in case you
+want to dive deeper into some of the topics.</p>
+<p>As a disclaimer, in this post I am going to mostly focus on ideas, and not
+explain who had or implemented them. A huge amount of people contributed to the
+design, the implementation, the funding and the organization of PyPy over the
+years, and it would be impossible to do them all justice.</p>
+<div class="contents topic" id="contents">
+<b>Contents</b>
+<ul class="simple">
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#starting-the-project" id="id17">2003: Starting the Project</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#implementing-the-interpreter" id="id18">2003: Implementing the Interpreter</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#early-organizational-ideas" id="id19">Early organizational ideas</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#eu-funding" id="id20">2004-2007: EU-Funding</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#bootstrapping-pypy" id="id21">2005: Bootstrapping PyPy</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#rpython-s-modularity-problems" id="id22">RPython's Modularity Problems</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#the-meta-jit" id="id23">2006: The Meta-JIT</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#the-first-jit-generator" id="id24">The First JIT Generator</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#promote" id="id25">Promote</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#virtuals" id="id26">Virtuals</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#jit-status-2007" id="id27">JIT Status 2007</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#rsqueak-and-other-languages" id="id28">2007: RSqueak and other languages</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#four-more-jit-generators" id="id29">2008-2009: Four More JIT Generators</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#meta-tracing" id="id30">2009: Meta-Tracing</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#why-did-we-abandon-partial-evaluation" id="id31">Why did we Abandon Partial Evaluation?</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#the-pyjit-eurostars-project" id="id32">2009-2011: The PyJIT Eurostars Project</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#tracing-jit-improvements" id="id33">Tracing JIT improvements</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#speed-pypy-org" id="id34">2010: speed.pypy.org</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#continuous-integration" id="id35">Continuous Integration</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#implementing-python-objects-with-maps" id="id36">2010: Implementing Python Objects with Maps</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#container-storage-strategies" id="id37">2011: Container Storage Strategies</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#deep-changes-in-the-runtime-are-necessary" id="id38">Deep Changes in the Runtime are Necessary</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#jit-status-2011" id="id39">JIT Status 2011</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#engineering-and-incremental-progress" id="id40">2012-2017: Engineering and Incremental Progress</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#cpyext" id="id41">CPyExt</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#python-3" id="id42">Python 3</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#incentives-of-oss-compared-to-academia" id="id43">Incentives of OSS compared to Academia</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#meta-tracing-really-works" id="id44">Meta-Tracing really works!</a></p></li>
+<li><p><a class="reference internal" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#acknowledgements" id="id45">Acknowledgements</a></p></li>
+</ul>
+</div>
+<div class="section" id="starting-the-project">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id17">2003: Starting the Project</a></h1>
+<p>On the technical level PyPy is a Python interpreter written in Python, which is
+where the name comes from. It also has an automatically generated JIT compiler,
+but I'm going to introduce that gradually over the rest of the blog post, so
+let's not worry about it too much yet. On the social level PyPy is an
+interesting mixture of a open source project, that sometimes had research done
+in it.</p>
+<p>The project got started in late 2002 and early 2003. To set the stage, at that
+point Python was a significantly less popular language than it is today. <a class="reference external" href="https://www.python.org/download/releases/2.2/">Python
+2.2</a> was the version at the time, Python didn't even have a <span class="docutils literal">bool</span> type yet.</p>
+<p>In fall 2002 the PyPy project was started by a number of Python programmers on a
+mailing list who said
+something like (I am exaggerating somewhat) "Python is the greatest most
+wonderful most perfect language ever, we should use it for absolutely
+everything. Well, what aren't we using it for? The Python virtual machine itself
+is written in C, that's bad. Let's start a project to fix that."</p>
+<p>Originally that project was called "minimal python", or "ptn", later gradually
+renamed to PyPy. Here's the <a class="reference external" href="https://mail.python.org/pipermail/python-list/2003-January/235289.html">mailing list post</a> to announce the project more
+formally:</p>
+<pre class="literal-block">Minimal Python Discussion, Coding and Sprint
+--------------------------------------------
+
+We announce a mailinglist dedicated to developing
+a "Minimal Python" version.  Minimal means that
+we want to have a very small C-core and as much
+as possible (re)implemented in python itself.  This
+includes (parts of) the VM-Code.</pre>
+<p>Why would that kind of project be useful? Originally it wasn't necessarily meant
+to be useful as a real implementation at all, it was more meant as a kind of
+executable explanation of how Python works, free of the low level details of
+CPython. But pretty soon there were then also plans for how the virtual machine
+(VM) could be bootstrapped to be runnable without an existing Python
+implementation, but I'll get to that further down.</p>
+</div>
+
+
+<div class="section" id="implementing-the-interpreter">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id18">2003: Implementing the Interpreter</a></h1>
+<p>In early 2003 a group of Python people met in Hildesheim (Germany) for the first
+of many week long development sprints, organized by Holger Krekel. During that
+week a group of people showed up and started working on the core interpreter.
+In May 2003 a second sprint was organized by Laura Creighton and Jacob Halén in
+Gothenburg (Sweden). And already at that sprint enough of the Python bytecodes
+and data structures were implemented to make it possible to run a program that
+computed how much money everybody had to pay for the food bills of the week. And
+everybody who's tried that for a large group of people knows that that’s an
+amazingly complex mathematical problem.</p>
+<p>In the next two years, the project continued as a open source project with
+various contributors working on it in their free time, and meeting for the
+occasional sprint. In that time, the rest of the core interpreter and the core
+data types were implemented.</p>
+<p>There's not going to be any other code in this post, but to give a bit of a
+flavor of what the Python interpreter at that time looked like, here's the
+implementation of the <span class="docutils literal">DUP_TOP</span> bytecode after these first sprints. As you can
+see, it's in Python, obviously, and it has high level constructs such as method
+calls to do the stack manipulations:</p>
+<pre class="code python literal-block"><code><span class="keyword">def</span> <span class="name function">DUP_TOP</span><span class="punctuation">(</span><span class="name">f</span><span class="punctuation">):</span>
+    <span class="name">w_1</span> <span class="operator">=</span> <span class="name">f</span><span class="operator">.</span><span class="name">valuestack</span><span class="operator">.</span><span class="name">top</span><span class="punctuation">()</span>
+    <span class="name">f</span><span class="operator">.</span><span class="name">valuestack</span><span class="operator">.</span><span class="name">push</span><span class="punctuation">(</span><span class="name">w_1</span><span class="punctuation">)</span></code></pre>
+<p>Here's the early code for integer addition:</p>
+<pre class="code python literal-block"><code><span class="keyword">def</span> <span class="name function">int_int_add</span><span class="punctuation">(</span><span class="name">space</span><span class="punctuation">,</span> <span class="name">w_int1</span><span class="punctuation">,</span> <span class="name">w_int2</span><span class="punctuation">):</span>
+    <span class="name">x</span> <span class="operator">=</span> <span class="name">w_int1</span><span class="operator">.</span><span class="name">intval</span>
+    <span class="name">y</span> <span class="operator">=</span> <span class="name">w_int2</span><span class="operator">.</span><span class="name">intval</span>
+    <span class="keyword">try</span><span class="punctuation">:</span>
+        <span class="name">z</span> <span class="operator">=</span> <span class="name">x</span> <span class="operator">+</span> <span class="name">y</span>
+    <span class="keyword">except</span> <span class="name exception">OverflowError</span><span class="punctuation">:</span>
+        <span class="keyword">raise</span> <span class="name">FailedToImplement</span><span class="punctuation">(</span><span class="name">space</span><span class="operator">.</span><span class="name">w_OverflowError</span><span class="punctuation">,</span>
+                                <span class="name">space</span><span class="operator">.</span><span class="name">wrap</span><span class="punctuation">(</span><span class="literal string double">"integer addition"</span><span class="punctuation">))</span>
+    <span class="keyword">return</span> <span class="name">W_IntObject</span><span class="punctuation">(</span><span class="name">space</span><span class="punctuation">,</span> <span class="name">z</span><span class="punctuation">)</span></code></pre>
+<p>(the <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/blob/branch/default/pypy/interpreter/pyopcode.py#L582">current</a> <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/blob/branch/default/pypy/objspace/std/intobject.py#L551">implementations</a> look slightly but not fundamentally different.)</p>
+</div>
+
+
+<div class="section" id="early-organizational-ideas">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id19">Early organizational ideas</a></h1>
+<p>Some of the early organizational ideas of the project were as follows. Since the
+project was started on a sprint and people really liked that style of working
+PyPy continued to be developed on various subsequent <a class="reference external" href="https://www.youtube.com/watch?v=ed-zAxZtGlY">sprints</a>.</p>
+<p>From early on there was a very heavy emphasis on testing. All the parts of the
+interpreter that were implemented had a very careful set of unit tests to make
+sure that they worked correctly. From early on, there was a continuous
+integration infrastructure, which grew over time (nowadays it is very natural
+for people to have automated tests, and the concept of green/red builds: but
+embracing this workflow in the early 2000s was not really mainstream yet, and
+it is probably one of the reasons behind PyPy's success).</p>
+<p>At the sprints there was also an emphasis on doing pair programming to make
+sure that everybody understood the codebase
+equally. There was also a heavy emphasis on writing good code and on regularly
+doing refactorings to make sure that the codebase remained nice, clean and
+understandable. Those ideas followed from the early thoughts that PyPy would be
+a sort of readable explanation of the language.</p>
+<p>There was also a pretty fundamental design decision made at the time. That was
+that the project should stay out of language design completely. Instead it would
+follow CPython's lead and behave exactly like that implementation in all cases.
+The project therefore committed to being almost quirk-to-quirk compatible and to
+implement even the more obscure (and partially unnecessary) corner cases of
+CPython.</p>
+<p>All of these principles continue pretty much still today (There are a few places
+where we had to deviate from being completely compatible, they are documented
+<a class="reference external" href="https://doc.pypy.org/en/latest/cpython_differences.html">here</a>).</p>
+</div>
+
+
+<div class="section" id="eu-funding">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id20">2004-2007: EU-Funding</a></h1>
+<p>While all this coding was going on it became clear pretty soon that the goals
+that various participants had for the project would be very hard to achieve with
+just open source volunteers working on the project in their spare time.
+Particularly also the sprints became expensive given that those were just
+volunteers doing this as a kind of weird hobby. Therefore a couple of people of
+the project got together to apply for an EU grant in the <a class="reference external" href="https://en.wikipedia.org/wiki/Framework_Programmes_for_Research_and_Technological_Development#FP6_and_FP7">framework programme 6</a>
+to solve these money problems. In mid-2004 that application proved to be
+successful. And so the project got a grant of a 1.3 million Euro for
+two years to be able to employ some of the core developers and to make it
+possible for them work on the project full time. The EU grant went to seven
+small-to-medium companies and <a class="reference external" href="https://hhu.de">Uni Düsseldorf</a>. The budget also contained money to
+fund sprints, both for the employed core devs as well as other open source
+contributors.</p>
+
+<p>The EU project started in December 2004 and that was a fairly heavy change in
+pace for the project. Suddenly a lot of people were working full time on it, and
+the pace and the pressure picked up quite a lot. Originally it had been a
+leisurely project people worked on for fun. But afterwards people discovered
+that doing this kind of work full time becomes slightly less fun, particularly
+also if you have to fulfill the ambitious technical goals that the EU proposal
+contained. And the proposal indeed contained a bit everything to increase its
+chance of acceptance, such as <a class="reference external" href="https://en.wikipedia.org/wiki/Aspect-oriented_programming">aspect oriented programming</a>, semantic web, logic
+programming, constraint programming, and so on. Unfortunately it
+turned out that those things then have to be implemented, which can be called
+the first thing we learned: if you promise something to the EU, you'll have to
+actually go do it (After the funding ended, a lot of these features were
+actually removed from the project again, at a <a class="reference external" href="https://www.pypy.org/posts/2007/11/sprint-pictures.html">cleanup sprint</a>).</p>
+</div>
+
+
+<div class="section" id="bootstrapping-pypy">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id21">2005: Bootstrapping PyPy</a></h1>
+<p>So what were the actually useful things done as part of the EU project?</p>
+<p>One of the most important goals that the EU project was meant to solve was the
+question of how to turn PyPy into an actually useful VM for Python. The
+bootstrapping plans were taken quite directly from <a class="reference external" href="https://wiki.squeak.org/squeak">Squeak</a>, which is a Smalltalk
+VM written in a subset of Smalltalk called Slang, which can then be bootstrapped
+to C code. The plan for PyPy was to do something similar, to define a restricted
+subset of Python called RPython, restricted in such a way that it should be
+possible to statically compile RPython programs to C code. Then the Python
+interpreter should only use that subset, of course.</p>
+<p>The main difference from the Squeak approach is that Slang, the subset of Squeak
+used there, is actually quite a low level language. In a way, you could almost
+describe it as C with Smalltalk syntax. RPython was really meant to be a
+much higher level language, much closer to Python, with full support for single
+inheritance classes, and most of Python's built-in data structures.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-LpUpuvIQNAM/W5UX365L1HI/AAAAAAAAlE0/JB3Co6ICsLwxQDHkqFDyXsxvsCeCAK4BACLcBGAs/s1600/translation.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="640" src="https://2.bp.blogspot.com/-LpUpuvIQNAM/W5UX365L1HI/AAAAAAAAlE0/JB3Co6ICsLwxQDHkqFDyXsxvsCeCAK4BACLcBGAs/s640/translation.png" width="628"></a></div>
+<p>(BTW, you don’t have to understand any of the illustrations in this blog post,
+they are taken from talks and project reports we did over the years so they are
+of archaeological interest only and I don’t understand most of them myself.)</p>
+<p>From 2005 on, work on the RPython type inference engine and C backend started in
+earnest, which was sort of co-developed with the RPython language definition and
+the PyPy Python interpreter. This is also roughly the time that I joined the
+project as a volunteer.</p>
+<p>And at the second sprint I went to, in July 2005, two and a half years after the
+project got started, we managed to <a class="reference external" href="https://mail.python.org/pipermail/pypy-dev/2005-July/002239.html">bootstrap</a> the PyPy interpreter to C for the
+first time. When we ran the compiled program, it of course immediately
+segfaulted. The reason for that was that the C backend had turned characters
+into signed chars in C, while the rest of the infrastructure assumed that they
+were unsigned chars. After we fixed that, the second attempt worked and we
+managed to run an incredibly complex program, something like <span class="docutils literal">6 * 7</span>. That
+first bootstrapped version was really really slow, a couple of hundred times
+slower than CPython.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-w3Rzz7ngdz0/W5UX_THbfYI/AAAAAAAAlFA/kK33VIR3G-AlNq9CRuOdXNWbjTII6vGKwCPcBGAYYCw/s1600/champagne.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="300" src="https://2.bp.blogspot.com/-w3Rzz7ngdz0/W5UX_THbfYI/AAAAAAAAlFA/kK33VIR3G-AlNq9CRuOdXNWbjTII6vGKwCPcBGAYYCw/s400/champagne.png" width="400"></a></div>
+<p>The bootstrapping process of RPython has a number of nice benefits, a big one
+being that a number of the properties of the generated virtual machine don't
+have to expressed in the interpreter. The biggest example of this is garbage
+collection. RPython is a garbage collected language, and the interpreter does
+not have to care much about GC in most cases. When the C source code is
+generated, a GC is automatically inserted. This is a source of great
+flexibility. Over time we experimented with a number of different GC
+approaches, from reference counting to <a class="reference external" href="https://www.hboehm.info/gc/">Boehm</a> to our current incremental
+generational collector. As an aside, for a long time we were also working on
+other backends to the RPython language and hoped to be able to target Java and
+.NET as well. Eventually we abandoned this strand of work, however.</p>
+</div>
+
+
+<div class="section" id="rpython-s-modularity-problems">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id22">RPython's Modularity Problems</a></h1>
+<p>Now we come to the first thing I would say we learned in the project, which is
+that the quality of tools we thought of as internal things still matters a lot.
+One of the biggest technical mistakes we've made in the project was that we
+designed RPython without any kind of story for modularity. There is no concept
+of modules in the language or any other way to break up programs into smaller
+components. We always thought that it would be ok for RPython to be a little bit
+crappy. It was meant to be this sort of internal language with not too many
+external users. And of course that turned out to be completely wrong later.</p>
+<p>That lack of modularity led to various problems that persist until today. The
+biggest one is that there is no separate compilation for RPython programs at
+all! You always need to compile all the parts of your VM together, which leads
+to infamously bad compilation times.</p>
+<p>Also by not considering the modularity question we were never forced to fix
+some internal structuring issues of the RPython compiler itself.
+Various layers of the compiler keep very badly defined and porous interfaces between
+them. This was made possible by being able to work with all the program information in one heap,
+making the compiler less approachable and maintainable than it maybe could be.</p>
+<p>Of course this mistake just got more and more costly to fix over time,
+and so it means that so far nobody has actually done it.
+Not thinking more carefully about RPython's design, particularly its
+modularity story, is in my opinion the biggest technical mistake the project
+made.</p>
+</div>
+
+
+<div class="section" id="the-meta-jit">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id23">2006: The Meta-JIT</a></h1>
+<p>After successfully bootstrapping the VM we did some fairly straightforward
+optimizations on the interpreter and the C backend and managed to reduce the
+slowdown versus CPython to something like 2-5 times slower. That's great! But of
+course not actually useful in practice. So where do we go from here?</p>
+<p>One of the not so secret goals of Armin Rigo, one of the PyPy founders, was to
+use PyPy together with some advanced <a class="reference external" href="https://en.wikipedia.org/wiki/Partial_evaluation">partial evaluation</a> magic sauce to
+somehow automatically generate a JIT compiler from the interpreter. The goal was
+something like, "you write your interpreter in RPython, add a few annotations
+and then we give you a JIT for free for the language that that interpreter
+implements."</p>
+<p>Where did the wish for that approach come from, why not just write a JIT for
+Python manually in the first place? Armin had actually done just that before he
+co-founded PyPy, in a project called <a class="reference external" href="https://psyco.sourceforge.net/">Psyco</a>. Psyco was an extension module for
+CPython that contained a method-based JIT compiler for Python code. And Psyco
+proved to be an amazingly frustrating compiler to write. There were two main
+reasons for that. The first reason was that Python is actually quite a complex
+language underneath its apparent simplicity. The second reason for the
+frustration was that Python was and is very much an alive language, that gains
+new features in the language core in every version. So every time a new Python
+version came out, Armin had to do fundamental changes and rewrites to Psyco, and
+he was getting pretty frustrated with it. So he hoped that that effort could be
+diminished by not writing the JIT for PyPy by hand at all. Instead, the goal was
+to generate a method-based JIT from the interpreter automatically. By taking the
+interpreter, and applying a kind of advanced transformation to it, that would
+turn it into a method-based JIT. And all that would still be translated into a
+C-based VM, of course.</p>
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-gCI1qhaNKIE/W5UWuEJHcsI/AAAAAAAAlEo/ctU2bNj03iEzcHkqDcJH5LuKznuppNegwCLcBGAs/s1600/page21.jpg" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://2.bp.blogspot.com/-gCI1qhaNKIE/W5UWuEJHcsI/AAAAAAAAlEo/ctU2bNj03iEzcHkqDcJH5LuKznuppNegwCLcBGAs/s640/page21.jpg" width="600"></a></div>
+<p>Slide from Psyco presentation at EuroPython 2002</p>
+</div>
+
+
+<div class="section" id="the-first-jit-generator">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id24">The First JIT Generator</a></h1>
+<p>From early 2006 on until the end of the EU project a lot of work went into
+writing such a JIT generator. The idea was to base it on runtime partial
+evaluation. Partial evaluation is an old idea in computer science. It's supposed
+to be a way to automatically turn interpreters for a language into a compiler
+for that same language. Since PyPy was trying to generate a JIT compiler, which
+is in any case necessary to get good performance for a dynamic language like
+Python, the partial evaluation was going to happen at runtime.</p>
+<p>There are various ways to look at partial evaluation, but if you've never heard
+of it before, a simple way to view it is that it will compile a Python function
+by gluing together the implementations of the bytecodes of that function and
+optimizing the result.</p>
+<p>The main new ideas of PyPy's partial-evaluation based JIT generator as opposed
+to earlier partial-evaluation approaches are the ideas of "promote" and the idea
+of "virtuals". Both of these techniques had already been present (in a slightly
+less general form) in Psyco, and the goal was to keep using them in PyPy. Both
+of these techniques also still remain in use today in PyPy. I'm
+going on a slight technical diversion now, to give a high level explanation of
+what those ideas are for.</p>
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-e3T0At96nbI/W5UYIgiaTZI/AAAAAAAAlE8/Fn-f4C4FpH03CAPr17RiUPKNoQKyf2UugCLcBGAs/s1600/redgreen.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="640" src="https://2.bp.blogspot.com/-e3T0At96nbI/W5UYIgiaTZI/AAAAAAAAlE8/Fn-f4C4FpH03CAPr17RiUPKNoQKyf2UugCLcBGAs/s640/redgreen.png" width="567"></a></div>
+</div>
+
+
+<div class="section" id="promote">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id25">Promote</a></h1>
+<p>One important ingredient of any JIT compiler is the ability to do runtime
+feedback. Runtime feedback is most commonly used to know something about which
+concrete types are used by a program in practice. Promote is basically a way to
+easily introduce runtime feedback into the JIT produced by the JIT generator.
+It's an <a class="reference external" href="https://www.pypy.org/posts/2011/03/controlling-tracing-of-interpreter-with_15.html">annotation</a> the implementer of a language can use to express their wish
+that specialization should happen at <em>this</em> point. This mechanism can be used to
+express <a class="reference external" href="https://www.pypy.org/posts/2011/03/controlling-tracing-of-interpreter-with_21.html">all kinds of</a> runtime feedback, moving values from the interpreter
+into the compiler, whether they be types or other things.</p>
+</div>
+
+
+<div class="section" id="virtuals">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id26">Virtuals</a></h1>
+<p>Virtuals are a very aggressive form of <a class="reference external" href="https://www.ssw.uni-linz.ac.at/Research/Papers/Stadler14/Stadler2014-CGO-PEA.pdf">partial escape analysis</a>. A dynamic
+language often puts a lot of pressure on the garbage collector, since most
+primitive types (like integers, floats and strings) are boxed in the heap, and
+new boxes are allocated all the time.</p>
+<p>With the help of virtuals a very significant portion of all allocations in the
+generated machine code can be completely removed. Even if they can't be removed,
+often the allocation can be delayed or moved into an error path, or even
+into a <a class="reference external" href="https://bibliography.selflanguage.org/_static/dynamic-deoptimization.pdf">deoptimization</a> path, and thus disappear from the generated machine code
+completely.</p>
+<p>This optimization really is the super-power of PyPy's optimizer, since it
+doesn't work only for primitive boxes but for any kind of object allocated on
+the heap with a predictable lifetime.</p>
+<p>As an aside, while this kind of partial escape analysis is sort of new for
+object-oriented languages, it has actually existed in Prolog-based partial
+evaluation systems since the 80s, because it's just extremely natural there.</p>
+</div>
+
+
+<div class="section" id="jit-status-2007">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id27">JIT Status 2007</a></h1>
+<p>So, back to our history. We're now in 2007, at the end of the EU project (you
+can find the EU-reports we wrote during the projects <a class="reference external" href="https://doc.pypy.org/en/latest/index-report.html">here</a>). The EU project
+successfully finished, we survived the final review with the EU. So, what's the
+2007 status of the JIT generator? It works kind of, it can be applied to PyPy. It
+produces a VM with a JIT that will turn Python code into machine code at runtime
+and run it. However, that machine code is not particularly fast. Also, it tends
+to generate many megabytes of machine code even for small Python programs. While
+it's always faster than PyPy without JIT, it's only sometimes faster than
+CPython, and most of the time Psyco still beats it. On the one hand, this is
+still an amazing achievement! It's arguably the biggest application of partial
+evaluation at this point in time! On the other hand, it was still quite
+disappointing in practice, particularly since some of us had believed at the
+time that it should have been possible to reach and then surpass the speed of
+Psyco with this approach.</p>
+</div>
+
+
+<div class="section" id="rsqueak-and-other-languages">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id28">2007: RSqueak and other languages</a></h1>
+<p>After the EU project ended we did all kinds of things. Like sleep for a month
+for example, and have the cleanup sprint that I already mentioned. We also had a
+slightly unusual sprint in Bern, with members of the <a class="reference external" href="https://scg.unibe.ch/">Software Composition
+Group</a> of Oscar Nierstrasz. As I wrote above, PyPy had been heavily influenced
+by Squeak Smalltalk, and that group is a heavy user of Squeak, so we wanted to
+see how to collaborate with them. At the beginning of the sprint, we decided
+together that the goal of that week should be to try to write a Squeak virtual
+machine in RPython, and at the end of the week we'd gotten surprisingly far with
+that goal. Basically most of the bytecodes and the Smalltalk object system
+worked, we had written an image loader and could run some benchmarks (during the
+sprint we also regularly updated a <a class="reference external" href="https://pypysqueak.blogspot.com/">blog</a>, the success of which led us to <a class="reference external" href="https://www.pypy.org/posts/2007/10/first-post.html">start</a>
+the PyPy blog).</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://4.bp.blogspot.com/-n0Xj6fdNu-g/W5UZE-Z0O8I/AAAAAAAAlFM/A61pBvOV-zkIrYZKDTagNbFrm6HxyFbuwCLcBGAs/s1600/bern.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://4.bp.blogspot.com/-n0Xj6fdNu-g/W5UZE-Z0O8I/AAAAAAAAlFM/A61pBvOV-zkIrYZKDTagNbFrm6HxyFbuwCLcBGAs/s640/bern.png" width="600"></a></div>
+<p>The development of the Squeak interpreter was very interesting for the project,
+because it was the first real step that moved RPython from being an
+implementation detail of PyPy to be a more interesting project in its own right.
+Basically a language to write interpreters in, with the eventual promise to get
+a JIT for that language almost for free. That Squeak implementation is now
+called <a class="reference external" href="https://github.com/hpi-swa/RSqueak">RSqueak</a> ("Research Squeak").</p>
+<p>I'll not go into more details about any of the other language implementations in
+RPython in this post, but over the years we've had a large variety of language
+of them done by various people and groups, most of them as research vehicles,
+but also some as real language implementations. Some very cool research results
+came out of these efforts, here's a slightly outdated <a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html">list of some of them</a>.</p>
+<p>The use of RPython for other languages complicated the PyPy narrative a lot, and
+in a way we never managed to recover the simplicity of the original project
+description "PyPy is Python in Python". Because now it's something like "we have
+this somewhat strange language, a subset of Python, that's called RPython, and
+it's good to write interpreters in. And if you do that, we'll give you a JIT for
+almost free. And also, we used that language to write a Python implementation,
+called PyPy.". It just doesn't roll off the tongue as nicely.</p>
+</div>
+
+
+<div class="section" id="four-more-jit-generators">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id29">2008-2009: Four More JIT Generators</a></h1>
+<p>Back to the JIT. After writing the first JIT generator as part of the EU
+project, with somewhat mixed results, we actually wrote several more JIT
+generator prototypes with different architectures to try to solve some of the
+problems of the first approach. To give an impression of these prototypes,
+here’s a list of them.</p>
+<ul class="simple">
+<li><p>The second JIT generator we started working on in 2008 behaved exactly like
+the first one, but had a meta-interpreter based architecture, to make it more
+flexible and easier to experiment with. The meta-interpreter was called
+the "rainbow interpreter", and in general the JIT is an area where we went
+somewhat overboard with borderline silly terminology, with notable
+occurrences of "timeshifter", "blackhole interpreter" etc.</p></li>
+<li><p>The third JIT generator was an experiment based on the second one which
+changed
+compilation strategy. While the previous two had compiled many control flow
+paths of the currently compiled function eagerly, that third JIT was sort of
+maximally lazy and stopped compilation at every control flow split to avoid
+guessing which path would actually be useful later when executing the code.
+This was an attempt to reduce the problem of the first JIT generating way too
+much machine code. Only later, when execution went down one of the not yet
+compiled paths would it continue compiling more code. This gives an effect
+similar to that of <a class="reference external" href="https://arxiv.org/abs/1411.0352">lazy basic block versioning</a>.</p></li>
+<li><p>The fourth JIT generator was a pretty strange prototype, a <a class="reference external" href="https://pdfs.semanticscholar.org/db2d/0542c7791ee6f29a9f35e3181a186866f881.pdf">runtime partial
+evaluator for Prolog</a>, to experiment with various specialization trade-offs. It
+had an approach that we gave a not at all humble name, called "perfect
+specialization".</p></li>
+<li><p>The fifth JIT generator is the one that we are still using today. Instead of
+generating a method-based JIT compiler from our interpreter we switched to
+generating a tracing JIT compiler. Tracing JIT compilers were sort of the
+latest fashion at the time, at least for a little while.</p></li>
+</ul>
+</div>
+
+
+<div class="section" id="meta-tracing">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id30">2009: Meta-Tracing</a></h1>
+<p>So, how did that tracing JIT generator work? A <a class="reference external" href="https://en.wikipedia.org/wiki/Tracing_just-in-time_compilation">tracing JIT</a> generates code by
+observing and logging the execution of the running program. This yields a
+straight-line trace of operations, which are then optimized and compiled into
+machine code. Of course most tracing systems mostly focus on tracing loops.</p>
+<p>As we discovered, it's actually quite simple to <a class="reference external" href="https://www.pypy.org/posts/2009/03/applying-tracing-jit-to-interpreter.html">apply a tracing JIT to a generic
+interpreter</a>, by not tracing the execution of the user program directly, but by
+instead tracing the execution of the interpreter while it is running the user
+program (here's the <a class="reference external" href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/default/talk/icooolps2009/bolz-tracing-jit-final.pdf">paper</a> we wrote about this approach).</p>
+<p>So that's what we implemented. Of course we kept the two successful parts of the
+first JIT, <a class="reference external" href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/default/talk/icooolps2011/bolz-hints-final.pdf">promote</a> and <a class="reference external" href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/default/talk/pepm2011/escape-tracing.pdf">virtuals</a> (both links go to the papers about these
+features in the meta-tracing context).</p>
+<div class="separator" style="clear: both; text-align: center;"><a href="https://3.bp.blogspot.com/-LeGqU7U6UfI/W5UZNLCjCAI/AAAAAAAAlFQ/_yhheMGCTu82WB8bp1wjVfhCeu_ppdw_gCLcBGAs/s1600/metajit.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://3.bp.blogspot.com/-LeGqU7U6UfI/W5UZNLCjCAI/AAAAAAAAlFQ/_yhheMGCTu82WB8bp1wjVfhCeu_ppdw_gCLcBGAs/s640/metajit.png" width="600"></a></div>
+</div>
+
+
+<div class="section" id="why-did-we-abandon-partial-evaluation">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id31">Why did we Abandon Partial Evaluation?</a></h1>
+<p>So one question I get sometimes asked when telling this story is, why did
+we think that tracing would work better than partial evaluation (PE)? One of the
+hardest parts of compilers in general and partial evaluation based systems in
+particular is the decision when and how much to inline, how much to specialize,
+as well as the decision when to split control flow paths. In the PE based JIT
+generator we never managed to control that question. Either the JIT would
+inline too much, leading to useless compilation of all kinds of unlikely error
+cases. Or it wouldn't inline enough, preventing necessary optimizations.</p>
+<p>Meta tracing solves this problem with a hammer, it doesn't make particularly
+complex inlining decisions at all. It instead decides what to inline by
+precisely following what a real execution through the program is doing. Its
+inlining decisions are therefore very understandable and predictable, and it
+basically only has one heuristic based on whether the called function contains a
+loop or not: If the called function contains a loop, we'll never inline it, if
+it doesn't we always try to inline it. That predictability is actually what was
+the most helpful, since it makes it possible for interpreter authors to
+understand why the JIT did what it did and to actually influence its inlining
+decisions by changing the annotations in the interpreter source. It turns out
+that simple is better than complex.</p>
+</div>
+
+
+<div class="section" id="the-pyjit-eurostars-project">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id32">2009-2011: The PyJIT Eurostars Project</a></h1>
+<p>While we were writing all these JIT prototypes, PyPy had sort of reverted back
+to being a volunteer-driven open source project (although some of us, like
+Antonio Cuni and I, had started working for universities and other project
+members had other sources of funding). But again, while we did the work it
+became clear that to get an actually working fast PyPy with generated JIT we
+would need actual funding again for the project. So we applied to the EU again,
+this time for a much smaller project with less money, in the <a class="reference external" href="https://www.pypy.org/posts/2010/12/oh-and-btw-pypy-gets-funding-through.html">Eurostars</a>
+framework. We got a grant for three participants, <a class="reference external" href="https://merlinux.eu/">merlinux</a>, <a class="reference external" href="https://www.openend.se/">OpenEnd</a> and Uni
+Düsseldorf, on the order of a bit more than half a million euro. That money was
+specifically for JIT development and JIT testing infrastructure.</p>
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-CmyDXLRX85w/W5UZaPZSrzI/AAAAAAAAlFU/VcOEpPg95cUW7h8xssvJsGbiQAar8wsMACLcBGAs/s1600/eurostars.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="640" src="https://2.bp.blogspot.com/-CmyDXLRX85w/W5UZaPZSrzI/AAAAAAAAlFU/VcOEpPg95cUW7h8xssvJsGbiQAar8wsMACLcBGAs/s640/eurostars.png" width="494"></a></div>
+</div>
+
+
+<div class="section" id="tracing-jit-improvements">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id33">Tracing JIT improvements</a></h1>
+<p>When writing the grant we had sat together at a sprint and discussed extensively
+and decided that we would not switch JIT generation approaches any more. We all
+liked the tracing approach well enough and thought it was promising. So instead
+we agreed to try in earnest to make the tracing JIT really practical. So in the
+Eurostars project we started with implementing sort of fairly standard JIT
+compiler optimizations for the meta-tracing JIT, such as:</p>
+<ul class="simple">
+<li><p>constant folding</p></li>
+<li><p>dead code elimination</p></li>
+<li><p><a class="reference external" href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/default/talk/dls2012/dls04-ardo.pdf">loop invariant code motion</a> (using <a class="reference external" href="https://lua-users.org/lists/lua-l/2009-11/msg00089.html">LuaJIT's approach</a>)</p></li>
+<li><p>better heap optimizations</p></li>
+<li><p>faster deoptimization (which is actually a bit of a mess in the
+meta-approach)</p></li>
+<li><p>and dealing more efficiently with Python frames objects and the
+features of Python's debugging facilities</p></li>
+</ul>
+</div>
+
+
+<div class="section" id="speed-pypy-org">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id34">2010: speed.pypy.org</a></h1>
+<p>In 2010, to make sure that we wouldn't accidentally introduce speed regressions
+while working on the JIT, we implemented infrastructure to build PyPy and run
+our benchmarks nightly. Then, the <a class="reference external" href="https://speed.pypy.org">https://speed.pypy.org</a> website was implemented
+by Miquel Torres, a volunteer. The website shows the changes in benchmark
+performance compared to the previous <em>n</em> days. It didn't sound too important at
+first, but this was (and is) a fantastic tool, and an amazing motivator over the
+next years, to keep continually improving performance.</p>
+<div class="separator" style="clear: both; text-align: center;"><a href="https://4.bp.blogspot.com/-IVkE9-xguTs/W5UZgDbKiCI/AAAAAAAAlFc/pylFf_taalIHiqkR9IAKFR36cfJCaopPwCLcBGAs/s1600/speed.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://4.bp.blogspot.com/-IVkE9-xguTs/W5UZgDbKiCI/AAAAAAAAlFc/pylFf_taalIHiqkR9IAKFR36cfJCaopPwCLcBGAs/s640/speed.png" width="600"></a></div>
+</div>
+
+
+<div class="section" id="continuous-integration">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id35">Continuous Integration</a></h1>
+<p>This actually leads me to something else that I'd say we learned, which is that
+continuous integration is really awesome, and completely transformative to have
+for a project. This is not a particularly surprising insight nowadays in the
+open source community, it's easy to set up continuous integration on Github
+using Travis or some other CI service. But I still see a lot of research
+projects that don't have tests, that don't use CI, so I wanted to mention it
+anyway. As I mentioned earlier in the post, PyPy has a quite serious testing
+culture, with unit tests written for new code, regression tests for all bugs,
+and integration tests using the CPython test suite. Those tests are <a class="reference external" href="https://buildbot.pypy.org/">run
+nightly</a> on a number of architectures and operating systems.</p>
+<p>Having all this kind of careful testing is of course necessary, since PyPy is
+really trying to be a Python implementation that people actually use, not just
+write papers about. But having all this infrastructure also had other benefits,
+for example it allows us to trust newcomers to the project very quickly.
+Basically after your first patch gets accepted, you immediately get commit
+rights to the PyPy repository. If you screw up, the tests (or the code reviews)
+are probably going to catch it, and that reduction to the barrier to
+contributing is just super great.</p>
+<p>This concludes my advertisement for testing in this post.</p>
+</div>
+
+
+<div class="section" id="implementing-python-objects-with-maps">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id36">2010: Implementing Python Objects with Maps</a></h1>
+<p>So, what else did we do in the Eurostars project, apart from adding traditional
+compiler optimizations to the tracing JIT and setting up CI infrastructure?
+Another strand of work, that went on sort of concurrently to the JIT generator
+improvements, were deep rewrites in the Python runtime, and the Python data
+structures. I am going to write about two exemplary ones here, maps and storage strategies.</p>
+<p>The first such rewrite is fairly standard. Python instances are similar to
+Javascript objects, in that you can add arbitrary attributes to them at runtime.
+Originally Python instances were backed by a dictionary in PyPy, but of course
+in practice most instances of the same class have the same set of attribute
+names. Therefore we went and implemented <a class="reference external" href="https://www.pypy.org/posts/2010/11/efficiently-implementing-python-objects.html">Self style maps</a>, which are often
+called <a class="reference external" href="https://richardartoul.github.io/jekyll/update/2015/04/26/hidden-classes.html">hidden classes</a> in the JS world to represent instances instead. This
+has two big benefits, it allows you to generate much better machine code for
+instance attribute access and makes instances use a lot less memory.</p>
+<div class="separator" style="clear: both; text-align: center;"><a href="https://3.bp.blogspot.com/-Mp_vxpQsG5M/TN6__c74O3I/AAAAAAAAAMo/3RcifDuyVWk_PXcxKQJGbTqTMCEjIyPcACPcBGAYYCw/s1600/instancemap.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://3.bp.blogspot.com/-Mp_vxpQsG5M/TN6__c74O3I/AAAAAAAAAMo/3RcifDuyVWk_PXcxKQJGbTqTMCEjIyPcACPcBGAYYCw/s640/instancemap.png" width="600"></a></div>
+</div>
+
+
+<div class="section" id="container-storage-strategies">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id37">2011: Container Storage Strategies</a></h1>
+<p>Another important change in the PyPy runtime was rewriting the Python container
+data structures, such as lists, dictionaries and sets. A fairly straightforward
+observation about how those are used is that in a significant percentage of
+cases they contain type-homogeneous data. As an example it's quite common to
+have lists of only integers, or lists of only strings. So we changed the list,
+dict and set implementations to use something we called <a class="reference external" href="https://www.pypy.org/posts/2011/10/more-compact-lists-with-list-strategies.html">storage strategies</a>. With
+storage strategies these data structures use a more efficient representations if
+they contain only primitives of the same type, such as ints, floats, strings.
+This makes it possible to store the values without boxing them in the underlying
+data structure. Therefore read and write access are much faster for such type
+homogeneous containers. Of course when later another data type gets added to
+such a list, the existing elements need to all be boxed at that point, which is
+expensive. But we did a <a class="reference external" href="https://tratt.net/laurie/research/pubs/html/bolz_diekmann_tratt__storage_strategies_for_collections_in_dynamically_typed_languages/">study</a> and found out that that happens quite rarely in
+practice. A lot of that work was done by Lukas Diekmann.</p>
+<div class="separator" style="clear: both; text-align: center;"><a href="https://4.bp.blogspot.com/-hFXLNQ0Ry0I/TpQohnZHRpI/AAAAAAAAAYY/Yko9C1h1cU08jgighb9RKG3nEEp1ReA8wCPcBGAYYCw/s1600/with_strategies.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://4.bp.blogspot.com/-hFXLNQ0Ry0I/TpQohnZHRpI/AAAAAAAAAYY/Yko9C1h1cU08jgighb9RKG3nEEp1ReA8wCPcBGAYYCw/s640/with_strategies.png" width="600"></a></div>
+</div>
+
+
+<div class="section" id="deep-changes-in-the-runtime-are-necessary">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id38">Deep Changes in the Runtime are Necessary</a></h1>
+<p>These two are just two examples for a number of fairly fundamental changes in
+the PyPy runtime and PyPy data structures, probably the two most important ones,
+but we did many others. That leads me to another thing we learned. If you want
+to generate good code for a complex dynamic language such as Python, it's
+actually not enough at all to have a good code generator and good compiler
+optimizations. That's not going to help you, if your runtime data-structures
+aren't in a shape where it's possible to generate efficient machine code to
+access them.</p>
+<p>Maybe this is well known in the VM and research community. However it's the main
+mistake that in my opinion every other Python JIT effort has made in the last 10
+years, where most projects said something along the lines of "we're not
+changing the existing CPython data structures at all, we'll just let LLVM
+inline enough C code of the runtime and then it will optimize all the overhead
+away". That never works very well.</p>
+</div>
+
+
+<div class="section" id="jit-status-2011">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id39">JIT Status 2011</a></h1>
+<p>So, here we are at the end of the Eurostars project, what's the status of the JIT? Well, it
+seems this meta-tracing stuff really works! We finally started actually
+believing in it, when we reached the point in 2010 where self-hosting PyPy was
+actually <a class="reference external" href="https://www.pypy.org/posts/2010/11/snake-which-bites-its-tail-pypy-jitting.html">faster</a> than bootstrapping the VM on CPython. Speeding up the
+bootstrapping process is something that Psyco never managed at all, so we
+considered this a quite important achievement. At the end of
+Eurostars, we were about 4x faster than CPython on our set of benchmarks.</p>
+</div>
+
+
+<div class="section" id="engineering-and-incremental-progress">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id40">2012-2017: Engineering and Incremental Progress</a></h1>
+<p>2012 the Eurostars project was finished and PyPy reverted yet another time back
+to be an open source project. From then on, we've had a more diverse set of
+sources of funding: we received some crowd funding via the <a class="reference external" href="https://sfconservancy.org/">Software Freedom
+Conservancy</a> and contracts of various sizes from companies to implement various
+specific features, often handled by <a class="reference external" href="https://baroquesoftware.com/">Baroque Software</a>. Over the next couple of
+years
+we revamped various parts of the VM. We improved the GC in <a class="reference external" href="https://www.pypy.org/posts/2013/10/incremental-garbage-collector-in-pypy.html">major</a> ways. We
+optimized the implementation of the JIT compiler to improve <a class="reference external" href="https://www.pypy.org/posts/2015/10/pypy-memory-and-warmup-improvements-2.html">warmup</a> <a class="reference external" href="https://www.pypy.org/posts/2016/04/warmup-improvements-more-efficient.html">times</a>. We
+implemented backends for various CPU architectures (including <a class="reference external" href="https://www.pypy.org/posts/2015/10/powerpc-backend-for-jit.html">PowerPC</a> and
+<a class="reference external" href="https://www.pypy.org/posts/2016/04/pypy-enterprise-edition.html">s390x</a>). We tried to reduce the number of performance cliffs and make the JIT
+useful in a broader set of cases.</p>
+<p>Another strand of work was to push quite significantly to be more
+compatible with CPython, particularly the Python 3 line as well as extension
+module support. Other compatibility improvements we did was making sure that
+virtualenv <a class="reference external" href="https://www.pypy.org/posts/2010/08/using-virtualenv-with-pypy.html">works with PyPy</a>, better support for distutils and setuptools and
+similar improvements. The continually improving performance as well better
+compatibility with the ecosystem tools led to the <a class="reference external" href="https://www.pypy.org/posts/2014/10/couchbase-contribution-to-pypy.html">first few</a> <a class="reference external" href="https://baroquesoftware.com/blog#interview-with-roberto_de_ioris">users</a> of PyPy in
+<a class="reference external" href="https://baroquesoftware.com/blog#magnetic">industry</a>.</p>
+</div>
+<div class="section" id="cpyext">
+
+
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id41">CPyExt</a></h1>
+<p>Another very important strand of work that took a lot of effort in recent years
+was CPyExt. One of the main blockers of PyPy adoption had always been the fact
+that a lot of people need specific C-extension modules at least in some parts of
+their program, and telling them to reimplement everything in Python is just not
+a practical solution. Therefore we worked on CPyExt, an emulation layer  to make
+it possible to run <a class="reference external" href="https://www.pypy.org/posts/2010/04/using-cpython-extension-modules-with.html">CPython C-extension modules</a> in PyPy. Doing that was a very
+<a class="reference external" href="https://www.youtube.com/watch?v=qH0eeh-4XE8">painful process</a>, since the CPython extension API leaks a lot of CPython
+implementation details, so we had to painstakingly emulate all of these details
+to make it possible to run extensions. That this works at all remains completely
+amazing to me! But nowadays CPyExt is even getting quite good, a lot of the big
+numerical libraries such as Numpy and <a class="reference external" href="https://www.pypy.org/posts/2017/10/pypy-v59-released-now-supports-pandas.html">Pandas</a> are now supported (for a while
+we had worked hard on a reimplementation of Numpy called NumPyPy, but
+eventually realized that it would never be complete and useful enough).
+However, calling CPyExt modules from PyPy can still be very slow,
+which makes it impractical for some applications
+that's why we are <a class="reference external" href="https://www.pypy.org/posts/2017/10/cape-of-good-hope-for-pypy-hello-from.html">working</a> on it.</p>
+<p>Not thinking about C-extension module emulation earlier in the project history
+was a pretty bad strategic mistake. It had been clear for a long time that
+getting people to just stop using all their C-extension modules was never going
+to work, despite our efforts to give them alternatives, such as <a class="reference external" href="https://cffi.readthedocs.io/en/latest/">cffi</a>. So we
+should have thought of a story for all the existing C-extension modules earlier
+in the project. Not starting CPyExt earlier was mostly a failure of our
+imagination (and maybe a too high pain threshold): We didn't believe this kind
+of emulation was going to be practical, until somebody <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/commit/0c718ff5a3c1b583179325ab27b0d3b17fa11c0c">went and tried it</a>.</p>
+</div>
+
+
+<div class="section" id="python-3">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id42">Python 3</a></h1>
+<p>Another main
+focus of the last couple of years has been to catch up with the CPython 3 line.
+Originally we had ignored Python 3 for a little bit too long, and were trailing
+several versions behind. In 2016 and 2017 we had a <a class="reference external" href="https://www.pypy.org/posts/2016/08/pypy-gets-funding-from-mozilla-for.html">grant</a> from the Mozilla open
+source support program of $200'000 to be able to catch up with Python 3.5. This
+work is now basically done, and we are starting to target CPython 3.6 and will
+have to look into 3.7 in the near future.</p>
+</div>
+
+
+<div class="section" id="incentives-of-oss-compared-to-academia">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id43">Incentives of OSS compared to Academia</a></h1>
+<p>So, what can be learned from those more recent years? One thing we can observe
+is that a lot of the engineering work we did in that time is not really science
+as such. A lot of the VM techniques we implemented are kind of well known, and
+catching up with new Python features is also not particularly deep researchy
+work. Of course this kind of work is obviously super necessary if you want
+people to use your VM, but it would be very hard to try to get research funding
+for it. PyPy managed quite well over its history to balance phases of more
+research oriented work, and more product oriented ones. But getting this balance
+somewhat right is not easy, and definitely also involves a lot of luck. And, as
+has been discussed a lot, it's actually very hard to find funding for open
+source work, both within and outside of academia.</p>
+</div>
+<div class="section" id="meta-tracing-really-works">
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id44">Meta-Tracing really works!</a></h1>
+<p>Let me end with what, in my opinion, is the main positive technical result of PyPy the
+project. Which is that the whole idea of using a meta-tracing JIT can really
+work! Currently PyPy is about 7 times faster than CPython on a broad set of
+benchmarks. Also, one of the very early motivations for using a meta-jitting
+approach in PyPy, which was to not have to adapt the JIT to new versions of
+CPython proved to work: indeed we didn't have to change anything in the JIT
+infrastructure to support Python 3.</p>
+<p>RPython has also worked and improved performance for a number of other
+languages. Some of these interpreters had wildly different architectures.
+AST-based interpreters, bytecode based, CPU emulators, really inefficient
+high-level ones that allocate continuation objects all the time, and so on. This
+shows that RPython also gives you a lot of freedom in deciding how you want to
+structure the interpreter and that it can be applied to languages of quite
+different paradigms.</p>
+<p>I'll end with a list of the people that have contributed code to PyPy over its
+<a class="reference external" href="https://www.openhub.net/p/pypy">history</a>, more than 350 of them. I'd like to thank all of them and the various
+roles they played. To the next 15 years!</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-Qj9c-uIdhBw/W5UhBd-v07I/AAAAAAAAlFs/hSm6It8N_ngJLyM3tjH0ToNC_6SuvnCaQCLcBGAs/s1600/contributors2.pdf.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://2.bp.blogspot.com/-Qj9c-uIdhBw/W5UhBd-v07I/AAAAAAAAlFs/hSm6It8N_ngJLyM3tjH0ToNC_6SuvnCaQCLcBGAs/s1600/contributors2.pdf.png" width="600"></a></div>
+
+</div>
+<div class="section" id="acknowledgements">
+
+<h1><a class="toc-backref" href="../posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html#id45">Acknowledgements</a></h1>
+<p>A lot of people helped me with this blog post. Tim Felgentreff made me give the
+keynote, which lead me to start collecting the material. Samuele Pedroni
+gave essential early input when I just started planning the talk, and also gave
+feedback on the blog post. Maciej Fijałkowski gave me feedback on the post, in
+particular important insight about the more recent years of the project. Armin
+Rigo discussed the talk slides with me, and provided details about the early
+expectations about the first JIT's hoped-for performance. Antonio Cuni gave
+substantial feedback and many very helpful suggestions for the blog post.
+Michael Hudson-Doyle also fixed a number of mistakes in the post and rightfully
+complained about the lack of mention of the GC. Christian Tismer provided
+access to his copy of early Python-de mailing list posts. Matti Picus pointed
+out a number of things I had forgotten and fixed a huge number of typos and
+awkward English, including my absolute inability to put commas correctly.
+All remaining errors are of course my own.</p>
+</div>
+
+<p><b>update</b>: fixed confusing wording in the maps section.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-48103365717893152">
+        <div class="comment-header">
+          <a name="comment-48103365717893152"></a>
+            <span class="author">Peterino</span> wrote on <span class="date">2018-09-14 00:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>Congratulations on your story, and the fantastic achievements!<br><br>Interestingly, from my personal experience I can't confirm the "PyPy is faster than CPython" claim. Maybe you can help me understand. I'm running a simple set of tests against a subset of Python versions of CPython and against PyPy, for a few years. For what I saw in that time, PyPy - including PyPy3 now - was always the slowest, usually by a factor of 2 compared to the mean of all CPython versions. See the results on Travis, for example: https://travis-ci.org/painless-software/painless-continuous-delivery<br><br>Why is it that way? When is PyPy really faster? Are the benchmarks you run tailored to a specific area of software development?<br><br>And then the final thing I've not yet understood about PyPy: What is the ultimate plan? Should it ever replace CPython, one day? When it proves to be both faster and less laborious to maintain, maybe?</p>
+        </div>
+      </div>
+      <div class="comment comment-3621275076390202314">
+        <div class="comment-header">
+          <a name="comment-3621275076390202314"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2018-09-14 07:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi Peterino! Thanks for testing your project on PyPy! PyPy is often slower on unit tests, as is explained here:<br>https://alexgaynor.net/2013/jul/15/your-tests-are-not-benchmark/<br><br>PyPy is best at CPU bound python code  It will never replace CPython but keep existing as an alternative python implementation.</p>
+        </div>
+      </div>
+      <div class="comment comment-1112825347555059057">
+        <div class="comment-header">
+          <a name="comment-1112825347555059057"></a>
+            <span class="author">MikeABKK</span> wrote on <span class="date">2020-04-18 18:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; ...AST-based interpreters, ... really inefficient high-level ones that allocate continuation objects all the time, and so on.<br><br>Does anyone have any links to these sorts of interpreters? I am interested in both. I'd very much appreciate any references.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2018/06/repeating-matrix-multiplication-8641748742577945875.html" class="u-url">Repeating a Matrix Multiplication Benchmark</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2018/06/repeating-matrix-multiplication-8641748742577945875.html" rel="bookmark">
+            <time class="published dt-published" datetime="2018-06-20T13:36:00Z" itemprop="datePublished" title="2018-06-20 13:36">2018-06-20 13:36</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <article class="markdown-body entry-content"><p>I watched the Hennessy &amp; Patterson's Turing award lecture recently:</p>
+
+
+
+<p>In it, there's a slide comparing the performance of various matrix
+multiplication implementations, using Python (presumably CPython) as a baseline
+and comparing that against various C implementations (I couldn't find the
+linked paper yet):</p>
+
+<a href="https://1.bp.blogspot.com/-Jy_op9XTgH0/Wyo4IWrqNoI/AAAAAAAAh3w/bVrxPRSCHtY3AB8ITqe-QsqBYWCsGY7cQCPcBGAYYCw/s1600/matmul.png"><img border="0" height="360" src="https://1.bp.blogspot.com/-Jy_op9XTgH0/Wyo4IWrqNoI/AAAAAAAAh3w/bVrxPRSCHtY3AB8ITqe-QsqBYWCsGY7cQCPcBGAYYCw/s640/matmul.png" width="640"></a>
+
+<p>I expected the baseline speedup of switching from CPython to C to be
+higher and I also wanted to know what performance PyPy gets, so I did my own
+benchmarks. This is a problem that Python is completely unsuited for, so it
+should give very exaggerated results.</p>
+<p>The usual <strong>disclaimers</strong> apply: All benchmarks are lies, benchmarking of
+synthetic workloads even more so. My implementation is really naive (though I
+did optimize it a little bit to help CPython), don't use any
+of this <a href="https://gist.github.com/cfbolz/caa8299ebd5ab4e1203be1614a64bb54">code</a>
+for anything real. The benchmarks ran on my rather old Intel i5-3230M laptop
+under Ubuntu 17.10.</p>
+<p>With that said, my results were as follows:</p>
+<table>
+<thead><tr>
+<th>Implementation</th>
+<th align="right">time</th>
+<th align="right">speedup over CPython</th>
+<th align="right">speedup over PyPy</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>CPython</td>
+<td align="right">512.588 ± 2.362 s</td>
+<td align="right">1 ×</td>
+<td align="right"></td>
+</tr>
+<tr>
+<td>PyPy</td>
+<td align="right">8.167 ± 0.007 s</td>
+<td align="right">62.761 ±  0.295 ×</td>
+<td align="right">1 ×</td>
+</tr>
+<tr>
+<td>'naive' C</td>
+<td align="right">2.164 ± 0.025 s</td>
+<td align="right">236.817 ±  2.918 ×</td>
+<td align="right">3.773 ± 0.044 ×</td>
+</tr>
+<tr>
+<td>NumPy</td>
+<td align="right">0.171 ± 0.002 s</td>
+<td align="right">2992.286 ± 42.308 ×</td>
+<td align="right">47.678 ± 0.634 ×</td>
+</tr>
+</tbody>
+</table>
+<p>This is running 1500x1500 matrix multiplications with (the same) random matrices. Every
+implementation is run 50 times in a fresh process. The results are averaged,
+the errors are bootstrapped 99% confidence intervals.</p>
+<p>So indeed the speedup that I got of switching from CPython to C is quite a bit higher than
+47x! PyPy is much better than CPython, but of course can't really compete
+against GCC. And then the real professionals (numpy/OpenBLAS) are in a whole
+'nother league. The speedup of the AVX numbers in the slide above is even
+higher than my NumPy numbers, which I assume is the result of my old CPU with
+two cores, vs. the 18 core CPU with AVX support.
+Lesson confirmed: leave matrix multiplication to people who
+actually know what they are doing.</p>
+</article>
+</div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2018/04/how-to-ignore-annoying-cython-warnings-1007636731207810779.html" class="u-url">How to ignore the annoying Cython warnings in PyPy 6.0</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2018/04/how-to-ignore-annoying-cython-warnings-1007636731207810779.html" rel="bookmark">
+            <time class="published dt-published" datetime="2018-04-27T14:10:00Z" itemprop="datePublished" title="2018-04-27 14:10">2018-04-27 14:10</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div>
+</div>
+<div>
+<br class="Apple-interchange-newline">
+If you install any Cython-based module in PyPy 6.0.0, it is very likely that you get a warning like this:</div>
+<pre><code>&gt;&gt;&gt;&gt; import numpy
+/data/extra/pypy/6.0.0/site-packages/numpy/random/__init__.py:99: UserWarning: __builtin__.type size changed, may indicate binary incompatibility. Expected 888, got 408
+  from .mtrand import *
+</code></pre>
+<div>
+The TL;DR version is: the warning is a false alarm, and you can hide it by doing:</div>
+<pre><code>$ pypy -m pip install pypy-fix-cython-warning
+</code></pre>
+<div>
+The package does not contain any module, only a <code>.pth</code> file which installs a warning filter at startup.</div>
+<h2>
+Technical details</h2>
+<div>
+This happens because whenever Cython compiles a pyx file, it generates C code which does a sanity check on the C size of <code>PyType_Type</code>. PyPy versions up to 5.10 are buggy and report the incorrect size, so Cython includes a workaround to compare it with the incorrect value, when on PyPy.</div>
+<div>
+PyPy 6 fixed the bug and now <code>PyType_Type</code> reports the correct size; however, Cython still tries to compare it with the old, buggy value, so it (wrongly) emits the warning.</div>
+<div>
+Cython 0.28.2 includes a fix for it, so that C files generated by it no longer emit the warning. However, most packages are distributed with pre-cythonized C files. For example, <code>numpy-1.14.2.zip</code> include C files which were generated by Cython 0.26.1: if you compile it you still get the warning, even if you locally installed a newer version of Cython.<br><span style="color: #24292e;"><br></span>
+<span style="color: #24292e;">There is not much that we can do on the PyPy side, apart for waiting for all the Cython-based packages to do a new release which include C files generated by a newer Cython.  In the mean time, installing this module will silence the </span><span style="color: #24292e;">warning.</span>
+</div>
+<div>
+<div style="color: #24292e; font-size: 16px;">
+<br>
+</div>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1167293622063210215">
+        <div class="comment-header">
+          <a name="comment-1167293622063210215"></a>
+            <span class="author">Ralf Gommers</span> wrote on <span class="date">2018-04-29 04:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>I've opened an issue to allow easier workarounds via a Cython compile flag: https://github.com/cython/cython/issues/2221</p>
+        </div>
+      </div>
+      <div class="comment comment-4983835138583931329">
+        <div class="comment-header">
+          <a name="comment-4983835138583931329"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2018-05-02 10:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks, although note that this flag would not help much in this case. Even if it were there, the package author would still have to recompile/republish each package in order to get rid of them. And once you do that, the warning vanishes anyway in the case of PyPy :)</p>
+        </div>
+      </div>
+      <div class="comment comment-3683848615379368093">
+        <div class="comment-header">
+          <a name="comment-3683848615379368093"></a>
+            <span class="author">Amaroq Starwind</span> wrote on <span class="date">2018-05-10 19:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>PyPy looks awesome. I can't wait for Python 3.6.5 support and/or a Windows x86-64 version! Though it would be unlikely, Anaconda and/or IdleX support would be awesome too.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2018/04/pypy27-and-pypy35-v60-dual-release-7416552143474607997.html" class="u-url">PyPy2.7 and PyPy3.5 v6.0 dual release</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/mattip.html">mattip</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2018/04/pypy27-and-pypy35-v60-dual-release-7416552143474607997.html" rel="bookmark">
+            <time class="published dt-published" datetime="2018-04-26T01:12:00Z" itemprop="datePublished" title="2018-04-26 01:12">2018-04-26 01:12</time></a>
+            </p>
+                <p class="commentline">2 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+The PyPy team is proud to release both PyPy2.7 v6.0 (an interpreter supporting
+Python 2.7 syntax), and a PyPy3.5 v6.0 (an interpreter supporting Python
+3.5 syntax). The two releases are both based on much the same codebase, thus
+the dual release.<br>
+This release is a feature release following our previous 5.10 incremental
+release in late December 2017. Our C-API compatibility layer <b><code class="docutils literal"><span class="pre">cpyext</span></code></b> is
+now much faster (see the <a class="reference external" href="../posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html">blog post</a>) as well as more complete. We have made
+many other improvements in speed and CPython compatibility. Since the changes
+affect the included python development header files, all c-extension modules must
+be recompiled for this version.<br>
+Until we can work with downstream providers to distribute builds with PyPy, we
+have made packages for some common packages <a class="reference external" href="https://github.com/antocuni/pypy-wheels">available as wheels</a>. You may
+compile yourself using <b><code class="docutils literal"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">--no-build-isolation</span> <span class="pre">&lt;package&gt;</span></code></b>, the
+<b><code class="docutils literal"><span class="pre">no-build-isolation</span></code></b> is currently needed for pip v10.<br>
+First-time python users are often stumped by silly typos and omissions when
+getting started writing code. We have improved our parser to emit more friendly
+<a class="reference external" href="../posts/2018/04/improving-syntaxerror-in-pypy-5733639208090522433.html">syntax errors</a>,  making PyPy not only faster but more friendly.<br>
+The GC now has <a class="reference external" href="https://doc.pypy.org/en/latest/gc_info.html#gc-hooks">hooks</a> to gain more insights into its performance<br>
+The default Matplotlib TkAgg backend now works with PyPy, as do pygame and <a class="reference external" href="https://lazka.github.io/posts/2018-04_pypy-pygobject/index.html">pygobject</a>.<br>
+We updated the <a class="reference external" href="https://cffi.readthedocs.io/">cffi</a> module included in PyPy to version 1.11.5, and the
+<a class="reference external" href="https://cppyy.readthedocs.io/">cppyy</a> backend to 0.6.0. Please use these to wrap your C and C++ code,
+respectively, for a JIT friendly experience.<br>
+As always, this release is 100% compatible with the previous one and fixed
+several issues and bugs raised by the growing community of PyPy users.
+We strongly recommend updating.<br>
+The Windows PyPy3.5 release is still considered beta-quality. There are open
+issues with unicode handling especially around system calls and c-extensions.<br>
+The utf8 branch that changes internal representation of unicode to utf8 did not
+make it into the release, so there is still more goodness coming. We also
+began working on a Python3.6 implementation, help is welcome.<br>
+You can download the v6.0 releases here:<br><blockquote>
+<div>
+<a class="reference external" href="https://pypy.org/download.html">https://pypy.org/download.html</a>
+</div>
+</blockquote>
+We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+direct consulting work.<br>
+We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: <a class="reference external" href="https://doc.pypy.org/en/latest/index.html">PyPy</a>
+and <a class="reference external" href="https://rpython.readthedocs.org/">RPython</a> documentation improvements, tweaking popular <a class="reference external" href="https://doc.pypy.org/en/latest/project-ideas.html#make-more-python-modules-pypy-friendly">modules</a> to run
+on pypy, or general <a class="reference external" href="https://doc.pypy.org/en/latest/project-ideas.html">help</a> with making RPython’s JIT even better.<br><div class="section" id="what-is-pypy">
+<h2 style="text-align: center;">
+What is PyPy?</h2>
+PyPy is a very compliant Python interpreter, almost a drop-in replacement for
+CPython 2.7 and CPython 3.5. It’s fast (<a class="reference external" href="https://speed.pypy.org/">PyPy and CPython 2.7.x</a> performance comparison)
+due to its integrated tracing JIT compiler.<br>
+We also welcome developers of other <a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html">dynamic languages</a> to see what RPython
+can do for them.<br>
+The PyPy release supports:<br><blockquote>
+<div>
+<ul class="simple">
+<li>
+<b>x86</b> machines on most common operating systems
+(Linux 32/64 bits, Mac OS X 64 bits, Windows 32 bits, OpenBSD, FreeBSD)</li>
+<li>newer <b>ARM</b> hardware (ARMv6 or ARMv7, with VFPv3) running Linux,</li>
+<li>big- and little-endian variants of <b>PPC64</b> running Linux,</li>
+<li>
+<b>s390x</b> running Linux</li>
+</ul>
+</div>
+</blockquote>
+</div>
+<div class="section" id="changelog">
+<h2 style="text-align: center;">
+What else is new?</h2>
+<div style="text-align: left;">
+PyPy 5.10 was released in Dec, 2017.</div>
+<div style="text-align: left;">
+There are many incremental improvements to RPython and PyPy, the complete listing is <a href="https://pypy.readthedocs.io/en/latest/release-v6.0.0.html">here</a>.</div>
+<div style="text-align: left;">
+  </div>
+Please update, and continue to help us make PyPy better.<br><br>
+Cheers, The PyPy team</div>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-1683284378691997588">
+        <div class="comment-header">
+          <a name="comment-1683284378691997588"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2018-04-27 10:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>Good news! Gratz PyPy Dev Core people!</p>
+        </div>
+      </div>
+      <div class="comment comment-6395226424061509741">
+        <div class="comment-header">
+          <a name="comment-6395226424061509741"></a>
+            <span class="author">Gaëtan de Menten</span> wrote on <span class="date">2018-05-02 10:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>Congratulations to the team! This is getting more interesting with each release! <br><br>FWIW (not much, I know), I personally need two more things to start using pypy at work:<br>* Windows 64bit support<br>* pypy-specific conda packages for a few popular third-party packages (numpy, pandas, pytables, xlwings, ...)<br><br>If you would do a funding campaign specifically for either of those, I would donate, as I guess many people would.</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2018/04/improving-syntaxerror-in-pypy-5733639208090522433.html" class="u-url">Improving SyntaxError in PyPy</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2018/04/improving-syntaxerror-in-pypy-5733639208090522433.html" rel="bookmark">
+            <time class="published dt-published" datetime="2018-04-10T11:03:00Z" itemprop="datePublished" title="2018-04-10 11:03">2018-04-10 11:03</time></a>
+            </p>
+                <p class="commentline">10 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>For the last year, my halftime job has been to teach non-CS uni students
+to program in Python. While doing that, I have been trying to see what common
+stumbling blocks exist for novice programmers. There are many
+things that could be said here, but a common theme that emerges is
+hard-to-understand error messages. One source of such error messages,
+particularly when starting out, is <tt class="docutils literal">SyntaxErrors</tt>.</p>
+<p>PyPy's parser (mostly following the architecture of CPython) uses a
+regular-expression-based tokenizer with some cleverness to deal with
+indentation, and a simple LR(1) parser. Both of these components obviously
+produce errors for invalid syntax, but the messages are not very helpful. Often,
+the message is just "invalid syntax", without any hint of what exactly is wrong.
+In the last couple of weeks I have invested a little bit of effort to make them a
+tiny bit better. They will be part of the upcoming PyPy 6.0 release. Here are
+some examples of what changed.</p>
+<div class="section" id="missing-characters">
+<h1>Missing Characters</h1>
+<p>The first class of errors occurs when a token is missing, often there is only one
+valid token that the parser expects. This happens most commonly by leaving out
+the ':' after control flow statements (which is the syntax error I personally
+still make at least a few times a day). In such situations, the parser will now
+tell you which character it expected:</p>
+<pre class="code pycon literal-block">
+<span class="generic output">&gt;&gt;&gt;&gt; # before
+&gt;&gt;&gt;&gt; if 1
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">if</span> <span class="literal number integer">1</span>
+       <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # after
+&gt;&gt;&gt;&gt; if 1
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">if</span> <span class="literal number integer">1</span>
+       <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax (expected ':')</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+<p>Another example of this feature:</p>
+<pre class="code pycon literal-block">
+<span class="generic output">&gt;&gt;&gt;&gt; # before
+&gt;&gt;&gt;&gt; def f:
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">def</span> <span class="name function">f</span><span class="punctuation">:</span>
+        <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # after
+&gt;&gt;&gt;&gt; def f:
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="keyword">def</span> <span class="name function">f</span><span class="punctuation">:</span>
+         <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax (expected '(')</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+</div>
+<div class="section" id="parentheses">
+<h1>Parentheses</h1>
+<p>Another source of errors are unmatched parentheses. Here, PyPy has always had
+slightly better error messages than CPython:</p>
+<pre class="code pycon literal-block">
+<span class="comment single"></span><span class="generic prompt">&gt;&gt;&gt; </span><span class="comment single"># CPython</span>
+<span class="generic prompt">&gt;&gt;&gt; </span><span class="punctuation">)</span>
+<span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">)</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # PyPy
+</span><span class="punctuation"></span><span class="generic prompt">&gt;&gt;&gt; </span><span class="punctuation">)</span>
+<span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">)</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">unmatched ')'</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+<p>The same is true for parentheses that are never closed (the call to <tt class="docutils literal">eval</tt> is
+needed to get the error, otherwise the repl will just wait for more input):</p>
+<pre class="code pycon literal-block">
+<span class="comment single"></span><span class="generic prompt">&gt;&gt;&gt; </span><span class="comment single"># CPython</span>
+<span class="generic prompt">&gt;&gt;&gt; </span><span class="name builtin">eval</span><span class="punctuation">(</span><span class="literal string single">'('</span><span class="punctuation">)</span>
+<span class="generic traceback"></span>  File <span class="name builtin">"&lt;string&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">(</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">unexpected EOF while parsing</span>
+<span class="generic output">&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # PyPy
+&gt;&gt;&gt;&gt; eval('(')
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;string&gt;"</span>, line <span class="literal number">1</span>
+    <span class="punctuation">(</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">parenthesis is never closed</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+<p>What I have now improved is the case of parentheses that are matched wrongly:</p>
+<pre class="code pycon literal-block">
+<span class="generic output">&gt;&gt;&gt;&gt; # before
+&gt;&gt;&gt;&gt; (1,
+.... 2,
+.... ]
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">3</span>
+    <span class="punctuation">]</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">invalid syntax</span>
+<span class="generic output">&gt;&gt;&gt;&gt;
+
+&gt;&gt;&gt;&gt; # after
+&gt;&gt;&gt;&gt; (1,
+.... 2,
+.... ]
+</span><span class="generic traceback"></span>  File <span class="name builtin">"&lt;stdin&gt;"</span>, line <span class="literal number">3</span>
+    <span class="punctuation">]</span>
+    <span class="operator">^</span>
+<span class="generic error">SyntaxError</span>: <span class="name">closing parenthesis ']' does not match opening parenthesis '(' on line 1</span>
+<span class="generic output">&gt;&gt;&gt;&gt;</span>
+</pre>
+</div>
+<div class="section" id="conclusion">
+<h1>Conclusion</h1>
+<p>Obviously these are just some very simple cases, and there is still a lot of
+room for improvement (one huge problem is that only a single <tt class="docutils literal">SyntaxError</tt> is
+ever shown per parse attempt, but fixing that is rather hard).</p>
+<p>If you have a favorite unhelpful SyntaxError message you love to hate, please
+tell us in the comments and we might try to improve it. Other kinds of
+non-informative error messages are also always welcome!</p>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-2458219155505123971">
+        <div class="comment-header">
+          <a name="comment-2458219155505123971"></a>
+            <span class="author">stuaxo</span> wrote on <span class="date">2018-04-10 11:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is great, I've been thinking along these lines when it comes to python errors for a while.<br><br>This kind of improvements would be great for the long-suffering python web developers too.</p>
+        </div>
+      </div>
+      <div class="comment comment-4011598630142756327">
+        <div class="comment-header">
+          <a name="comment-4011598630142756327"></a>
+            <span class="author">stuaxo</span> wrote on <span class="date">2018-04-10 11:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>Despite my typo-ridden comment, English is my first language :(</p>
+        </div>
+      </div>
+      <div class="comment comment-4795341729166523752">
+        <div class="comment-header">
+          <a name="comment-4795341729166523752"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2018-04-10 16:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>I've seen people struggle with lambda.<br><br>&gt;&gt;&gt; lambda x: <br>  File "", line 1<br>    lambda x: <br>             ^<br>SyntaxError: invalid syntax<br></p>
+        </div>
+      </div>
+      <div class="comment comment-4591679718228283061">
+        <div class="comment-header">
+          <a name="comment-4591679718228283061"></a>
+            <span class="author">smurfix</span> wrote on <span class="date">2018-04-10 16:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>Upon a syntax error, you might want to scan forward until the next line with the current(ly-broken) statement's indent (or maybe until there's a dedent to below that level (except when already at top level, obviously)), then resume parsing.</p>
+        </div>
+      </div>
+      <div class="comment comment-5254338321985139805">
+        <div class="comment-header">
+          <a name="comment-5254338321985139805"></a>
+            <span class="author">André Roberge</span> wrote on <span class="date">2018-04-11 00:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>I applaud this initiative. This is something that I have attempted to do on https://reeborg.ca/reeborg.html (only for code run in the the editor, not for the repl). I also tried to provide translations when using languages other than English.  I think it would be great if you could somehow provide a hook to easily add translations.</p>
+        </div>
+      </div>
+      <div class="comment comment-5599091270368814656">
+        <div class="comment-header">
+          <a name="comment-5599091270368814656"></a>
+            <span class="author">Benjamin</span> wrote on <span class="date">2018-04-11 07:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>Missing commas between elements in data structures is probably my most common syntax error, especially when dealing with nested data structures or structures split across multiple lines. And while they're something I can recognize very easily, the actual error message isn't especially helpful, particularly when the next element after a missing comma is on the following line.</p>
+        </div>
+      </div>
+      <div class="comment comment-3553256019399345021">
+        <div class="comment-header">
+          <a name="comment-3553256019399345021"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2018-04-11 14:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks for the explanation. It all makes sense now that I know Python uses regular expressions in its parser. When Idle points to a random space character within the indentation, off to the left of a code block implemented in compliance with every recognized convention, boldly proclaiming "syntax error", I know precisely which vestigial anti-Pythonic Bell Labs holdover to resent. Again.</p>
+        </div>
+      </div>
+      <div class="comment comment-2432746306337813591">
+        <div class="comment-header">
+          <a name="comment-2432746306337813591"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2018-04-12 20:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>Everybody thanks for the suggestions! I've added these to my collections of things I might want to fix.<br><br>@smurfix there is a huge amount of scientific papers on approaches how to do stuff like that, I am currently working through them (slowly)<br><br>@Unknown do you have an example for this behaviour?</p>
+        </div>
+      </div>
+      <div class="comment comment-188104717791255547">
+        <div class="comment-header">
+          <a name="comment-188104717791255547"></a>
+            <span class="author">Noah F. San Tsorvutz</span> wrote on <span class="date">2018-04-13 19:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>Sorry for the 'unknown' status ... In fact, it happened again today. I can send a screenshot, if that will help, confirming the presence of a red highlighted space, among many seemingly non-offending spaces, within the left margin indentation. Let me see if it is still happening when I try to run that code ... No, that exact SNAFU has moved on, but I now have an example of a syntax error being highlighted within a comment. Is that interesting?<br></p>
+        </div>
+      </div>
+      <div class="comment comment-7692426643266392609">
+        <div class="comment-header">
+          <a name="comment-7692426643266392609"></a>
+            <span class="author">Amaroq Starwind</span> wrote on <span class="date">2018-05-10 19:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>I would love to see this get updated to Python 3.6.5. I'm currently using that for my programs, and even after looking at the changelogs between Python versions, I'm not sure what I'd lose by moving down to 3.5.3 so that I could use PyPy.<br><br>I'm also curious about things like IdleX and Anaconda. Would those be, hypothetically speaking, mergeable with PyPy?</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2018/03/leysin-winter-sprint-2018-review-3988364248531980164.html" class="u-url">Leysin Winter Sprint 2018: review</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2018/03/leysin-winter-sprint-2018-review-3988364248531980164.html" rel="bookmark">
+            <time class="published dt-published" datetime="2018-03-27T07:54:00Z" itemprop="datePublished" title="2018-03-27 07:54">2018-03-27 07:54</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <p>Like every year, the PyPy developers and a couple of newcomers
+      gathered in Leysin, Switzerland, to share their thoughts and
+      contribute to the development of PyPy.</p>
+    <p>As always, we had interesting discussions about how we could
+      improve PyPy, to make it the first choice for even more
+      developers. We also made some progress with current issues, like
+      compatibility with Python 3.6 and improving the performance of
+      CPython extension modules, where we fixed a lot of bugs and gained
+      new insights about where and how we could tweak PyPy.<br></p>
+    <p> We were very happy about the number of new people who joined us
+      for the first time, and hope they enjoyed it as much as everyone
+      else. <br></p>
+    <h3>Topics</h3>
+    We worked on the following topics (and more!):<br><ul>
+<li>Introductions for newcomers</li>
+      <li>Python 3.5 and 3.6 improvements</li>
+      <li>CPyExt performance improvements and GC implementation<br>
+</li>
+      <li>JIT: guard-compatible implementation<br>
+</li>
+      <li>Pygame performance improvements</li>
+      <li>Unicode/UTF8 implementation<br>
+</li>
+      <li>CFFI tutorial/overview rewrite
+      </li>
+      <li>py3 test runners refactoring</li>
+      <li>RevDB improvements<br>
+</li>
+    </ul>
+    The weather was really fine for most of the week, with only
+    occasional snow and fog. We started our days with a short (and
+    sometimes not so short) planning session and enjoyed our dinners in
+    the great restaurants in the area. Some of us even started earlier
+    and continued till late night. It was a relaxed, but also very
+    productive atmosphere. On our break day on Wednesday, we enjoyed the
+    great conditions and went skiing and hiking.
+    <h3>Attendees</h3>
+    <ul>
+<li>Arianna</li>
+      <li>Jean-Daniel<br>
+</li>
+      <li>Stefan Beyer</li>
+      <li>Floris Bruynooghe<br>
+</li>
+      <li>Antonio Cuni</li>
+      <li>René Dudfield</li>
+      <li>Manuel Jacob</li>
+      <li>Ronan Lamy</li>
+      <li>Remi Meier</li>
+      <li>Matti Picus<br>
+</li>
+      <li>Armin Rigo</li>
+      <li>Alexander Schremmer<br>
+</li>
+    </ul>
+    Leysin is easily reachable by Geneva Airport, so feel free to join
+    us next time!<br><br><br><p>Cheers,<br>
+      Stefan<br></p>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2018/01/pypy-5101-bugfix-release-for-python-35-8485250762789380657.html" class="u-url">PyPy 5.10.1 bugfix release for python 3.5</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/mattip.html">mattip</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2018/01/pypy-5101-bugfix-release-for-python-35-8485250762789380657.html" rel="bookmark">
+            <time class="published dt-published" datetime="2018-01-13T18:01:00Z" itemprop="datePublished" title="2018-01-13 18:01">2018-01-13 18:01</time></a>
+            </p>
+            
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+We have released a bug fix PyPy3.5-v5.10.1
+due to the following issues:<br><blockquote>
+<div>
+<ul class="simple">
+<li>Fix <code class="docutils literal"><span class="pre">time.sleep(float('nan'))</span></code> which would hang on Windows</li>
+<li>Fix missing <code class="docutils literal"><span class="pre">errno</span></code> constants on Windows</li>
+<li>Fix issue <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues/2718">2718</a> for the REPL on Linux</li>
+<li>Fix an overflow in converting int secs to nanosecs (issue <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues/2717">2717</a> )</li>
+<li>Using kwarg <span><code class="docutils literal"><span class="pre">'flag'</span></code></span> to <span><code class="docutils literal"><span class="pre">os.setxattr</span></code></span> had no effect</li>
+<li>Fix the winreg module for unicode entries in the registry on Windows</li>
+</ul>
+</div>
+</blockquote>
+Note that many of these fixes are for our new beta version of PyPy3.5 on Windows. There may be more unicode problems in the Windows beta version,
+especially concerning directory- and file-names with non-ASCII
+characters.<br><br>
+On macOS, we recommend you wait for the
+<a class="reference external" href="https://brewformulas.org/Pypy">Homebrew</a> package to prevent issues with third-party packages. For other supported platforms our <a href="https://bitbucket.org/pypy/pypy/downloads">downloads</a> are available now.<br>
+Thanks to those who reported the issues.<br><br><div class="section" id="what-is-pypy">
+<h2>
+What is PyPy?</h2>
+PyPy is a very compliant Python interpreter, almost a drop-in replacement for
+CPython 2.7 and CPython 3.5. It’s fast (<a class="reference external" href="https://speed.pypy.org/">PyPy and CPython 2.7.x</a> performance comparison)
+due to its integrated tracing JIT compiler.<br>
+
+We also welcome developers of other <a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html">dynamic languages</a> to see what RPython
+can do for them.<br>
+
+This PyPy 3.5 release supports:<br><blockquote>
+<div>
+<ul class="simple">
+<li>
+<strong>x86</strong> machines on most common operating systems
+(Linux 32/64 bits, macOS 64 bits, Windows 32 bits, OpenBSD, FreeBSD)</li>
+<li>newer <strong>ARM</strong> hardware (ARMv6 or ARMv7, with VFPv3) running Linux,</li>
+<li>big- and little-endian variants of <strong>PPC64</strong> running Linux,</li>
+<li>
+<strong>s390x</strong> running Linux</li>
+</ul>
+</div>
+</blockquote>
+Please update, and continue to help us make PyPy better.<br>
+
+Cheers<br>
+
+The PyPy Team<br>
+</div>
+</div>
+    </div>
+    </article><article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2018/01/leysin-winter-sprint-17-24-march-2018-7141092581585849418.html" class="u-url">Leysin Winter sprint: 17-24 March 2018</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2018/01/leysin-winter-sprint-17-24-march-2018-7141092581585849418.html" rel="bookmark">
+            <time class="published dt-published" datetime="2018-01-08T10:33:00Z" itemprop="datePublished" title="2018-01-08 10:33">2018-01-08 10:33</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <table border="0"><tr>
+<td>
+
+<p>The next PyPy sprint will be in Leysin, Switzerland, for the thirteenth
+time.  This is a fully public sprint: newcomers and topics other than
+those proposed below are welcome.</p>
+
+<p>(Note: this sprint is independent from the suggested April-May sprint in
+Poland.)</p>
+
+<h3>Goals and topics of the sprint</h3>
+
+<p>The list of topics is open, but here is our current list:</p>
+
+</td>
+<td>
+<div class="separator" style="clear: both; text-align: center;"><a href="https://4.bp.blogspot.com/-HQ8S2DcTato/WIc2XXEQP9I/AAAAAAAAAQw/7BNVgaMg-jcaMzVaAc2JD5sMgu-Xn5DeACLcB/s1600/chalet1_004.jpg" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="240" src="https://4.bp.blogspot.com/-HQ8S2DcTato/WIc2XXEQP9I/AAAAAAAAAQw/7BNVgaMg-jcaMzVaAc2JD5sMgu-Xn5DeACLcB/s320/chalet1_004.jpg" width="320"></a></div>
+</td>
+</tr></table>
+<ul>
+<li> cffi tutorial/overview rewrite
+</li>
+<li> py3 test runners are too complicated
+</li>
+<li> make win32 builds green
+</li>
+<li> make packaging more like cpython/portable builds
+</li>
+<li> get CI builders for PyPy into mainstream projects (Numpy, Scipy, lxml, uwsgi)
+</li>
+<li> get more of scientific stack working (tensorflow?)
+</li>
+<li> cpyext performance improvements
+</li>
+<li> General 3.5 and 3.6 improvements
+</li>
+<li> JIT topics: guard-compatible, and the subsequent research project to save and reuse traces across processes
+</li>
+<li> finish unicode-utf8
+</li>
+<li> update www.pypy.org, speed.pypy.org (web devs needed)
+</li>
+</ul>
+<p>As usual, the main side goal is to have fun in winter sports :-)
+We can take a day off (for ski or anything else).</p>
+
+<h3>Exact times</h3>
+
+<p>Work days: starting March 18th (~noon), ending March 24th (~noon).</p>
+
+<p>Please see <a href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/extradoc/sprintinfo/leysin-winter-2018/announcement.txt">announcement.txt</a> for more information.</p>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-7712849453715645325">
+        <div class="comment-header">
+          <a name="comment-7712849453715645325"></a>
+            <span class="author">Евгений Демченко</span> wrote on <span class="date">2018-01-09 05:49</span>:
+        </div>
+        <div class="comment-content">
+          <p>Can we expect a python 3.6 support released anytime soon? Thanks!</p>
+        </div>
+      </div>
+      <div class="comment comment-3977695368080246838">
+        <div class="comment-header">
+          <a name="comment-3977695368080246838"></a>
+            <span class="author">Oscar Smith</span> wrote on <span class="date">2018-01-13 01:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>It would be nice to have tensorflow working on pypy, even if there aren't many real world cases where this is useful, as most tensorflow does not use python for much heavy lifting.</p>
+        </div>
+      </div>
+      <div class="comment comment-9162920828019705620">
+        <div class="comment-header">
+          <a name="comment-9162920828019705620"></a>
+            <span class="author">Eric van Riet Paap</span> wrote on <span class="date">2018-02-09 22:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi PyPy-team!<br><br>While I was checking out a reinforcement learning repo I thought it would benefit a lot from have the games it was learning in something faster that CPython. So I had another look at PyPy. Tensorflow I could not install so I am really happy that this is on the agenda for the next sprint! <br><br>good luck and have fun!<br><br>Eric</p>
+        </div>
+      </div>
+         </div>
+
+    <article class="h-entry post-text" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title"><a href="../posts/2017/12/pypy27-and-pypy35-v510-dual-release-3223396318213306071.html" class="u-url">PyPy2.7 and PyPy3.5 v5.10 dual release</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn" itemprop="author">
+                <a href="../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="../posts/2017/12/pypy27-and-pypy35-v510-dual-release-3223396318213306071.html" rel="bookmark">
+            <time class="published dt-published" datetime="2017-12-25T18:51:00Z" itemprop="datePublished" title="2017-12-25 18:51">2017-12-25 18:51</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+        </div>
+    </header><div class="p-summary entry-summary">
+    <div dir="ltr" style="text-align: left;">
+<p>The PyPy team is proud to release both PyPy2.7 v5.10 (an interpreter supporting
+Python 2.7 syntax), and a final PyPy3.5 v5.10 (an interpreter for Python
+3.5 syntax). The two releases are both based on much the same codebase, thus
+the dual release.</p>
+<p>This release is an incremental release with very few new features, the main
+feature being the final PyPy3.5 release that works on linux and OS X with beta
+windows support. It also includes fixes for <a class="reference external" href="https://vmprof.readthedocs.io">vmprof</a> cooperation with greenlets.</p>
+<p>Compared to 5.9, the 5.10 release contains mostly bugfixes and small improvements.
+We have in the pipeline big new features coming for PyPy 6.0 that did not make
+the release cut and should be available within the next couple months.</p>
+<p>As always, this release is 100% compatible with the previous one and fixed
+several issues and bugs raised by the growing community of PyPy users.
+As always, we strongly recommend updating.</p>
+<p>There are quite a few important changes that are in the pipeline that did not
+make it into the 5.10 release. Most important are speed improvements to cpyext
+(which will make numpy and pandas a bit faster) and utf8 branch that changes
+internal representation of unicode to utf8, which should help especially the
+Python 3.5 version of PyPy.</p>
+<p>This release concludes the Mozilla Open Source <a class="reference external" href="../posts/2016/08/pypy-gets-funding-from-mozilla-for-5569307998787871200.html">grant</a> for having a compatible
+PyPy 3.5 release and we're very grateful for that.  Of course, we will continue
+to improve PyPy 3.5 and probably move to 3.6 during the course of 2018.</p>
+<p>You can download the v5.10 releases here:</p>
+<blockquote>
+<a class="reference external" href="https://pypy.org/download.html">https://pypy.org/download.html</a>
+</blockquote>
+<p>We would like to thank our donors for the continued support of the PyPy
+project.</p>
+<p>We would also like to thank our contributors and
+encourage new people to join the project. PyPy has many
+layers and we need help with all of them: <a class="reference external" href="../posts/2017/12/index.html">PyPy</a> and <a class="reference external" href="https://rpython.readthedocs.org">RPython</a> documentation
+improvements, tweaking popular <a class="reference external" href="../posts/2017/12/project-ideas.html#make-more-python-modules-pypy-friendly">modules</a> to run on pypy, or general <a class="reference external" href="../posts/2017/12/project-ideas.html">help</a>
+with making RPython's JIT even better.</p>
+<div class="section" id="what-is-pypy">
+<h1>What is PyPy?</h1>
+<p>PyPy is a very compliant Python interpreter, almost a drop-in replacement for
+CPython 2.7 and CPython 3.5. It's fast (<a class="reference external" href="https://speed.pypy.org">PyPy and CPython 2.7.x</a> performance comparison)
+due to its integrated tracing JIT compiler.</p>
+<p>We also welcome developers of other <a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html">dynamic languages</a> to see what RPython
+can do for them.</p>
+<p>The PyPy release supports:</p>
+<blockquote>
+<ul class="simple">
+<li>
+<strong>x86</strong> machines on most common operating systems
+(Linux 32/64 bits, Mac OS X 64 bits, Windows 32 bits, OpenBSD, FreeBSD)</li>
+<li>newer <strong>ARM</strong> hardware (ARMv6 or ARMv7, with VFPv3) running Linux,</li>
+<li>big- and little-endian variants of <strong>PPC64</strong> running Linux,</li>
+<li>
+<strong>s390x</strong> running Linux</li>
+</ul>
+</blockquote>
+</div>
+<div class="section" id="changelog">
+<h1>Changelog</h1>
+<ul class="simple">
+<li>improve ssl handling on windows for pypy3 (makes pip work)</li>
+<li>improve unicode handling in various error reporters</li>
+<li>fix vmprof cooperation with greenlets</li>
+<li>fix some things in cpyext</li>
+<li>test and document the cmp(nan, nan) == 0 behaviour</li>
+<li>don't crash when calling sleep with inf or nan</li>
+<li>fix bugs in _io module</li>
+<li>inspect.isbuiltin() now returns True for functions implemented in C</li>
+<li>allow the sequences future-import, docstring, future-import for CPython bug compatibility</li>
+<li>Issue #2699: non-ascii messages in warnings</li>
+<li>posix.lockf</li>
+<li>fixes for FreeBSD platform</li>
+<li>add .debug files, so builds contain debugging info, instead of being stripped</li>
+<li>improvements to cppyy</li>
+<li>issue #2677 copy pure c PyBuffer_{From,To}Contiguous from cpython</li>
+<li>issue #2682, split firstword on any whitespace in sqlite3</li>
+<li>ctypes: allow ptr[0] = foo when ptr is a pointer to struct</li>
+<li>matplotlib will work with tkagg backend once <a class="reference external" href="https://github.com/matplotlib/matplotlib/pull/9356">matplotlib pr #9356</a> is merged</li>
+<li>improvements to utf32 surrogate handling</li>
+<li>cffi version bump to 1.11.2</li>
+</ul>
+Maciej Fijalkowski, Matti Picus and the whole PyPy team
+</div>
+<br>
+</div>
+    </div>
+    </article><div class="comment-level comment-level-1">
+      <div class="comment comment-4216834904288848638">
+        <div class="comment-header">
+          <a name="comment-4216834904288848638"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-12-25 21:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks a lot! What a christmas present!</p>
+        </div>
+      </div>
+      <div class="comment comment-631448298331806547">
+        <div class="comment-header">
+          <a name="comment-631448298331806547"></a>
+            <span class="author">stuaxo</span> wrote on <span class="date">2017-12-25 23:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great work and happy Xmas :)</p>
+        </div>
+      </div>
+      <div class="comment comment-3887344721008409665">
+        <div class="comment-header">
+          <a name="comment-3887344721008409665"></a>
+            <span class="author">Joce</span> wrote on <span class="date">2017-12-26 04:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks for the Christmas present of a new release!<br><br>I'm having issues with the the official builds of 5.10 for macOS x64 (the "high sierra" version for pypy3):<br><br>With pypy3: dyld: Library not loaded: /usr/local/opt/libffi/lib/libffi.6.dylib<br>  Referenced from: /Users/joce/devtools/python/pypy3-v5.10.0-osx64/bin/libpypy3-c.dylib<br>  Reason: image not found<br>Abort trap: 6<br><br>With pypy2: dyld: Library not loaded: /usr/local/opt/openssl/lib/libssl.1.0.0.dylib<br>  Referenced from: /Users/joce/devtools/python/pypy2-v5.10.0-osx64/bin/libpypy-c.dylib<br>  Reason: image not found<br>Abort trap: 6<br><br>Given that I have no homebrew or macports installed (and never have on that fresh-ish install of high sierra), /usr/local/opt/ doesn't even exist, so it's not an appropriate folder for the linker to serach in.</p>
+        </div>
+      </div>
+      <div class="comment comment-7597993943355100984">
+        <div class="comment-header">
+          <a name="comment-7597993943355100984"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2018-01-05 21:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>Excellent work! I look forward to using PyPy with my 3.5-compatible applications!</p>
+        </div>
+      </div>
+         </div>
+
+</div>
+</div>
+<div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div></div>
+</main>
+</div>
+<div style="clear: both; width: 75%; margin: 1em auto;">
+        <nav class="postindexpager"><ul class="pager">
+<li class="previous">
+                <a href="index-39.html" rel="prev">Newer posts</a>
+            </li>
+            <li class="next">
+                <a href="index-37.html" rel="next">Older posts</a>
+            </li>
+        </ul></nav>
+</div>
+         
+                 <footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../assets/js/styles.js"></script></footer>
+</body>
+</html>

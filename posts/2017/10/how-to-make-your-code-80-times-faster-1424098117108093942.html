@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How to make your code 80 times faster | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2017/10/how-to-make-your-code-80-times-faster-1424098117108093942.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Antonio Cuni">
+<link rel="prev" href="cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html" title="(Cape of) Good Hope for PyPy" type="text/html">
+<link rel="next" href="../12/pypy27-and-pypy35-v510-dual-release-3223396318213306071.html" title="PyPy2.7 and PyPy3.5 v5.10 dual release" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="How to make your code 80 times faster">
+<meta property="og:url" content="https://www.pypy.org/posts/2017/10/how-to-make-your-code-80-times-faster-1424098117108093942.html">
+<meta property="og:description" content="I often hear people who are happy because PyPy makes their code 2 times faster
+or so. Here is a short personal story which shows PyPy can go well beyond
+that.
+
+DISCLAIMER: this is not a silver bullet ">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2017-10-30T10:15:00Z">
+<meta property="article:tag" content="jit">
+<meta property="article:tag" content="profiling">
+<meta property="article:tag" content="speed">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">How to make your code 80 times faster</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2017-10-30T10:15:00Z" itemprop="datePublished" title="2017-10-30 10:15">2017-10-30 10:15</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+                <p class="commentline">            <a href="how-to-make-your-code-80-times-faster-1424098117108093942.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <div class="document" id="how-to-make-your-code-80-times-faster">
+I often hear people who are happy because PyPy makes their code 2 times faster
+or so. Here is a short personal story which shows PyPy can go well beyond
+that.<br><br><strong>DISCLAIMER</strong>: this is not a silver bullet or a general recipe: it worked in
+this particular case, it might not work so well in other cases. But I think it
+is still an interesting technique. Moreover, the various steps and
+implementations are showed in the same order as I tried them during the
+development, so it is a real-life example of how to proceed when optimizing
+for PyPy.<br><br>
+Some months ago I <a class="reference external" href="https://github.com/antocuni/evolvingcopter">played a bit</a> with evolutionary algorithms: the ambitious
+plan was to automatically evolve a logic which could control a (simulated)
+quadcopter, i.e. a <a class="reference external" href="https://en.wikipedia.org/wiki/PID_controller">PID controller</a> (<strong>spoiler</strong>: it doesn't fly).<br><br>
+The idea is to have an initial population of random creatures: at each
+generation, the ones with the best fitness survive and reproduce with small,
+random variations.<br><br>
+However, for the scope of this post, the actual task at hand is not so
+important, so let's jump straight to the code. To drive the quadcopter, a
+<tt class="docutils literal">Creature</tt> has a <tt class="docutils literal">run_step</tt> method which runs at each <tt class="docutils literal">delta_t</tt> (<a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/creature.py">full
+code</a>):<br><pre class="code python literal-block"><span class="keyword">class</span> <span class="name class">Creature</span><span class="punctuation">(</span><span class="name builtin">object</span><span class="punctuation">):</span>
+    <span class="name">INPUTS</span> <span class="operator">=</span> <span class="literal number integer">2</span>  <span class="comment single"># z_setpoint, current z position</span>
+    <span class="name">OUTPUTS</span> <span class="operator">=</span> <span class="literal number integer">1</span> <span class="comment single"># PWM for all 4 motors</span>
+    <span class="name">STATE_VARS</span> <span class="operator">=</span> <span class="literal number integer">1</span>
+    <span class="operator">...</span>
+
+    <span class="keyword">def</span> <span class="name function">run_step</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="name">inputs</span><span class="punctuation">):</span>
+        <span class="comment single"># state: [state_vars ... inputs]</span>
+        <span class="comment single"># out_values: [state_vars, ... outputs]</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">state</span><span class="punctuation">[</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">:]</span> <span class="operator">=</span> <span class="name">inputs</span>
+        <span class="name">out_values</span> <span class="operator">=</span> <span class="name">np</span><span class="operator">.</span><span class="name">dot</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">matrix</span><span class="punctuation">,</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">state</span><span class="punctuation">)</span> <span class="operator">+</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">constant</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">state</span><span class="punctuation">[:</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="name">out_values</span><span class="punctuation">[:</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">]</span>
+        <span class="name">outputs</span> <span class="operator">=</span> <span class="name">out_values</span><span class="punctuation">[</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">STATE_VARS</span><span class="punctuation">:]</span>
+        <span class="keyword">return</span> <span class="name">outputs</span>
+</pre>
+<ul class="simple">
+<li>
+<tt class="docutils literal">inputs</tt> is a numpy array containing the desired setpoint and the current
+position on the Z axis;</li>
+<li>
+<tt class="docutils literal">outputs</tt> is a numpy array containing the thrust to give to the motors. To
+start easy, all the 4 motors are constrained to have the same thrust, so
+that the quadcopter only travels up and down the Z axis;</li>
+<li>
+<tt class="docutils literal">self.state</tt> contains arbitrary values of unknown size which are passed from
+one step to the next;</li>
+<li>
+<tt class="docutils literal">self.matrix</tt> and <tt class="docutils literal">self.constant</tt> contains the actual logic. By putting
+the "right" values there, in theory we could get a perfectly tuned PID
+controller. These are randomly mutated between generations.</li>
+</ul>
+<tt class="docutils literal">run_step</tt> is called at 100Hz (in the virtual time frame of the simulation). At each
+generation, we test 500 creatures for a total of 12 virtual seconds each. So,
+we have a total of 600,000 executions of <tt class="docutils literal">run_step</tt> at each generation.<br><br>
+At first, I simply tried to run this code on CPython; here is the result:<br><pre class="code literal-block">$ python -m ev.main
+Generation   1: ... [population = 500]  [12.06 secs]
+Generation   2: ... [population = 500]  [6.13 secs]
+Generation   3: ... [population = 500]  [6.11 secs]
+Generation   4: ... [population = 500]  [6.09 secs]
+Generation   5: ... [population = 500]  [6.18 secs]
+Generation   6: ... [population = 500]  [6.26 secs]
+</pre>
+Which means ~6.15 seconds/generation, excluding the first.<br><br>
+Then I tried with PyPy 5.9:<br><pre class="code literal-block">$ pypy -m ev.main
+Generation   1: ... [population = 500]  [63.90 secs]
+Generation   2: ... [population = 500]  [33.92 secs]
+Generation   3: ... [population = 500]  [34.21 secs]
+Generation   4: ... [population = 500]  [33.75 secs]
+</pre>
+Ouch! We are ~5.5x slower than CPython. This was kind of expected: numpy is
+based on cpyext, which is infamously slow.  (Actually, <a class="reference external" href="https://pypy.org/posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html">we are working on
+that</a> and on the <tt class="docutils literal"><span class="pre">cpyext-avoid-roundtrip</span></tt> branch we are already faster than
+CPython, but this will be the subject of another blog post.)<br><br>
+So, let's try to avoid cpyext. The first obvious step is to use <a class="reference external" href="https://doc.pypy.org/en/latest/faq.html#what-about-numpy-numpypy-micronumpy">numpypy</a>
+instead of numpy (actually, there is a <a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/pypycompat.py">hack</a> to use just the micronumpy
+part). Let's see if the speed improves:<br><pre class="code literal-block">$ pypy -m ev.main   # using numpypy
+Generation   1: ... [population = 500]  [5.60 secs]
+Generation   2: ... [population = 500]  [2.90 secs]
+Generation   3: ... [population = 500]  [2.78 secs]
+Generation   4: ... [population = 500]  [2.69 secs]
+Generation   5: ... [population = 500]  [2.72 secs]
+Generation   6: ... [population = 500]  [2.73 secs]
+</pre>
+So, ~2.7 seconds on average: this is 12x faster than PyPy+numpy, and more than
+2x faster than the original CPython. At this point, most people would be happy
+and go tweeting how PyPy is great.<br><br>
+In general, when talking of CPython vs PyPy, I am rarely satisfied with a 2x
+speedup: I know that PyPy can do much better than this, especially if you
+write code which is specifically optimized for the JIT. For a real-life
+example, have a look at <a class="reference external" href="https://capnpy.readthedocs.io/en/latest/benchmarks.html">capnpy benchmarks</a>, in which the PyPy version is
+~15x faster than the heavily optimized CPython+Cython version (both have been
+written by me, and I tried hard to write the fastest code for both
+implementations).<br><br>
+So, let's try to do better. As usual, the first thing to do is to profile and
+see where we spend most of the time. Here is the <a class="reference external" href="https://vmprof.com/#/449ca8ee-3ab2-49d4-b6f0-9099987e9000">vmprof profile</a>. We spend a
+lot of time inside the internals of numpypy, and allocating tons of temporary
+arrays to store the results of the various operations.<br><br>
+Also, let's look at the <a class="reference external" href="https://vmprof.com/#/28fd6e8f-f103-4bf4-a76a-4b65dbd637f4/traces">jit traces</a> and search for the function <tt class="docutils literal">run</tt>:
+this is loop in which we spend most of the time, and it is composed of 1796
+operations.  The operations emitted for the line <tt class="docutils literal"><span class="pre">np.dot(...)</span> +
+self.constant</tt> are listed between lines 1217 and 1456. Here is the excerpt
+which calls <tt class="docutils literal"><span class="pre">np.dot(...)</span></tt>; most of the ops are cheap, but at line 1232 we
+see a call to the RPython function <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/blob/release-pypy3.5-v5.10.0/pypy/module/micronumpy/ndarray.py#L1160">descr_dot</a>; by looking at the
+implementation we see that it creates a new <tt class="docutils literal">W_NDimArray</tt> to store the
+result, which means it has to do a <tt class="docutils literal">malloc()</tt>:<br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://4.bp.blogspot.com/-_h6BuLTtEO8/Wfb6BXDg93I/AAAAAAAABNY/BY2XBg4ZtwokB9f1mWSmzI9gn_qanb81QCLcBGAs/s1600/2017-10-trace1.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="450" src="https://4.bp.blogspot.com/-_h6BuLTtEO8/Wfb6BXDg93I/AAAAAAAABNY/BY2XBg4ZtwokB9f1mWSmzI9gn_qanb81QCLcBGAs/s640/2017-10-trace1.png" width="640"></a>
+</div>
+<br>
+The implementation of the <tt class="docutils literal">+ self.constant</tt> part is also interesting:
+contrary the former, the call to <tt class="docutils literal">W_NDimArray.descr_add</tt> has been inlined by
+the JIT, so we have a better picture of what's happening; in particular, we
+can see the call to <tt class="docutils literal">__0_alloc_with_del____</tt> which allocates the
+<tt class="docutils literal">W_NDimArray</tt> for the result, and the <tt class="docutils literal">raw_malloc</tt> which allocates the
+actual array. Then we have a long list of 149 simple operations which set the
+fields of the resulting array, construct an iterator, and finally do a
+<tt class="docutils literal">call_assembler</tt>: this is the actual logic to do the addition, which was
+JITtted independently; <tt class="docutils literal">call_assembler</tt> is one of the operations to do
+JIT-to-JIT calls:<br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://1.bp.blogspot.com/-vmo0pWharIU/Wfb3VfwHjxI/AAAAAAAABNE/a6Em09qZizwGiWJeTbGzKfHQH70dB7RKgCEwYBhgL/s1600/2017-10-trace2.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="640" src="https://1.bp.blogspot.com/-vmo0pWharIU/Wfb3VfwHjxI/AAAAAAAABNE/a6Em09qZizwGiWJeTbGzKfHQH70dB7RKgCEwYBhgL/s640/2017-10-trace2.png" width="625"></a>
+</div>
+<br>
+All of this is very suboptimal: in this particular case, we know that the
+shape of <tt class="docutils literal">self.matrix</tt> is always <tt class="docutils literal">(3, 2)</tt>: so, we are doing an incredible
+amount of work, including calling <tt class="docutils literal">malloc()</tt> twice for the temporary arrays, just to
+call two functions which ultimately do a total of 6 multiplications
+and 6 additions.  Note also that this is not a fault of the JIT: CPython+numpy
+has to do the same amount of work, just hidden inside C calls.<br><br>
+One possible solution to this nonsense is a well known compiler optimization:
+loop unrolling.  From the compiler point of view, unrolling the loop is always
+risky because if the matrix is too big you might end up emitting a huge blob
+of code, possibly uselss if the shape of the matrices change frequently: this
+is the main reason why the PyPy JIT does not even try to do it in this case.<br><br>
+However, we <strong>know</strong> that the matrix is small, and always of the same
+shape. So, let's unroll the loop manually:<br><pre class="code python literal-block"><span class="keyword">class</span> <span class="name class">SpecializedCreature</span><span class="punctuation">(</span><span class="name">Creature</span><span class="punctuation">):</span>
+
+    <span class="keyword">def</span> <span class="name function magic">__init__</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="operator">*</span><span class="name">args</span><span class="punctuation">,</span> <span class="operator">**</span><span class="name">kwargs</span><span class="punctuation">):</span>
+        <span class="name">Creature</span><span class="operator">.</span><span class="name function magic">__init__</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="operator">*</span><span class="name">args</span><span class="punctuation">,</span> <span class="operator">**</span><span class="name">kwargs</span><span class="punctuation">)</span>
+        <span class="comment single"># store the data in a plain Python list</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data</span> <span class="operator">=</span> <span class="name builtin">list</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">matrix</span><span class="operator">.</span><span class="name">ravel</span><span class="punctuation">())</span> <span class="operator">+</span> <span class="name builtin">list</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">constant</span><span class="punctuation">)</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data_state</span> <span class="operator">=</span> <span class="punctuation">[</span><span class="literal number float">0.0</span><span class="punctuation">]</span>
+        <span class="keyword">assert</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">matrix</span><span class="operator">.</span><span class="name">shape</span> <span class="operator">==</span> <span class="punctuation">(</span><span class="literal number integer">2</span><span class="punctuation">,</span> <span class="literal number integer">3</span><span class="punctuation">)</span>
+        <span class="keyword">assert</span> <span class="name builtin">len</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data</span><span class="punctuation">)</span> <span class="operator">==</span> <span class="literal number integer">8</span>
+
+    <span class="keyword">def</span> <span class="name function">run_step</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">,</span> <span class="name">inputs</span><span class="punctuation">):</span>
+        <span class="comment single"># state: [state_vars ... inputs]</span>
+        <span class="comment single"># out_values: [state_vars, ... outputs]</span>
+        <span class="name">k0</span><span class="punctuation">,</span> <span class="name">k1</span><span class="punctuation">,</span> <span class="name">k2</span><span class="punctuation">,</span> <span class="name">q0</span><span class="punctuation">,</span> <span class="name">q1</span><span class="punctuation">,</span> <span class="name">q2</span><span class="punctuation">,</span> <span class="name">c0</span><span class="punctuation">,</span> <span class="name">c1</span> <span class="operator">=</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data</span>
+        <span class="name">s0</span> <span class="operator">=</span> <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data_state</span><span class="punctuation">[</span><span class="literal number integer">0</span><span class="punctuation">]</span>
+        <span class="name">z_sp</span><span class="punctuation">,</span> <span class="name">z</span> <span class="operator">=</span> <span class="name">inputs</span>
+        <span class="comment single">#</span>
+        <span class="comment single"># compute the output</span>
+        <span class="name">out0</span> <span class="operator">=</span> <span class="name">s0</span><span class="operator">*</span><span class="name">k0</span> <span class="operator">+</span> <span class="name">z_sp</span><span class="operator">*</span><span class="name">k1</span> <span class="operator">+</span> <span class="name">z</span><span class="operator">*</span><span class="name">k2</span> <span class="operator">+</span> <span class="name">c0</span>
+        <span class="name">out1</span> <span class="operator">=</span> <span class="name">s0</span><span class="operator">*</span><span class="name">q0</span> <span class="operator">+</span> <span class="name">z_sp</span><span class="operator">*</span><span class="name">q1</span> <span class="operator">+</span> <span class="name">z</span><span class="operator">*</span><span class="name">q2</span> <span class="operator">+</span> <span class="name">c1</span>
+        <span class="comment single">#</span>
+        <span class="name builtin pseudo">self</span><span class="operator">.</span><span class="name">data_state</span><span class="punctuation">[</span><span class="literal number integer">0</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="name">out0</span>
+        <span class="name">outputs</span> <span class="operator">=</span> <span class="punctuation">[</span><span class="name">out1</span><span class="punctuation">]</span>
+        <span class="keyword">return</span> <span class="name">outputs</span>
+</pre>
+In the <a class="reference external" href="https://github.com/antocuni/evolvingcopter/blob/master/ev/creature.py#L100">actual code</a> there is also a sanity check which asserts that the
+computed output is the very same as the one returned by <tt class="docutils literal">Creature.run_step</tt>.<br><br>
+So, let's try to see how it performs. First, with CPython:<br><pre class="code literal-block">$ python -m ev.main
+Generation   1: ... [population = 500]  [7.61 secs]
+Generation   2: ... [population = 500]  [3.96 secs]
+Generation   3: ... [population = 500]  [3.79 secs]
+Generation   4: ... [population = 500]  [3.74 secs]
+Generation   5: ... [population = 500]  [3.84 secs]
+Generation   6: ... [population = 500]  [3.69 secs]
+</pre>
+This looks good: 60% faster than the original CPython+numpy
+implementation. Let's try on PyPy:<br><pre class="code literal-block">Generation   1: ... [population = 500]  [0.39 secs]
+Generation   2: ... [population = 500]  [0.10 secs]
+Generation   3: ... [population = 500]  [0.11 secs]
+Generation   4: ... [population = 500]  [0.09 secs]
+Generation   5: ... [population = 500]  [0.08 secs]
+Generation   6: ... [population = 500]  [0.12 secs]
+Generation   7: ... [population = 500]  [0.09 secs]
+Generation   8: ... [population = 500]  [0.08 secs]
+Generation   9: ... [population = 500]  [0.08 secs]
+Generation  10: ... [population = 500]  [0.08 secs]
+Generation  11: ... [population = 500]  [0.08 secs]
+Generation  12: ... [population = 500]  [0.07 secs]
+Generation  13: ... [population = 500]  [0.07 secs]
+Generation  14: ... [population = 500]  [0.08 secs]
+Generation  15: ... [population = 500]  [0.07 secs]
+</pre>
+Yes, it's not an error. After a couple of generations, it stabilizes at around
+~0.07-0.08 seconds per generation. This is around <strong>80 (eighty) times faster</strong>
+than the original CPython+numpy implementation, and around 35-40x faster than
+the naive PyPy+numpypy one.<br><br>
+Let's look at the <a class="reference external" href="https://vmprof.com/#/402af746-2966-4403-a61d-93015abac033/traces">trace</a> again: it no longer contains expensive calls, and
+certainly no more temporary <tt class="docutils literal">malloc()</tt> s. The core of the logic is between
+lines 386-416, where we can see that it does fast C-level multiplications and
+additions: <tt class="docutils literal">float_mul</tt> and <tt class="docutils literal">float_add</tt> are translated straight into
+<tt class="docutils literal">mulsd</tt> and <tt class="docutils literal">addsd</tt> x86 instructions.<br><br>
+As I said before, this is a very particular example, and the techniques
+described here do not always apply: it is not realistic to expect an 80x
+speedup on arbitrary code, unfortunately. However, it clearly shows the potential of PyPy when
+it comes to high-speed computing. And most importantly, it's not a toy
+benchmark which was designed specifically to have good performance on PyPy:
+it's a real world example, albeit small.<br><br>
+You might be also interested in the talk I gave at last EuroPython, in which I
+talk about a similar topic: "The Joy of PyPy JIT: abstractions for free"
+(<a class="reference external" href="https://ep2017.europython.eu/conference/talks/the-joy-of-pypy-jit-abstractions-for-free">abstract</a>, <a class="reference external" href="https://speakerdeck.com/antocuni/the-joy-of-pypy-jit-abstractions-for-free">slides</a> and <a class="reference external" href="https://www.youtube.com/watch?v=NQfpHQII2cU">video</a>).<br><br><div class="section" id="how-to-reproduce-the-results">
+<h3>
+How to reproduce the results<a href="#how-to-reproduce-the-results" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<pre class="code literal-block">$ git clone https://github.com/antocuni/evolvingcopter
+$ cd evolvingcopter
+$ {python,pypy} -m ev.main --no-specialized --no-numpypy
+$ {python,pypy} -m ev.main --no-specialized
+$ {python,pypy} -m ev.main
+</pre>
+</div>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/jit.html" rel="tag">jit</a></li>
+            <li><a class="tag p-category" href="../../../categories/profiling.html" rel="tag">profiling</a></li>
+            <li><a class="tag p-category" href="../../../categories/speed.html" rel="tag">speed</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html" rel="prev" title="(Cape of) Good Hope for PyPy">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../12/pypy27-and-pypy35-v510-dual-release-3223396318213306071.html" rel="next" title="PyPy2.7 and PyPy3.5 v5.10 dual release">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-5224678192359798621">
+        <div class="comment-header">
+          <a name="comment-5224678192359798621"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-11-02 21:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>Isn't this a factor 80 slowdown because of a design error? Normally, one should store all creatures in a big numpy array and evaluate run_step on all creatures at once.</p>
+        </div>
+      </div>
+      <div class="comment comment-236503210440598911">
+        <div class="comment-header">
+          <a name="comment-236503210440598911"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2017-11-27 10:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>I don't understand - how do you figure out that line 1232 is not cheap?</p>
+        </div>
+      </div>
+      <div class="comment comment-1027494427925729781">
+        <div class="comment-header">
+          <a name="comment-1027494427925729781"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2017-11-28 09:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>@anatoly: line 1232 is a call to descr_dot: if you look at the implementation, you see that it does lots of things including mallocs, and those we know are not cheap at all</p>
+        </div>
+      </div>
+      <div class="comment comment-422136929529467376">
+        <div class="comment-header">
+          <a name="comment-422136929529467376"></a>
+            <span class="author">homm</span> wrote on <span class="date">2018-05-21 15:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>Have you tried the third argument of numpy.dot, out to avoid memory alocation?</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

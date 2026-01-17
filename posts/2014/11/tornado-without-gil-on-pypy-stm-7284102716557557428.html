@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tornado without a GIL on PyPy STM | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2014/11/tornado-without-gil-on-pypy-stm-7284102716557557428.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="pypy-io-improvements-1042070332447047674.html" title="PyPy IO improvements" type="text/html">
+<link rel="next" href="september-donations-and-thank-you-to-4531550307707104017.html" title="September donations and thank you to the Python Software Foundation!" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Tornado without a GIL on PyPy STM">
+<meta property="og:url" content="https://www.pypy.org/posts/2014/11/tornado-without-gil-on-pypy-stm-7284102716557557428.html">
+<meta property="og:description" content="This post is by Konstantin Lopuhin, who tried PyPy STM during the
+Warsaw sprint.
+Python has a GIL, right? Not quite - PyPy STM is a python implementation
+without a GIL, so it can scale CPU-bound work ">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2014-11-17T14:05:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Tornado without a GIL on PyPy STM</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2014-11-17T14:05:00Z" itemprop="datePublished" title="2014-11-17 14:05">2014-11-17 14:05</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+                <p class="commentline">            <a href="tornado-without-gil-on-pypy-stm-7284102716557557428.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p><em>This post is by Konstantin Lopuhin, who tried PyPy STM during the
+Warsaw sprint.</em></p>
+<p>Python has a GIL, right? Not quite - PyPy STM is a python implementation
+without a GIL, so it can scale CPU-bound work to several cores.
+PyPy STM is developed by Armin Rigo and Remi Meier,
+and supported by community <a class="reference external" href="https://pypy.org/tmdonate2.html">donations</a>.
+You can read more about it in the
+<a class="reference external" href="https://pypy.readthedocs.org/en/latest/stm.html">docs</a>.</p>
+<p>Although PyPy STM is still a work in progress, in many cases it can already
+run CPU-bound code faster than regular PyPy, when using multiple cores.
+Here we will see how to slightly modify Tornado IO loop to use
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch//stmgc-c7/lib_pypy/transaction.py">transaction</a>
+module.
+This module is <a class="reference external" href="https://pypy.readthedocs.org/en/latest/stm.html#atomic-sections-transactions-etc-a-better-way-to-write-parallel-programs">described</a>
+in the docs and is really simple to use - please see an example there.
+An event loop of Tornado, or any other asynchronous
+web server, looks like this (with some simplifications):</p>
+<pre class="literal-block">
+while True:
+    for callback in list(self._callbacks):
+        self._run_callback(callback)
+    event_pairs = self._impl.poll()
+    self._events.update(event_pairs)
+    while self._events:
+        fd, events = self._events.popitem()
+        handler = self._handlers[fd]
+        self._handle_event(fd, handler, events)
+</pre>
+<p>We get IO events, and run handlers for all of them, these handlers can
+also register new callbacks, which we run too. When using such a framework,
+it is very nice to have a guaranty that all handlers are run serially,
+so you do not have to put any locks. This is an ideal case for the
+transaction module - it gives us guaranties that things appear
+to be run serially, so in user code we do not need any locks. We just
+need to change the code above to something like:</p>
+<pre class="literal-block">
+while True:
+    for callback in list(self._callbacks):
+        transaction.add(                # added
+            self._run_callback, callback)
+    transaction.run()                   # added
+    event_pairs = self._impl.poll()
+    self._events.update(event_pairs)
+    while self._events:
+        fd, events = self._events.popitem()
+        handler = self._handlers[fd]
+        transaction.add(                # added
+            self._handle_event, fd, handler, events)
+    transaction.run()                   # added
+</pre>
+<p>The actual commit is
+<a class="reference external" href="https://github.com/lopuhin/tornado/commit/246c5e71ce8792b20c56049cf2e3eff192a01b20">here</a>,
+- we had to extract a little function to run the callback.</p>
+<div class="section" id="part-1-a-simple-benchmark-primes">
+<h1>Part 1: a simple benchmark: primes<a href="#part-1-a-simple-benchmark-primes" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>Now we need a simple benchmark, lets start with
+<a class="reference external" href="https://bitbucket.org/kostialopuhin/tornado-stm-bench/src/a038bf99de718ae97449607f944cecab1a5ae104/primes.py?at=default">this</a>
+- just calculate a list of primes up to the given number, and return it
+as JSON:</p>
+<pre class="literal-block">
+def is_prime(n):
+    for i in xrange(2, n):
+        if n % i == 0:
+            return False
+    return True
+
+class MainHandler(tornado.web.RequestHandler):
+    def get(self, num):
+        num = int(num)
+        primes = [n for n in xrange(2, num + 1) if is_prime(n)]
+        self.write({'primes': primes})
+</pre>
+<p>We can benchmark it with <tt class="docutils literal">siege</tt>:</p>
+<pre class="literal-block">
+siege -c 50 -t 20s https://localhost:8888/10000
+</pre>
+<p>But this does not scale. The CPU load is at 101-104 %, and we handle 30 %
+less request per second. The reason for the slowdown is STM overhead,
+which needs to keep track of all writes and reads in order to detect conflicts.
+And the reason for using only one core is, obviously, conflicts!
+Fortunately, we can see what this conflicts are, if we run code like this
+(here 4 is the number of cores to use):</p>
+<pre class="literal-block">
+PYPYSTM=stm.log ./primes.py 4
+</pre>
+<p>Then we can use <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch//stmgc-c7/pypy/stm/print_stm_log.py">print_stm_log.py</a>
+to analyse this log. It lists the most expensive conflicts:</p>
+<pre class="literal-block">
+14.793s lost in aborts, 0.000s paused (1258x STM_CONTENTION_INEVITABLE)
+File "/home/ubuntu/tornado-stm/tornado/tornado/httpserver.py", line 455, in __init__
+    self._start_time = time.time()
+File "/home/ubuntu/tornado-stm/tornado/tornado/httpserver.py", line 455, in __init__
+    self._start_time = time.time()
+...
+</pre>
+<p>There are only three kinds of conflicts, they are described in
+<a class="reference external" href="https://bitbucket.org/pypy/pypy/src/6355617bf9a2a0fa8b74ae17906e4a591b38e2b5/rpython/translator/stm/src_stm/stm/contention.c?at=stmgc-c7">stm source</a>,
+Here we see that two threads call into external function to get current time,
+and we can not rollback any of them, so one of them must wait till the other
+transaction finishes.
+For now we can hack around this by disabling this timing - this is only
+needed for internal profiling in tornado.</p>
+<p>If we do it, we get the following results (but see caveats below):</p>
+
+<table border="0"><tr>
+<td>
+<table border="1" class="docutils">
+<colgroup>
+<col width="57%">
+<col width="43%">
+</colgroup>
+<thead valign="bottom"><tr>
+<th class="head">Impl.</th>
+<th class="head">req/s</th>
+</tr></thead>
+<tbody valign="top">
+<tr>
+<td>PyPy 2.4</td>
+<td>14.4</td>
+</tr>
+<tr>
+<td>CPython 2.7</td>
+<td>3.2</td>
+</tr>
+<tr>
+<td>PyPy-STM 1</td>
+<td>9.3</td>
+</tr>
+<tr>
+<td>PyPy-STM 2</td>
+<td>16.4</td>
+</tr>
+<tr>
+<td>PyPy-STM 3</td>
+<td>20.4</td>
+</tr>
+<tr>
+<td>PyPy STM 4</td>
+<td>24.2</td>
+</tr>
+</tbody>
+</table>
+</td>
+<td>   </td>
+<td>
+<a href="https://4.bp.blogspot.com/-juukhmXIkWw/VGn6-Lll9FI/AAAAAAAAAJk/0Z-2gqUlm4s/s1600/tornado-stm-results.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://4.bp.blogspot.com/-juukhmXIkWw/VGn6-Lll9FI/AAAAAAAAAJk/0Z-2gqUlm4s/s320/tornado-stm-results.png"></a>
+</td>
+</tr></table>
+<p>As we can see, in this benchmark PyPy STM using just two cores
+can beat regular PyPy!
+This is not linear scaling, there are still conflicts left, and this
+is a very simple example but still, it works!</p>
+<p>But its not that simple yet :)</p>
+<p>First, these are best-case numbers after long (much longer than for regular
+PyPy) warmup. Second, it can sometimes crash (although removing old pyc files
+fixes it). Third, benchmark meta-parameters are also tuned.</p>
+<p>Here we get relatively good results only when there are a lot of concurrent
+clients - as a results, a lot of requests pile up, the server is not keeping
+with the load, and transaction module is busy with work running this piled up
+requests. If we decrease the number of concurrent clients, results get slightly worse.
+Another thing we can tune is how heavy is each request - again, if we ask
+primes up to a lower number, then less time is spent doing calculations,
+more time is spent in tornado, and results get much worse.</p>
+<p>Besides the <tt class="docutils literal">time.time()</tt> conflict described above, there are a lot of others.
+The bulk of time is lost in these two conflicts:</p>
+<pre class="literal-block">
+14.153s lost in aborts, 0.000s paused (270x STM_CONTENTION_INEVITABLE)
+File "/home/ubuntu/tornado-stm/tornado/tornado/web.py", line 1082, in compute_etag
+    hasher = hashlib.sha1()
+File "/home/ubuntu/tornado-stm/tornado/tornado/web.py", line 1082, in compute_etag
+    hasher = hashlib.sha1()
+
+13.484s lost in aborts, 0.000s paused (130x STM_CONTENTION_WRITE_READ)
+File "/home/ubuntu/pypy/lib_pypy/transaction.py", line 164, in _run_thread
+    got_exception)
+</pre>
+<p>The first one is presumably calling into some C function from stdlib, and we get
+the same conflict as for <tt class="docutils literal">time.time()</tt> above, but is can be fixed on PyPy
+side, as we can be sure that computing sha1 is pure.</p>
+<p>It is easy to hack around this one too, just removing etag support, but if
+we do it, performance is much worse, only slightly faster than regular PyPy,
+with the top conflict being:</p>
+<pre class="literal-block">
+83.066s lost in aborts, 0.000s paused (459x STM_CONTENTION_WRITE_WRITE)
+File "/home/arigo/hg/pypy/stmgc-c7/lib-python/2.7/_weakrefset.py", line 70, in __contains__
+File "/home/arigo/hg/pypy/stmgc-c7/lib-python/2.7/_weakrefset.py", line 70, in __contains__
+</pre>
+<p><em>Comment by Armin: It is unclear why this happens so far.  We'll investigate...</em></p>
+<p>The second conflict (without etag tweaks) originates
+in the transaction module, from this piece of code:</p>
+<pre class="literal-block">
+while True:
+    self._do_it(self._grab_next_thing_to_do(tloc_pending),
+                got_exception)
+    counter[0] += 1
+</pre>
+<p><em>Comment by Armin: This is a conflict in the transaction module itself; ideally,
+it shouldn't have any, but in order to do that we might need a little bit
+of support from RPython or C code.  So this is pending improvement.</em></p>
+<p>Tornado modification used in this blog post is based on 3.2.dev2.
+As of now, the latest version is 4.0.2, and if we
+<a class="reference external" href="https://github.com/lopuhin/tornado/commit/04cd7407f8690fd1dc55b686eb78e3795f4363e6">apply</a>
+the same changes to this version, then we no longer get any scaling on this benchmark,
+and there are no conflicts that take any substantial time.</p>
+<p><em>Comment by Armin: There are two possible reactions to a conflict.  We can either
+abort one of the two threads, or (depending on the circumstances) just
+pause the current thread until the other one commits, after which the
+thread will likely be able to continue.  The tool ``print_stm_log.py``
+did not report conflicts that cause pauses.  It has been fixed very
+recently.  Chances are that on this test it would report long pauses and
+point to locations that cause them.</em></p>
+</div>
+<div class="section" id="part-2-a-more-interesting-benchmark-a-star">
+<h1>Part 2: a more interesting benchmark: A-star<a href="#part-2-a-more-interesting-benchmark-a-star" class="headerlink" title="Permalink to this heading">¶</a></h1>
+<p>Although we have seen that PyPy STM is not all moonlight and roses,
+it is interesting to see how it works on a more realistic application.</p>
+<p><a class="reference external" href="https://bitbucket.org/kostialopuhin/tornado-stm-bench/src/a038bf99de718ae97449607f944cecab1a5ae104/astar.py">astar.py</a>
+is a simple game where several players move on a map
+(represented as a list of lists of integers),
+build and destroy walls, and ask server to give them
+shortest paths between two points
+using A-star search, adopted from <a class="reference external" href="https://code.activestate.com/recipes/577519-a-star-shortest-path-algorithm/">ActiveState recipie</a>.</p>
+<p>The benchmark <a class="reference external" href="https://bitbucket.org/kostialopuhin/tornado-stm-bench/src/a038bf99de718ae97449607f944cecab1a5ae104/bench_astar.py">bench_astar.py</a>
+is simulating players, and tries to put the main load on A-star search,
+but also does some wall building and destruction. There are no locks
+around map modifications, as normal tornado is executing all callbacks
+serially, and we can keep this guaranty with atomic blocks of PyPy STM.
+This is also an example of a program that is not trivial
+to scale to multiple cores with separate processes (assuming
+more interesting shared state and logic).</p>
+<p>This benchmark is very noisy due to randomness of client interactions
+(also it could be not linear), so just lower and upper bounds for
+number of requests are reported</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="55%">
+<col width="45%">
+</colgroup>
+<thead valign="bottom"><tr>
+<th class="head">Impl.</th>
+<th class="head">req/s</th>
+</tr></thead>
+<tbody valign="top">
+<tr>
+<td>PyPy 2.4</td>
+<td>5 .. 7</td>
+</tr>
+<tr>
+<td>CPython 2.7</td>
+<td>0.5 .. 0.9</td>
+</tr>
+<tr>
+<td>PyPy-STM 1</td>
+<td>2 .. 4</td>
+</tr>
+<tr>
+<td>PyPy STM 4</td>
+<td>2 .. 6</td>
+</tr>
+</tbody>
+</table>
+<p>Clearly this is a very bad benchmark, but still we can see that scaling is worse
+and STM overhead is sometimes higher.
+The bulk of conflicts come from the transaction module (we have seen it
+above):</p>
+<pre class="literal-block">
+91.655s lost in aborts, 0.000s paused (249x STM_CONTENTION_WRITE_READ)
+File "/home/ubuntu/pypy/lib_pypy/transaction.py", line 164, in _run_thread
+    got_exception)
+</pre>
+<p>Although it is definitely not ready for production use, you can already try
+to run things, report bugs, and see what is missing in user-facing tools
+and libraries.</p>
+<p>Benchmarks setup:</p>
+<ul class="simple">
+<li>Amazon c3.xlarge (4 cores) running Ubuntu 14.04</li>
+<li>pypy-c-r74011-stm-jit for the primes benchmark (but it has more bugs
+than more recent versions), and
+<a class="reference external" href="https://cobra.cs.uni-duesseldorf.de/~buildmaster/misc/pypy-c-r74378-74379-stm-jit.xz">pypy-c-r74378-74379-stm-jit</a>
+for astar benchmark (put it inside pypy source checkout at 38c9afbd253c)</li>
+<li>
+<a class="reference external" href="https://bitbucket.org/kostialopuhin/tornado-stm-bench">https://bitbucket.org/kostialopuhin/tornado-stm-bench</a> at 65144cda7a1f</li>
+</ul>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="pypy-io-improvements-1042070332447047674.html" rel="prev" title="PyPy IO improvements">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="september-donations-and-thank-you-to-4531550307707104017.html" rel="next" title="September donations and thank you to the Python Software Foundation!">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-1575711345805344940">
+        <div class="comment-header">
+          <a name="comment-1575711345805344940"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-11-18 07:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>"Clearly this is a very benchmark" - looks like you've missed a word here ;)</p>
+        </div>
+      </div>
+      <div class="comment comment-2517327115986575422">
+        <div class="comment-header">
+          <a name="comment-2517327115986575422"></a>
+            <span class="author">crusaderky</span> wrote on <span class="date">2014-11-19 00:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>in bench_astar.py, you are doing the following queries:<br>- try to move: 85%<br>- build a wall: 10.5% [(1-.85)*.7]<br>- erase something: 0.45% [(1-.85)*(1-.7)*.1]<br>- show map: 4.05% [(1-.85)*(1-.7)*(1-.1)]<br><br>I doubt that's intentional.... :P</p>
+        </div>
+      </div>
+      <div class="comment comment-7350636623943992876">
+        <div class="comment-header">
+          <a name="comment-7350636623943992876"></a>
+            <span class="author">crusaderky</span> wrote on <span class="date">2014-11-19 01:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>Correct me if I misunderstood the theory of PyPy-STM, but in the A* test there's nothing that prevents a get() to read the game map while MapChangeHandler.put() is running (that is, while the system is in an incoherent status)?<br><br>Shouldn't MapChangeHandler.put() be wrapped in a exclusive write lock, and all the get() handlers be wrapped with a shared read lock?</p>
+        </div>
+      </div>
+      <div class="comment comment-7466019346033391209">
+        <div class="comment-header">
+          <a name="comment-7466019346033391209"></a>
+            <span class="author">Konstantin Lopuhin</span> wrote on <span class="date">2014-11-19 20:45</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; Clearly this is a very benchmark" - looks like you've missed a word here ;)<br><br>Oh, yes, that word is "bad" :)<br><br>&gt; Shouldn't MapChangeHandler.put() be wrapped in a exclusive write lock, and all the get() handlers be wrapped with a shared read lock?<br><br>Here all request handlers are already wrapped inside atomic blocks, but this is hidden from us in (modified) tornado. So we do not need any locks (as in normal tornado too, because normal tornado is single threaded). If request handlers conflict, then we just loose performance, not correctness. This is one of the main points of PyPy STM: it can support multithreaded code without needing to use locks.<br><br>Regarding the probabilities: yes, that's not quite intentional)</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

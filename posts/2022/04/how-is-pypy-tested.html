@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How is PyPy Tested? | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2022/04/how-is-pypy-tested.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="../03/pypy-v738-release.html" title="PyPy v7.3.9 security release" type="text/html">
+<link rel="next" href="../07/toy-optimizer.html" title="Implementing a Toy Optimizer" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="How is PyPy Tested?">
+<meta property="og:url" content="https://www.pypy.org/posts/2022/04/how-is-pypy-tested.html">
+<meta property="og:description" content="How is PyPy Tested?
+In this post I want to give an overview of how the PyPy project does and thinks
+about testing. PyPy takes testing quite seriously and has done some from the
+start of the project. H">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2022-04-02T15:00:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-rest h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">How is PyPy Tested?</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2022-04-02T15:00:00Z" itemprop="datePublished" title="2022-04-02 15:00">2022-04-02 15:00</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="how-is-pypy-tested.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <section id="how-is-pypy-tested"><h2>How is PyPy Tested?<a href="#how-is-pypy-tested" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>In this post I want to give an overview of how the PyPy project does and thinks
+about testing. PyPy takes testing quite seriously and has done some from the
+start of the project. Here I want to present the different styles of
+tests that PyPy has, when we use them and how I think about them.</p>
+<section id="background"><h3>Background<a href="#background" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>To make the blog post self-contained, I am going to start with a small overview
+about PyPy's architecture. If you already know what PyPy is and how it works,
+you can skip this section.</p>
+<p>PyPy means "Python in Python". It is an alternative implementation of the Python
+language. Usually, when we speak of "Python", we can mean two different things.
+On the one hand it means "Python as an abstract programming language". On the
+other hand, the main implementation of that language is also often called
+"Python". To more clearly distinguish the two, the implementation is often also
+called "CPython", because it is an interpreter implemented in C code.</p>
+<p>Now we can make the statement "PyPy is Python in Python" more precise: PyPy is
+an interpreter for Python 3.9, implemented in RPython. RPython ("Restricted
+Python") is a subset of Python 2, which is statically typed (using type
+inference, not type annotations) and can be compiled
+to C code. That means we can take our Python 3.9 interpreter, and compile it
+into a C binary that can run Python 3.9 code. The final binary behaves pretty
+similarly to CPython.</p>
+<p>The main thing that makes PyPy interesting is that during the translation of our
+interpreter to C, a number of components are automatically inserted into the
+final binary. One component is a reasonably good garbage collector.</p>
+<p>The more exciting component that is inserted into the binary is a just-in-time
+compiler. The insertion of this component is not fully automatic, instead it is
+guided by a small number of annotations in the source code of the interpreter.
+The effect of inserting this JIT compiler into the binary is that the resulting
+binary can run Python code significantly faster than CPython, in many cases.
+How this works is not important for the rest of the post, if you want to see an
+example of concretely doing that to a small interpreter you can look at this
+<a class="reference external" href="https://www.youtube.com/watch?v=fZj3uljJl_k">video</a>.</p>
+</section><section id="pypy-testing-history"><h3>PyPy Testing History<a href="#pypy-testing-history" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>A few historical notes on the PyPy project and its relationship to testing: The
+PyPy project <a class="reference external" href="https://www.pypy.org/posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html">was started in 2004</a>. At the time when the project was started,
+Extreme Programming and Agile Software Development were up and coming. On the
+methodology side, PyPy was heavily influenced by these, and started using
+Test-Driven Development and pair programming right from the start.</p>
+<p>Also technologically, PyPy has been influential on testing in the Python world.
+Originally, PyPy had used the <code class="docutils literal">unittest</code> testing framework, but pretty soon
+the developers got frustrated with it. <a class="reference external" href="https://holgerkrekel.net/">Holger Krekel</a>, one of the original
+developers who started PyPy, started the <a class="reference external" href="https://pytest.org/">pytest</a> testing framework soon
+afterwards.</p>
+</section><section id="interpreter-level-tests"><h3>Interpreter-Level Tests<a href="#interpreter-level-tests" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>So, how are tests for PyPy written, concretely? The tests for the interpreter
+are split into two different kinds, which we call "interpreter level tests" and
+"application level tests". The former are tests that can be used to test the
+objects and functions that are used in the implementation of the Python
+interpreter. Since the interpreter is written in Python 2, those tests are also
+written in Python 2, using pytest. They tend to be more on the unit test side of
+things. They are in files with the pattern <code class="docutils literal"><span class="pre">test_*.py</span></code>.</p>
+<p>Here is an example that tests the implementation of integers (very slightly
+simplified):</p>
+<div class="code"><pre class="code python"><a id="rest_code_a51fc73807284bac9d5456c12ab71cca-1" name="rest_code_a51fc73807284bac9d5456c12ab71cca-1" href="how-is-pypy-tested.html#rest_code_a51fc73807284bac9d5456c12ab71cca-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestW_IntObject</span><span class="p">:</span>
+<a id="rest_code_a51fc73807284bac9d5456c12ab71cca-2" name="rest_code_a51fc73807284bac9d5456c12ab71cca-2" href="how-is-pypy-tested.html#rest_code_a51fc73807284bac9d5456c12ab71cca-2"></a>    <span class="o">...</span>
+<a id="rest_code_a51fc73807284bac9d5456c12ab71cca-3" name="rest_code_a51fc73807284bac9d5456c12ab71cca-3" href="how-is-pypy-tested.html#rest_code_a51fc73807284bac9d5456c12ab71cca-3"></a>
+<a id="rest_code_a51fc73807284bac9d5456c12ab71cca-4" name="rest_code_a51fc73807284bac9d5456c12ab71cca-4" href="how-is-pypy-tested.html#rest_code_a51fc73807284bac9d5456c12ab71cca-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_hash</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="rest_code_a51fc73807284bac9d5456c12ab71cca-5" name="rest_code_a51fc73807284bac9d5456c12ab71cca-5" href="how-is-pypy-tested.html#rest_code_a51fc73807284bac9d5456c12ab71cca-5"></a>        <span class="n">w_x</span> <span class="o">=</span> <span class="n">W_IntObject</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<a id="rest_code_a51fc73807284bac9d5456c12ab71cca-6" name="rest_code_a51fc73807284bac9d5456c12ab71cca-6" href="how-is-pypy-tested.html#rest_code_a51fc73807284bac9d5456c12ab71cca-6"></a>        <span class="n">w_result</span> <span class="o">=</span> <span class="n">w_x</span><span class="o">.</span><span class="n">descr_hash</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">space</span><span class="p">)</span>
+<a id="rest_code_a51fc73807284bac9d5456c12ab71cca-7" name="rest_code_a51fc73807284bac9d5456c12ab71cca-7" href="how-is-pypy-tested.html#rest_code_a51fc73807284bac9d5456c12ab71cca-7"></a>        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">w_result</span><span class="p">,</span> <span class="n">W_IntObject</span><span class="p">)</span>
+<a id="rest_code_a51fc73807284bac9d5456c12ab71cca-8" name="rest_code_a51fc73807284bac9d5456c12ab71cca-8" href="how-is-pypy-tested.html#rest_code_a51fc73807284bac9d5456c12ab71cca-8"></a>        <span class="k">assert</span> <span class="n">w_result</span><span class="o">.</span><span class="n">intval</span> <span class="o">==</span> <span class="mi">42</span>
+</pre></div>
+<p>This test checks that if you take an object that represents integers in the
+Python language (using the class <code class="docutils literal">W_IntObject</code>, a "wrapped integer object")
+with the value 42, computing the hash of that object returns another instance of
+the same class, also with the value 42.</p>
+<p>These tests can be run on top of any Python 2 implementation, either CPython or
+PyPy. We can then test and debug the internals of the PyPy interpreter using
+familiar tools like indeed pytest and the Python debuggers. They can be run,
+because all the involved code like the tests and the class <code class="docutils literal">W_IntObject</code> are
+just completely regular Python 2 classes that behave in the regular way when
+run on top of a Python interpreter.</p>
+<p>In CPython, these tests don't really have an equivalent. They would correspond
+to tests that are written in C and that can test the logic of all the C
+functions of CPython that execute certain functionality, accessing the internals
+of C structs in the process. <a class="reference internal" href="how-is-pypy-tested.html#target-1">¹</a></p>
+</section><section id="application-level-tests"><h3>Application-Level Tests<a href="#application-level-tests" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>There is also a second class of tests for the interpreter. Those are tests that
+don't run on the level of the implementation. Instead, they are executed <em>by</em>
+the PyPy Python interpreter, thus running on the level of the applications run
+by PyPy. Since the interpreter is running Python 3, the tests are also written
+in Python 3. They are stored in files with the pattern <code class="docutils literal"><span class="pre">apptest_*.py</span></code> and
+look like "regular" Python 3 tests. <a class="reference internal" href="how-is-pypy-tested.html#target-2">²</a></p>
+<p>Here's an example of how you could write a test equivalent to the one above:</p>
+<div class="code"><pre class="code python"><a id="rest_code_c5eb0031754945d38418e50140a51a13-1" name="rest_code_c5eb0031754945d38418e50140a51a13-1" href="how-is-pypy-tested.html#rest_code_c5eb0031754945d38418e50140a51a13-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_hash</span><span class="p">():</span>
+<a id="rest_code_c5eb0031754945d38418e50140a51a13-2" name="rest_code_c5eb0031754945d38418e50140a51a13-2" href="how-is-pypy-tested.html#rest_code_c5eb0031754945d38418e50140a51a13-2"></a>    <span class="k">assert</span> <span class="nb">hash</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span> <span class="o">==</span> <span class="mi">42</span>
+</pre></div>
+<p>This style of test looks more "natural" and is the preferred one in cases where
+the test does not need to access the internals of the logic or the objects of
+the interpreter.</p>
+<p>Application level tests can be run in two different ways. On the one hand, we
+can simply run them on CPython 3. This is very useful! Since we want PyPy to
+behave like CPython, running the tests that we write on CPython is useful to
+make sure that the tests themselves aren't wrong.</p>
+<p>On the other hand, the main way to run these tests is on top of PyPy, itself
+running on top of a Python 2 implementation. This makes it possible to run the
+test without first bootstrapping PyPy to C. Since bootstrapping to C is a
+relatively slow operation (can take up to an hour) it is crucially important to
+be able to run tests without bootstrapping first. It also again makes it
+possible to debug crashes in the interpreter using the regular Python 2
+debugger. Of course running tests in this way is unfortunately itself not super
+fast, given that they run on a stack of two different interpreters.</p>
+<p>Application-level tests correspond quite closely to CPython's tests suite (which
+is using the unittest framework). Of course in CPython it is not possible to run
+the test suite without building the CPython binary using a C compiler. <a class="reference internal" href="how-is-pypy-tested.html#target-3">³</a></p>
+<p>So when do we write application-level tests, and when interpreter-level tests?
+Interpreter-level tests are necessary to test internal data structures that
+touch data and logic that is not directly exposed to the Python language. If
+that is not necessary, we try to write application-level tests. App-level tests
+are however by their nature always more on the integration test side of things.
+To be able to run the <code class="docutils literal">test_hash</code> function above, many parts of PyPy need to
+work correctly, the parser, the bytecode compiler, the bytecode interpreter, the
+<code class="docutils literal">hash</code> builtin, calling the <code class="docutils literal">__hash__</code> special method, etc, etc.</p>
+<p>This observation is also true for CPython! One could argue that CPython has no
+unit tests at all, because in order to be able to even run the tests, most of
+Python needs to be in working order already, so all the tests are really
+implicitly integration tests.</p>
+</section><section id="the-cpython-test-suite"><h3>The CPython Test Suite<a href="#the-cpython-test-suite" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>We also use the CPython Test suite as a final check to see whether our
+interpreter correctly implements all the features of the Python language. In
+that sense it acts as some kind of compliance test suite that checks whether we
+implement the language correctly. The test suite is not perfect for this.
+Since it is written for CPython's purposes during its development, a
+lot of the tests check really specific CPython implementation details. Examples
+for these are tests that check that <code class="docutils literal">__del__</code> is called immediately after
+objects go out of scope (which only happens if you use reference counting as a
+garbage collection strategy, PyPy uses a <a class="reference external" href="https://www.pypy.org/posts/2013/10/incremental-garbage-collector-in-pypy-8956893523842234676.html">different approach to garbage
+collection</a>). Other examples are checking
+for exception error messages very explicitly. However, the CPython test suite
+has gotten a lot better in these regards over time, by adding
+<code class="docutils literal">support.gc_collect()</code> calls to fix the former problem, and by marking some
+very specific tests with the <code class="docutils literal">@impl_detail</code> decorator. Thanks to all the
+CPython developers who have worked on this!</p>
+<p>In the process of re-implementing CPython's functionality and running CPython's
+tests suite, PyPy can often also be a good way to find bugs in CPython. While we
+think about the corner cases of some Python feature we occasionally find
+situations where CPython didn't get everything completely correct either, which
+we then report back.</p>
+</section><section id="testing-for-performance-regressions"><h3>Testing for Performance Regressions<a href="#testing-for-performance-regressions" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>All the tests we described so far are checking <em>behaviour</em>. But one of PyPy's
+important goals is to be a <em>fast</em> implementation not "just" a correct one. Some
+aspects of performance can be tested by regular unit tests, either application-
+or interpreter-level. In order to check whether some performance shortcut is
+taken in the interpreter, we sometimes can write tests that monkeypatch the slow
+default implementation to always error. Then, if the fast path is taken
+properly, that slow default implementation is never reached.</p>
+<p>But we also have additional tests that test the correct interaction with the JIT
+explicitly. For that, we have a special style of test that checks that the JIT
+will produce the correct machine code for a small snippet of Python code. To
+make this kind of test somewhat more robust, we don't check the machine code
+directly, but instead the architecture independent <a class="reference external" href="https://www.pypy.org/posts/2018/09/the-first-15-years-of-pypy-3412615975376972020.html">intermediate
+representation</a> that the JIT uses to produce machine code from.</p>
+<p>As an example, here is a small test that loading the attribute of a constant
+global instance can be completely constant folded away:</p>
+<div class="code"><pre class="code python"><a id="rest_code_abba7b413b5346b0a48d5c438a81da78-1" name="rest_code_abba7b413b5346b0a48d5c438a81da78-1" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_load_attr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-2" name="rest_code_abba7b413b5346b0a48d5c438a81da78-2" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-2"></a>    <span class="n">src</span> <span class="o">=</span> <span class="s1">'''</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-3" name="rest_code_abba7b413b5346b0a48d5c438a81da78-3" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-3"></a><span class="s1">        class A(object):</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-4" name="rest_code_abba7b413b5346b0a48d5c438a81da78-4" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-4"></a><span class="s1">            pass</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-5" name="rest_code_abba7b413b5346b0a48d5c438a81da78-5" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-5"></a><span class="s1">        a = A()</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-6" name="rest_code_abba7b413b5346b0a48d5c438a81da78-6" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-6"></a><span class="s1">        a.x = 1</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-7" name="rest_code_abba7b413b5346b0a48d5c438a81da78-7" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-7"></a><span class="s1">        def main(n):</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-8" name="rest_code_abba7b413b5346b0a48d5c438a81da78-8" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-8"></a><span class="s1">            i = 0</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-9" name="rest_code_abba7b413b5346b0a48d5c438a81da78-9" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-9"></a><span class="s1">            while i &lt; n:</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-10" name="rest_code_abba7b413b5346b0a48d5c438a81da78-10" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-10"></a><span class="s1">                i = i + a.x</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-11" name="rest_code_abba7b413b5346b0a48d5c438a81da78-11" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-11"></a><span class="s1">            return i</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-12" name="rest_code_abba7b413b5346b0a48d5c438a81da78-12" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-12"></a><span class="s1">    '''</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-13" name="rest_code_abba7b413b5346b0a48d5c438a81da78-13" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-13"></a>    <span class="n">log</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="p">[</span><span class="mi">1000</span><span class="p">])</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-14" name="rest_code_abba7b413b5346b0a48d5c438a81da78-14" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-14"></a>    <span class="k">assert</span> <span class="n">log</span><span class="o">.</span><span class="n">result</span> <span class="o">==</span> <span class="mi">1000</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-15" name="rest_code_abba7b413b5346b0a48d5c438a81da78-15" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-15"></a>    <span class="n">loop</span><span class="p">,</span> <span class="o">=</span> <span class="n">log</span><span class="o">.</span><span class="n">loops_by_filename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filepath</span><span class="p">)</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-16" name="rest_code_abba7b413b5346b0a48d5c438a81da78-16" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-16"></a>    <span class="k">assert</span> <span class="n">loop</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s2">"""</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-17" name="rest_code_abba7b413b5346b0a48d5c438a81da78-17" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-17"></a><span class="s2">        i9 = int_lt(i5, i6)</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-18" name="rest_code_abba7b413b5346b0a48d5c438a81da78-18" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-18"></a><span class="s2">        guard_true(i9, descr=...)</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-19" name="rest_code_abba7b413b5346b0a48d5c438a81da78-19" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-19"></a><span class="s2">        guard_not_invalidated(descr=...)</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-20" name="rest_code_abba7b413b5346b0a48d5c438a81da78-20" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-20"></a><span class="s2">        i10 = int_add(i5, 1)</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-21" name="rest_code_abba7b413b5346b0a48d5c438a81da78-21" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-21"></a><span class="s2">        --TICK--</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-22" name="rest_code_abba7b413b5346b0a48d5c438a81da78-22" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-22"></a><span class="s2">        jump(..., descr=...)</span>
+<a id="rest_code_abba7b413b5346b0a48d5c438a81da78-23" name="rest_code_abba7b413b5346b0a48d5c438a81da78-23" href="how-is-pypy-tested.html#rest_code_abba7b413b5346b0a48d5c438a81da78-23"></a><span class="s2">    """</span><span class="p">)</span>
+</pre></div>
+<p>The string passed to the <code class="docutils literal">loop.match</code> function is a string representation of
+the intermediate representation code that is generated for the <code class="docutils literal">while</code> loop in
+the <code class="docutils literal">main</code> function given in the source. The important part of that
+intermediate representation is that the <code class="docutils literal">i = i + a.x</code> addition is optimized
+into an <code class="docutils literal">int_add(x, 1)</code> operation. The second argument for the addition is the
+constant <code class="docutils literal">1</code>, because the JIT noted that the global <code class="docutils literal">a</code> is a constant, and
+the attribute <code class="docutils literal">x</code> of that instance is always <code class="docutils literal">1</code>. The test thus checks that
+this optimization still works.</p>
+<p>Those tests are again more on the unit test side of things (and can thus
+unfortunately be a bit brittle sometimes and break). The integration test
+equivalent for performance is the <a class="reference external" href="https://speed.pypy.org/">PyPy Speed Center</a> which tracks the
+performance of micro- and macro-benchmarks over time and lets us see when big
+performance regressions are happening. The speed center is not really an
+automatic test and does not produce pass/fail outcomes. Instead, it requires
+human judgement and intervention in order to interpret the performance changes.
+Having a real pass/fail mechanism is something that would be <a class="reference external" href="https://twitter.com/glyph/status/1495122754286198790">great to have</a>
+but is probably <a class="reference external" href="https://arxiv.org/abs/1602.00602">quite tricky in practice</a>.</p>
+</section><section id="conclusion"><h3>Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>This concludes my overview of some of the different styles of tests that we use
+to develop the PyPy Python interpreter.</p>
+<p>There is a whole other set of tests for the development of the RPython language,
+the garbage collectors it provides as well as the code that does the automatic
+JIT insertion, maybe I'll cover these in a future post.</p>
+<section id="footnotes"><h4>Footnotes<a href="#footnotes" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p id="target-1">¹ CPython has the <cite>_testcapimodule.c</cite> and related modules, that are used to
+unit-test the C-API. However, these are still driven from Python tests using
+the <code class="docutils literal">unittest</code> framework and wouldn't run without the Python interpreter
+already working.</p>
+<p id="target-2">² There is also a deprecated different way to write these tests, by putting
+them in the <code class="docutils literal"><span class="pre">test_*.py</span></code> files that interpreter level tests are using and
+then having a test class with the pattern <code class="docutils literal">class AppTest*</code>. We haven't
+converted all of them to the new style yet, even though the old style is
+quite weird: since the <code class="docutils literal"><span class="pre">test_*.py</span></code> files are themselves parsed by
+Python 2, the tests methods in <code class="docutils literal">AppTest*</code> classes need to be written in the
+subset of Python 3 syntax that is also valid Python 2 syntax, leading to a lot
+of confusion.</p>
+<p id="target-3">³ Nit-picky side-note: <a class="reference external" href="https://root.cern.ch/root/html534/guides/users-guide/CINT.html">C interpreters</a> <a class="reference external" href="https://www.youtube.com/watch?v=yyDD_KRdQQU">are a thing</a>! But not that
+widely used in practice, or only in very specific situations.</p>
+</section></section></section>
+</div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../03/pypy-v738-release.html" rel="prev" title="PyPy v7.3.9 security release">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../07/toy-optimizer.html" rel="next" title="Implementing a Toy Optimizer">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="How is PyPy Tested?" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PowerPC backend for the JIT | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2015/10/powerpc-backend-for-jit-3014100267884692148.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="pypy-memory-and-warmup-improvements-2-4598780879518640015.html" title="PyPy memory and warmup improvements (2) - Sharing of Guards" type="text/html">
+<link rel="next" href="automatic-simd-vectorization-support-in-639063580401330508.html" title="Automatic SIMD vectorization support in PyPy" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="PowerPC backend for the JIT">
+<meta property="og:url" content="https://www.pypy.org/posts/2015/10/powerpc-backend-for-jit-3014100267884692148.html">
+<meta property="og:description" content="Hi all,
+
+PyPy's JIT now supports the 64-bit PowerPC architecture!  This is the
+third architecture supported, in addition to x86 (32 and 64) and ARM
+(32-bit only).  More precisely, we support Linux run">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2015-10-16T17:08:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">PowerPC backend for the JIT</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2015-10-16T17:08:00Z" itemprop="datePublished" title="2015-10-16 17:08">2015-10-16 17:08</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="powerpc-backend-for-jit-3014100267884692148.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Hi all,</p>
+
+<p>PyPy's JIT now supports the 64-bit PowerPC architecture!  This is the
+third architecture supported, in addition to x86 (32 and 64) and ARM
+(32-bit only).  More precisely, we support Linux running the big- and the
+little-endian variants of ppc64.  Thanks to IBM for funding this work!</p>
+
+<p>The new JIT backend has been merged into "default".  You should be able
+to translate PPC versions
+<a href="https://pypy.org/download.html#building-from-source">as usual</a>
+directly on the machines.  For
+the foreseeable future, I will compile and distribute binary versions
+corresponding to the official releases (for Fedora), but of course I'd
+welcome it if someone else could step in and do it.  Also, it is unclear
+yet if we will run a buildbot.</p>
+
+<p>To check that the result performs well, I logged in a ppc64le machine
+and ran the usual benchmark suite of PyPy (minus sqlitesynth: sqlite
+was not installed on that machine).  I ran it twice at a difference of
+12 hours, as an attempt to reduce risks caused by other users suddenly
+using the machine.  The machine was overall relatively quiet.  Of
+course, this is scientifically not good enough; it is what I could come
+up with given the limited resources.</p>
+
+<p>Here are the results, where the numbers are speed-up factors between the
+non-jit and the jit version of PyPy.  The first column is x86-64, for
+reference.  The second and third columns are the two ppc64le runs.  All
+are Linux.  A few benchmarks are not reported here because the runner
+doesn't execute them on non-jit (however, apart from sqlitesynth, they
+all worked).</p>
+
+<pre>
+    ai                        13.7342        16.1659     14.9091
+    bm_chameleon               8.5944         8.5858        8.66
+    bm_dulwich_log             5.1256         5.4368      5.5928
+    bm_krakatau                5.5201         2.3915      2.3452
+    bm_mako                    8.4802         6.8937      6.9335
+    bm_mdp                     2.0315         1.7162      1.9131
+    chaos                     56.9705        57.2608     56.2374
+    sphinx
+    crypto_pyaes               62.505         80.149     79.7801
+    deltablue                  3.3403         5.1199      4.7872
+    django                    28.9829         23.206       23.47
+    eparse                     2.3164         2.6281       2.589
+    fannkuch                   9.1242        15.1768     11.3906
+    float                     13.8145        17.2582     17.2451
+    genshi_text               16.4608        13.9398     13.7998
+    genshi_xml                 8.2782         8.0879      9.2315
+    go                         6.7458        11.8226     15.4183
+    hexiom2                   24.3612        34.7991     33.4734
+    html5lib                   5.4515         5.5186       5.365
+    json_bench                28.8774        29.5022     28.8897
+    meteor-contest             5.1518         5.6567      5.7514
+    nbody_modified            20.6138        22.5466     21.3992
+    pidigits                   1.0118          1.022      1.0829
+    pyflate-fast               9.0684        10.0168     10.3119
+    pypy_interp                3.3977         3.9307      3.8798
+    raytrace-simple           69.0114       108.8875    127.1518
+    richards                  94.1863       118.1257    102.1906
+    rietveld                   3.2421         3.0126      3.1592
+    scimark_fft
+    scimark_lu
+    scimark_montecarlo
+    scimark_sor
+    scimark_sparsematmul
+    slowspitfire               2.8539         3.3924      3.5541
+    spambayes                  5.0646         6.3446       6.237
+    spectral-norm             41.9148        42.1831     43.2913
+    spitfire                   3.8788         4.8214       4.701
+    spitfire_cstringio          7.606         9.1809      9.1691
+    sqlitesynth
+    sympy_expand               2.9537         2.0705      1.9299
+    sympy_integrate            4.3805         4.3467      4.7052
+    sympy_str                  1.5431         1.6248      1.5825
+    sympy_sum                  6.2519          6.096      5.6643
+    telco                     61.2416        54.7187     55.1705
+    trans2_annotate
+    trans2_rtype
+    trans2_backendopt
+    trans2_database
+    trans2_source
+    twisted_iteration         55.5019        51.5127     63.0592
+    twisted_names              8.2262         9.0062      10.306
+    twisted_pb                12.1134         13.644     12.1177
+    twisted_tcp                4.9778          1.934      5.4931
+
+    GEOMETRIC MEAN               9.31           9.70       10.01
+</pre>
+
+<p>The last line reports the geometric mean of each column.  We see that
+the goal was reached: PyPy's JIT actually improves performance by a
+factor of around 9.7 to 10 times on ppc64le.  By comparison, it "only"
+improves performance by a factor 9.3 on Intel x86-64.  I don't know why,
+but I'd guess it mostly means that a non-jitted PyPy performs slightly
+better on Intel than it does on PowerPC.</p>
+
+<p>Why is that?  Actually, if we do the same comparison with an ARM
+column too, we also get higher numbers there than on Intel.
+When we discovered that a few years ago, we guessed that
+on ARM running the whole interpreter in
+PyPy takes up a lot of resources, e.g. of instruction cache, which the
+JIT's assembler doesn't need any more after the process is warmed up.
+And caches are much bigger on Intel.  However, PowerPC is much closer
+to Intel, so this argument doesn't work for PowerPC.
+But there are other more subtle
+variants of it.  Notably, Intel is doing crazy things about branch
+prediction, which likely helps a big interpreter---both the non-JITted
+PyPy and CPython, and both for the interpreter's main loop itself and
+for the numerous indirect branches that depend on the types of the
+objects.  Maybe the PowerPC is as good as Intel, and so this argument
+doesn't work either.  Another one would be:
+on PowerPC I did notice that gcc itself is not
+perfect at optimization.  During development of this backend, I often
+looked at assembler produced by gcc, and there are a number of small
+inefficiencies there.  All these are factors that slow down the
+non-JITted version of PyPy, but don't influence the speed of the
+assembler produced just-in-time.</p>
+
+<p>Anyway, this is just guessing.  The fact remains that PyPy can now
+be used on PowerPC machines.  Have fun!</p>
+
+<p>A bientôt,</p>
+
+<p>Armin.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="pypy-memory-and-warmup-improvements-2-4598780879518640015.html" rel="prev" title="PyPy memory and warmup improvements (2) - Sharing of Guards">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="automatic-simd-vectorization-support-in-639063580401330508.html" rel="next" title="Automatic SIMD vectorization support in PyPy">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="PowerPC backend for the JIT" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

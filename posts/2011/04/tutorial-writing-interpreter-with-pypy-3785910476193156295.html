@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorial: Writing an Interpreter with PyPy, Part 1 | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2011/04/tutorial-writing-interpreter-with-pypy-3785910476193156295.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="pypy-goteborg-post-easter-sprint-april-16274563331982977.html" title="PyPy Göteborg Post-Easter Sprint April 25 - May 1 2011" type="text/html">
+<link rel="next" href="tutorial-part-2-adding-jit-8121732841568309472.html" title="Tutorial Part 2: Adding a JIT" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Tutorial: Writing an Interpreter with PyPy, Part 1">
+<meta property="og:url" content="https://www.pypy.org/posts/2011/04/tutorial-writing-interpreter-with-pypy-3785910476193156295.html">
+<meta property="og:description" content="This is a guest blog post written by Andrew Brown, with help from the PyPy developers
+on the pypy-dev mailing list.
+This tutorial's master copy and supporting files live at
+https://bitbucket.org/brown">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2011-04-05T13:44:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Tutorial: Writing an Interpreter with PyPy, Part 1</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2011-04-05T13:44:00Z" itemprop="datePublished" title="2011-04-05 13:44">2011-04-05 13:44</time></a>
+            </p>
+                <p class="commentline">15 comments</p>
+
+                <p class="commentline">            <a href="tutorial-writing-interpreter-with-pypy-3785910476193156295.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>This is a guest blog post <a href="https://codespeak.net/pipermail/pypy-dev/2011q2/007128.html">written by Andrew Brown</a>, with help from the PyPy developers
+on the pypy-dev mailing list.</p>
+<p>This tutorial's master copy and supporting files live at
+<a class="reference external" href="https://bitbucket.org/brownan/pypy-tutorial/">https://bitbucket.org/brownan/pypy-tutorial/</a></p>
+<hr>
+<p>When I first learned about the PyPy project, it took me a while to figure out
+exactly what it was about. For those that don't already know, it's two things:</p>
+<ul class="simple">
+<li>A set of tools for implementing interpreters for interpreted languages</li>
+<li>An implementation of Python using this toolchain</li>
+</ul>
+<p>The second part is probably what most people think PyPy is, but this tutorial
+is <em>not</em> about their Python interpreter.  It is about writing your own
+interpreter for your own language.</p>
+<p>This is the project I undertook to help myself better understand how PyPy works
+and what it's all about.</p>
+<p>This tutorial assumes you know very little about PyPy, how it works, and even
+what it's all about. I'm starting from the very beginning here.</p>
+<div class="section" id="what-pypy-does">
+<h2>What PyPy Does<a href="#what-pypy-does" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Here's a brief overview of what PyPy can do. Let's say you want to write an
+interpreted language. This involves writing some kind of source code parser, a
+bytecode interpretation loop, and lots of standard library code.</p>
+<p>That's quite a bit of work for moderately complicated languages, and there's a
+lot of low level work involved. Writing the parser and compiler code usually
+isn't fun, that's why there are tools out there to generate parsers and
+compilers for you.</p>
+<p>Even then, you still must worry about memory management in your interpreter,
+and you're going to be re-implementing a lot if you want data types like
+arbitrary precision integers, nice general hash tables, and such. It's enough
+to put someone off from implementing their idea for a language.</p>
+<p>Wouldn't it be nice if you could write your language in an existing high level
+language like, for example, Python? That sure would be ideal, you'd get all the
+advantages of a high level language like automatic memory management and rich
+data types at your disposal.  Oh, but an interpreted language interpreting
+another language would be slow, right? That's twice as much interpreting going
+on.</p>
+<p>As you may have guessed, PyPy solves this problem. PyPy is a sophisticated
+toolchain for analyzing and translating your interpreter code to C code (or JVM
+or CLI). This process is called "translation", and it knows how to translate
+quite a lot of Python's syntax and standard libraries, but not everything. All
+you have to do is write your interpreter in <strong>RPython</strong>, a subset of the Python
+language carefully defined to allow this kind of analysis and translation, and
+PyPy will produce for you a very efficient interpreter.</p>
+<p>Because efficient interpreters should not be hard to write.</p>
+</div>
+<div class="section" id="the-language">
+<h2>The Language<a href="#the-language" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>The language I've chosen to implement is dead simple. The language runtime
+consists of a tape of integers, all initialized to zero, and a single pointer
+to one of the tape's cells. The language has 8 commands, described here:</p>
+<dl class="docutils">
+<dt>&gt;</dt>
+<dd>Moves the tape pointer one cell to the right</dd>
+</dl>
+<dl class="docutils">
+<dt>&lt;</dt>
+<dd>Moves the tape pointer one cell to the left</dd>
+<dt>+</dt>
+<dd>Increments the value of the cell underneath the pointer</dd>
+<dt>-</dt>
+<dd>Decrements the value of the cell underneath the pointer</dd>
+</dl>
+<dl class="docutils">
+<dt>[</dt>
+<dd>If the cell under the current pointer is 0, skip to the instruction after
+the matching ]</dd>
+</dl>
+<dl class="docutils">
+<dt>]</dt>
+<dd>Skip back to the matching [ (evaluating its condition)</dd>
+</dl>
+<dl class="docutils">
+<dt>.</dt>
+<dd>Print out a single byte to stdout from the cell under the pointer</dd>
+</dl>
+<dl class="docutils">
+<dt>,</dt>
+<dd>Read in a single byte from stdin to the cell under the pointer</dd>
+</dl>
+<p>Any unrecognized bytes are ignored.</p>
+<p>Some of you may recognize this language. I will be referring to it as BF.</p>
+<p>One thing to notice is that the language is its own bytecode; there is no
+translation from source code to bytecode. This means that the language can be
+interpreted directly: the main eval loop of our interpreter will operate right
+on the source code. This simplifies the implementation quite a bit.</p>
+</div>
+<div class="section" id="first-steps">
+<h2>First Steps<a href="#first-steps" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Let's start out by writing a BF interpreter in plain old Python. The first step
+is sketching out an eval loop:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">mainloop</span>(program):
+    tape <span style="color: #555555;">=</span> Tape()
+    pc <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>
+    <span style="color: #006699; font-weight: bold;">while</span> pc <span style="color: #555555;">&lt;</span> <span style="color: #336666;">len</span>(program):
+        code <span style="color: #555555;">=</span> program[pc]
+
+        <span style="color: #006699; font-weight: bold;">if</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"&gt;"</span>:
+            tape<span style="color: #555555;">.</span>advance()
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"&lt;"</span>:
+            tape<span style="color: #555555;">.</span>devance()
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"+"</span>:
+            tape<span style="color: #555555;">.</span>inc()
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"-"</span>:
+            tape<span style="color: #555555;">.</span>dec()
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"."</span>:
+            sys<span style="color: #555555;">.</span>stdout<span style="color: #555555;">.</span>write(<span style="color: #336666;">chr</span>(tape<span style="color: #555555;">.</span>get()))
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">","</span>:
+            tape<span style="color: #555555;">.</span>set(<span style="color: #336666;">ord</span>(sys<span style="color: #555555;">.</span>stdin<span style="color: #555555;">.</span>read(<span style="color: #FF6600;">1</span>)))
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"["</span> <span style="color: #000000; font-weight: bold;">and</span> value() <span style="color: #555555;">==</span> <span style="color: #FF6600;">0</span>:
+            <span style="color: #0099FF; font-style: italic;"># Skip forward to the matching ]</span>
+        <span style="color: #006699; font-weight: bold;">elif</span> code <span style="color: #555555;">==</span> <span style="color: #CC3300;">"]"</span> <span style="color: #000000; font-weight: bold;">and</span> value() <span style="color: #555555;">!=</span> <span style="color: #FF6600;">0</span>:
+            <span style="color: #0099FF; font-style: italic;"># Skip back to the matching [</span>
+
+        pc <span style="color: #555555;">+=</span> <span style="color: #FF6600;">1</span>
+</pre></div>
+<p>As you can see, a program counter (pc) holds the current instruction index. The
+first statement in the loop gets the instruction to execute, and then a
+compound if statement decides how to execute that instruction.</p>
+<p>The implementation of [ and ] are left out here, but they should change the
+program counter to the value of the matching bracket. (The pc then gets
+incremented, so the condition is evaluated once when entering a loop, and once
+at the end of each iteration)</p>
+<p>Here's the implementation of the Tape class, which holds the tape's values as
+well as the tape pointer:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Tape</span>(<span style="color: #336666;">object</span>):
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape <span style="color: #555555;">=</span> [<span style="color: #FF6600;">0</span>]
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>position <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>
+
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">get</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape[<span style="color: #336666;">self</span><span style="color: #555555;">.</span>position]
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">set</span>(<span style="color: #336666;">self</span>, val):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape[<span style="color: #336666;">self</span><span style="color: #555555;">.</span>position] <span style="color: #555555;">=</span> val
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">inc</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape[<span style="color: #336666;">self</span><span style="color: #555555;">.</span>position] <span style="color: #555555;">+=</span> <span style="color: #FF6600;">1</span>
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">dec</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape[<span style="color: #336666;">self</span><span style="color: #555555;">.</span>position] <span style="color: #555555;">-=</span> <span style="color: #FF6600;">1</span>
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">advance</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>position <span style="color: #555555;">+=</span> <span style="color: #FF6600;">1</span>
+        <span style="color: #006699; font-weight: bold;">if</span> <span style="color: #336666;">len</span>(<span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape) <span style="color: #555555;">&lt;=</span> <span style="color: #336666;">self</span><span style="color: #555555;">.</span>position:
+            <span style="color: #336666;">self</span><span style="color: #555555;">.</span>thetape<span style="color: #555555;">.</span>append(<span style="color: #FF6600;">0</span>)
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">devance</span>(<span style="color: #336666;">self</span>):
+        <span style="color: #336666;">self</span><span style="color: #555555;">.</span>position <span style="color: #555555;">-=</span> <span style="color: #FF6600;">1</span>
+</pre></div>
+<p>As you can see, the tape expands as needed to the right, indefinitely. We
+should really add some error checking to make sure the pointer doesn't go
+negative, but I'm not worrying about that now.</p>
+<p>Except for the omission of the "[" and "]" implementation, this code will work
+fine.  However, if the program has a lot of comments, it will have to skip over
+them one byte at a time at runtime. So let's parse those out once and for all.</p>
+<p>At the same time, we'll build a dictionary mapping between brackets, so that
+finding a matching bracket is just a single dictionary lookup. Here's how:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">parse</span>(program):
+    parsed <span style="color: #555555;">=</span> []
+    bracket_map <span style="color: #555555;">=</span> {}
+    leftstack <span style="color: #555555;">=</span> []
+
+    pc <span style="color: #555555;">=</span> <span style="color: #FF6600;">0</span>
+    <span style="color: #006699; font-weight: bold;">for</span> char <span style="color: #000000; font-weight: bold;">in</span> program:
+        <span style="color: #006699; font-weight: bold;">if</span> char <span style="color: #000000; font-weight: bold;">in</span> (<span style="color: #CC3300;">'['</span>, <span style="color: #CC3300;">']'</span>, <span style="color: #CC3300;">'&lt;'</span>, <span style="color: #CC3300;">'&gt;'</span>, <span style="color: #CC3300;">'+'</span>, <span style="color: #CC3300;">'-'</span>, <span style="color: #CC3300;">','</span>, <span style="color: #CC3300;">'.'</span>):
+            parsed<span style="color: #555555;">.</span>append(char)
+
+            <span style="color: #006699; font-weight: bold;">if</span> char <span style="color: #555555;">==</span> <span style="color: #CC3300;">'['</span>:
+                leftstack<span style="color: #555555;">.</span>append(pc)
+            <span style="color: #006699; font-weight: bold;">elif</span> char <span style="color: #555555;">==</span> <span style="color: #CC3300;">']'</span>:
+                left <span style="color: #555555;">=</span> leftstack<span style="color: #555555;">.</span>pop()
+                right <span style="color: #555555;">=</span> pc
+                bracket_map[left] <span style="color: #555555;">=</span> right
+                bracket_map[right] <span style="color: #555555;">=</span> left
+            pc <span style="color: #555555;">+=</span> <span style="color: #FF6600;">1</span>
+
+    <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #CC3300;">""</span><span style="color: #555555;">.</span>join(parsed), bracket_map
+</pre></div>
+<p>This returns a string with all invalid instructions removed, and a dictionary
+mapping bracket indexes to their matching bracket index.</p>
+<p>All we need is some glue code and we have a working BF interpreter:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">run</span>(<span style="color: #336666;">input</span>):
+    program, <span style="color: #336666;">map</span> <span style="color: #555555;">=</span> parse(<span style="color: #336666;">input</span><span style="color: #555555;">.</span>read())
+    mainloop(program, <span style="color: #336666;">map</span>)
+
+<span style="color: #006699; font-weight: bold;">if</span> __name__ <span style="color: #555555;">==</span> <span style="color: #CC3300;">"__main__"</span>:
+    <span style="color: #006699; font-weight: bold;">import</span> <span style="color: #00CCFF; font-weight: bold;">sys</span>
+    run(<span style="color: #336666;">open</span>(sys<span style="color: #555555;">.</span>argv[<span style="color: #FF6600;">1</span>], <span style="color: #CC3300;">'r'</span>))
+</pre></div>
+<p>If you're following along at home, you'll also need to change the signature of
+mainloop() and implement the bracket branches of the if statement. Here's the
+complete example: <a class="reference external" href="https://bitbucket.org/brownan/pypy-tutorial/src/tip/example1.py">example1.py</a></p>
+<p>At this point you can try it out to see that it works by running the
+interpreter under python, but be warned, it will be <em>very</em> slow on the more
+complex examples:</p>
+<pre class="literal-block">
+$ python example1.py 99bottles.b
+</pre>
+<p>You can find mandel.b and several other example programs (not written by me) in
+my repository.</p>
+</div>
+<div class="section" id="pypy-translation">
+<h2>PyPy Translation<a href="#pypy-translation" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>But this is not about writing a BF interpreter, this is about PyPy. So what
+does it take to get PyPy to translate this into a super-fast executable?</p>
+<p>As a side note, there are some simple examples in the pypy/translator/goal
+directory of the PyPy source tree that are helpful here. My starting point for
+learning this was the example "targetnopstandalone.py", a simple hello world
+for PyPy.</p>
+<p>For our example, the module must define a name called "target" which returns the
+entry point. The translation process imports your module and looks for that
+name, calls it, and the function object returned is where it starts the
+translation.</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">run</span>(fp):
+    program_contents <span style="color: #555555;">=</span> <span style="color: #CC3300;">""</span>
+    <span style="color: #006699; font-weight: bold;">while</span> <span style="color: #336666;">True</span>:
+        read <span style="color: #555555;">=</span> os<span style="color: #555555;">.</span>read(fp, <span style="color: #FF6600;">4096</span>)
+        <span style="color: #006699; font-weight: bold;">if</span> <span style="color: #336666;">len</span>(read) <span style="color: #555555;">==</span> <span style="color: #FF6600;">0</span>:
+            <span style="color: #006699; font-weight: bold;">break</span>
+        program_contents <span style="color: #555555;">+=</span> read
+    os<span style="color: #555555;">.</span>close(fp)
+    program, bm <span style="color: #555555;">=</span> parse(program_contents)
+    mainloop(program, bm)
+
+<span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">entry_point</span>(argv):
+    <span style="color: #006699; font-weight: bold;">try</span>:
+        filename <span style="color: #555555;">=</span> argv[<span style="color: #FF6600;">1</span>]
+    <span style="color: #006699; font-weight: bold;">except</span> <span style="color: #CC0000; font-weight: bold;">IndexError</span>:
+        <span style="color: #006699; font-weight: bold;">print</span> <span style="color: #CC3300;">"You must supply a filename"</span>
+        <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #FF6600;">1</span>
+
+    run(os<span style="color: #555555;">.</span>open(filename, os<span style="color: #555555;">.</span>O_RDONLY, <span style="color: #FF6600;">0777</span>))
+    <span style="color: #006699; font-weight: bold;">return</span> <span style="color: #FF6600;">0</span>
+
+<span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">target</span>(<span style="color: #555555;">*</span>args):
+    <span style="color: #006699; font-weight: bold;">return</span> entry_point, <span style="color: #336666;">None</span>
+
+<span style="color: #006699; font-weight: bold;">if</span> __name__ <span style="color: #555555;">==</span> <span style="color: #CC3300;">"__main__"</span>:
+    entry_point(sys<span style="color: #555555;">.</span>argv)
+</pre></div>
+<p>The entry_point function is passed the command line arguments when you run the
+resulting executable.</p>
+<p>A few other things have changed here too. See the next section...</p>
+</div>
+<div class="section" id="about-rpython">
+<h2>About RPython<a href="#about-rpython" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Let's talk a bit about RPython at this point. PyPy can't translate arbitrary
+Python code because Python is a bit too dynamic. There are restrictions on what
+standard library functions and what syntax constructs one can use. I won't be
+going over all the restrictions, but for more information see
+<a class="reference external" href="https://readthedocs.org/docs/pypy/en/latest/coding-guide.html#restricted-python">https://readthedocs.org/docs/pypy/en/latest/coding-guide.html#restricted-python</a></p>
+<p>In the example above, you'll see a few things have changed.  I'm now using low
+level file descriptors with os.open and os.read instead of file objects.
+The implementation of "." and "," are similarly tweaked (not shown above).
+Those are the only changes to make to this code, the rest is simple enough for
+PyPy to digest.</p>
+<p>That wasn't so hard, was it? I still get to use dictionaries, expandable lists,
+and even classes and objects! And if low level file descriptors are too low for
+you, there are some helpful abstractions in the rlib.streamio module included
+with PyPy's "RPython standard library."</p>
+<p>For the example thus far, see <a class="reference external" href="https://bitbucket.org/brownan/pypy-tutorial/src/tip/example2.py">example2.py</a></p>
+</div>
+<div class="section" id="translating">
+<h2>Translating<a href="#translating" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>If you haven't already, check yourself out the latest version of PyPy from
+their bitbucket.org repository:</p>
+<pre class="literal-block">
+$ hg clone https://bitbucket.org/pypy/pypy
+</pre>
+<p>(A recent revision is necessary because of a bugfix that makes my example
+possible)</p>
+<p>The script to run is in "pypy/translator/goal/translate.py". Run this script,
+passing in our example module as an argument.</p>
+<p><b><i>[A note added much later: this script has been moved to "rpython/bin/rpython".]</i></b></p>
+<pre class="literal-block">
+$ python ./pypy/pypy/translator/goal/translate.py example2.py
+</pre>
+<p>(You can use PyPy's python interpreter for extra speed, but it's not necessary)</p>
+<p>PyPy will churn for a bit, drawing some nice looking fractals to your console
+while it works. It takes around 20 seconds on my machine.</p>
+<p>The result from this is an executable binary that interprets BF programs.
+Included in my repository are some example BF programs, including a mandelbrot
+fractal generator, which takes about 45 seconds to run on my computer. Try it
+out:</p>
+<pre class="literal-block">
+$ ./example2-c mandel.b
+</pre>
+<p>Compare this to running the interpreter un-translated on top of python:</p>
+<pre class="literal-block">
+$ python example2.py mandel.b
+</pre>
+<p>Takes forever, doesn't it?</p>
+<p>So there you have it. We've successfully written our own interpreter in RPython
+and translated it with the PyPy toolchain.</p>
+<hr>
+<p>(more in the next blog post...)</p>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="pypy-goteborg-post-easter-sprint-april-16274563331982977.html" rel="prev" title="PyPy Göteborg Post-Easter Sprint April 25 - May 1 2011">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="tutorial-part-2-adding-jit-8121732841568309472.html" rel="next" title="Tutorial Part 2: Adding a JIT">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-1655999581131029809">
+        <div class="comment-header">
+          <a name="comment-1655999581131029809"></a>
+            <span class="author">Dunk</span> wrote on <span class="date">2011-04-05 14:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>nice post!</p>
+        </div>
+      </div>
+      <div class="comment comment-7110443337570363967">
+        <div class="comment-header">
+          <a name="comment-7110443337570363967"></a>
+            <span class="author">DaNmarner</span> wrote on <span class="date">2011-04-05 16:35</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hmmmmmm, yum.<br><br>I'm going to translate this into Chinese, if you don't mind?</p>
+        </div>
+      </div>
+      <div class="comment comment-386734010605518570">
+        <div class="comment-header">
+          <a name="comment-386734010605518570"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-04-05 16:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>"devance"? I think you meant "retract".</p>
+        </div>
+      </div>
+      <div class="comment comment-6846797576851428869">
+        <div class="comment-header">
+          <a name="comment-6846797576851428869"></a>
+            <span class="author">Paul Smith</span> wrote on <span class="date">2011-04-06 04:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>On my Ubuntu 10.10 laptop, the PyPy BF interpreter ran hanoi in ~20 sec and mandel in ~40 sec. By comparison, the beef BF interpreter (written in C) ran these in ~10 and ~20 sec., respectively. Not too shabby, PyPy.</p>
+        </div>
+      </div>
+      <div class="comment comment-1013638857021386597">
+        <div class="comment-header">
+          <a name="comment-1013638857021386597"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2011-04-06 10:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>Nice article though I'm really missing a simple benchmark between the python interpreter and the pypy interpreter. "Takes forever" vs "45 seconds" isn't as awesome of a conclusion as I'd hoped for.</p>
+        </div>
+      </div>
+      <div class="comment comment-4239135028386300775">
+        <div class="comment-header">
+          <a name="comment-4239135028386300775"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-04-06 14:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>@temptemptemp13: I think you are missing something much more substantial. This article is not about Python at all. It is about how to use the PyPy toolchain to implement a different language - in this case the brainfuck programming language.<br><br>While BF isn't a very useful language, it has the nice properties of being very small. Almost all of the language fits in a blog post.</p>
+        </div>
+      </div>
+      <div class="comment comment-1971667908316437874">
+        <div class="comment-header">
+          <a name="comment-1971667908316437874"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2011-04-08 10:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks. I've finally understood what PyPy is.</p>
+        </div>
+      </div>
+      <div class="comment comment-3863676909683312150">
+        <div class="comment-header">
+          <a name="comment-3863676909683312150"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-04-12 18:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>I like how this article became family-friendly by actually avoiding calling BF by its name :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-4472733791964019847">
+        <div class="comment-header">
+          <a name="comment-4472733791964019847"></a>
+            <span class="author">Davide</span> wrote on <span class="date">2011-04-15 03:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>Amazing! Thanks for posting. I was wondering, what's about a pure C or C++ implementations, as close as reasonable to the python one? So I wrote them. You can read more details <a href="https://blog.javacorner.net/2011/04/pypy-wonders.html" rel="nofollow">here</a>, but the bottom line is that PyPy is (marginally) faster than C++, and (marginally) slower than C :-O</p>
+        </div>
+      </div>
+      <div class="comment comment-2259705524617110733">
+        <div class="comment-header">
+          <a name="comment-2259705524617110733"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2011-04-15 07:53</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Davide: you should compare your C version against the PyPy version WITH the JIT, as explained here:<br><br>https://morepypy.blogspot.com/2011/04/tutorial-part-2-adding-jit.html<br><br>I bet that PyPy will easily win :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-4622755320167081094">
+        <div class="comment-header">
+          <a name="comment-4622755320167081094"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-12-12 01:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>Nice post. I just want to report that I tried running<br><br> /usr/share/pypy-1.6/pypy/translator/goal/translate.py example2.py<br><br>and got the following error.<br>This is with an Ubuntu 1.7 pypy package rebuilt on Debian squeeze (the 1.6 is a typo, it should be 1.7).<br><br>[translation:ERROR] Error:<br>[translation:ERROR]  Traceback (most recent call last):<br>[translation:ERROR]    File "/usr/share/pypy-1.6/pypy/translator/goal/translate.py", line 308, in main<br>[translation:ERROR]     drv.proceed(goals)<br>[translation:ERROR]    File "/usr/share/pypy-1.6/pypy/translator/driver.py", line 809, in proceed<br>[translation:ERROR]     return self._execute(goals, task_skip = self._maybe_skip())<br>[translation:ERROR]    File "/usr/share/pypy-1.6/pypy/translator/tool/taskengine.py", line 116, in _execute<br>[translation:ERROR]     res = self._do(goal, taskcallable, *args, **kwds)<br>[translation:ERROR]    File "/usr/share/pypy-1.6/pypy/translator/driver.py", line 286, in _do<br>[translation:ERROR]     res = func()<br>[translation:ERROR]    File "/usr/share/pypy-1.6/pypy/translator/driver.py", line 441, in task_backendopt_lltype<br>[translation:ERROR]     from pypy.translator.backendopt.all import backend_optimizations<br>[translation:ERROR]    File "/usr/share/pypy-1.6/pypy/translator/backendopt/all.py", line 2, in <br>[translation:ERROR]     from pypy.translator.backendopt import removenoops<br>[translation:ERROR]    File "/usr/share/pypy-1.6/pypy/translator/backendopt/removenoops.py", line 5, in <br>[translation:ERROR]     from pypy import conftest<br>[translation:ERROR]    File "/usr/share/pypy-1.6/pypy/conftest.py", line 1, in <br>[translation:ERROR]     import py, pytest, sys, os, textwrap, types<br>[translation:ERROR]  ImportError: No module named pytest<br>[translation] start debugger...<br>&gt; /usr/share/pypy-1.6/pypy/conftest.py(1)()<br>-&gt; import py, pytest, sys, os, textwrap, types<br>(Pdb+)<br><br>So, it looks like pytest needs to be installed. This does not appear to be available as a Debian package.<br><br>Regards, Faheem Mitha <br>(faheem at faheem dot info)</p>
+        </div>
+      </div>
+      <div class="comment comment-3206828184167150028">
+        <div class="comment-header">
+          <a name="comment-3206828184167150028"></a>
+            <span class="author">James Mills</span> wrote on <span class="date">2013-02-14 05:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is a great post for anyone interested in programming languages :) Great post!</p>
+        </div>
+      </div>
+      <div class="comment comment-6509040578763151306">
+        <div class="comment-header">
+          <a name="comment-6509040578763151306"></a>
+            <span class="author">ℭacilhας, ℒa ℬatalema</span> wrote on <span class="date">2013-02-23 02:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>Now, with os.read() and os.write():<br><br>[translation:ERROR] Error:<br>[translation:ERROR]  Traceback (most recent call last):<br>[translation:ERROR]    File "/opt/local/lib/pypy/src/pypy-pypy-07e08e9c885c/pypy/translator/goal/translate.py", line 303, in main<br>[translation:ERROR]     drv.proceed(goals)<br>[translation:ERROR]    File "/opt/local/lib/pypy-2.0-b1/src/pypy-pypy-07e08e9c885c/pypy/translator/driver.py", line 771, in proceed<br>[translation:ERROR]     return self._execute(goals, task_skip = self._maybe_skip())<br>[translation:ERROR]    File "/opt/local/lib/pypy-2.0-b1/src/pypy-pypy-07e08e9c885c/pypy/translator/tool/taskengine.py", line 116, in _execute<br>[translation:ERROR]     res = self._do(goal, taskcallable, *args, **kwds)<br>[translation:ERROR]    File "/opt/local/lib/pypy-2.0-b1/src/pypy-pypy-07e08e9c885c/pypy/translator/driver.py", line 283, in _do<br>[translation:ERROR]     res = func()<br>[translation:ERROR]    File "/opt/local/lib/pypy-2.0-b1/src/pypy-pypy-07e08e9c885c/pypy/translator/driver.py", line 319, in task_annotate<br>[translation:ERROR]     s = annotator.build_types(self.entry_point, self.inputtypes)<br>[translation:ERROR]    File "/opt/local/lib/pypy-2.0-b1/src/pypy-pypy-07e08e9c885c/pypy/annotation/annrpython.py", line 89, in build_types<br>[translation:ERROR]     return self.build_graph_types(flowgraph, inputcells, complete_now=complete_now)<br>[translation:ERROR]    File "/opt/local/lib/pypy-2.0-b1/src/pypy-pypy-07e08e9c885c/pypy/annotation/annrpython.py", line 142, in build_graph_types<br>[translation:ERROR]     self.complete()<br>[translation:ERROR]    File "/opt/local/lib/pypy-2.0-b1/src/pypy-pypy-07e08e9c885c/pypy/annotation/annrpython.py", line 217, in complete<br>[translation:ERROR]     raise AnnotatorError(text)<br>[translation:ERROR]  AnnotatorError: -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+<br>[translation:ERROR] Blocked block -- operation cannot succeed<br>[translation:ERROR]<br>[translation:ERROR]  v1 = ord(v0)<br>[translation:ERROR] In :<br>[translation:ERROR] Happened at file /Users/cacilhas/Workspace/Personal/brainfuck/src/brainfuck/parser.py line 29<br>[translation:ERROR]<br>[translation:ERROR] ==&gt;             tape.set(ord(os.read(0, 1)))<br>[translation:ERROR]<br>[translation:ERROR] Known variable annotations:<br>[translation:ERROR]  v0 = SomeString(can_be_None=True)</p>
+        </div>
+      </div>
+      <div class="comment comment-6568973580845189857">
+        <div class="comment-header">
+          <a name="comment-6568973580845189857"></a>
+            <span class="author">Dvd Fo</span> wrote on <span class="date">2013-08-26 12:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>I think that your "," implementation is incorrect, os.read returns an empty string on EOF, thus [0] triggers an exception.<br>According to Wikipedia, setting the cell to 0, -1 or leaving the cell unchanged each may be used to tell EOF apart from other characters.</p>
+        </div>
+      </div>
+      <div class="comment comment-3836156420776004882">
+        <div class="comment-header">
+          <a name="comment-3836156420776004882"></a>
+            <span class="author">James</span> wrote on <span class="date">2015-12-02 05:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>I followed this tutorial again several years later :) (just for fun) using the newly published rpython toolchain now available up on PyPi. You can now just: pip install rpython -- I also wanted to point out that recent versions of the RPython toolchain have made advances in what it can translate it seems; specifically I did not need to change the open(...).read() parts to lower level os.read() calls.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

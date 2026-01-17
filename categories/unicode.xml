@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about unicode)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/unicode.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:36 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>(Cape of) Good Hope for PyPy</title><link>https://www.pypy.org/posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html</link><dc:creator>Antonio Cuni</dc:creator><description>&lt;div&gt;
+&lt;br&gt;&lt;/div&gt;
+Hello from the other side of the world (for most of you)!&lt;br&gt;
+&lt;br&gt;
+With the excuse of coming to &lt;a class="reference external" href="https://za.pycon.org/"&gt;PyCon ZA&lt;/a&gt; during the last two weeks Armin,
+Ronan, Antonio and sometimes Maciek had a very nice and productive sprint in
+Cape Town, as pictures show :). We would like to say a big thank you to
+Kiwi.com, which sponsored part of the travel costs via its awesome &lt;a class="reference external" href="https://www.kiwi.com/sourcelift/"&gt;Sourcelift&lt;/a&gt;
+program to help Open Source projects.&lt;br&gt;
+&lt;br&gt;
+&lt;table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="float: right; margin-left: 1em; text-align: right;"&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td style="text-align: center;"&gt;&lt;a href="https://3.bp.blogspot.com/-9YVNucPN1wE/WeaWmTUFB-I/AAAAAAAABMQ/HeVMqS-ya2IYJuk0iZZODlULqpKaf5XcgCLcBGAs/s1600/DSC_2418.JPG" style="margin-left: auto; margin-right: auto;"&gt;&lt;img border="0" height="225" src="https://3.bp.blogspot.com/-9YVNucPN1wE/WeaWmTUFB-I/AAAAAAAABMQ/HeVMqS-ya2IYJuk0iZZODlULqpKaf5XcgCLcBGAs/s400/DSC_2418.JPG" width="400"&gt;&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class="tr-caption" style="text-align: center;"&gt;Armin, Anto and Ronan at Cape Point&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;br&gt;
+Armin, Ronan and Anto spent most of the time hacking at cpyext, our CPython
+C-API compatibility layer: during the last years, the focus was to make it
+working and compatible with CPython, in order to run existing libraries such
+as numpy and pandas. However, we never paid too much attention to performance,
+so the net result is that with the latest released version of PyPy, C
+extensions generally work but their speed ranges from "slow" to "horribly
+slow".&lt;br&gt;
+&lt;br&gt;
+For example, these very simple &lt;a class="reference external" href="https://github.com/antocuni/cpyext-benchmarks"&gt;microbenchmarks&lt;/a&gt; measure the speed of
+calling (empty) C functions, i.e. the time you spend to "cross the border"
+between RPython and C.  &lt;i&gt;(Note: this includes the time spent doing the loop in regular Python code.)&lt;/i&gt; These are the results on CPython, on PyPy 5.8, and on
+our newest in-progress version:&lt;br&gt;
+&lt;br&gt;
+&lt;pre class="literal-block"&gt;$ python bench.py     # CPython
+noargs      : 0.41 secs
+onearg(None): 0.44 secs
+onearg(i)   : 0.44 secs
+varargs     : 0.58 secs
+&lt;/pre&gt;
+&lt;div&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;pre class="literal-block"&gt;$ pypy-5.8 bench.py   # PyPy 5.8
+noargs      : 1.01 secs
+onearg(None): 1.31 secs
+onearg(i)   : 2.57 secs
+varargs     : 2.79 secs
+&lt;/pre&gt;
+&lt;div&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;pre class="literal-block"&gt;$ pypy bench.py       # cpyext-refactor-methodobject branch
+noargs      : 0.17 secs
+onearg(None): 0.21 secs
+onearg(i)   : 0.22 secs
+varargs     : 0.47 secs
+&lt;/pre&gt;
+&lt;div&gt;
+&lt;br&gt;&lt;/div&gt;
+&lt;pre class="literal-block"&gt;&lt;/pre&gt;
+&lt;pre class="literal-block"&gt;&lt;/pre&gt;
+So yes: before the sprint, we were ~2-6x slower than CPython. Now, we are
+&lt;strong&gt;faster&lt;/strong&gt; than it!
+To reach this result, we did various improvements, such as:
+&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ol class="arabic simple"&gt;
+&lt;li&gt;teach the JIT how to look (a bit) inside the cpyext module;&lt;/li&gt;
+&lt;li&gt;write specialized code for calling &lt;tt class="docutils literal"&gt;METH_NOARGS&lt;/tt&gt;, &lt;tt class="docutils literal"&gt;METH_O&lt;/tt&gt; and
+&lt;tt class="docutils literal"&gt;METH_VARARGS&lt;/tt&gt; functions; previously, we always used a very general and
+slow logic;&lt;/li&gt;
+&lt;li&gt;implement freelists to allocate the cpyext versions of &lt;tt class="docutils literal"&gt;int&lt;/tt&gt; and
+&lt;tt class="docutils literal"&gt;tuple&lt;/tt&gt; objects, as CPython does;&lt;/li&gt;
+&lt;li&gt;the &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/merge_requests/573"&gt;cpyext-avoid-roundtrip&lt;/a&gt; branch: crossing the RPython/C border is
+slowish, but the real problem was (and still is for many cases) we often
+cross it many times for no good reason. So, depending on the actual API
+call, you might end up in the C land, which calls back into the RPython
+land, which goes to C, etc. etc. (ad libitum).&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+The branch tries to fix such nonsense: so far, we fixed only some cases, which
+are enough to speed up the benchmarks shown above.  But most importantly, we
+now have a clear path and an actual plan to improve cpyext more and
+more. Ideally, we would like to reach a point in which cpyext-intensive
+programs run at worst at the same speed of CPython.&lt;br&gt;
+&lt;br&gt;
+The other big topic of the sprint was Armin and Maciej doing a lot of work on the
+&lt;a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/branch/unicode-utf8"&gt;unicode-utf8&lt;/a&gt; branch: the goal of the branch is to always use UTF-8 as the
+internal representation of unicode strings. The advantages are various:
+&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;decoding a UTF-8 stream is super fast, as you just need to check that the
+stream is valid;&lt;/li&gt;
+&lt;li&gt;encoding to UTF-8 is almost a no-op;&lt;/li&gt;
+&lt;li&gt;UTF-8 is always more compact representation than the currently
+used UCS-4. It's also almost always more compact than CPython 3.5 latin1/UCS2/UCS4 combo;&lt;/li&gt;
+&lt;li&gt;smaller representation means everything becomes quite a bit faster due to lower cache pressure.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+Before you ask: yes, this branch contains special logic to ensure that random
+access of single unicode chars is still O(1), as it is on both CPython and the
+current PyPy.&lt;br&gt;
+We also plan to improve the speed of decoding even more by using modern processor features, like SSE and AVX. Preliminary results show that decoding can be done 100x faster than the current setup.
+&lt;br&gt;
+&lt;br&gt;
+In summary, this was a long and profitable sprint, in which we achieved lots
+of interesting results. However, what we liked even more was the privilege of
+doing &lt;a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/a4307fb5912e"&gt;commits&lt;/a&gt; from awesome places such as the top of Table Mountain:&lt;br&gt;
+&lt;br&gt;
+&lt;blockquote class="twitter-tweet"&gt;
+&lt;div dir="ltr" lang="en"&gt;
+Our sprint venue today &lt;a href="https://twitter.com/hashtag/pypy?src=hash&amp;amp;ref_src=twsrc%5Etfw"&gt;#pypy&lt;/a&gt; &lt;a href="https://t.co/o38IfTYmAV"&gt;pic.twitter.com/o38IfTYmAV&lt;/a&gt;&lt;/div&gt;
+— Ronan Lamy (@ronanlamy) &lt;a href="https://twitter.com/ronanlamy/status/915575026107240449?ref_src=twsrc%5Etfw"&gt;4 ottobre 2017&lt;/a&gt;&lt;/blockquote&gt;
+
+
+&lt;br&gt;
+&lt;table align="center" cellpadding="0" cellspacing="0" class="tr-caption-container" style="float: left; margin-right: 1em; text-align: left;"&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;td style="text-align: center;"&gt;&lt;a href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/extradoc/sprintinfo/cape-town-2017/2017-10-04-155524.jpg" style="margin-left: auto; margin-right: auto;"&gt;&lt;img border="0" height="360" src="https://bytebucket.org/pypy/extradoc/raw/extradoc/sprintinfo/cape-town-2017/2017-10-04-155524.jpg" width="640"&gt;&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td class="tr-caption" style="text-align: center;"&gt;The panorama we looked at instead of staring at cpyext code&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;</description><category>cpyext</category><category>profiling</category><category>speed</category><category>sprint</category><category>unicode</category><guid>https://www.pypy.org/posts/2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html</guid><pubDate>Wed, 18 Oct 2017 13:31:00 GMT</pubDate></item></channel></rss>

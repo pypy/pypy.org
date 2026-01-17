@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Porting the JIT to CLI (part 2) | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2008/11/porting-jit-to-cli-part-2-2456826431882963884.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Antonio Cuni">
+<link rel="prev" href="porting-jit-to-cli-part-1-8712941279840156635.html" title="Porting the JIT to CLI (part 1)" type="text/html">
+<link rel="next" href="../12/porting-jit-to-cli-part-3-3519327524638923621.html" title="Porting the JIT to CLI (part 3)" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Porting the JIT to CLI (part 2)">
+<meta property="og:url" content="https://www.pypy.org/posts/2008/11/porting-jit-to-cli-part-2-2456826431882963884.html">
+<meta property="og:description" content="In my previous post, we saw that PyPy JIT generator can produce huge
+speedups when applied to the tlc toy language.
+In this post we will dive a bit into the internals of PyPy JIT, to see how it
+manage">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2008-11-07T11:03:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Porting the JIT to CLI (part 2)</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2008-11-07T11:03:00Z" itemprop="datePublished" title="2008-11-07 11:03">2008-11-07 11:03</time></a>
+            </p>
+                <p class="commentline">6 comments</p>
+
+                <p class="commentline">            <a href="porting-jit-to-cli-part-2-2456826431882963884.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>In my <a class="reference" href="porting-jit-to-cli-part-1-8712941279840156635.html">previous post</a>, we saw that PyPy JIT generator can produce huge
+speedups when applied to the <a class="reference" href="https://www.blogger.com/.._%60sourcecode%60:https://codespeak.net/svn/pypy/branch/oo-jit/pypy/jit/tl/tlc.py">tlc</a> toy language.</p>
+<p>In this post we will dive a bit into the internals of PyPy JIT, to see how it
+manages to do so. Note that this is a <strong>very</strong> high level overview of how the
+JIT works, and applies to all backends.  Then, in the third post of this
+series, we will look closer at the CLI JIT backend, seeing how it works around
+some .NET limitations and how the generated code looks like.</p>
+
+<h2 id="pypy-jit-for-dummies">PyPy JIT for dummies<a href="#pypy-jit-for-dummies" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>As you surely know, the key idea of PyPy is that we are too lazy to write a
+JIT of our own: so, instead of passing nights writing a JIT, we pass years
+coding a <strong>JIT generator</strong> that writes the JIT for us :-).</p>
+<p>I'm not going to explain how the JIT generator does its job, (perhaps this
+will be the subject of another blog post), but how the <strong>generated JIT</strong>
+works.</p>
+<p>There are values that, if known at compile-time (i.e., when the <em>JIT compiler</em>
+runs), let the JIT to produce very efficient code.  In a dynamic language,
+types are the primary example: for instance, suppose you are a compiler and
+you have to compile to following Python function:</p>
+<pre class="literal-block">
+def mysum(a):
+  return a + 1
+</pre>
+<p>At compile time, you don't have any knowledge about the type of the parameter:
+it could be integer, float, an user defined object, etc.  In this situation,
+the only safe choice is to emit code which does the usual, slow, full lookup
+to know how to perform the operations.</p>
+<p>On the other hand, suppose that you knew in advance that the parameter is an
+integer: this time, you could emit code that exploits this <strong>extra
+knowledge</strong>, by performing directly a fast integer addition.</p>
+<p>The idea behind PyPy JIT is that if you don't have enough knowledge to
+generate efficient code, you <strong>stop compiling</strong> and wait until you know
+exactly what you need.  Concretely, you emit code that runs until the point
+where you stopped the compilation, then it triggers a special procedure that
+<strong>restarts the compiler</strong>.  This time the JIT compiler knows everything
+you need, because you can inspect the state of the running program.</p>
+<p>Let's see an example: the first time the JIT compiles <tt class="docutils literal"><span class="pre">mysum</span></tt>, it produces
+something like this pseudo-code:</p>
+<pre class="literal-block">
+PyObject mysum_compiled(PyObject a)
+{
+  Type a_type = a.GetType();
+  switch(a_type) {
+      default: continue_compilation(a_type, &lt;position&gt;);
+  }
+}
+</pre>
+<p>If you call <tt class="docutils literal"><span class="pre">mysum(41)</span></tt>, the execution goes in the <em>default</em> branch of the
+switch, thus calling <tt class="docutils literal"><span class="pre">continue_compilation</span></tt>: its job is to restart the JIT
+compiler, which now can emit fast code because it knows the exact type of
+<tt class="docutils literal"><span class="pre">a</span></tt>; then, it <strong>modifies</strong> the original <tt class="docutils literal"><span class="pre">mysum_compiled</span></tt> function, in
+order to make it executing the newly generated code the next time it
+encounters an integer at that point:</p>
+<pre class="literal-block">
+PyObject mysum_compiled(PyObject a)
+{
+  Type a_type = a.GetType();
+  switch(a_type) {
+      PyInteger: return new PyInteger(a.value+1); // fast path!
+      default: continue_compilation(a_type, &lt;position&gt;);
+  }
+}
+</pre>
+<p>From now on, every time we call <tt class="docutils literal"><span class="pre">mysum</span></tt> with an integer argument, the JIT
+compiler is not called anymore and the fast path is directly executed; if we
+happen to call <tt class="docutils literal"><span class="pre">mysum</span></tt> with a float arguments, the switch goes again in the
+<em>default</em> branch, and the JIT compiler is started once more to produce fast
+code also for this case.  What happens in practice is that compile-time and
+runtime are continuously intermixed, until the switches are stable enough and
+the compiler is not needed anymore.</p>
+<p>In PyPy jargon, this kind of "growable switch" is called <strong>flexswitch</strong>, and
+it's one of the most important concept of our JIT generator.</p>
+
+<h2 id="promotion">Promotion<a href="#promotion" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>How can the JIT generator know which values are useful to know to generate
+efficient code and which aren't?  Unfortunately it can't, or at least our JIT
+generator is not smart enough at the moment.</p>
+<p>To get the best from it, the developers of the VM need to instruct it by
+<em>annotating</em> the variables on which we want the JIT to stop until it knows the
+actual values; this is done by using particular <strong>hints</strong>, called <em>promote</em>
+and <em>promote_class</em>; variables annotated with such hints are said to be
+<strong>promoted</strong>. If something is promoted, a flexswitch is used to gain
+information about it, as seen in the last section.</p>
+<p>For an example, let's look at an excerpt from main dispatch loop of the <a class="reference" href="https://www.blogger.com/.._%60sourcecode%60:https://codespeak.net/svn/pypy/branch/oo-jit/pypy/jit/tl/tlc.py">tlc</a>
+virtual machine:</p>
+<pre class="literal-block">
+elif opcode == ADD:
+  a, b = stack.pop(), stack.pop()
+  hint(a, promote_class=True)
+  hint(b, promote_class=True)
+  stack.append(b.add(a))
+</pre>
+<p>This the implementation of the <tt class="docutils literal"><span class="pre">ADD</span></tt> opcode: first, it pops two values from
+the stack; then, it computes the result; finally, it push the result to the
+stack again.  In between, both the classes of <tt class="docutils literal"><span class="pre">a</span></tt> and <tt class="docutils literal"><span class="pre">b</span></tt> have been
+promoted: this means that when the JIT emits the code for <tt class="docutils literal"><span class="pre">b.add(a)</span></tt>, it
+knows exactly what is happening: if it sees that both are instances of the
+<tt class="docutils literal"><span class="pre">IntObj</span></tt> class, it inlines the method call and emits a fast integer addition
+instead.</p>
+
+<h2 id="virtuals">Virtuals<a href="#virtuals" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>The other important concept of the JIT is the presence of <em>virtual
+structures</em>, <em>virtual lists</em>, and <em>virtual dictionaries</em>.  Again, I'm not
+going to explain in depth how they work, but only why they are so important for
+generating highly efficient code.</p>
+<p>The essence of virtuals is that you don't allocate objects until you really
+need to do it, e.g. because they are being passed as an argument to some
+external function.  Instead, we store all the informations we need as local
+variables; e.g., in the case of a virtual structure, we create as many local
+variables as the number of its fields: if the structure <em>escapes</em> the local
+scope, we <em>force</em> it to a real object, by allocating memory on the heap and
+initializing it after the current value of the local variables.</p>
+<p>This technique allows the JIT to avoid the allocation of many temporary
+objects that hold intermediate results; consider for example the following
+Python loop:</p>
+<pre class="literal-block">
+result = 0
+for i in range(N):
+  result += i
+return result
+</pre>
+<p>Without the JIT, at each iteration, a new <tt class="docutils literal"><span class="pre">int</span></tt> object is created and bound
+to the <tt class="docutils literal"><span class="pre">result</span></tt> variable, while the previous one is discarded and not needed
+anymore.  By combining virtuals and promotion, the JIT can emit code that does
+the whole computation locally, and allocates a real object only at the end,
+when it <em>escapes</em> from the local scope because it is returned from the
+function.</p>
+
+<h2 id="putting-it-all-together">Putting it all together<a href="#putting-it-all-together" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>This is, essentially, how PyPy's generated JITs work.  To summarize, our JITs
+emit multiple versions of each chunk of code: each version is <strong>specialized</strong>
+and optimized for one particular case.</p>
+<p>The cost of selecting the right specialization to use (through flexswitches)
+is almost always negligible compared to how much time you save by running the
+fast version instead of the more-general-but-slow one.  Moreover, each
+specialized version knows the exact shape of the objects it's dealing with, so
+they can be virtualized to make the generated code even more efficient.</p>
+<p>At the end, the actual code generation is done by one of the <strong>JIT backends</strong>:
+the backends exploit all the knowledge gathered by the previous steps to
+produce highly efficient code, but this will be the subject of the next blog
+post.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="porting-jit-to-cli-part-1-8712941279840156635.html" rel="prev" title="Porting the JIT to CLI (part 1)">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../12/porting-jit-to-cli-part-3-3519327524638923621.html" rel="next" title="Porting the JIT to CLI (part 3)">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-6902825876361907657">
+        <div class="comment-header">
+          <a name="comment-6902825876361907657"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-11-07 12:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wow... I love this approach. Keep up the great work and interesting posts!</p>
+        </div>
+      </div>
+      <div class="comment comment-4821479895843489531">
+        <div class="comment-header">
+          <a name="comment-4821479895843489531"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2008-11-07 18:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is a very clear and didactic explanation. Thanks!</p>
+        </div>
+      </div>
+      <div class="comment comment-950075562559359694">
+        <div class="comment-header">
+          <a name="comment-950075562559359694"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-11-07 20:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>can't wait for the next one</p>
+        </div>
+      </div>
+      <div class="comment comment-4172511053662153109">
+        <div class="comment-header">
+          <a name="comment-4172511053662153109"></a>
+            <span class="author">kbob</span> wrote on <span class="date">2008-11-08 01:35</span>:
+        </div>
+        <div class="comment-content">
+          <p>What does the flexswitch compile into?  I'm guessing it would look like<br><br>    t = type(obj);<br>    if (t == int)<br>        ...<br>    else if (t == float)<br>        ...<br>    else<br>        ....<br><br>but maybe there's a better way (or maybe the answer is backend-dependent).</p>
+        </div>
+      </div>
+      <div class="comment comment-2887523272693636820">
+        <div class="comment-header">
+          <a name="comment-2887523272693636820"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2008-11-08 08:53</span>:
+        </div>
+        <div class="comment-content">
+          <p>@bob<br>your guess is right, how to implement the flexswitch is backend-dependent.  This is the hardest part for .NET, as the flexswitch needs to grow dynamically (i.e., you have to add more case after the .NET method has already been compiled). It will be subject of the next blog post.</p>
+        </div>
+      </div>
+      <div class="comment comment-463934217000221313">
+        <div class="comment-header">
+          <a name="comment-463934217000221313"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2009-01-05 22:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>It seems that an implication of the JIT way is that, by adopting a consistent habit of implementing type driven Generic Functions, the JIT could accomplish nearly all of the possible optimizations in a single pass. In other words, by definition, each type based variation of a Generic Function call can only be fired when data of that type is provided as a parameter.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

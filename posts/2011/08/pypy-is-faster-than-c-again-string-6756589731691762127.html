@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy is faster than C, again: string formatting | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2011/08/pypy-is-faster-than-c-again-string-6756589731691762127.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Maciej Fijalkowski">
+<link rel="prev" href="../07/realtime-image-processing-in-python-6985924592886873374.html" title="Realtime image processing in Python" type="text/html">
+<link rel="next" href="visualization-of-jitted-code-6202490807361942120.html" title="Visualization of JITted code" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="PyPy is faster than C, again: string formatting">
+<meta property="og:url" content="https://www.pypy.org/posts/2011/08/pypy-is-faster-than-c-again-string-6756589731691762127.html">
+<meta property="og:description" content="String formatting is probably something you do just about every day in Python,
+and never think about.  It's so easy, just &quot;%d %d&quot; % (i, i) and you're
+done.  No thinking about how to size your result b">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2011-08-02T18:50:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">PyPy is faster than C, again: string formatting</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2011-08-02T18:50:00Z" itemprop="datePublished" title="2011-08-02 18:50">2011-08-02 18:50</time></a>
+            </p>
+                <p class="commentline">52 comments</p>
+
+                <p class="commentline">            <a href="pypy-is-faster-than-c-again-string-6756589731691762127.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>String formatting is probably something you do just about every day in Python,
+and never think about.  It's so easy, just <tt class="docutils literal">"%d %d" % (i, i)</tt> and you're
+done.  No thinking about how to size your result buffer, whether your output
+has an appropriate NULL byte at the end, or any other details.  A C
+equivalent might be:</p>
+<pre class="literal-block">
+char x[44];
+sprintf(x, "%d %d", i, i);
+</pre>
+<p>Note that we had to stop for a second and consider how big numbers might get
+and overestimate the size (44 = length of the biggest number on 64bit (20) +
+1 for the sign * 2 + 1 (for the space) + 1 (NUL byte)), it took the authors of
+this post, fijal and alex, 3 tries to get the math right on this :-)</p>
+<p>This is fine, except you can't even return <tt class="docutils literal">x</tt> from this function, a more
+fair comparison might be:</p>
+<pre class="literal-block">
+char *x = malloc(44 * sizeof(char));
+sprintf(x, "%d %d", i, i);
+</pre>
+<p><tt class="docutils literal">x</tt> is slightly overallocated in some situations, but that's fine.</p>
+<p>But we're not here to just discuss the implementation of string
+formatting, we're here to discuss how blazing fast PyPy is at it, with
+the new <tt class="docutils literal"><span class="pre">unroll-if-alt</span></tt> branch.  Given the Python code:</p>
+<pre class="literal-block">
+def main():
+    for i in xrange(10000000):
+        "%d %d" % (i, i)
+
+main()
+</pre>
+<p>and the C code:</p>
+<pre class="literal-block">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+
+int main() {
+    int i = 0;
+    char x[44];
+    for (i = 0; i &lt; 10000000; i++) {
+        sprintf(x, "%d %d", i, i);
+    }
+}
+</pre>
+<p>Run under PyPy, at the head of the <tt class="docutils literal"><span class="pre">unroll-if-alt</span></tt> branch, and
+compiled with GCC 4.5.2 at -O4 (other optimization levels were tested,
+this produced the best performance). It took <strong>0.85</strong> seconds to
+execute under PyPy, and <strong>1.63</strong> seconds with the compiled binary. We
+think this demonstrates the incredible potential of dynamic
+compilation, GCC is unable to inline or unroll the <tt class="docutils literal">sprintf</tt> call,
+because it sits inside of libc.</p>
+<p>Benchmarking the C code:</p>
+<pre class="literal-block">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+
+int main() {
+    int i = 0;
+    for (i = 0; i &lt; 10000000; i++) {
+        char *x = malloc(44 * sizeof(char));
+        sprintf(x, "%d %d", i, i);
+        free(x);
+    }
+}
+</pre>
+<p>Which as discussed above, is more comperable to the Python, gives a
+result of <strong>1.96</strong> seconds.</p>
+<p>Summary of performance:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="20%">
+<col width="19%">
+<col width="19%">
+<col width="12%">
+<col width="30%">
+</colgroup>
+<tbody valign="top">
+<tr>
+<td>Platform</td>
+<td>GCC (stack)</td>
+<td>GCC (malloc)</td>
+<td>CPython</td>
+<td>PyPy (unroll-if-alt)</td>
+</tr>
+<tr>
+<td>Time</td>
+<td>1.63s</td>
+<td>1.96s</td>
+<td>10.2s</td>
+<td>0.85s</td>
+</tr>
+<tr>
+<td>relative to C</td>
+<td>1x</td>
+<td>0.83x</td>
+<td>0.16x</td>
+<td><strong>1.9x</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Overall PyPy is almost <strong>2x</strong> faster. This is clearly win for dynamic
+compilation over static - the <cite>sprintf</cite> function lives in libc and so
+cannot be specializing over the constant string, which has to be parsed
+every time it's executed. In the case of PyPy, we specialize
+the assembler if we detect the left hand string of the modulo operator
+to be constant.</p>
+<p>Cheers,<br>
+alex &amp; fijal</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../07/realtime-image-processing-in-python-6985924592886873374.html" rel="prev" title="Realtime image processing in Python">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="visualization-of-jitted-code-6202490807361942120.html" rel="next" title="Visualization of JITted code">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-8549734260032489673">
+        <div class="comment-header">
+          <a name="comment-8549734260032489673"></a>
+            <span class="author">salmon</span> wrote on <span class="date">2011-08-02 19:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>What about '{0}'.format('pypy') ?<br>Is this also faster?</p>
+        </div>
+      </div>
+      <div class="comment comment-2346883473253657369">
+        <div class="comment-header">
+          <a name="comment-2346883473253657369"></a>
+            <span class="author">JoeHillen</span> wrote on <span class="date">2011-08-02 19:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>Where can we see this "unroll-if-alt" branch?</p>
+        </div>
+      </div>
+      <div class="comment comment-1848248575826608609">
+        <div class="comment-header">
+          <a name="comment-1848248575826608609"></a>
+            <span class="author">Greg Haines</span> wrote on <span class="date">2011-08-02 20:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>Are you sure the compiler isn't optimizing away the actual execution since you're not doing anything with the result?</p>
+        </div>
+      </div>
+      <div class="comment comment-4004366549817031533">
+        <div class="comment-header">
+          <a name="comment-4004366549817031533"></a>
+            <span class="author">Thomas Schilling</span> wrote on <span class="date">2011-08-02 20:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>How are those two loops equivalent?  You're not printing anything in the Python loop.  I/O buffering etc. can eat quite a bit of runtime.  It would also be nice to see what the particular improvements in this "unroll-if-alt" branch are.</p>
+        </div>
+      </div>
+      <div class="comment comment-1500656059432769204">
+        <div class="comment-header">
+          <a name="comment-1500656059432769204"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-02 20:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>How about doing something like that:<br>....<br>char p[5] = "%d %d"<br>//and then<br>sprintf(x, p, i,i);<br>....<br><br>?</p>
+        </div>
+      </div>
+      <div class="comment comment-322236938083229206">
+        <div class="comment-header">
+          <a name="comment-322236938083229206"></a>
+            <span class="author">Andrew Pendleton</span> wrote on <span class="date">2011-08-02 20:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Thomas the C one doesn't print anything, either; sprintf just returns a string.  printf is the one that prints.</p>
+        </div>
+      </div>
+      <div class="comment comment-3077470909634093215">
+        <div class="comment-header">
+          <a name="comment-3077470909634093215"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-02 20:26</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Thomas the C one doesn't print anything either, so it sounds pretty equivalent to me.</p>
+        </div>
+      </div>
+      <div class="comment comment-6210890615556329311">
+        <div class="comment-header">
+          <a name="comment-6210890615556329311"></a>
+            <span class="author">Johan Tibell</span> wrote on <span class="date">2011-08-02 20:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>This doesn't really have anything to do with dynamic compilation, but cross module optimization. There are static compilers, such as the Glasgow Haskell Compiler, that do this. If the compilation strategy depended on runtime data (e.g. measure hot spots), it would be dynamic compilation.</p>
+        </div>
+      </div>
+      <div class="comment comment-4459479332389604269">
+        <div class="comment-header">
+          <a name="comment-4459479332389604269"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-02 20:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>*yawn* If you want to see ridiculously fast string formatting, look at the Boost's Spirit library (specifically Karma). Small test case, but point well illustrated: https://www.boost.org/doc/libs/1_47_0/libs/spirit/doc/html/spirit/karma/performance_measurements/numeric_performance/int_performance.html Or look at Spirit's input parser for even integers: https://alexott.blogspot.com/2010/01/boostspirit2-vs-atoi.html</p>
+        </div>
+      </div>
+      <div class="comment comment-207875433882257655">
+        <div class="comment-header">
+          <a name="comment-207875433882257655"></a>
+            <span class="author">Antonio Cuni</span> wrote on <span class="date">2011-08-02 20:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>@JoeHillen: the unroll-if-alt branch is inside the main pypy repo on bitbucket (together with all the other branches).<br><br>@Greg: yes, we checked the generated code, it's not optimized away.<br><br>@anonymous: why it should be any faster? String literals in C are constants, it's not that you need to create a new one at each iteration<br><br>@Johan: note that the PyPy approach can generate code optimized for a formatting string loaded from a disk, or computed at runtime. No static compiler could do that.</p>
+        </div>
+      </div>
+      <div class="comment comment-9006643932216839467">
+        <div class="comment-header">
+          <a name="comment-9006643932216839467"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-02 21:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>What machine are you on that an int is 64 bits?  Hardly anybody uses ILP64 or SILP64 data models ( https://en.wikipedia.org/wiki/64-bit#Specific_C-language_data_models ).  Maybe a fourth try is in order? :P</p>
+        </div>
+      </div>
+      <div class="comment comment-5927487656373714703">
+        <div class="comment-header">
+          <a name="comment-5927487656373714703"></a>
+            <span class="author">Johan Tibell</span> wrote on <span class="date">2011-08-02 21:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>Antonio, that is indeed neat.</p>
+        </div>
+      </div>
+      <div class="comment comment-5934681704643865363">
+        <div class="comment-header">
+          <a name="comment-5934681704643865363"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2011-08-02 22:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>So when are you going to teach PyPy that the result of an unused string formatting can be deleted, and then delete the loop?  ;)<br><br>I'm not sure how you'd get there from a tracing JIT, though.  WIth Python, you still have to call all the formatting and stringification methods because they might have side effects.  You only get to know that the entire operation is a no-op after you've inlined everything, but by then it will be at a low enough representation that it's hard to tell.</p>
+        </div>
+      </div>
+      <div class="comment comment-4906250535693137554">
+        <div class="comment-header">
+          <a name="comment-4906250535693137554"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-02 22:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>sizeof(char)==1.  By definition.  Argh.<br><br>PS: negative karma for lying headline</p>
+        </div>
+      </div>
+      <div class="comment comment-81508328450910436">
+        <div class="comment-header">
+          <a name="comment-81508328450910436"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-02 22:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>Check that you're not spending all your time in malloc/free(). Also use the return value from a failed snprintf(), plus 1, to size your output buffer.</p>
+        </div>
+      </div>
+      <div class="comment comment-8836770953439937355">
+        <div class="comment-header">
+          <a name="comment-8836770953439937355"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2011-08-02 22:21</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous 2: Even if all the time were spent in malloc/free, PyPy has to dynamically allocate the string data structure, as well as provide a buffer to fill with the characters from the integers, since it has no way of knowing how much space will be needed (could be a custom integer class).<br><br>However, you're right that malloc and free are slow and a good gc system would have a faster allocator.</p>
+        </div>
+      </div>
+      <div class="comment comment-7916479943368840430">
+        <div class="comment-header">
+          <a name="comment-7916479943368840430"></a>
+            <span class="author">vsergeev</span> wrote on <span class="date">2011-08-02 22:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>a quick tip to minimize the math in determining your sprintf buffer size for your experiment:<br>#include &lt; stdint.h &gt;<br>len = snprintf(NULL, 0, "%d %d", INT32_MIN, INT32_MIN);<br>will give you the string length required (not including null terminating byte) to fit the formatted string.<br><br>Similarly, %lld and INT64_MIN will do the trick (on the right platform) for 64-bit signed integers.<br><br>(not that I advocate fixed sized buffers for formatted strings based on min/max digit lengths for any real application)</p>
+        </div>
+      </div>
+      <div class="comment comment-7428487986448993372">
+        <div class="comment-header">
+          <a name="comment-7428487986448993372"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-02 22:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>You wrote:<br><i>and compiled with GCC 4.5.2 at -O4</i><br><br>Please read the manual of GCC. There you will see that every optimization level above 3 is handled as it would be 3. '-O4' is nothing else than '-O3'.<br><br>It is also known that optimizing with -O3 may lead to several problems at runtime (e.g. memory delays for short programs or memory allocation failure in larger programs).<br>That's why the recommended optimization level is '2' (or 's' for embedded systems) and not '3'.<br><br>Did you test with a realtime kernel?<br>How about the scheduler?<br><br>Maybe you should double check your test environment.</p>
+        </div>
+      </div>
+      <div class="comment comment-7606502834538440880">
+        <div class="comment-header">
+          <a name="comment-7606502834538440880"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-02 22:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>For all you complaining about test eviorment. Pypy would still have to do that internaly. If they should be truely comparable, then you need to also include snprintf inside the loop, making C even slower. Also, I doubt you will get 200% performance boost from scheduler change.<br><br>unroll-if-alt will be included in 1.6 right? Also when will 1.6 be released?</p>
+        </div>
+      </div>
+      <div class="comment comment-1734383319348443493">
+        <div class="comment-header">
+          <a name="comment-1734383319348443493"></a>
+            <span class="author">Thomas Schilling</span> wrote on <span class="date">2011-08-02 22:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Andrew, @hobbs: Oh, sorry I overlooked the "s" in "sprintf".  It would still be nice compare the generated machine code to explain the differences.<br><br>Whenever, someone claims language L1 implementation A is faster than language L2 implementation B there are obvious questions about (1) fairness of comparison, (2) what is being measured.  In this case PyPy is specializing on the format string interpreter (does that require library annotations?) which a C compiler could do in principle here (but probably doesn't.)  So, I'm always a bit suspicious when I see these kinds of comparisons.<br><br>@Johan: GHC's cross-module optimization often comes at the expense of binary compatibility.  A JIT has a big advantage here.</p>
+        </div>
+      </div>
+      <div class="comment comment-7105823921529412975">
+        <div class="comment-header">
+          <a name="comment-7105823921529412975"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2011-08-02 23:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>The python faster than C day has come!  Congrats.<br><br>ps. Did you try it with (Link Time Optimization)LTO?  that is with gcc the option: -flto ?  Also, are you using PGO with gcc?</p>
+        </div>
+      </div>
+      <div class="comment comment-2792433294640140627">
+        <div class="comment-header">
+          <a name="comment-2792433294640140627"></a>
+            <span class="author">nekto0n</span> wrote on <span class="date">2011-08-02 23:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>@salmon According to this <a href="https://bitbucket.org/pypy/pypy/changeset/f45b04b331a6#chg-pypy/objspace/std/newformat.py" rel="nofollow">commit</a> new style formatting is supported too.<br><br>Someone correct me if I'm wrong.</p>
+        </div>
+      </div>
+      <div class="comment comment-1284618952149817016">
+        <div class="comment-header">
+          <a name="comment-1284618952149817016"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-02 23:49</span>:
+        </div>
+        <div class="comment-content">
+          <p>I think that computation is not correct yet. IIRC, you only get 20 digits in an unsigned 64-bit quantity.<br><br>Worse, (again IIRC) sprintf is locale dependent. It may insert thousands separators.</p>
+        </div>
+      </div>
+      <div class="comment comment-3559546173966141322">
+        <div class="comment-header">
+          <a name="comment-3559546173966141322"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-03 00:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is not a good performance test because all printf function have high constant complexity, without looking at format string, check it</p>
+        </div>
+      </div>
+      <div class="comment comment-3674129131548011685">
+        <div class="comment-header">
+          <a name="comment-3674129131548011685"></a>
+            <span class="author">Strohan</span> wrote on <span class="date">2011-08-03 01:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>wouldn't it be better to run your test with a more modern c++ library like cstring?</p>
+        </div>
+      </div>
+      <div class="comment comment-9011623056493186601">
+        <div class="comment-header">
+          <a name="comment-9011623056493186601"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-03 03:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>If 1.9x is "almost 2x faster", then what is "1x faster"?</p>
+        </div>
+      </div>
+      <div class="comment comment-8056695997075130866">
+        <div class="comment-header">
+          <a name="comment-8056695997075130866"></a>
+            <span class="author">Poposhka</span> wrote on <span class="date">2011-08-03 05:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>post the Assembly code, map files and call graph or it didnt happen!!!!!!!!</p>
+        </div>
+      </div>
+      <div class="comment comment-6225551896160358432">
+        <div class="comment-header">
+          <a name="comment-6225551896160358432"></a>
+            <span class="author">Reinis I.</span> wrote on <span class="date">2011-08-03 07:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>"one time faster" is bad English.</p>
+        </div>
+      </div>
+      <div class="comment comment-6625735662149629937">
+        <div class="comment-header">
+          <a name="comment-6625735662149629937"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-03 08:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>What performance impact does the malloc/free produce in the C code? AFAIK Python allocates memory in larger chunks from the operating system. Probably Python does not have to call malloc after initialization after it allocated the first chunk.<br><br>AFAIK each malloc/free crosses the boundaries between user-mode/kernel-mode.<br><br>So, IMHO you should compare the numbers of a C program which<br>does not allocate dynamic memory more than once and uses an internal memory management system.<br><br>These numbers would be interesting.<br><br>Have fun</p>
+        </div>
+      </div>
+      <div class="comment comment-6708170690935286644">
+        <div class="comment-header">
+          <a name="comment-6708170690935286644"></a>
+            <span class="author">Damian Cugley</span> wrote on <span class="date">2011-08-03 08:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>The point here is not that the Python implementation of formatting is better than the C standard library, but that dynamic optimisation can make a big difference.  The first time the formatting operator is called its format string is parsed and assembly code for assembling the output generated. The next 999999 times that assembly code is used without doing the parsing step. Even if sprintf were defined locally, a static compiler can’t optimise away the parsing step, so that work is done redundantly every time around the loop.<br><br>In a language like Haskell something similar happens. A string formatting function in the style of sprintf would take a format string as a parameter and return a new function that formats its arguments according to that string. The new function corresponds to the specialized assembly code generated by PyPy’s JIT. I think if you wanted to give the static compiler the opportunity to do optimizations that PyPy does at runtime you would need to use a custom type rather than a string as the formatting spec. (NB my knowledge of functional-language implementation is 20 years out of date so take the above with a pinch of salt.)</p>
+        </div>
+      </div>
+      <div class="comment comment-415195237064488124">
+        <div class="comment-header">
+          <a name="comment-415195237064488124"></a>
+            <span class="author">Dave Kirby</span> wrote on <span class="date">2011-08-03 12:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous:<br><br>The C code shown does not do any malloc/free.  The sprintf function formats the string into the char array x, which is allocated on the stack.  It is highly unlikely that the sprintf function itself mallocs any memory.</p>
+        </div>
+      </div>
+      <div class="comment comment-1076746612002500813">
+        <div class="comment-header">
+          <a name="comment-1076746612002500813"></a>
+            <span class="author">Paul Jaros</span> wrote on <span class="date">2011-08-03 15:45</span>:
+        </div>
+        <div class="comment-content">
+          <p>I'm following the progress on pypy since many years and the potential is and has always been here. And boy, pypy has come a looong way.<br><br>You are my favorite open-source project and I am excited to see what will happen next. Go pypy-team, go!</p>
+        </div>
+      </div>
+      <div class="comment comment-4060331138568834151">
+        <div class="comment-header">
+          <a name="comment-4060331138568834151"></a>
+            <span class="author">Stepan Koltsov</span> wrote on <span class="date">2011-08-03 18:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>PyPy does nothing 1.9 times faster than C.</p>
+        </div>
+      </div>
+      <div class="comment comment-442286616724560885">
+        <div class="comment-header">
+          <a name="comment-442286616724560885"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2011-08-03 19:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>You wrote: "We think this demonstrates the incredible potential of dynamic compilation, ..."<br><br>I disagree. You tested a microbenchmark. Claims about compiler or language X winning over Y should be made after observing patterns in real programs. That is: execute or analyse real C programs which are making use of 'sprintf', record their use of 'sprintf', create a statistics out of the recorded data and then finally use the statistical distributions to create Python programs with a similar distribution of calls to '%'.<br><br>Trivial microbenchmarks can be deceiving.</p>
+        </div>
+      </div>
+      <div class="comment comment-3959527016695567914">
+        <div class="comment-header">
+          <a name="comment-3959527016695567914"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-04 01:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Dave Kirby:<br><br>There are two C programs there. One on the stack, one with a malloc / free in the loop.<br><br>Which one is used for the faster claim?</p>
+        </div>
+      </div>
+      <div class="comment comment-4068929081443684480">
+        <div class="comment-header">
+          <a name="comment-4068929081443684480"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-08-04 08:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous: this branch, unroll-if-alt, will not be included in the release 1.6, which we're doing right now (it should be out any day now).  It will only be included in the next release, which we hope to do soonish.  It will also be in the nightly builds as soon as it is merged.</p>
+        </div>
+      </div>
+      <div class="comment comment-7104690340776437777">
+        <div class="comment-header">
+          <a name="comment-7104690340776437777"></a>
+            <span class="author">Connelly Barnes</span> wrote on <span class="date">2011-08-04 20:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>Is string/IO performance in general being worked on in Pypy? Last I looked Pypy showed it was faster than CPython in many cases on its benchmarks page, but for many string/IO intensive tasks I tried Pypy v1.5 on, it was slower.</p>
+        </div>
+      </div>
+      <div class="comment comment-3710046042028182472">
+        <div class="comment-header">
+          <a name="comment-3710046042028182472"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-08-05 07:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Connelly yes, for some definition of working (being thought about). that's one reason why twisted_tcp is slower than other twisted benchmarks. We however welcome simple benchmarks as bugs on the issue tracker</p>
+        </div>
+      </div>
+      <div class="comment comment-2471477793777742440">
+        <div class="comment-header">
+          <a name="comment-2471477793777742440"></a>
+            <span class="author">tt</span> wrote on <span class="date">2011-08-05 10:05</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is a horribly flawed benchmark which illustrates absolutely nothing. First of all, an optimizing JIT should be (easily) able to detect that your inner loop has no side effects and optimize it away. Secondly, with code like that you should expect all kinds of weirds transformations by the compiler, hence - you can't be really sure what you are comparing here. As many here have pointed out, you should compare the output assembly.<br><br>Anyway, if you really want to do a benchmark like that, do it the right way. Make the loop grow a string by continuous appending and write the string to the file in the end (time the loop only). This way you will get accurate results which really compare the performance of two compilers performing the same task.</p>
+        </div>
+      </div>
+      <div class="comment comment-9110238064234290648">
+        <div class="comment-header">
+          <a name="comment-9110238064234290648"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-05 11:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>try in nodejs:<br><br>var t = (new Date()).getTime();<br><br>function main() {<br>    var x;<br>    for (var i = 0; i &lt; 10000000; i++)<br>        x = i + " " + i;<br>    return x;<br>}<br>x = main();<br><br>t = (new Date()).getTime() - t;<br>console.log(x + ", " + t);</p>
+        </div>
+      </div>
+      <div class="comment comment-2293194787886399905">
+        <div class="comment-header">
+          <a name="comment-2293194787886399905"></a>
+            <span class="author">tt</span> wrote on <span class="date">2011-08-05 16:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>I have now put a small, slightly more realistic benchmark. I used following code.<br><br><b>Python </b><br><br>def main():<br> x = ""<br> for i in xrange(50000):<br>  x = "%s %d" % (x, i)<br> return x<br><br>x = main()<br><br>f = open("log.txt", "w")<br>f.write(x)<br>f.close()<br><br><b>C</b><br>#include <br>#include <br>#include <br><br><br>int main() {<br> int i;<br>    char *x = malloc(0);<br> FILE *file; <br><br>    *x = 0x00;<br><br>    for (i = 0; i &lt; 50000; i++) {<br>     char *nx = malloc(strlen(x) + 16); // +16 bytes to be on the safe side<br><br>        sprintf(nx, "%s %d", x, i);<br>        free(x);<br>        x = nx;<br>    }<br><br> file = fopen("log1.txt","w"); <br> fprintf(file, "%s", x); <br> fclose(file); <br>}<br><br><b>JavaScript (NodeJS)</b><br><br>var fs = require('fs');<br><br>String.prototype.format = function() {<br>    var formatted = this;<br>    for (var i = 0; i &lt; arguments.length; i++) {<br>        var regexp = new RegExp('\\{'+i+'\\}', 'gi');<br>        formatted = formatted.replace(regexp, arguments[i]);<br>    }<br>    return formatted;<br>};<br><br><br>function main() {<br>var x = "";<br>for (var i = 0; i &lt; 50000; i++)<br> x = "{0} {1}".format(x, i);<br>return(x)<br>}<br><br>x = main();<br>fs.writeFile('log.txt', x)<br><br><br>Note for JS example: I did not want to use the  stuff like i + " " + i because it bypasses the format function call. Obviously, using the + operator the nodejs example would be much faster (but pypy probably as well).<br><br>Also, I used PyPy 1.5 as I did not find any precompiled PyPy 1.6 for OS X. <br><br>Results:<br><br>PyPy: real 0m13.307s<br>NodeJS: real 0m44.350s<br>C: real 0m1.812s</p>
+        </div>
+      </div>
+      <div class="comment comment-8196183060405841801">
+        <div class="comment-header">
+          <a name="comment-8196183060405841801"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2011-08-05 18:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>@tt: This is a very <b>inefficient</b> C/C++ implementation of the idea "make a loop grow a string by continuous appending and write the string to the file in the end". In addition, it appears to be an <b>uncommon</b> piece of C/C++ code.</p>
+        </div>
+      </div>
+      <div class="comment comment-7034552848818282014">
+        <div class="comment-header">
+          <a name="comment-7034552848818282014"></a>
+            <span class="author">tt</span> wrote on <span class="date">2011-08-05 20:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>Well, I never said anything about writing super efficient C code. Anyway, I don't see how you want to implement string formatting more efficiently  - if we talk about general usage scenario. You can't really reuse the old string buffer, you basically have to allocate new one each time the string grows. Or pre-allocate a larger string buffer and do some substring copies (which will result in a much more complicated code). Anyway, the malloc() on OS X is very fast.<br><br>My point is: even this C code, which you call inefficient is around 6 times faster then pypy 1.5</p>
+        </div>
+      </div>
+      <div class="comment comment-8973221726765232994">
+        <div class="comment-header">
+          <a name="comment-8973221726765232994"></a>
+            <span class="author">Antiplutocrat</span> wrote on <span class="date">2011-08-05 21:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>@tt except one of the main points of the post was that they had implemented a *new* feature (unroll-if-alt, I believe) that sped things up a bunch. <br><br>I'm not sure how much any comparison that *doesn't* use this new feature is worth ...<br><br>So many haters ! ;)</p>
+        </div>
+      </div>
+      <div class="comment comment-8120059732906295773">
+        <div class="comment-header">
+          <a name="comment-8120059732906295773"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-06 00:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>The compare is good because both use standard langauge fetatures to do the same thing, using a third part lib is not the same, then I have to code the same implant in RPython and people would still complain do to RPython often being faster then C regardless.<br><br>Python could have detected that the loop is not doing anything, but give that one value had a __str__ call it could've broken some code. Anyway, C compiler could also see that you didn't do anything with the value and optimalize it the same way.</p>
+        </div>
+      </div>
+      <div class="comment comment-82206416910885214">
+        <div class="comment-header">
+          <a name="comment-82206416910885214"></a>
+            <span class="author">tt</span> wrote on <span class="date">2011-08-06 11:05</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Antiplutocrat:<br>Honestly, I expected a bit more objectivity from posters here. I am really disappointed that you compare me to "haters" (whoever that may be). <br><br>Your point about unroll-if-alt is absolutely valid and I myself have explicitly stated that I did not use that feature. At no point I have refuted that the original blog post was wrong - it is still very well possible that PyPy 1.6 is faster then C in this usage scenario. The main goal of my post was to make clear that the original benchmarks were flawed, as they grant the compiler too much  space for unpredictable optimizations. I believe that my benchmark code produces more realistic results and I suggest that the authors of this blog entry re-run the benchmark using my code (or something similar, which controls for unpredictable optimizations).</p>
+        </div>
+      </div>
+      <div class="comment comment-3908814753897430340">
+        <div class="comment-header">
+          <a name="comment-3908814753897430340"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-06 16:35</span>:
+        </div>
+        <div class="comment-content">
+          <p>@tt: Code is doing something else so it's not the same.</p>
+        </div>
+      </div>
+      <div class="comment comment-2494310827119670528">
+        <div class="comment-header">
+          <a name="comment-2494310827119670528"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-12 17:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>Only a quick note OffTopic: in the python FAQ, one could update adding PyPy besides Psyco in the performance tips:<br><br>https://docs.python.org/faq/programming.html#my-program-is-too-slow-how-do-i-speed-it-up</p>
+        </div>
+      </div>
+      <div class="comment comment-3529683872234984787">
+        <div class="comment-header">
+          <a name="comment-3529683872234984787"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2011-08-14 18:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous: I agree with your other paragraphs, but not with the one where you wrote that "... OLDER version (4.5.x) of GCC whilst a newer version (4.6.x) is available with major improvements to the optimizer in general".<br><br>I am not sure, what "major improvements" in GCC 4.6 do you mean? Do you have benchmark numbers to back up your claim?<br><br>As far as well-written C code is concerned, in my opinion, there haven't been any "major improvements" in GCC for more than 5+ years. There have been improvements of a few percent in a limited number of cases - but nothing major.<br><br>Even LTO (link-time optimization (and lets hope it will be safe/stable to use when GCC 4.7 is released)) isn't a major boost. I haven't seen LTO being able to optimize calls to functions living in dynamic libraries (the bsearch(3) function would be a nice candidate). And I also haven't seen GCC's LTO being able to optimize calls to/within the Qt GUI library when painting pixels or lines onto the screen.<br><br>The main point of the PyPy article was that run-time optimizations in PyPy have a chance of surpassing GCC in certain cases.<br><br>Personally, I probably wouldn't willingly choose to work on a project like PyPy - since, err, I believe that hard-core JIT optimizations on a dynamically typed language like Python are generally a bad idea - but I am (in a positive way) eager to see what the PyPy team will be able to do in this field in the years to come.</p>
+        </div>
+      </div>
+      <div class="comment comment-29307641900913078">
+        <div class="comment-header">
+          <a name="comment-29307641900913078"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-14 20:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>@⚛: I indeed do not have benchmarks for these claims, but GCC 4.6 indeed added some newer optimization techniques to its assortment. Maybe these may not have had a significant influence in said case but they might have somewhere else. I'm merely saying: you can't really compare the latest hot inventions with something that is surpassed (e.g. compare Java 7 to a program output by Visual C++ back form the VS 2003 IDE).<br><br>All by all, I'm not saying that Python sucks and don't want to sound like a fanboy (on the contrary, Linux uses a great deal of Python and if this could mean a major speedup, then why the hell not ;).<br><br>I guess I was pissed off because the written article sounds very much fanboyish and pro-Python (just look at the title alone).</p>
+        </div>
+      </div>
+      <div class="comment comment-4441342449976828444">
+        <div class="comment-header">
+          <a name="comment-4441342449976828444"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-11-01 17:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>So a loop that doesn't print in Python is compared to a loop in C that does and that was compiled on one of the slowest C compilers out there.<br><br><a href="https://linuxhaters.blogspot.ca/" rel="nofollow">YearOfTheLinuxDesktopIsAtHand(TM)</a></p>
+        </div>
+      </div>
+      <div class="comment comment-6085220478226409773">
+        <div class="comment-header">
+          <a name="comment-6085220478226409773"></a>
+            <span class="author">Cees Timmerman</span> wrote on <span class="date">2012-11-12 15:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous, "the C one doesn't print anything, either; sprintf just returns a string. printf is the one that prints." - Andrew Pendleton, this page, August 2, 2011 9:25 PM</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

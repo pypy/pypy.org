@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts by Alexander Schremmer)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/authors/alexander-schremmer.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:38 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>Using CPython extension modules with PyPy natively, or: PyPy can load .pyd files with CPyExt!</title><link>https://www.pypy.org/posts/2010/04/using-cpython-extension-modules-with-5864754772659599217.html</link><dc:creator>Alexander Schremmer</dc:creator><description>&lt;p&gt;PyPy is now able to load
+and run CPython extension modules (i.e. .pyd and .so files) natively by using the new CPyExt
+subsystem.
+Unlike the solution presented in &lt;a class="reference external" href="https://www.pypy.org/posts/2009/11/using-cpython-extension-modules-with-4951018896657992031.html"&gt;another blog post&lt;/a&gt; (where extension modules like
+numpy etc. were run on CPython and proxied through TCP), this solution does not require
+a running CPython anymore. We do not achieve full binary compatiblity
+yet (like Ironclad), but recompiling the extension is generally enough.&lt;/p&gt;
+&lt;p&gt;The only prerequisite is that the necessary functions of the C API of CPython are already
+implemented in PyPy. If you are a user or an author of a module and miss certain functions
+in PyPy, we invite you to implement them. Up until now, a lot of people (including a lot of
+new committers) have stepped up and implemented a few functions to get their favorite module
+running. See the end of this post for a list of names.&lt;/p&gt;
+&lt;p&gt;Regarding speed, we tried the following: even though there is a bit of overhead when running
+these modules, we could run the regular expression engine of CPython (&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;_sre.so&lt;/span&gt;&lt;/tt&gt;) and execute
+the spambayes benchmark of the Unladen Swallow benchmark suite (cf. &lt;a class="reference external" href="https://speed.pypy.org/"&gt;speed.pypy.org&lt;/a&gt;) and
+experience a speedup:
+It became &lt;em&gt;two times faster&lt;/em&gt; on pypy-c than with the built-in regular
+expression engine of PyPy. From &lt;a href="https://en.wikipedia.org/wiki/Amdahl%27s_law"&gt;Amdahl's Law&lt;/a&gt; it follows that the &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;_sre.so&lt;/span&gt;&lt;/tt&gt; must run several
+times faster than the built-in engine.&lt;/p&gt;
+&lt;p&gt;Currently pursued modules include PIL and others. Distutils support is nearly ready.
+If you would like to participate or want information on how to use this new feature, come and join
+our IRC channel &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;#pypy&lt;/span&gt;&lt;/tt&gt; on &lt;a class="reference external" href="irc://irc.freenode.net/"&gt;freenode&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Amaury Forgeot d'Arc and Alexander Schremmer&lt;/p&gt;
+&lt;p&gt;Further CPyExt Contributors:&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;Alex Gaynor
+&lt;/li&gt;&lt;li&gt;Benjamin Peterson
+&lt;/li&gt;&lt;li&gt;Jean-Paul Calderone
+&lt;/li&gt;&lt;li&gt;Maciej Fijalkowski
+&lt;/li&gt;&lt;li&gt;Jan de Mooij
+&lt;/li&gt;&lt;li&gt;Lucian Branescu Mihaila
+&lt;/li&gt;&lt;li&gt;Andreas Stührk
+&lt;/li&gt;&lt;li&gt;Zooko Wilcox-O Hearn&lt;/li&gt;&lt;/ul&gt;</description><category>cpyext</category><category>CPython</category><category>extension modules</category><category>speed</category><guid>https://www.pypy.org/posts/2010/04/using-cpython-extension-modules-with-5864754772659599217.html</guid><pubDate>Fri, 09 Apr 2010 22:56:00 GMT</pubDate></item><item><title>Using CPython extension modules with PyPy, or: PyQt on PyPy</title><link>https://www.pypy.org/posts/2009/11/using-cpython-extension-modules-with-4951018896657992031.html</link><dc:creator>Alexander Schremmer</dc:creator><description>&lt;div class="document" id="using-cpython-extension-modules-with-pypy-or-pyqt-on-pypy"&gt;
+
+&lt;p&gt;If you have ever wanted to use CPython extension modules on PyPy,
+we want to announce that there is a solution that should be compatible
+to quite a bit of the available modules. It is neither new nor written
+by us, but works nevertheless great with PyPy.&lt;/p&gt;
+&lt;p&gt;The trick is to use RPyC, a transparent, symmetric remote procedure
+call library written in Python. The idea is to start a
+CPython process that hosts the PyQt libraries
+and connect to it via TCP to send RPC commands to it.&lt;/p&gt;
+&lt;p&gt;I tried to run PyQt applications
+using it on PyPy and could get quite a bit of the functionality of these
+working. Remaining problems include regular segfaults of CPython
+because of PyQt-induced memory corruption and bugs because classes
+like StandardButtons behave incorrectly when it comes to arithmetical operations.&lt;/p&gt;
+&lt;p&gt;Changes to RPyC needed to be done to support remote unbound &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;__init__&lt;/span&gt;&lt;/tt&gt; methods,
+shallow call by value for list and dict types (PyQt4 methods want real lists and dicts
+as parameters), and callbacks to methods (all remote method objects are wrapped into
+small lambda functions to ease the call for PyQt4).&lt;/p&gt;
+&lt;p&gt;If you want to try RPyC to run the PyQt application of your choice, you just
+need to follow these steps. Please report your experience here in the blog
+comments or on our &lt;a class="reference external" href="https://codespeak.net/mailman/listinfo/pypy-dev"&gt;mailing list&lt;/a&gt;.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;ol class="arabic simple"&gt;
+&lt;li&gt;Download RPyC from the &lt;a class="reference external" href="https://sourceforge.net/projects/rpyc/files/"&gt;RPyC download page&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Download this &lt;a class="reference external" href="https://codespeak.net/svn/user/xoraxax/rpyc-3.0.7-pyqt4-compat.patch"&gt;patch&lt;/a&gt; and apply it to RPyC by running
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;patch&lt;/span&gt; &lt;span class="pre"&gt;-p1&lt;/span&gt; &lt;span class="pre"&gt;&amp;lt;&lt;/span&gt; &lt;span class="pre"&gt;rpyc-3.0.7-pyqt4-compat.patch&lt;/span&gt;&lt;/tt&gt; in the RPyC directory.&lt;/li&gt;
+&lt;li&gt;Install RPyc by running &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;python&lt;/span&gt; &lt;span class="pre"&gt;setup.py&lt;/span&gt; &lt;span class="pre"&gt;install&lt;/span&gt;&lt;/tt&gt; as root.&lt;/li&gt;
+&lt;li&gt;Run the file &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;rpyc/servers/classic_server.py&lt;/span&gt;&lt;/tt&gt; using CPython.&lt;/li&gt;
+&lt;li&gt;Execute your PyQt application on PyPy.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;PyPy will automatically connect to CPython and use its PyQt libraries.&lt;/p&gt;
+&lt;p&gt;Note that this scheme works with nearly every extension library. Look
+at &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy/lib/sip.py&lt;/span&gt;&lt;/tt&gt; on how to add new libraries (you need to create
+such a file for every proxied extension module).&lt;/p&gt;
+&lt;p&gt;Have fun with PyQt&lt;/p&gt;
+&lt;p&gt;Alexander Schremmer&lt;/p&gt;
+&lt;/div&gt;</description><category>CPython</category><category>extension modules</category><category>PyQt4</category><category>RPyC</category><guid>https://www.pypy.org/posts/2009/11/using-cpython-extension-modules-with-4951018896657992031.html</guid><pubDate>Mon, 30 Nov 2009 11:19:00 GMT</pubDate></item></channel></rss>

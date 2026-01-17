@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>We need Software Transactional Memory | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2011/08/we-need-software-transactional-memory-6513983438425039230.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="pypy-16-kickass-panda-559424594592497545.html" title="PyPy 1.6 - kickass panda" type="text/html">
+<link rel="next" href="wrapping-c-libraries-with-reflection-3916959558080483711.html" title="Wrapping C++ Libraries with Reflection — Status Report One Year Later" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="We need Software Transactional Memory">
+<meta property="og:url" content="https://www.pypy.org/posts/2011/08/we-need-software-transactional-memory-6513983438425039230.html">
+<meta property="og:description" content="Hi all.  Here is (an extract of) a short summary paper about my current position on
+Software Transactional Memory as a general tool in the implementation
+of Python or Python-like languages.  Thanks to">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2011-08-23T12:53:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">We need Software Transactional Memory</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2011-08-23T12:53:00Z" itemprop="datePublished" title="2011-08-23 12:53">2011-08-23 12:53</time></a>
+            </p>
+                <p class="commentline">38 comments</p>
+
+                <p class="commentline">            <a href="we-need-software-transactional-memory-6513983438425039230.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Hi all.  Here is (an extract of) a short summary paper about my current position on
+Software Transactional Memory as a general tool in the implementation
+of Python or Python-like languages.  Thanks to people on IRC for discussion on making
+this blog post better (lucian, Alex Gaynor, rguillebert, timonator, Da_Blitz).
+For the purpose of the present discussion, we are comparing Java with Python
+when it comes to multi-threading.</p>
+
+<h2 id="the-problem-in-complex-high-level-languages">The problem in complex high-level languages<a href="#the-problem-in-complex-high-level-languages" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Like Java, the Python language gives guarantees: it is not acceptable
+for the Python virtual machine to crash due to incorrect usage of
+threads.  A primitive operation in Java is something like reading or
+writing a field of an object; the corresponding guarantees are along the
+lines of: if the program reads a field of an object, and another thread
+writes to the same field of the same object, then the program will see
+either the old value, or the new value, but not something else entirely,
+and the virtual machine will not crash.</p>
+<p>Higher-level languages like Python differ from Java by the fact that a
+"primitive operation" is far more complex.  It may for example involve
+looking in several hash maps, perhaps doing updates.  In general, it is
+completely impossible to map every operation that must be atomic to a
+single processor instruction.</p>
+
+<h2 id="jython-fine-grained-locking">Jython: fine-grained locking<a href="#jython-fine-grained-locking" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>This problem has been solved "explicitly" in the Jython interpreter that
+runs on top of Java.  The solution is explicit in the following sense:
+throughout the Jython interpreter, every single operation makes careful
+use of Java-level locking mechanisms.  This is an application of
+"fine-grained locking".  For example, operations like attribute lookup,
+which need to perform look-ups in a number of hash maps, are protected
+by acquiring and releasing locks (in __getattribute__).</p>
+<p>A draw-back of this solution is the attention to detail required.
+If even one place misses a lock, then there is either a
+bug --- and such bugs occur in cases that are increasingly rare and hard
+to debug as the previous bugs are fixed --- or we just file it under "differences
+from CPython".  There is however the risk of
+deadlock, if two threads attempt to lock the same objects in different
+order.</p>
+
+<p>In practice, the situation is actually not as bad as
+I may paint it: the number of locks in Jython is reasonable, and allows for
+all the "common cases" to work as expected.
+(For the uncommon cases, see below.)</p>
+
+<p>Performance-wise, the Java virtual machine itself comes with locks that
+have been heavily optimized over a long period of time, so the
+performance is acceptable.  However if this solution were coded in C, it
+would need a lot of extra work to optimize the locks manually (possibly
+introducing more of the subtle bugs).</p>
+
+<h2 id="cpython-coarse-grained-locking">CPython: coarse-grained locking<a href="#cpython-coarse-grained-locking" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>CPython, the standard implementation of Python in C, took a different
+and simpler approach: it has a single global lock, called the Global
+Interpreter Lock (GIL).  It uses "coarse-grained locking": the lock is
+acquired and released around the whole execution of one bytecode (or
+actually a small number of bytecodes, like 100).  This solution is
+enough to ensure that no two operations can conflict with each other,
+because the two bytecodes that invoke them are themselves
+serialized by the GIL.  It is a solution which avoids --- unlike Jython
+--- writing careful lock-acquiring code all over the interpreter.  It
+also offers even stronger guarantees: every bytecode runs entirely
+atomically.</p>
+<p>Nowadays, the draw-back of the GIL approach is obvious on multi-core
+machines: by serializing the execution of bytecodes, starting multiple
+threads does not actually let the interpreter use of more than one core.</p>
+<p>PyPy, the Python implementation in Python, takes the same approach so
+far.</p>
+
+<h2 id="existing-usage">Existing usage<a href="#existing-usage" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>As we have seen, we have the following situation: the existing Python
+language, as CPython implements it, offers very strong guarantees about
+multi-threaded usage.  It is important to emphasize that most existing
+multi-threaded Python programs actually rely on such strong guarantees.
+This can be seen for example in a problem that takes a populated list
+and does in several threads:</p>
+<pre class="literal-block">
+next_item = global_list.pop()
+</pre>
+<p>This implicitly relies on the fact that pop() will perform atomic
+removal from the list.  If two threads try to pop() from the same list
+at the same time, then the two operations will occur in one order or the
+other; but they will not e.g. return the same object to both threads or
+mess up the internal state of the list object.</p>
+<p>With such an example in mind, it should be clear that we do not want a
+solution to the multi-core issue that involves dropping these strong
+guarantees.  It is ok however to lower the barrier, as Jython does; but
+any Python implementation must offer <i>some</i> guarantees, or not offer
+multi-threading at all.  This includes the fact that a lot of methods on
+built-in types are supposed to be atomic.</p>
+
+<p>(It should be noted that not offering multi-threading at all is actually
+also a (partial) solution to the problem.  Recently, several "hacks"
+have appeared that give a programmer more-or-less transparent access to
+multiple independent processes (e.g. <a href="https://docs.python.org/library/multiprocessing.html">multiprocessing</a>).  While these provide appropriate
+solutions in some context, they are not as widely applicable as
+multi-threading.  As a typical example, they fail to apply when the
+mutiple cores need to process information that cannot be serialized at
+all --- a requirement for any data exchange between several processes.)</p>
+
+<p>Here is an example of how Jython's consistency is weaker than CPython's GIL.
+It takes uncommon examples to show it, and the fact that it does not work
+like a CPython programmer expect them to is generally considered as an
+implementation detail.  Consider:</p>
+<pre>Thread 1:  set1.update(set2)
+Thread 2:  set2.update(set3)
+Thread 3:  set3.update(set1)</pre>
+<p>Each operation is atomic in the case of CPython, but decomposed in two steps
+(which can each be considered atomic) in the case of Jython: reading from the
+argument, and then updating the target set.  Suppose that initially
+set1 = {1}, set2 = {2}, set3 = {3}.  On CPython, independently on
+the order in which the threads run, we will end up with at least one of the
+sets being {1, 2, 3}.  On Jython, it is possible that all
+three sets end up as containing two items only.  The example is a bit
+far-fetched but should show that CPython's consistency is strictly stronger
+than Jython's.</p>
+
+<h2 id="pypy">PyPy<a href="#pypy" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>PyPy is a Python interpreter much like CPython or Jython, but the way it
+is produced is particular.  It is an interpreter written in RPython, a
+subset of Python, which gets turned into a complete virtual machine (as
+generated C code) automatically by a step called the "translation".  In
+this context, the trade-offs are different from the ones in CPython and
+in Jython: it is possible in PyPy, and even easy, to apply arbitrary
+whole-program transformations to the interpreter at "translation-time".</p>
+<p>With this in mind, it is possible to imagine a whole-program
+transformation that would add locking on every object manipulated in
+RPython by the interpreter.  This would end up in a situation similar to
+Jython.  However, it would not automatically solve the issue of
+deadlocks, which is avoided in the case of Jython by careful manual
+placement of the locks.  (In fact, being deadlock-free is a global
+program property that cannot be automatically ensured or verified; any
+change to Jython can in theory break this property, and thus introduce
+subtle deadlocks.  The same applies to non-atomicity.)</p>
+<p>In fact, we can easily check that if the interpreter accesses (for
+both reading and writing)
+objects A and B in a bytecode of thread 1, and objects B and A (in the
+opposite order) in a bytecode of thread 2 --- and moreover if you need to
+have accessed the first object before you can decide that you will need
+to access the second object --- then there is no way (apart from the GIL) to avoid
+a deadlock while keeping the strong guarantee of atomicity.  Indeed, if
+both threads have progressed to the middle of the execution of their
+bytecode, then A has already been mutated by thread 1 and similarly B
+has already been mutated by thread 2.  It is not possible to
+successfully continue running the threads in that case.</p>
+
+<h2 id="using-software-transactional-memory">Using Software Transactional Memory<a href="#using-software-transactional-memory" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Software Transactional Memory (STM) is an approach that gives a solution
+to precisely the above problem.  If a thread ended up in a situation
+where continuing to run it would be wrong, then we can <i>abort and
+rollback.</i>  This is similar to the notion of transaction on databases.
+In the above example, one or both threads would notice that they are
+about to run into troubles and abort.  This means more concretely that
+they need to have a way to restart execution at the start of the
+bytecode, with all the side-effects of what they did so far being either
+cancelled or just not committed yet.</p>
+<p>We think that this capacity to abort and rollback is the missing piece
+of the puzzle of multi-threaded implementations of Python.
+Actually, according to the presentation of the problem given
+above, it is unavoidable that any solution that wants to offer the
+same level of consistency and atomicity as CPython would involve
+the capacity of aborting and rolling back --- <i>which means precisely
+that STM cannot be avoided.</i></p>
+
+<p>Ok, but why not settle down with Jython's
+approach and put careful locks left and right throughout the interpreter?
+Because (1) we would have to consider every operation's atomicity and make decisions
+(or steal Jython's) and document them
+<a href="https://doc.pypy.org/en/latest/cpython_differences.html">here</a>;
+(2) it would also be really a lot of work, to optimize these locks e.g. with the
+JIT as well as the JVM does; and (3) it is not the PyPy way to require manually
+tweaking your code everywhere for a feature that should be orthogonal.  Point
+(3) is probably the most important here: you need to redo the work for every
+language you implement in PyPy.
+It also implies my own point (4): <i>it is not fun :-)</i></p>
+
+<p>In more details, the process would work as follows.  (This gives an
+overview of one possible model; it is possible that a different model
+will end up being better.)  In every thread:</p>
+<ul>
+<li>At the start of a bytecode, we start a "transaction".  This means
+setting up a thread-local data structure to record a log of what
+occurs in the transaction.</li>
+<li>We record in the log all objects that are read, as well as the
+modifications that we would like to make.</li>
+<li>During this time, we detect "read" inconsistencies, shown by the
+object's "last-modified" timestamp being later than the start time
+of the current transaction, and abort.  This prevents the rest of
+the code from running with inconsistent values.</li>
+<li>If we reach the end of the bytecode without a "read" inconsistency,
+then we atomically check for "write" inconsistencies.  These are
+inconsistencies which arise from concurrent updates to objects
+in the other threads --- either our "write" objects, or our "read"
+objects.</li>
+<li>If no inconsistency is found, we "commit" the transaction by copying
+the delayed writes from the log into main memory.</li>
+</ul>
+<p>The points at which a transaction starts or ends are exactly the
+points at which, in CPython, the Global Interpreter Lock is
+respectively acquired and released.  If we ignore the fact that (purely for
+performance) CPython acquires and releases the GIL only every N bytecodes,
+then this means:</p>
+<ol>
+<li>Before any bytecode we acquire the GIL (start a transaction), and after
+the bytecode we release it (ends the transaction); and
+</li>
+<li>Before doing an external call to the C library or the OS we release the GIL
+(ends the transaction) and afterwards re-acquire it (start the next transaction).
+</li>
+</ol>
+So in particular this model is well suited to the STM condition that we cannot
+do anything in a transaction that cannot be rolled back, like --- precisely ---
+system calls.  Indeed, by construction, these system calls occur outside a
+transaction, because in CPython they occur with the GIL released.
+
+<h2 id="performance">Performance<a href="#performance" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>A large number of implementation details are still open for now.
+From a user's point of view (i.e. the programmer using Python),
+the most relevant one is the overall performance impact.  We
+cannot give precise numbers so far, and we expect the initial
+performance to be abysmally bad (maybe 10x slower); however, with
+successive improvements to the locking mechanism, to the global
+program transformation inserting the locks, to the garbage 
+collector (GC), and to the Just-in-Time (JIT) compiler, we
+believe that it should be possible to get a roughly reasonable
+performance (up to maybe 2x slower).  For example, the GC can
+maintain flags on the objects to know that they did not escape
+their creation thread, and do not need any logging; and the JIT
+compiler can aggregate several reads or writes to an object into
+one.  We believe that these are the kind of optimizations that
+can give back a lot of the performance lost.</p>
+
+<h2 id="the-state-of-stm">The state of STM<a href="#the-state-of-stm" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Transactional Memory is itself a relatively old idea, originating
+from a 1986 paper by Tom Knight.  At first based on hardware
+support, the idea of software-only transactional memory (STM) was
+popularized in 1995 and has recently been the focus of intense 
+research.</p>
+<p>The approach outlined above --- using STM to form the core of the
+implementation of a language --- is new, as far as we know.  So
+far, most implementations provide STM as a library feature.  It
+requires explicit usage, often in the form of explicitly
+declaring which objects must be protected by STM (object-based
+STMs).  It is only recently that native STM support has started
+to appear, notably in the Clojure language.</p>
+<p>STM is described on Wikipedia as an approach that "greatly
+simplifies conceptual understanding of multithreaded programs and
+helps make programs more maintainable by working in harmony with
+existing high-level abstractions such as objects and modules."
+We actually think that these benefits are important enough to
+warrant being exposed to the Python programmer as well, instead
+of being used only internally.  This would give the Python
+programmer a very simple interface:</p>
+<pre class="literal-block">
+with atomic:
+    &lt;these operations are executed atomically&gt;
+</pre>
+<p>(This is <a href="https://mail.python.org/pipermail/python-dev/2003-February/033259.html">an old idea.</a>  Funny how back in 2003 people, including me, thought that this was a hack.  Now I'm writing a blog post to say "it was not a hack; it's explicitly using locks that is a hack."  I'm buying the idea of <a href="https://en.wikipedia.org/wiki/Software_transactional_memory#Composable_operations">composability.</a>)</p>
+
+<p>From a practical point of view, I started looking seriously at
+the University of Rochester STM (RSTM), a C++ library that has
+been a focus of --- and a collection of results from --- recent
+research.  One particularly representative paper is
+<a href="https://www.cs.rochester.edu/u/spear/ppopp09.pdf">A
+Comprehensive Strategy for Contention Management in Software
+Transactional Memory</a> by Michael F. Spear, Luke Dalessandro,
+Virendra J. Marathe and Michael L. Scott.</p>
+
+<h2 id="conclusion">Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Taking these ideas and applying them in the context of an
+implementation of a complex high-level language like Python comes
+with its own challanges.  In this context, using PyPy makes sense
+as both an experimentation platform and as a platform that is
+recently gaining attention for its performance.  The alternatives
+are unattractive: doing it in CPython for example would mean
+globally rewriting the interpreter.  In PyPy instead, we write it
+as a transformation that is applied systematically at translation-time.
+Also, PyPy is a general platform for generating fast interpreters
+for dynamic languages; the STM implementation in PyPy would work
+out of the box for other language implementations as well, instead
+of just for Python.</p>
+<br><p><b>Update:</b>
+</p>
+<ul>
+<li>This is mostly me (Armin Rigo) ranting aloud and trying experiments;
+this post should not be confused as meaning that the whole PyPy team
+will now spend the next years working on it full-time.
+As I said it is orthogonal to the actual Python interpreter, and it is in
+any case a feature that can be turned on or off during translation; I know
+that in many or most use cases, people are more interested in getting a
+fast PyPy rather than one which is twice as slow but scales well.
+</li>
+<li>Nothing I said is really new.  For proof, see
+<a href="https://sabi.net/nriley/pubs/dls6-riley.pdf">Riley and Zilles (2006)</a>
+as well as <a href="https://www.cs.auckland.ac.nz/~fuad/parpycan.pdf">Tabba (2010)</a> who both experimented with <i>Hardware</i> Transactional Memory, turning CPython or PyPy interpreter's GIL into start/end transactions, as I describe here.
+</li>
+</ul>
+</div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="pypy-16-kickass-panda-559424594592497545.html" rel="prev" title="PyPy 1.6 - kickass panda">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="wrapping-c-libraries-with-reflection-3916959558080483711.html" rel="next" title="Wrapping C++ Libraries with Reflection — Status Report One Year Later">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-2413167444689638946">
+        <div class="comment-header">
+          <a name="comment-2413167444689638946"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-23 13:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>How to handle composability ("with atomic") when something inside composed block turns out to make a system call? With explicit locking, this shouldn't be a problem.</p>
+        </div>
+      </div>
+      <div class="comment comment-8338135678673808956">
+        <div class="comment-header">
+          <a name="comment-8338135678673808956"></a>
+            <span class="author">ajuc</span> wrote on <span class="date">2011-08-23 14:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>Re sys calls in transactions:<br><br>In clojure it is solved by requiring that code in transaction is side effect free.<br><br>You can tag code as having side effects by macro "io!" :<br><br>(defn launch-missiles<br>“Launch attack on remote targets with everything we have.”<br>[]<br>(io!<br>(doseq [missile (all-silos)]<br>(fire missile))))<br><br>Then if you try to execut this code in transaction clojure will complain, because you can't really rollback launching nuclear missiles :)</p>
+        </div>
+      </div>
+      <div class="comment comment-2528779304023100167">
+        <div class="comment-header">
+          <a name="comment-2528779304023100167"></a>
+            <span class="author">ajuc</span> wrote on <span class="date">2011-08-23 14:49</span>:
+        </div>
+        <div class="comment-content">
+          <p>Ehh, I should've thought more before posting.<br><br>Code in transactions need not be side effect free - in fact in clojure side effects are the whole point of transactions. But this code should only change STM controlled variables, not outside world.<br><br>And "io!" macro is for marking code that changes things outside of STM.<br><br>Sorry for confusion.</p>
+        </div>
+      </div>
+      <div class="comment comment-219184611646737735">
+        <div class="comment-header">
+          <a name="comment-219184611646737735"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-08-23 14:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>Here are my current hacks in C, based on RSTM: https://bitbucket.org/arigo/arigo/raw/default/hack/stm/c , from the repo https://bitbucket.org/arigo/arigo .</p>
+        </div>
+      </div>
+      <div class="comment comment-5883675089644735702">
+        <div class="comment-header">
+          <a name="comment-5883675089644735702"></a>
+            <span class="author">Thomas Schilling</span> wrote on <span class="date">2011-08-23 14:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>Implementing STM at a core level is certainly a nice research topic, but I wonder whether it's the best way forward for Python.<br><br>STM works well in Haskell because it has the type system to enforce several constraints.  Also most data is immutable in Haskell, so threading is mostly safe by default.<br><br>Most Python objects are mutable (by default), so users have to be very careful when using multi-threading.  STM gives you a nice, composable primitive to protect your critical sections, but it does not tell <b>where</b> your critical sections are.<br><br>You dismiss multiprocessing because of serialization issues, but what about multiprocessing within the same process?  You have a VM already, so my guess would be that it wouldn't be that hard to implement software processes (a la Erlang).  Sure, using message passing may lead to a fair amount of copying, but I it seems to be much easier to implement and easier to use than shared-memory concurrency + STM.</p>
+        </div>
+      </div>
+      <div class="comment comment-7844308630289145107">
+        <div class="comment-header">
+          <a name="comment-7844308630289145107"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-08-23 15:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Thomas Schilling: I don't see how having a "multiprocessing" that uses the same process, rather than different processes, makes a difference.  In both cases you need to write your threading code specially and care about explicitly transferring objects via shared memory --- either to another OS thread in the same process, or to a different process altogether.</p>
+        </div>
+      </div>
+      <div class="comment comment-8697711460090759773">
+        <div class="comment-header">
+          <a name="comment-8697711460090759773"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2011-08-23 16:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>closures</p>
+        </div>
+      </div>
+      <div class="comment comment-4458303753132923233">
+        <div class="comment-header">
+          <a name="comment-4458303753132923233"></a>
+            <span class="author">Sam Wilson</span> wrote on <span class="date">2011-08-23 16:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>I'm with illume... look at what Apple has done with blocks. This seems like a very efficient way forward.<br><br>Separately, you are missing something about the Java-side.<br><br>For many of the data structures in Java there are atomic and non-atomic versions. That is, when you are using a data structure on a single thread, you grab the non-atomic version. This way, you don't pay for the overhead of the locking. But, when you are sharing a data structure between threads, you use the atomic version. As a by-product of history, though it is a nice by-product, you usually get the atomic version by default. That is to say, you have to go looking for trouble by explicitly asking for the non-atomic version.<br><br>By baking this into the language, you are forcing a single policy on all programs, rather than letting the programmer choose what policy is going to be best in that scenario. Either that, or they will be forced to put code guards all over the place.<br><br>To me, it seems like the language/runtime should provide the most basic of atomic operations, and the run-time library on top should provide the policy. That's the Java approach, in a nutshell. It gives the programmer flexibility and keeps the core runtime simple and easier to optimize.<br><br>Granted, you want a high-level language where the programmer doesn't make a lot of these decisions. So... looking at your own arguments... you are expecting an initial 10x performance hit relative to the current GIL-python approach, with hopes of getting it down to 2x performance... If that's the case, why not just stick with the GIL and have Python programmers take advantage of multiprocessing by creating co-operative programs using a message passing API. In some ways, it's a little more TAUP to do it that way, isn't it?</p>
+        </div>
+      </div>
+      <div class="comment comment-1944385877647011715">
+        <div class="comment-header">
+          <a name="comment-1944385877647011715"></a>
+            <span class="author">nekto0n</span> wrote on <span class="date">2011-08-23 16:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>What about replaying syscalls? Is it possible that such situation will happen?</p>
+        </div>
+      </div>
+      <div class="comment comment-4182713227454616753">
+        <div class="comment-header">
+          <a name="comment-4182713227454616753"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-08-23 16:45</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous: this case can be handled on a case-by-case basis (e.g. special-casing "prints" to buffer), but it also has a general solution: we turn the transaction into an "inevitable" transaction, i.e. one which cannot fail.<br><br>I already have support for this in my demo code, because it is needed to handle the cases where the nesting of the C program is such that setjmp/longjmp can no longer work.  The typical example is the RETURN_VALUE bytecode.  It starts a transaction, returns to the caller by popping off some C frames, then ends the transaction in the caller.  When we return from the C frame of the callee, in the middle of the transaction, we notice that we won't have the setjmp around any longer, so we are not allowed to abort and rollback any more.<br><br>Inevitable transactions have the property of being "a bit like" a GIL in the sense that you can only have one in total, and other transactions cannot commit before it does.  In case of the RETURN_VALUE, it's a very short transaction so it shouldn't really be a problem.  For the case of a user-specified "with atomic:" block, it can make all the other threads pause.  Not ideal, but at least better than nothing...</p>
+        </div>
+      </div>
+      <div class="comment comment-4289702079798383834">
+        <div class="comment-header">
+          <a name="comment-4289702079798383834"></a>
+            <span class="author">TomV</span> wrote on <span class="date">2011-08-23 16:49</span>:
+        </div>
+        <div class="comment-content">
+          <p>Could you explain a bit more what PyPy currently does to prevent these kinds of problems?</p>
+        </div>
+      </div>
+      <div class="comment comment-7974275952910874833">
+        <div class="comment-header">
+          <a name="comment-7974275952910874833"></a>
+            <span class="author">nekto0n</span> wrote on <span class="date">2011-08-23 16:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>@TomV PyPy uses GIL</p>
+        </div>
+      </div>
+      <div class="comment comment-7913053725739157011">
+        <div class="comment-header">
+          <a name="comment-7913053725739157011"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-08-23 16:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Sam Wilson: as you know, the PyPy approach is to sacrifice nothing to performance for the user, and get reasonably good (if not exactly Java-level) performance anyway :-)<br><br>I should also mention generally that for some programs that I have in mind, using a message-passing API would be a complete rewrite (if it is really possible at all), whereas "just" making them multithreaded can be done.  The "translate.py" of PyPy falls into this category.  It is a program that heavily use objects within objects within objects in a big non-nicely-separable "mess", and I would not dare to think about how to send parts of this object graph over a messaging API and get back localized updates.<br><br>Of course there are also other use cases where you can naturally get a model that plays nicely with message passing.</p>
+        </div>
+      </div>
+      <div class="comment comment-104891792177726745">
+        <div class="comment-header">
+          <a name="comment-104891792177726745"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-08-23 17:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>@nekto0n: that's not really possible in general, because you need to have the return value of the syscall to decide what to do next, which normally means that you have to really do the syscall.</p>
+        </div>
+      </div>
+      <div class="comment comment-2864503186023382210">
+        <div class="comment-header">
+          <a name="comment-2864503186023382210"></a>
+            <span class="author">nekto0n</span> wrote on <span class="date">2011-08-23 17:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>@armin please describe what will happen if 2 threads call write() on single socket object? what exactly should/will happen when iterpreter begins to dispatch CALL bytecode?<br><br>I think, it's the most questionable part of STM approach.</p>
+        </div>
+      </div>
+      <div class="comment comment-6034340347554293027">
+        <div class="comment-header">
+          <a name="comment-6034340347554293027"></a>
+            <span class="author">Rodrigo Araújo</span> wrote on <span class="date">2011-08-23 17:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>some change in my code<br><br>https://paste.pocoo.org/show/463085/</p>
+        </div>
+      </div>
+      <div class="comment comment-1522836423051094915">
+        <div class="comment-header">
+          <a name="comment-1522836423051094915"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-08-23 17:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>@nekto0n: nothing particular.  The two threads will run the calls in parallel, just like CPython, which calls the send() function without any GIL acquired.  What exactly occurs depends on the OS and not on the language.</p>
+        </div>
+      </div>
+      <div class="comment comment-7048529467948214143">
+        <div class="comment-header">
+          <a name="comment-7048529467948214143"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-23 17:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>I dissagree to the fact that threads whose transactions would be invalidated, are stealing CPU timeshares from other processes / threads.<br><br>STM is an 'egoist' aproach</p>
+        </div>
+      </div>
+      <div class="comment comment-1431667169635265661">
+        <div class="comment-header">
+          <a name="comment-1431667169635265661"></a>
+            <span class="author">kost BebiX</span> wrote on <span class="date">2011-08-23 20:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>I know this might sound stupid, but is it possible to enable/disable STM on the fly? Like to enable it only for several threads involved.</p>
+        </div>
+      </div>
+      <div class="comment comment-6504810880618934457">
+        <div class="comment-header">
+          <a name="comment-6504810880618934457"></a>
+            <span class="author">kost BebiX</span> wrote on <span class="date">2011-08-23 20:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>Or just not open transaction when there's only 1 thread?</p>
+        </div>
+      </div>
+      <div class="comment comment-3067222387706714551">
+        <div class="comment-header">
+          <a name="comment-3067222387706714551"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2011-08-23 22:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi,<br><br>I thought a bit about what you said about Jython. Mostly, I was thinking about a way to do this automatically instead of making it explicitly.<br><br>I came up with this first draft: https://github.com/albertz/automatic_object_locking<br><br>This will obviously also be very slow but it should be possible to optimize this well (similarly to STM). And I think it is much easier than STM.<br><br>-Albert</p>
+        </div>
+      </div>
+      <div class="comment comment-4022730260305278833">
+        <div class="comment-header">
+          <a name="comment-4022730260305278833"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-24 07:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>Funny to see how Python eats itself like an Ouroboros. Wrong design decisions that made concurrency almost impossible, dirty hacks ("dirty" compared to, for example, Erlang's approach to SMP — almost linear scalability with a number of cores with 10-20% static overhead thanks to locks) that PyPy team are trying to do to solve problems introduced by Guido's ignorance, and a lot of Python "programmers" that don't understand what SMP is. Python is a ghetto, for real.</p>
+        </div>
+      </div>
+      <div class="comment comment-6664269580343846798">
+        <div class="comment-header">
+          <a name="comment-6664269580343846798"></a>
+            <span class="author">Paul Harrison</span> wrote on <span class="date">2011-08-24 07:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>Seems like it should be possible to guarantee performance not much worse than with a GIL.<br><br>Am I right in thinking there is a locked section where changes are written to memory? The execution before this is effectively just some speculative computation to to speed up the locked section. If it turns out there's an inconsistency, just execute the locked section as you would normally. If the speculative computation is failing most of the time or is slow, switch to not doing it -- and we are back to GIL performance.</p>
+        </div>
+      </div>
+      <div class="comment comment-475038430560503263">
+        <div class="comment-header">
+          <a name="comment-475038430560503263"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-08-24 10:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>@all: please come to the #pypy irc channel on irc.freenode.net if you want to discuss this further.</p>
+        </div>
+      </div>
+      <div class="comment comment-2878747439923990242">
+        <div class="comment-header">
+          <a name="comment-2878747439923990242"></a>
+            <span class="author">Thomas Schilling</span> wrote on <span class="date">2011-08-24 12:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin: Each in-memory process would use its own part of the heap so there would be no locking necessary except during message sending.  You also don't need to have a 1-to-1 mapping of OS threads to processes.  You could schedule N processes onto M OS threads (preferably chosen to match the number of CPU cores).<br><br>Of course, if you don't want a message-passing model (as you mentioned in another comment) then fine.<br><br>My argument is just that: STM is difficult to implement, difficult to make fast, and it still isn't that easy to use.  A message passing model is much easier to implement and easier to use for end users.  (You can still get deadlocks, but you could provide libraries for standard communication patterns which you only have to get right once, like Erlang's OTP.)</p>
+        </div>
+      </div>
+      <div class="comment comment-8328783528921012438">
+        <div class="comment-header">
+          <a name="comment-8328783528921012438"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2011-08-24 13:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>I think that there is some confusion here about what the underlying problem that you are trying to solve is.<br><br>The underlying (fundamental) problem that transactional memory as a method to replace GIL in Python is trying to solve is: automatic parallelization. That *is* hard.<br><br>Mediocre implementations of transactional memory are trivial to implement. Almost anybody can do it. Of course, the performance will be horrible.<br><br>If we stick to the idea about the underlying problem (automatic parallelization) and keep it in our minds while thinking, it is clear and utterly obvious that *any* implementation of transactional memory which is slower than serial execution is simply missing the target. The target is, obviously, to run the program faster than serial execution. Otherwise, it would be totally pointless.<br><br>Based on this reasoning, it is an *obvious* conclusion that a transactional memory implementation simply cannot be allowed to result in lower performance than serial execution of the code. Allowing lower performance would be completely irrational.<br><br>We are humans, not animals. Rationality is our distinctive feature. We have to try to follow rationality.<br><br>In light of this, saying that "It is OK for transactional memory to result in 2x slowdown" is irrational. I will write it one more time: accepting 2x slowdown is irrational.<br><br>Now, it is crucial to note that there are various kinds of performance measurements. And it is OK to slow down one performance indicator while boosting another performance indicator. For example, in web server environment, it is OK to slow down the delivery of individual web pages by a factor 1.3 - while boosting the number of requests per second by 2.3. That is *rational* and perfectly OK. Also, 3x developer productivity boost would be OK.<br><br>Following this example, if transactional memory is allowed to slow down performance of the program (compared to serial execution) by 2x, a person who follows rationally would immediately be drawn to seek for the evidence of a greater-than-2x performance boost in another area of the program.<br><br>Omitting developer productivity, how are the PyPy developers going to deliver the *mandatory* greater-than-2x performance boost (in some area) without actually solving the underlying hard problems requiring hard-core code analysis?<br><br>If PyPy's transactional memory implementation would serialize calls to the Linux kernel (because it is hard to emulate them in user-space), then this alone would prevent some programs to achieve the more-than-2x performance boost. This is because it is impossible to boost program performance (in some areas, given a particular performance indicator) unless the modified program is allowed to call kernel functions out-of-order or in parallel.<br><br>-----<br><br>Note: I am *not* saying that PyPy should give up. I am just trying to note that you do not seem to know what you are doing. But I may be wrong.</p>
+        </div>
+      </div>
+      <div class="comment comment-3607630193498235800">
+        <div class="comment-header">
+          <a name="comment-3607630193498235800"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-08-24 16:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>Of course the sentence "It is OK for transactional memory to result in 2x slowdown" was meant "on one thread".  As soon as your program uses more than 2 threads, on a more-than-2-CPUs machine, then you win.</p>
+        </div>
+      </div>
+      <div class="comment comment-1231623510528316211">
+        <div class="comment-header">
+          <a name="comment-1231623510528316211"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2011-08-24 17:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>I read "Tabba (2010)" (Tabba: Adding Concurrency in Python Using a Commercial Processor’s Hardware Transactional Memory Support) just now.<br><br><br>The article:<br><br>- benchmark "iterate": This function is not making calls to other functions. The authors are independently running 16 instances of the "iterate" function on a 16-core CPU using 16 threads. The speedup in respect to unmodified CPython is 7x. The slowdown in respect to 16 CPython processes is 2.2x.<br><br>- benchmark "count": This is similar to "iterate". The speedup in respect to unmodified CPython is 4.5x. The slowdown in respect to 16 CPython processes is 3.5x.<br><br>- benchmark "pystone": This function is making calls to other functions. 16 instances of the "pystone" function on a 16-core CPU using 16 threads. The speedup in respect to unmodified CPython is 0.9x. The slowdown in respect to 16 CPython processes is 17x.<br><br><br>My analysis:<br><br>- iterate: The fact that N instances of this function can run in parallel without any interference can be determined easily. The algorithm to determine this is trivial. (Not to mention, the pointless loop in the function can be replaced by a NOP in a dead-code elimination pass).<br><br>- count: same as "iterate".<br><br>- pystone: It is not trivial to determine whether multiple instances can run in parallel. So, it should presumably run single-threaded.<br><br>- The article is *not* mentioning any real problem that was solved by TM in the case of "iterate", "count" or "pystone". That is logical, since the truth is that there is no real problem to solve here. The benchmark functions can be trivially run in 16 CPython Linux processes - anybody can do that (even your grandma).<br><br><br>My summary:<br><br>- In case of the two functions for which it *can* be trivially determined whether their instances can run in parallel, the TM approach results in a 2x-3x slowdown compared to the most basic auto-parallelization algorithm.<br><br>- In case of the function for which it *cannot* be trivially determined whether multiple instances can run in parallel, the TM approach running on 4-16 threads achieved 90% (loss of 10%) of the speed of single-threaded CPython without TM. On 1 thread, the TM approach is 2.1x slower.<br><br><br>Bottom line:<br><br>Call me crazy, but my conclusion from this article is that TM (at least the TM approach from the article) is not working at all.</p>
+        </div>
+      </div>
+      <div class="comment comment-746133189326067689">
+        <div class="comment-header">
+          <a name="comment-746133189326067689"></a>
+            <span class="author">Greg Wilson</span> wrote on <span class="date">2011-08-24 17:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>Cool to see this happening. What's also cool is the result reported in Rossbach et al's study (https://www.neverworkintheory.org/?p=122): novices using STM did <i>better</i> in simple programming problems than students using traditional mechanisms, even though they thought they had done <i>worse</i>.  "Baroque syntax" may be part of the problem; I'm sure the paper's authors would be happy to chat.</p>
+        </div>
+      </div>
+      <div class="comment comment-5506709174254681028">
+        <div class="comment-header">
+          <a name="comment-5506709174254681028"></a>
+            <span class="author">Timo</span> wrote on <span class="date">2011-08-27 13:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>⚛, you're missing a very important bit of the paper. In it, the authors say, that the Rock hardware only holds 256 bytes of write-buffer content, while Riley and Zilles¹ determined the average write-buffer size needed for transactions to not fail prematurely would be "less than 640 bytes", which is almost three times as much as Rock offers.<br><br>Thus, the big slowdown that the pystone benchmark experiences could be caused by the shortcomings of the TM built into Rock.<br><br>I do have to agree, though, that the "benchmarks" used in the paper are not very satisfactory. However, the magical "simple parallelization algorithm" you summon in your comment would break down quite easily shortly after the complexity of the situation increases by just a bit, would it not?<br><br>¹ I only briefly glanced over the paper, so if anyone read it more thoroughly, they can feel free to correct me.</p>
+        </div>
+      </div>
+      <div class="comment comment-2404362792346927299">
+        <div class="comment-header">
+          <a name="comment-2404362792346927299"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2011-08-28 00:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>I thought Erlang successfully solved this problem years ago? And I don't think anything scales better than it. So why aren't we just copying them? Message passing, where each thread or process share absolutely nothing, is the sanest and safest way to do concurrent and multi-threaded programming. I mean, you don't even have to worry about locking! STM always seemed complicated to me.</p>
+        </div>
+      </div>
+      <div class="comment comment-7195777204013130530">
+        <div class="comment-header">
+          <a name="comment-7195777204013130530"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-08-30 03:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>is there a branch we can check this out?</p>
+        </div>
+      </div>
+      <div class="comment comment-7137530463798478310">
+        <div class="comment-header">
+          <a name="comment-7137530463798478310"></a>
+            <span class="author">squeaky_pl</span> wrote on <span class="date">2011-09-01 10:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hardware transactional memory anyone? https://arstechnica.com/hardware/news/2011/08/ibms-new-transactional-memory-make-or-break-time-for-multithreaded-revolution.ars</p>
+        </div>
+      </div>
+      <div class="comment comment-6853320227030958680">
+        <div class="comment-header">
+          <a name="comment-6853320227030958680"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-09-21 19:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>@squeaky_pl: thanks for the link.  In some way researching this is ultimately doomed: either transactional memory doesn't work, or it does and in 5 or 10 years all CPUs will have good hardware support and will be able to run existing software like CPython with minor changes.  :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-3941250212293457365">
+        <div class="comment-header">
+          <a name="comment-3941250212293457365"></a>
+            <span class="author">staila</span> wrote on <span class="date">2011-11-03 05:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>We are actually working on implementing this directly into <a href="https://blog.staila.com/?p=81" rel="nofollow">stailaOS</a>.</p>
+        </div>
+      </div>
+      <div class="comment comment-1824199823810479371">
+        <div class="comment-header">
+          <a name="comment-1824199823810479371"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-05-12 10:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Mystilleef agree 100%</p>
+        </div>
+      </div>
+      <div class="comment comment-6697447537028188824">
+        <div class="comment-header">
+          <a name="comment-6697447537028188824"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-07-05 22:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>The high-level semantics that the Python VM provides through the GIL are perfect for most programs, and for most programmer's knowledge about concurrency.<br><br>What is the purpose of going after the GIL? <br><br>If it's just a performance boost on multiple cores, then an GIOL (global IO lock) implemented on the VM, as the GIL is, should be considered. The VM could run several OS threads blocking them on IO and releasing GIL.<br><br>If the purpose is to make concurrent programming easy and correct, it can be proven that it <b>is not possible</b>.<br><br>Yet, there are alternatives that don't alter the language or the semantics that can be explored. <br><br>Erlang-style message passing can be provided through object proxies implemented on top or beneath the VM, so the threads/processes can even run on different computers.<br><br>In short, an Actor model is much preferable to a shared-memory one.<br><br>https://en.wikipedia.org/wiki/Actor_model</p>
+        </div>
+      </div>
+      <div class="comment comment-6835034220746341475">
+        <div class="comment-header">
+          <a name="comment-6835034220746341475"></a>
+            <span class="author">Alex moner</span> wrote on <span class="date">2014-10-21 17:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>In general, it is completely impossible to map every operation that must be atomic to a single processor instruction.<a href="https://www.uni-collect.com/uniwebsite/Products/VQNAgency.aspx" rel="nofollow">Uni-source</a><br></p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

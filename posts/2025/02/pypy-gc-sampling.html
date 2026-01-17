@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Low Overhead Allocation Sampling with VMProf in PyPy's GC | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2025/02/pypy-gc-sampling.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Christoph Jung">
+<link rel="prev" href="pypy-v7318-release.html" title="PyPy v7.3.18 release" type="text/html">
+<link rel="next" href="pypy-v7319-release.html" title="PyPy v7.3.19 release" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Low Overhead Allocation Sampling with VMProf in PyPy's GC">
+<meta property="og:url" content="https://www.pypy.org/posts/2025/02/pypy-gc-sampling.html">
+<meta property="og:description" content="Introduction
+There are many time-based statistical profilers around (like VMProf or py-spy
+just to name a few). They allow the user to pick a trade-off between profiling
+precision and runtime overhead">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2025-02-25T10:16:00Z">
+<meta property="article:tag" content="gc">
+<meta property="article:tag" content="profiling">
+<meta property="article:tag" content="vmprof">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/christoph-jung.html">Christoph Jung</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2025-02-25T10:16:00Z" itemprop="datePublished" title="2025-02-25 10:16">2025-02-25 10:16</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="pypy-gc-sampling.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <h3 id="introduction">Introduction<a href="#introduction" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>There are many time-based statistical profilers around (like VMProf or py-spy
+just to name a few). They allow the user to pick a trade-off between profiling
+precision and runtime overhead.</p>
+<p>On the other hand there are memory profilers
+such as <a href="https://github.com/bloomberg/memray">memray</a>. They can be handy for
+finding leaks or for discovering functions that allocate a lot of memory.
+Memory profilers typlically save every single allocation a program does. This
+results in precise profiling, but larger overhead.</p>
+<p>In this post we describe our experimental approach to low overhead statistical
+memory profiling. Instead of saving every single allocation a program does, it
+only saves every nth allocated byte. We have tightly integrated VMProf and the
+PyPy Garbage Collector to achieve this. The main technical insight is that the
+check whether an allocation should be sampled can be made free. This is done by
+folding it into the bump pointer allocator check that the PyPy’s GC uses to
+find out if it should start a minor collection. In this way the fast path with
+and without memory sampling are exactly the same.</p>
+<h3 id="background">Background<a href="#background" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>To get an insight how the profiler and GC interact, lets take a brief look at
+both of them first.</p>
+<h4 id="vmprof">VMProf<a href="#vmprof" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p><a href="https://github.com/vmprof/vmprof-python">VMProf</a> is a statistical time-based profiler for PyPy. VMProf samples the stack of currently running Python functions a certain user-configured number of times per second. By adjusting
+this number, the overhead of profiling can be modified to pick the correct trade-off between overhead and precision of the profile. In the resulting profile, functions with huge runtime stand out the most, functions with shorter runtime less so. If you want to get a little more introduction to VMProf and how to use it with PyPy, you may look
+at <a href="https://pypy.org/posts/2024/05/vmprof-firefox-converter.html">this blog post</a></p>
+<h4 id="pypys-gc">PyPy’s GC<a href="#pypys-gc" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>PyPy uses a generational incremental copying collector. That means there are two spaces for allocated objects, the nursery and the old-space. Freshly allocated objects will be allocated into the nursery. When the nursery is full at some point, it will be collected and all objects that survive will be tenured i.e. moved into the old-space. The old-space is much larger than the nursery and is collected less frequently and <a href="../../2024/03/fixing-bug-incremental-gc.html">incrementally</a> (not completely
+collected in one go, but step-by-step). The old space collection is not relevant for the rest of the post though. We will now take a look at nursery allocations and how the nursery is collected.</p>
+<h4 id="bump-pointer-allocation-in-the-nursery">Bump Pointer Allocation in the Nursery<a href="#bump-pointer-allocation-in-the-nursery" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>The nursery (a small continuous memory area) utilizes two pointers to keep track from where on the nursery is free and where it ends. They are called <code>nursery_free</code> and <code>nursery_top</code>. When memory is allocated, the GC checks if there is enough space in the nursery left. If there is enough space, the <code>nursery_free</code> pointer will be returned as the start address for the newly allocated memory, and <code>nursery_free</code> will be moved forward by the amount of allocated memory.</p>
+<p><img src="../../../images/2025_02_allocation_sampling_images/nursery_allocation.svg"></p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">allocate</span><span class="p">(</span><span class="n">totalsize</span><span class="p">):</span>
+  <span class="c1"># Save position, where the object will be allocated to as result</span>
+  <span class="n">result</span> <span class="o">=</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span>
+  <span class="c1"># Move nursery_free pointer forward by totalsize</span>
+  <span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span> <span class="o">=</span> <span class="n">result</span> <span class="o">+</span> <span class="n">totalsize</span>
+  <span class="c1"># Check if this allocation would exceed the nursery</span>
+  <span class="k">if</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span> <span class="o">&gt;</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_top</span><span class="p">:</span>
+      <span class="c1"># If it does =&gt; collect the nursery and allocate afterwards</span>
+      <span class="n">result</span> <span class="o">=</span> <span class="n">collect_and_reserve</span><span class="p">(</span><span class="n">totalsize</span><span class="p">)</span>
+  <span class="c1"># result is a pointer into the nursery, obj will be allocated there</span>
+  <span class="k">return</span> <span class="n">result</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">collect_and_reserve</span><span class="p">(</span><span class="n">size_of_allocation</span><span class="p">):</span>
+    <span class="c1"># do a minor collection and return the start of the nursery afterwards</span>
+    <span class="n">minor_collection</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span>
+</pre></div>
+
+<p>Understanding this is crucial for our allocation sampling approach, so let us go through this step-by-step.</p>
+<p>We already saw an example on how an allocation into a non-full nursery will look like. But what happens, if the nursery is (too) full?</p>
+<p><img src="../../../images/2025_02_allocation_sampling_images/nursery_full.svg"></p>
+<p>As soon as an object doesn't fit into the nursery anymore, it will be collected. A nursery collection will move all surviving objects into the old-space, so that the nursery is free afterwards, and the requested allocation can be made.</p>
+<p><img src="../../../images/2025_02_allocation_sampling_images/nursery_collected.svg"></p>
+<p>(Note that this is still a bit of a simplification.)</p>
+<h3 id="sampling-approach">Sampling Approach<a href="#sampling-approach" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The last section described how the nursery allocation works normally. Now we'll talk how we integrate the new allocation sampling approach into it.</p>
+<p>To decide whether the GC should trigger a sample, the sampling logic is integrated into the bump pointer allocation logic. Usually, when there is not enough space in the nursery left to fulfill an allocation request, the nursery will be collected and the allocation will be done afterwards. We reuse that mechanism for sampling, by introducing a new pointer called <code>sample_point</code> that is calculated by <code>sample_point = nursery_free + sample_n_bytes</code> where <code>sample_n_bytes</code> is the number of bytes allocated before a sample is made (i.e. our sampling rate).</p>
+<p>Imagine we'd have a nursery of 2MB and want to sample every 512KB allocated, then you could imagine our nursery looking like that:</p>
+<p><img src="../../../images/2025_02_allocation_sampling_images/nursery_sampling.svg"></p>
+<p>We use the sample point as <code>nursery_top</code>, so that allocating a chunk of 512KB would exceed the nursery top and start a nursery collection. But of course we don't want to do a minor collection just then, so before starting a collection, we need to check if the nursery is actually full or if that is just an exceeded sample point. The latter will then trigger a VMprof stack sample. Afterwards we don't actually do a minor collection, but change <code>nursery_top</code> and immediately return to the caller.</p>
+<p>The last picture is a conceptual simplification. Only one sampling point exists at any given time. After we created the sampling point, it will be used as nursery top, if exceeded at some point, we will just add <code>sample_n_bytes</code> to that sampling point, i.e. move it forward.</p>
+<p>Here's how the updated <code>collect_and_reserve</code> function looks like:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">collect_and_reserve</span><span class="p">(</span><span class="n">size_of_allocation</span><span class="p">):</span>
+    <span class="c1"># Check if we exceeded a sample point or if we need to do a minor collection</span>
+    <span class="k">if</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_top</span> <span class="o">==</span> <span class="n">gc</span><span class="o">.</span><span class="n">sample_point</span><span class="p">:</span>
+        <span class="c1"># One allocation could exceed multiple sample points</span>
+        <span class="c1"># Sample, move sample_point forward</span>
+        <span class="n">vmprof</span><span class="o">.</span><span class="n">sample_now</span><span class="p">()</span>
+        <span class="n">gc</span><span class="o">.</span><span class="n">sample_point</span> <span class="o">+=</span> <span class="n">sample_n_bytes</span>
+
+        <span class="c1"># Set sample point as new nursery_top if it fits into the nursery</span>
+        <span class="k">if</span> <span class="n">sample_point</span> <span class="o">&lt;=</span> <span class="n">gc</span><span class="o">.</span><span class="n">real_nursery_top</span><span class="p">:</span>
+            <span class="n">gc</span><span class="o">.</span><span class="n">nursery_top</span> <span class="o">=</span> <span class="n">sample_point</span>
+        <span class="c1"># Or use the real nursery top if it does not fit</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">gc</span><span class="o">.</span><span class="n">nursery_top</span> <span class="o">=</span> <span class="n">gc</span><span class="o">.</span><span class="n">real_nursery_top</span>
+
+        <span class="c1"># Is there enough memory left inside the nursery</span>
+        <span class="k">if</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span> <span class="o">+</span> <span class="n">size_of_allocation</span> <span class="o">&lt;=</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_top</span><span class="p">:</span>
+            <span class="c1"># Yes =&gt; move nursery_free forward</span>
+            <span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span> <span class="o">+=</span> <span class="n">size_of_allocation</span>
+            <span class="k">return</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span>
+
+    <span class="c1"># We did not exceed a sampling point and must do a minor collection, or</span>
+    <span class="c1"># we exceeded a sample point but we needed to do a minor collection anyway</span>
+    <span class="n">minor_collection</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span>
+</pre></div>
+
+<h3 id="why-is-the-overhead-low">Why is the Overhead ‘low’<a href="#why-is-the-overhead-low" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The most important property of our approach is that the bump-pointer fast path is not changed at all. If sampling is turned off, the slow path in <code>collect_and_reserve</code> has three extra instructions for the if at the beginning, but are only a very small amount of overhead, compared to doing a minor collection.</p>
+<p>When sampling is on, the extra logic in <code>collect_and_reserve</code> gets executed. Every time an allocation exceeds the <code>sample_point</code>, <code>collect_and_reserve</code> will sample the Python functions currently executing. The resulting overhead is directly controlled by <code>sample_n_bytes</code>. After sampling, the <code>sample_point</code> and <code>nursery_top</code> must be set accordingly. This will be done once after sampling in <code>collect_and_reserve</code>. At some point a nursery collection will free the nursery and set the new <code>sample_point</code> afterwards.</p>
+<p>That means that the overhead mostly depends on the sampling rate and the rate at which the user program allocates memory, as the combination of those two factors determines the amount of samples.</p>
+<p>Since the sampling rate can be adjusted from as low as 64 Byte to a theoretical maximum of ~4 GB (at the moment), the tradeoff between number of samples (i.e. profiling precision) and overhead can be completely adjusted.</p>
+<p>We also suspect linkage between user program stack depth and overhead (a deeper stack takes longer to walk, leading to higher overhead), especially when walking the C call stack to.</p>
+<h3 id="sampling-rates-bigger-than-the-nursery-size">Sampling rates bigger than the nursery size<a href="#sampling-rates-bigger-than-the-nursery-size" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The nursery usually has a size of a few megabytes, but profiling long-runningor larger applications with tons of allocations could result in very high number of samples per second (and thus overhead). To combat that it is possible to use sampling rates higher than the nursery size.</p>
+<p>The sampling point is not limited by the nursery size, but if it is 'outside' the nursery (e.g. because <code>sample_n_bytes</code> is set to twice the nursery size) it won't be used as <code>nursery_top</code> until it 'fits' into the nursery.</p>
+<p><img src="../../../images/2025_02_allocation_sampling_images/nursery_sampling_larger_than_nursery.svg"></p>
+<p>After every nursery collection, we'd usually set the <code>sample_point</code> to <code>nursery_free + sample_n_bytes</code>, but if it is larger than the nursery, then the amount of collected memory during the last nursery collection is subtracted from <code>sample_point</code>.</p>
+<p><img src="../../../images/2025_02_allocation_sampling_images/nursery_sampling_larger_than_nursery_post_minor.svg"></p>
+<p>At some point the <code>sample_point</code> will be smaller than the nursery size, then it will be used as <code>nursery_top</code> again to trigger a sample when exceeded.</p>
+<h3 id="differences-to-time-based-sampling">Differences to Time-Based Sampling<a href="#differences-to-time-based-sampling" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>As mentioned in the introduction, time-based sampling ‘hits’ functions with high runtime, and allocation-sampling ‘hits’ functions allocating much memory. But are those always different functions? The answer is: sometimes. There can be functions allocating lots of memory, that do not have a (relative) high runtime.</p>
+<p>Another difference to time-based sampling is that the profiling overhead does not solely depend on the sampling rate (if we exclude a potential stack-depth - overhead correlation for now) but also on the amount of memory the user code allocates.</p>
+<p>Let us look at an example:</p>
+<p>If we’d sample every 1024 Byte and some program A allocates 3 MB and runs for 5 seconds, and program B allocates 6 MB but also runs for 5 seconds, there will be ~3000 samples when profiling A, but ~6000 samples when profiling B. That means we cannot give a ‘standard’ sampling rate like time-based profilers use to do (e.g. vmprof uses ~1000 samples/s for time sampling), as the number of resulting samples, and thus overhead, depends on sampling rate and amount of memory allocated by the program.</p>
+<p>For testing and benchmarking, we usually started with a sampling rate of 128Kb and then halved or doubled that (multiple times) depending on sample counts, our need for precision (and size of the profile).</p>
+<h3 id="evaluation">Evaluation<a href="#evaluation" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<h4 id="overhead">Overhead<a href="#overhead" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>Now let us take a look at the allocation sampling overhead, by profiling some benchmarks. </p>
+<p>The x-axis shows the sampling rate, while the y-axis shows the overhead, which is computed as <code>runtime_with_sampling / runtime_without_sampling</code>.</p>
+<p>All benchmarks were executed five times on a PyPy with JIT and native profiling enabled, so that every dot in the plot is one run of a benchmark.</p>
+<p><img src="../../../images/2025_02_allocation_sampling_images/as_overhead.png"></p>
+<p>As you probably expected, the Overhead drops with higher allocation sampling rates.
+Reaching from as high as ~390% for 32kb allocation sampling to as low as &lt; 10% for 32mb.</p>
+<p>Let me give one concrete example: One run of the microbenchmark at 32kb sampling took 15.596 seconds and triggered 822050 samples.
+That makes a ridiculous amount of <code>822050 / 15.596 = ~52709</code> samples per second. </p>
+<p>There is probably no need for that amount of samples per second, so that for 'real' application profiling a much higher sampling rate would be sufficient.</p>
+<p>Let us compare that to time sampling.</p>
+<p>This time we ran those benchmarks with 100, 1000 and 2000 samples per second.</p>
+<p><img src="../../../images/2025_02_allocation_sampling_images/ts_overhead.png"></p>
+<p>The overhead varies with the sampling rate. Both with allocation and time sampling, you can reach any amount of overhead and any level of profiling precision you want. The best approach probably is to just try out a sampling rate and choose what gives you the right tradeoff between precision and overhead (and disk usage).</p>
+<p>The benchmarks used are:</p>
+<p>microbenchmark </p>
+<ul>
+<li><a href="https://github.com/Cskorpion/microbenchmark">https://github.com/Cskorpion/microbenchmark</a></li>
+<li><code>pypy microbench.py 65536</code></li>
+</ul>
+<p>gcbench </p>
+<ul>
+<li><a href="https://github.com/pypy/pypy/blob/main/rpython/translator/goal/gcbench.py">https://github.com/pypy/pypy/blob/main/rpython/translator/goal/gcbench.py</a></li>
+<li>print statements removed</li>
+<li><code>pypy gcbench.py 1</code></li>
+</ul>
+<p>pypy translate step</p>
+<ul>
+<li>first step of the pypy translation (annotation step)</li>
+<li><code>pypy path/to/rpython --opt=0 --cc=gcc --dont-write-c-files --gc=incminimark --annotate path/to/pypy/goal/targetpypystandalone.py</code></li>
+</ul>
+<p>interpreter pystone</p>
+<ul>
+<li>pystone benchmark on top of an interpreted pypy on top of a translated pypy</li>
+<li><code>pypy path/to/pypy/bin/pyinteractive.py -c "import test.pystone; test.pystone.main(1)"</code></li>
+</ul>
+<p>All benchmarks executed on:</p>
+<ul>
+<li>Kubuntu 24.04</li>
+<li>AMD Ryzen 7 5700U</li>
+<li>24gb DDR4 3200MHz (dual channel)</li>
+<li>
+<p>SSD benchmarking at read: 1965 MB/s, write: 227 MB/s</p>
+<ul>
+<li>Sequential 1MB 1 Thread 8 Queues</li>
+</ul>
+</li>
+<li>
+<p>Self built PyPy with allocation sampling features</p>
+<ul>
+<li><a href="https://github.com/Cskorpion/pypy/tree/gc_allocation_sampling_u_2.7">https://github.com/Cskorpion/pypy/tree/gc_allocation_sampling_u_2.7</a></li>
+</ul>
+</li>
+<li>
+<p>Modified VMProf with allocation sampling support</p>
+<ul>
+<li><a href="https://github.com/Cskorpion/vmprof-python/tree/pypy_gc_allocation_sampling">https://github.com/Cskorpion/vmprof-python/tree/pypy_gc_allocation_sampling</a></li>
+</ul>
+</li>
+</ul>
+<h4 id="example">Example<a href="#example" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>We have also modified <a href="https://github.com/Cskorpion/vmprof-firefox-converter/tree/allocation_sampling">vmprof-firefox-converter</a> to show the allocation samples in the Firefor Profiler UI. With the techniques from this post, the output looks like this:</p>
+<p><img src="../../../images/2025_02_allocation_sampling_images/allocation_sampling_call_tree.png"></p>
+<p>While this view is interesting, it would be even better if we could also see what types of objects are being allocated in these functions. We will take about how to do this in a future blog post.</p>
+<h3 id="conclusion">Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>In this blog post we introduced allocation sampling for PyPy by going through the technical aspects and the corresponding overhead. In a future blog post, we are going to dive into the actual usage of allocation sampling with VMProf, and show an example case study. That will be accompanied by some new improvements and additional features, like extracting the type of an object that triggered a sample.</p>
+<p>So far all this work is still experimental and happening on PyPy branches but
+we hope to get the technique stable enough to merge it to main and ship it with
+PyPy eventually.</p>
+<p>-- Christoph Jung and CF Bolz-Tereick</p>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/gc.html" rel="tag">gc</a></li>
+            <li><a class="tag p-category" href="../../../categories/profiling.html" rel="tag">profiling</a></li>
+            <li><a class="tag p-category" href="../../../categories/vmprof.html" rel="tag">vmprof</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="pypy-v7318-release.html" rel="prev" title="PyPy v7.3.18 release">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy-v7319-release.html" rel="next" title="PyPy v7.3.19 release">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="Low Overhead Allocation Sampling with VMProf in PyPy's GC" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

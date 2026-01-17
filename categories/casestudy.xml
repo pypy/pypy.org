@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about casestudy)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/casestudy.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:35 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>Guest Post: How PortaOne uses PyPy for high-performance processing, connecting over 1B of phone calls every month</title><link>https://www.pypy.org/posts/2024/08/portaone.html</link><dc:creator>The PyPy Team</dc:creator><description>&lt;p&gt;The PyPy project is always happy to hear about industrial use  and deployments
+of PyPy. For the &lt;a href="https://www.pypy.org/posts/2024/03/fixing-bug-incremental-gc.html"&gt;GC bug
+finding&lt;/a&gt;
+task earlier this year, we collaborated with PortaOne and we're super happy
+that Serhii Titov, head of the QA department at PortaOne, was up to writing
+this guest post to describe their use and experience with the project.&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id="what-does-portaone-do"&gt;What does PortaOne do?&lt;/h3&gt;
+&lt;p&gt;We at &lt;a href="https://www.portaone.com/"&gt;PortaOne Inc.&lt;/a&gt; allow telecom operators to
+launch new services (or provide existing services more efficiently) using our
+VoIP platform (PortaSIP) and our real-time charging system (PortaBilling),
+which provides additional features for cloud PBX, such as call transfer,
+queues, interactive voice response (IVR) and more. At this moment our support
+team manages several thousand servers with our software installed in 100
+countries, through which over 500 telecommunication service providers connect
+millions of end users every day. The unique thing about PortaOne is that we
+supply the source code of our product to our customers - something unheard of
+in the telecom world! Thus we attract "telco innovators", who use our APIs to
+build around the system and the source code to create unique tweaks of
+functionality, which produces amazing products.&lt;/p&gt;
+&lt;p&gt;At the core of PortaSIP is the middle-ware component (the proper name for it is
+"B2BUA", but that probably does not say much to anyone outside of experts in
+VoIP), which implements the actual handling of SIP calls, messages, etc. and
+all added features (for instance, trying to send a call via telco operators
+through which the cost per minute is lower). It has to be fast (since even a
+small delay in establishing a call is noticed by a customer), reliable
+(everyone hates when a call drops or cannot be completed) and yet easily
+expandable with new functionality. This is why we decided to use Python as
+opposed to C/C++ or similar programming languages, which are often used in
+telecom equipment.&lt;/p&gt;
+&lt;p&gt;The B2BUA component is a batch of similar Python processes that are looped
+inside a
+&lt;a href="https://docs.python.org/3.10/library/asyncore.html"&gt;&lt;code&gt;asyncore.dispatcher&lt;/code&gt;&lt;/a&gt;
+wrapper. The load balancing between these Python processes is done by our
+stateless SIP proxy server written in C++. All our sockets are served by this
+B2BUA. We have our custom client-wrappers around &lt;code&gt;pymysql&lt;/code&gt;, &lt;code&gt;redis&lt;/code&gt;,
+&lt;code&gt;cassandra-driver&lt;/code&gt; and &lt;code&gt;requests&lt;/code&gt; to communicate with external services. Some
+of the Python processes use &lt;a href="https://cffi.readthedocs.io/en/stable/"&gt;&lt;code&gt;cffi&lt;/code&gt;&lt;/a&gt;
+wrappers around C-code to improve their performance (examples: an Oracle DB
+driver, a client to a radius server, a custom C logger).&lt;/p&gt;
+&lt;p&gt;The I/O operations that block the main thread of the Python processes are
+processed in sub-threads. We have custom wrappers  around &lt;code&gt;threading.Thread&lt;/code&gt;
+and also &lt;code&gt;asyncore.dispatcher&lt;/code&gt;. The results of such operations are returned to
+the main thread.&lt;/p&gt;
+&lt;h3 id="improving-our-performance-with-pypy"&gt;Improving our performance with PyPy&lt;/h3&gt;
+&lt;p&gt;We started with CPython and then in 2014 switched to PyPy because it was
+faster. Here's an exact quote from our first testing notes: "PyPy gives
+significant performance boost, ~50%". Nowadays, after years of changes in all
+the software involved, PyPy still gives us +50% boost compared to CPython.&lt;/p&gt;
+&lt;p&gt;Taking care of real time traffic for so many people around the globe is
+something we're really proud of. I hope the PyPy team can be proud of it as
+well, as the PyPy product is a part of this solution.&lt;/p&gt;
+&lt;h3 id="finding-a-garbage-collector-bug-stage-1-the-gc-hooks"&gt;Finding a garbage collector bug: stage 1, the GC hooks&lt;/h3&gt;
+&lt;p&gt;However our path with PyPy wasn't perfectly smooth. There were very rare cases
+of crashes on PyPy that we weren't able to catch. That's because to make
+coredump useful we needed to switch to PyPy with debug, but we cannot let it
+run in that mode on a production system for an extended period of time, and we
+did not have any STR (steps-to-reproduce) to make PyPy crash again in our lab.
+That's why we kept (and still keep) both interpreters installed just in case,
+and we would switch to CPython if we noticed it happening.&lt;/p&gt;
+&lt;p&gt;At the time of updating PyPy from 3.5 to 3.6 our QA started noticing those
+crashes more often, but we still had no luck with STR or collecting proper
+coredumps with debug symbols. Then it became even worse after our development
+played with the &lt;a href="https://doc.pypy.org/en/latest/gc_info.html"&gt;Garbage Collector's
+options&lt;/a&gt; to increase performance
+of our middleware component. The crashes started to affect our regular
+performance testing (controlled by QA manager Yevhenii Bovda). At that point it
+was decided that we can no longer live like that and so we started an intense
+investigation.&lt;/p&gt;
+&lt;p&gt;During the first stage of our investigation (following the best practice of
+troubleshooting) we narrowed down the issue as much as we could. So, it was not
+our code, it was definitely somewhere in PyPy. Eventually our SIP software
+engineer &lt;a href="https://github.com/Yevhenii-Yatchenko"&gt;Yevhenii Yatchenko&lt;/a&gt; found out
+that this bug is connected with the use of our &lt;a href="https://doc.pypy.org/en/latest/gc_info.html#gc-hooks"&gt;custom hooks in the
+GC&lt;/a&gt;. Yevhenii created
+ticket &lt;a href="https://github.com/pypy/pypy/issues/4899"&gt;#4899&lt;/a&gt; and within 2-3 days we
+got a fix from a &lt;a href="https://github.com/cfbolz"&gt;member of the PyPy team&lt;/a&gt;, in true open-source fashion.&lt;/p&gt;
+&lt;h3 id="finding-a-garbage-collector-bug-stage-2-the-real-bug"&gt;Finding a garbage collector bug: stage 2, the real bug&lt;/h3&gt;
+&lt;p&gt;Then came stage 2. In parallel with the previous ticket, Yevhenii created
+&lt;a href="https://github.com/pypy/pypy/issues/4900"&gt;#4900&lt;/a&gt; that we still see failing
+with coredumps quite often, and they are not connected to GC custom hooks. In a
+nutshell, it took us dozens of back and forward emails, three Zoom sessions and
+four versions of a patch to solve the issue. During the last iteration we got a
+new set of options to try and a new version of the patch. Surprisingly, that
+helped! What a relief! So, the next logical step was to remove all debug
+options and run PyPy only with the patch. Unfortunately, it started to fail
+again and we came to the obvious conclusion that what will help us is not a
+patch, but one of options we were testing out. At that point we found out that
+&lt;a href="https://doc.pypy.org/en/latest/gc_info.html#environment-variables"&gt;&lt;code&gt;PYPY_GC_MAX_PINNED=0&lt;/code&gt;&lt;/a&gt;
+is a necessary and sufficient condition to solve our issue. This points to
+another bug in the garbage collector, somehow related to object pinning.&lt;/p&gt;
+&lt;p&gt;Here's our current state: we have to add &lt;code&gt;PYPY_GC_MAX_PINNED=0&lt;/code&gt;, but we do not
+face the crashes anymore.&lt;/p&gt;
+&lt;h3 id="conclusion-and-next-steps"&gt;Conclusion and next steps&lt;/h3&gt;
+&lt;p&gt;Gratitude is extended to Carl for his invaluable assistance in resolving the
+nasty bugss, because it seems we're the only ones who suffered from the last
+one and we really did not want to fall back to CPython due to its performance
+disadvantage.&lt;/p&gt;
+&lt;p&gt;Serhii Titov, head of the QA department at PortaOne Inc.&lt;/p&gt;
+&lt;p&gt;P.S. If you are a perfectionist and at this point you have mixed feelings and
+you are still bothered by the question "But there might still be a bug in the
+GC, what about that?" - Carl has some ideas about it and he will sort it out
+(we will help with the testing/verification part).&lt;/p&gt;</description><category>casestudy</category><category>guestpost</category><guid>https://www.pypy.org/posts/2024/08/portaone.html</guid><pubDate>Thu, 29 Aug 2024 09:00:00 GMT</pubDate></item><item><title>RPython-based emulator speeds up RISC-V simulation over 15x</title><link>https://www.pypy.org/posts/2023/05/rpython-used-to-speed-up-risc-v-simulation-over-15x.html</link><dc:creator>CF Bolz-Tereick</dc:creator><description>&lt;p&gt;In cooperation with &lt;a class="reference external" href="https://riscv.org/"&gt;RISC-V International&lt;/a&gt;, who funded a part of this project,
+we recently created a workflow to
+use RPython to take a &lt;a class="reference external" href="https://github.com/riscv/sail-riscv#riscv-sail-model"&gt;Sail RISC-V&lt;/a&gt; model and automatically create a RISC-V ISA
+emulator from it, which we call &lt;a class="reference external" href="https://docs.pydrofoil.org"&gt;Pydrofoil&lt;/a&gt;. The simulator sped up booting a
+linux emulator from 35 minutes (using the standard Sail-generated emulator in
+C) to 2 minutes, a speedup of 17.5x. More details about the process are in the
+&lt;a class="reference external" href="https://riscv.org/blog/2023/05/how-to-speed-up-the-emulating-process-with-pydrofoil-carl-friedrich/"&gt;RISC-V blog post&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;A few take-aways from the project:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;While PyPy has shown it can speed up generic python code &lt;a class="reference external" href="https://speed.pypy.org"&gt;about 4x&lt;/a&gt;, the
+technology behind PyPy can really shine in other areas.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;RPython is malleable and can be molded to many tasks, the RPython meta-JIT is
+very flexible.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;A JIT is well-suited for the problem of emulation, because it can
+perform dynamic binary translation.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy can solve real world performance problems, even somewhat unusual ones.
+Please &lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;get in touch&lt;/a&gt; and let us know how we can help you solve yours!&lt;/p&gt;</description><category>casestudy</category><category>performance</category><guid>https://www.pypy.org/posts/2023/05/rpython-used-to-speed-up-risc-v-simulation-over-15x.html</guid><pubDate>Tue, 16 May 2023 11:22:35 GMT</pubDate></item><item><title>Natural Language Processing for Icelandic with PyPy: A Case Study</title><link>https://www.pypy.org/posts/2022/02/nlp-icelandic-case-study.html</link><dc:creator>Vilhjálmur Þorsteinsson</dc:creator><description>&lt;section id="natural-language-processing-for-icelandic-with-pypy-a-case-study"&gt;
+&lt;h2&gt;Natural Language Processing for Icelandic with PyPy: A Case Study&lt;/h2&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://en.wikipedia.org/wiki/Icelandic_language"&gt;Icelandic&lt;/a&gt; is one
+of the smallest languages of the world, with about 370.000 speakers. It
+is a language in the Germanic family, most similar to Norwegian, Danish
+and Swedish, but closer to the original &lt;a class="reference external" href="https://en.wikipedia.org/wiki/Old_Norse"&gt;Old
+Norse&lt;/a&gt; spoken throughout
+Scandinavia until about the 14th century CE.&lt;/p&gt;
+&lt;p&gt;As with other small languages, there are &lt;a class="reference external" href="https://www.theguardian.com/world/2018/feb/26/icelandic-language-battles-threat-of-digital-extinction"&gt;worries that the language may
+not
+survive&lt;/a&gt;
+in a digital world, where all kinds of fancy applications are developed
+first - and perhaps only - for the major languages. Voice assistants,
+chatbots, spelling and grammar checking utilities, machine translation,
+etc., are increasingly becoming staples of our personal and professional
+lives, but if they don’t exist for Icelandic, Icelanders will gravitate
+towards English or other languages where such tools are readily
+available.&lt;/p&gt;
+&lt;p&gt;Iceland is a technology-savvy country, with &lt;a class="reference external" href="https://ourworldindata.org/grapher/share-of-individuals-using-the-internet?tab=table"&gt;world-leading adoption
+rates of the
+Internet&lt;/a&gt;,
+PCs and smart devices, and a thriving software industry. So the
+government figured that it would be worthwhile to fund a &lt;a class="reference external" href="https://aclanthology.org/2020.lrec-1.418.pdf"&gt;5-year
+plan&lt;/a&gt; to build natural
+language processing (NLP) resources and other infrastructure for the
+Icelandic language. The project focuses on collecting data and
+developing open source software for a range of core applications, such
+as tokenization, vocabulary lookup, n-gram statistics, part-of-speech
+tagging, named entity recognition, spelling and grammar checking, neural
+language models and speech processing.&lt;/p&gt;
+&lt;hr class="docutils"&gt;
+&lt;p&gt;My name is Vilhjálmur Þorsteinsson, and I’m the founder and CEO of a
+software startup &lt;a class="reference external" href="https://mideind.is/english.html"&gt;Miðeind&lt;/a&gt; in Reykjavík,
+Iceland, that employs 10 software engineers and linguists and focuses on
+NLP and AI for the Icelandic language. The company participates in the
+government’s language technology program, and has contributed
+significantly to the program’s core tools (e.g., a tokenizer and a
+parser), spelling and grammar checking modules, and a neural machine
+translation stack.&lt;/p&gt;
+&lt;p&gt;When it came to a choice of programming languages and development tools
+for the government program, the requirements were for a major, well
+supported, vendor-and-OS-agnostic FOSS platform with a large and diverse
+community, including in the NLP space. The decision to select Python as
+a foundational language for the project was a relatively easy one. That
+said, there was a bit of trepidation around the well known fact that
+CPython can be slow for inner-core tasks, such as tokenization and
+parsing, that can see heavy workloads in production.&lt;/p&gt;
+&lt;p&gt;I first became aware of PyPy in early 2016 when I was developing a
+crossword game &lt;a class="reference external" href="https://github.com/mideind/Netskrafl"&gt;Netskrafl&lt;/a&gt; in Python 2.7
+for Google App Engine. I had a utility program that compressed a
+dictionary into a Directed Acyclic Word Graph and was taking 160
+seconds  to run on CPython 2.7, so I tried PyPy and to my amazement saw
+a 4x speedup (down to 38 seconds), with literally no effort besides
+downloading the PyPy runtime.&lt;/p&gt;
+&lt;p&gt;This led me to select PyPy as the default Python interpreter for my
+company’s Python development efforts as well as for our production
+websites and API servers, a role in which it remains to this day. We
+have followed PyPy’s upgrades along the way, being just about to migrate
+our minimally required language version from 3.6 to 3.7.&lt;/p&gt;
+&lt;p&gt;In NLP, speed and memory requirements can be quite important for
+software usability. On the other hand, NLP logic and algorithms are
+often complex and challenging to program, so programmer productivity and
+code clarity are also critical success factors. A pragmatic approach
+balances these factors, avoids premature optimization and seeks a
+careful compromise between maximal run-time efficiency and minimal
+programming and maintenance effort.&lt;/p&gt;
+&lt;p&gt;Turning to our use cases, our Icelandic text
+tokenizer &lt;a class="reference external" href="https://github.com/mideind/Tokenizer"&gt;"Tokenizer"&lt;/a&gt; is fairly light,
+runs tight loops and performs a large number of small, repetitive
+operations. It runs very well on PyPy’s JIT and has not required further
+optimization.&lt;/p&gt;
+&lt;p&gt;Our Icelandic parser &lt;a class="reference external" href="https://github.com/mideind/GreynirPackage"&gt;Greynir&lt;/a&gt;
+(known on PyPI as &lt;a class="reference external" href="https://pypi.org/project/reynir/"&gt;reynir&lt;/a&gt;) is,
+if I may say so myself, a piece of work. It &lt;a class="reference external" href="https://aclanthology.org/R19-1160.pdf"&gt;parses natural language
+text&lt;/a&gt; according to a
+&lt;a class="reference external" href="https://github.com/mideind/GreynirPackage/blob/master/src/reynir/Greynir.grammar"&gt;hand-written context-free
+grammar&lt;/a&gt;,
+using an &lt;a class="reference external" href="https://en.wikipedia.org/wiki/Earley_parser"&gt;Earley-type
+algorithm&lt;/a&gt; as &lt;a class="reference external" href="https://www.sciencedirect.com/science/article/pii/S0167642309000951"&gt;enhanced
+by Scott and
+Johnstone&lt;/a&gt;.
+The CFG contains almost 7,000 nonterminals and 6,000 terminals, and the
+parser handles ambiguity as well as left, right and middle recursion. It
+returns a packed parse forest for each input sentence, which is then
+pruned by a scoring heuristic down to a single best result tree.&lt;/p&gt;
+&lt;p&gt;This parser was originally coded in pure Python and turned out to be
+unusably slow when run on CPython - but usable on PyPy, where it was
+3-4x faster. However, when we started applying it to heavier production
+workloads, it  became apparent that it needed to be faster still. We
+then proceeded to convert the innermost Earley parsing loop from Python
+to &lt;a class="reference external" href="https://github.com/mideind/GreynirPackage/blob/master/src/reynir/eparser.cpp"&gt;tight
+C++&lt;/a&gt;
+and to call it from PyPy via
+&lt;a class="reference external" href="https://cffi.readthedocs.io/en/latest/"&gt;CFFI&lt;/a&gt;, with callbacks for
+token-terminal matching functions (“business logic”) that remained on
+the Python side. This made the parser much faster (on the order of 100x
+faster than the original on CPython) and quick enough for our production
+use cases. Even after moving much of the heavy processing to C++ and using CFFI, PyPy still gives a significant speed boost over CPython.&lt;/p&gt;
+&lt;p&gt;Connecting C++ code with PyPy proved to be quite painless using CFFI,
+although we had to figure out a few &lt;a class="reference external" href="https://github.com/mideind/GreynirPackage/blob/master/src/reynir/eparser_build.py"&gt;magic incantations in our build
+module&lt;/a&gt;
+to make it compile smoothly during setup from source on Windows and
+MacOS in addition to Linux. Of course, we build binary PyPy and CPython
+wheels for the most common targets so most users don’t have to worry
+about setup requirements.&lt;/p&gt;
+&lt;p&gt;With the positive experience from the parser project, we proceeded to
+take a similar approach for two other core NLP packages: our compressed
+vocabulary package &lt;a class="reference external" href="https://github.com/mideind/BinPackage"&gt;BinPackage&lt;/a&gt;
+(known on PyPI as &lt;a class="reference external" href="https://pypi.org/project/islenska/"&gt;islenska&lt;/a&gt;) and our
+trigrams database package &lt;a class="reference external" href="https://github.com/mideind/Icegrams"&gt;Icegrams&lt;/a&gt;.
+These packages both take large text input (3.1 million word forms with
+inflection data in the vocabulary case; 100 million tokens in the
+trigrams case) and compress it into packed binary structures. These
+structures are then memory-mapped at run-time using
+&lt;a class="reference external" href="https://docs.python.org/3/library/mmap.html"&gt;mmap&lt;/a&gt; and queried via
+Python functions with a lookup time in the microseconds range. The
+low-level data structure navigation is &lt;a class="reference external" href="https://github.com/mideind/Icegrams/blob/master/src/icegrams/trie.cpp"&gt;done in
+C++&lt;/a&gt;,
+called from Python via CFFI. The ex-ante preparation, packing,
+bit-fiddling and data structure generation is fast enough with PyPy, so
+we haven’t seen a need to optimize that part further.&lt;/p&gt;
+&lt;p&gt;To showcase our tools, we host public (and open source) websites such as
+&lt;a class="reference external" href="https://greynir.is/"&gt;greynir.is&lt;/a&gt; for our parsing, named entity
+recognition and query stack and
+&lt;a class="reference external" href="https://yfirlestur.is/"&gt;yfirlestur.is&lt;/a&gt; for our spell and grammar
+checking stack. The server code on these sites is all Python running on
+PyPy using &lt;a class="reference external" href="https://flask.palletsprojects.com/en/2.0.x/"&gt;Flask&lt;/a&gt;,
+wrapped in &lt;a class="reference external" href="https://gunicorn.org/"&gt;gunicorn&lt;/a&gt; and hosted on
+&lt;a class="reference external" href="https://www.nginx.com/"&gt;nginx&lt;/a&gt;. The underlying database is
+&lt;a class="reference external" href="https://www.postgresql.org/"&gt;PostgreSQL&lt;/a&gt; accessed via
+&lt;a class="reference external" href="https://www.sqlalchemy.org/"&gt;SQLAlchemy&lt;/a&gt; and
+&lt;a class="reference external" href="https://pypi.org/project/psycopg2cffi/"&gt;psycopg2cffi&lt;/a&gt;. This setup
+has served us well for 6 years and counting, being fast, reliable and
+having helpful and supporting communities.&lt;/p&gt;
+&lt;p&gt;As can be inferred from the above, we are avid fans of PyPy and
+commensurately thankful for the great work by the PyPy team over the
+years. PyPy has enabled us to use Python for a larger part of our
+toolset than CPython alone would have supported, and its smooth
+integration with C/C++ through CFFI has helped us attain a better
+tradeoff between performance and programmer productivity in our
+projects. We wish for PyPy a great and bright future and also look
+forward to exciting related developments on the horizon, such as
+&lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt;.&lt;/p&gt;
+&lt;/section&gt;</description><category>casestudy</category><category>guestpost</category><guid>https://www.pypy.org/posts/2022/02/nlp-icelandic-case-study.html</guid><pubDate>Sun, 06 Feb 2022 15:00:00 GMT</pubDate></item></channel></rss>

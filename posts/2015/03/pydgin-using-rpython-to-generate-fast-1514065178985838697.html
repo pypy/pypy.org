@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pydgin: Using RPython to Generate Fast Instruction-Set Simulators | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Maciej Fijalkowski">
+<link rel="prev" href="../02/experiments-in-pyrlang-with-rpython-8103387814587972227.html" title="Experiments in Pyrlang with RPython" type="text/html">
+<link rel="next" href="pypy-251-released-5657064769385723517.html" title="PyPy 2.5.1 Released" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Pydgin: Using RPython to Generate Fast Instruction-Set Simulators">
+<meta property="og:url" content="https://www.pypy.org/posts/2015/03/pydgin-using-rpython-to-generate-fast-1514065178985838697.html">
+<meta property="og:description" content="Note: This is a guest blog post by Derek Lockhart and Berkin Ilbeyi from
+Computer Systems Laboratory of Cornell University.
+In this blog post I'd like to describe some recent work on using the RPython">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2015-03-13T09:31:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Pydgin: Using RPython to Generate Fast Instruction-Set Simulators</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2015-03-13T09:31:00Z" itemprop="datePublished" title="2015-03-13 09:31">2015-03-13 09:31</time></a>
+            </p>
+                <p class="commentline">1 comment</p>
+
+                <p class="commentline">            <a href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <div dir="ltr" style="text-align: left;">
+
+<p><strong>Note:</strong> This is a guest blog post by Derek Lockhart and Berkin Ilbeyi from
+Computer Systems Laboratory of Cornell University.</p>
+<p>In this blog post I'd like to describe some recent work on using the RPython
+translation toolchain to generate fast instruction set simulators.
+Our open-source framework, Pydgin <a class="citation-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#a" id="id1">[a]</a>, provides a domain-specific
+language (DSL) embedded in Python for concisely describing instruction set
+architectures <a class="citation-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#b" id="id2">[b]</a> and then uses these descriptions to generate fast,
+JIT-enabled simulators.
+Pydgin will be presented at the <em>IEEE International Symposium on Performance
+Analysis of Systems and Software (ISPASS)</em> and in this post we provide a
+preview of that work.
+In addition, we discuss some additional progress updates that occurred after
+the publishing deadline and will not appear in the final paper <a class="footnote-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id16" id="id3">[1]</a>.</p>
+<p>Our area of research expertise is computer architecture, which is perhaps an
+unfamiliar topic for some readers of the PyPy blog.
+Below we provide some brief background on hardware simulation in the field of
+computer architecture, as well as some context as to why instruction set
+simulators in particular are such an important tool.</p>
+<div class="section" id="simulators-designing-hardware-with-software">
+<h3>Simulators: Designing Hardware with Software<a href="#simulators-designing-hardware-with-software" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>For computer architects in both academia and industry, a key step in designing
+new computational hardware (e.g., CPUs, GPUs, and mobile system-on-chips) is
+simulation <a class="citation-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#c" id="id4">[c]</a> of the target system.
+While numerous models for simulation exist, three classes are particularly
+important in hardware design.</p>
+<p><strong>Functional Level</strong> models simulate the <em>behavior</em> of the target system.
+These models are useful for creating a "golden" reference which can serve as an
+executable specification or alternatively as an emulation platform for software
+development.</p>
+<p><strong>Cycle Level</strong> models aim to simulate both the <em>behavior</em> and the approximate
+<em>timing</em> of a hardware component.
+These models help computer architects explore design tradeoffs and quickly
+determine things like how big caches should be, how many functional units are
+needed to meet throughput targets, and how the addition of a custom accelerator
+block may impact total system performance.</p>
+<p><strong>Register-Transfer Level</strong> (RTL) models specify the <em>behavior</em>, <em>timing</em>, and
+<em>resources</em> (e.g., registers, wires, logic gates) of a hardware component.
+RTL models are bit-accurate hardware specifications typically written in a
+hardware description language (HDL) such as Verilog or VHDL.
+Once verified through extensive simulation, HDL specifications can be passed
+into synthesis and place-and-route tools to estimate area/energy/timing or to
+create FPGA or ASIC prototypes.</p>
+<p>An <em>instruction set simulator</em> (ISS) is a special kind of
+<em>functional-level</em> model that simulates the behavior of a processor or
+system-on-chip (SOC).  ISSs serve an important role in hardware design
+because they model the instruction set architecture (ISA) interface: the
+contractual boundary between hardware designers and software developers.
+ISSs allow hardware designers to quickly experiment with adding new processor
+instructions while also allowing software developers to build new compilers,
+libraries, and applications long before physical silicon is available.</p>
+</div>
+<div class="section" id="instruction-set-simulators-must-be-fast-and-productive">
+<h3>Instruction-Set Simulators Must be Fast and Productive<a href="#instruction-set-simulators-must-be-fast-and-productive" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Instruction-set simulators are more important than ever because the ISA
+boundary has become increasingly fluid.
+While <a class="reference external" href="https://en.wikipedia.org/wiki/Moore%27s_law">Moore's law</a> has continued to deliver larger numbers of transistors
+which computer architects can use to build increasingly complex chips, limits
+in <a class="reference external" href="https://en.wikipedia.org/wiki/Dennard_scaling#Recent_breakdown_of_Dennard_scaling">Dennard scaling</a> have restricted how these transistors can be used <a class="citation-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#d" id="id5">[d]</a>.
+In more simple terms, thermal constraints (and energy constraints in mobile
+devices) have resulted in a growing interest in pervasive <em>specialization</em>:
+using custom accelerators to more efficiently perform compute intensive tasks.
+This is already a reality for designers of mobile SOCs who continually add new
+accelerator blocks and custom processor instructions in order to achieve higher
+performance with less energy consumption.
+ISSs are indispensable tools in this SOC design process for both hardware
+architects building the silicon and software engineers developing the software
+stack on top of it.</p>
+<p>An instruction set simulator has two primary responsibilities: 1) accurately
+emulating the external execution behavior of the target, and 2) providing
+observability by accurately reproducing the target's internal state (e.g.,
+register values, program counter, status flags) at each time step.
+However, other qualities critical to an effective ISS are <strong>simulation
+performance</strong> and <strong>designer productivity</strong>.
+Simulation performance is important because shorter simulation times allow
+developers to more quickly execute and verify large software applications.
+Designer productivity is important because it allows hardware architects to
+easily experiment with adding new instructions and estimate their impact on
+application performance.</p>
+<p>To improve simulation performance, high-performance ISSs use dynamic binary
+translation (DBT) as a mechanism to translate frequently visited blocks of
+target instructions into optimized sequences of host instructions.
+To improve designer productivity, many design toolchains automatically generate
+ISSs from an architectural description language (ADL): a special
+domain-specific language for succinctly specifying instruction encodings and
+instruction semantics of an ISA.
+Very few existing systems have managed to encapsulate the design complexity of
+DBT engines such that high-performance, DBT-accelerated ISSs could be
+automatically generated from ADLs <a class="citation-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#e" id="id6">[e]</a>.
+Unfortunately, tools which have done so are either proprietary software or
+leave much to be desired in terms of performance or productivity.</p>
+</div>
+<div class="section" id="why-rpython">
+<h3>Why RPython?<a href="#why-rpython" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Our research group learned of the RPython translation toolchain through our
+experiences with PyPy, which we had used in conjunction with our Python
+hardware modeling framework to achieve significant improvements in simulation
+performance <a class="footnote-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id17" id="id7">[2]</a>.
+We realized that the RPython translation toolchain could potentially be adapted
+to create fast instruction set simulators since the process of interpreting
+executables comprised of binary instructions shared many similarities with the
+process of interpreting bytecodes in a dynamic-language VM.
+In addition, we were inspired by PyPy's meta-tracing approach to JIT-optimizing
+VM design which effectively separates the process of specifying a language
+interpreter from the optimization machinery needed to achieve good performance.</p>
+<p>Existing ADL-driven ISS generators have tended to use domain-specific
+languages that require custom parsers or verbose C-based syntax that
+distracts from the instruction specification.
+Creating an embedded-ADL within Python provides several benefits over these
+existing approaches including a gentler learning curve for new users, access to
+better debugging tools, and easier maintenance and extension by avoiding a
+custom parser.
+Additionally, we have found that the ability to directly execute Pydgin
+ISA descriptions in a standard Python interpreter such as CPython or PyPy
+significantly helps debugging and testing during initial ISA exploration.
+Python's concise, pseudocode-like syntax also manages to map quite closely to
+the pseudocode specifications provided by many ISA manuals <a class="citation-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#f" id="id8">[f]</a>.</p>
+</div>
+<div class="section" id="the-pydgin-embedded-adl">
+<h3>The Pydgin embedded-ADL<a href="#the-pydgin-embedded-adl" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Defining a new ISA in the Pydgin embedded-ADL requires four primary pieces of
+information: the architectural state (e.g. register file, program counter,
+control registers), the bit encodings of each instruction, the instruction
+fields, and the semantic definitions for each instruction. Pydgin aims to make
+this process as painless as possible by providing helper classes and functions
+where possible.</p>
+<p>For example, below we provide a truncated example of the ARMv5 instruction
+encoding table. Pydgin maintains encodings of all instructions in a centralized
+<tt class="docutils literal">encodings</tt> data structure for easy maintenance and quick lookup. The
+user-provided instruction names and bit encodings are used to automatically
+generate decoders for the simulator. Unlike many ADLs, Pydgin does not require
+that the user explicitly specify instruction types or mask bits for field
+matching because the Pydgin decoder generator can automatically infer decoder
+fields from the encoding table.</p>
+<pre class="code python literal-block">
+<span class="name">encodings</span> <span class="operator">=</span> <span class="punctuation">[</span>
+  <span class="punctuation">[</span><span class="literal string">'adc'</span><span class="punctuation">,</span>      <span class="literal string">'xxxx00x0101xxxxxxxxxxxxxxxxxxxxx'</span><span class="punctuation">],</span>
+  <span class="punctuation">[</span><span class="literal string">'add'</span><span class="punctuation">,</span>      <span class="literal string">'xxxx00x0100xxxxxxxxxxxxxxxxxxxxx'</span><span class="punctuation">],</span>
+  <span class="punctuation">[</span><span class="literal string">'and'</span><span class="punctuation">,</span>      <span class="literal string">'xxxx00x0000xxxxxxxxxxxxxxxxxxxxx'</span><span class="punctuation">],</span>
+  <span class="punctuation">[</span><span class="literal string">'b'</span><span class="punctuation">,</span>        <span class="literal string">'xxxx1010xxxxxxxxxxxxxxxxxxxxxxxx'</span><span class="punctuation">],</span>
+  <span class="punctuation">[</span><span class="literal string">'bl'</span><span class="punctuation">,</span>       <span class="literal string">'xxxx1011xxxxxxxxxxxxxxxxxxxxxxxx'</span><span class="punctuation">],</span>
+  <span class="punctuation">[</span><span class="literal string">'bic'</span><span class="punctuation">,</span>      <span class="literal string">'xxxx00x1110xxxxxxxxxxxxxxxxxxxxx'</span><span class="punctuation">],</span>
+  <span class="punctuation">[</span><span class="literal string">'bkpt'</span><span class="punctuation">,</span>     <span class="literal string">'111000010010xxxxxxxxxxxx0111xxxx'</span><span class="punctuation">],</span>
+  <span class="punctuation">[</span><span class="literal string">'blx1'</span><span class="punctuation">,</span>     <span class="literal string">'1111101xxxxxxxxxxxxxxxxxxxxxxxxx'</span><span class="punctuation">],</span>
+  <span class="punctuation">[</span><span class="literal string">'blx2'</span><span class="punctuation">,</span>     <span class="literal string">'xxxx00010010xxxxxxxxxxxx0011xxxx'</span><span class="punctuation">],</span>
+  <span class="comment"># ...</span>
+  <span class="punctuation">[</span><span class="literal string">'teq'</span><span class="punctuation">,</span>      <span class="literal string">'xxxx00x10011xxxxxxxxxxxxxxxxxxxx'</span><span class="punctuation">],</span>
+  <span class="punctuation">[</span><span class="literal string">'tst'</span><span class="punctuation">,</span>      <span class="literal string">'xxxx00x10001xxxxxxxxxxxxxxxxxxxx'</span><span class="punctuation">],</span>
+<span class="punctuation">]</span>
+</pre>
+<p>A major goal of Pydgin was ensuring instruction semantic definitions map to ISA
+manual specifications as much as possible. The code below shows one such
+definition for the ARMv5 <tt class="docutils literal">add</tt> instruction.
+A user-defined <tt class="docutils literal">Instruction</tt> class (not shown) specifies field names that can
+be used to conveniently access bit positions within an instruction (e.g.
+<tt class="docutils literal">rd</tt>, <tt class="docutils literal">rn</tt>, <tt class="docutils literal">S</tt>).
+Additionally, users can choose to define their own helper functions, such as
+the <tt class="docutils literal">condition_passed</tt> function, to create more concise syntax that better
+matches the ISA manual.</p>
+<pre class="code python literal-block">
+<span class="keyword">def</span> <span class="name function">execute_add</span><span class="punctuation">(</span> <span class="name">s</span><span class="punctuation">,</span> <span class="name">inst</span> <span class="punctuation">):</span>
+  <span class="keyword">if</span> <span class="name">condition_passed</span><span class="punctuation">(</span> <span class="name">s</span><span class="punctuation">,</span> <span class="name">inst</span><span class="operator">.</span><span class="name">cond</span><span class="punctuation">()</span> <span class="punctuation">):</span>
+    <span class="name">a</span><span class="punctuation">,</span>   <span class="operator">=</span> <span class="name">s</span><span class="operator">.</span><span class="name">rf</span><span class="punctuation">[</span> <span class="name">inst</span><span class="operator">.</span><span class="name">rn</span><span class="punctuation">()</span> <span class="punctuation">]</span>
+    <span class="name">b</span><span class="punctuation">,</span> <span class="name">_</span> <span class="operator">=</span> <span class="name">shifter_operand</span><span class="punctuation">(</span> <span class="name">s</span><span class="punctuation">,</span> <span class="name">inst</span> <span class="punctuation">)</span>
+    <span class="name">result</span> <span class="operator">=</span> <span class="name">a</span> <span class="operator">+</span> <span class="name">b</span>
+    <span class="name">s</span><span class="operator">.</span><span class="name">rf</span><span class="punctuation">[</span> <span class="name">inst</span><span class="operator">.</span><span class="name">rd</span><span class="punctuation">()</span> <span class="punctuation">]</span> <span class="operator">=</span> <span class="name">trim_32</span><span class="punctuation">(</span> <span class="name">result</span> <span class="punctuation">)</span>
+
+    <span class="keyword">if</span> <span class="name">inst</span><span class="operator">.</span><span class="name">S</span><span class="punctuation">():</span>
+      <span class="keyword">if</span> <span class="name">inst</span><span class="operator">.</span><span class="name">rd</span><span class="punctuation">()</span> <span class="operator">==</span> <span class="literal number integer">15</span><span class="punctuation">:</span>
+        <span class="keyword">raise</span> <span class="name">FatalError</span><span class="punctuation">(</span><span class="literal string">'Writing SPSR not implemented!'</span><span class="punctuation">)</span>
+      <span class="name">s</span><span class="operator">.</span><span class="name">N</span> <span class="operator">=</span> <span class="punctuation">(</span><span class="name">result</span> <span class="operator">&gt;&gt;</span> <span class="literal number integer">31</span><span class="punctuation">)</span><span class="operator">&amp;</span><span class="literal number integer">1</span>
+      <span class="name">s</span><span class="operator">.</span><span class="name">Z</span> <span class="operator">=</span> <span class="name">trim_32</span><span class="punctuation">(</span> <span class="name">result</span> <span class="punctuation">)</span> <span class="operator">==</span> <span class="literal number integer">0</span>
+      <span class="name">s</span><span class="operator">.</span><span class="name">C</span> <span class="operator">=</span> <span class="name">carry_from</span><span class="punctuation">(</span> <span class="name">result</span> <span class="punctuation">)</span>
+      <span class="name">s</span><span class="operator">.</span><span class="name">V</span> <span class="operator">=</span> <span class="name">overflow_from_add</span><span class="punctuation">(</span> <span class="name">a</span><span class="punctuation">,</span> <span class="name">b</span><span class="punctuation">,</span> <span class="name">result</span> <span class="punctuation">)</span>
+
+    <span class="keyword">if</span> <span class="name">inst</span><span class="operator">.</span><span class="name">rd</span><span class="punctuation">()</span> <span class="operator">==</span> <span class="literal number integer">15</span><span class="punctuation">:</span>
+      <span class="keyword">return</span>
+
+  <span class="name">s</span><span class="operator">.</span><span class="name">rf</span><span class="punctuation">[</span><span class="name">PC</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="name">s</span><span class="operator">.</span><span class="name">fetch_pc</span><span class="punctuation">()</span> <span class="operator">+</span> <span class="literal number integer">4</span>
+</pre>
+<p>Compared to the ARM ISA Reference manual shown below, the Pydgin instruction
+definition is a fairly close match. Pydgin's definitions could certainly be
+made more concise by using a custom DSL, however, this would lose many of the
+debugging benefits afforded to a well-supported language such as Python and
+additionally require using a custom parser that would likely need modification
+for each new ISA.</p>
+<pre class="code literal-block">
+if ConditionPassed(cond) then
+   Rd = Rn + shifter_operand
+   if S == 1 and Rd == R15 then
+     if CurrentModeHasSPSR() then CPSR = SPSR
+   else UNPREDICTABLE else if S == 1 then
+     N Flag = Rd[31]
+     Z Flag = if Rd == 0 then 1 else 0
+     C Flag = CarryFrom(Rn + shifter_operand)
+     V Flag = OverflowFrom(Rn + shifter_operand)
+</pre>
+<p>Creating an ISS that can run real applications is a rather complex task, even
+for a bare metal simulator with no operating system such as Pydgin.
+Each system call in the C library must be properly implemented, and
+bootstrapping code must be provided to set up the program stack and
+architectural state.
+This is a very tedious and error prone process which Pydgin tries to
+encapsulate so that it remains as transparent to the end user as possible.
+In future versions of Pydgin we hope to make bootstrapping more painless and
+support a wider variety of C libraries.</p>
+<!-- Architectural state... leave out for now. -->
+<!-- ::
+
+class State( object ):
+  _virtualizable_ = ['pc', 'ncycles']
+  def __init__( self, memory, debug, reset_addr=0x400 ):
+    self.pc       = reset_addr
+    self.rf       = ArmRegisterFile( self, num_regs=16 )
+    self.mem      = memory
+
+    self.rf[ 15 ]  = reset_addr
+
+    # current program status register (CPSR)
+    self.N    = 0b0      # Negative condition
+    self.Z    = 0b0      # Zero condition
+    self.C    = 0b0      # Carry condition
+    self.V    = 0b0      # Overflow condition
+
+    # other registers
+    self.status        = 0
+    self.ncycles       = 0
+
+  def fetch_pc( self ):
+    return self.pc -->
+</div>
+<div class="section" id="pydgin-performance">
+<h3>Pydgin Performance<a href="#pydgin-performance" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>In order to achieve good simulation performance from Pydgin ISSs, significant
+work went into adding appropriate JIT annotations to the Pydgin library
+components.
+These optimization hints, which allow the JIT generated by the RPython
+translation toolchain to produce more efficient code, have been specifically
+selected for the unique properties of ISSs.
+For the sake of brevity, we do not talk about the exact optimizations here but
+a detailed discussion can be found in the ISPASS paper <a class="footnote-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id16" id="id9">[1]</a>.
+In the paper we evaluate two ISSs, one for a simplified MIPS ISA and another
+for the ARMv5 ISA, whereas below we only discuss results for the ARMv5 ISS.</p>
+<p>The performance of Pydgin-generated ARMv5 ISSs were compared against
+several reference ISSs: the <a class="reference external" href="https://www.gem5.org/">gem5</a> ARM atomic simulator (<em>gem5</em>),
+interpretive and JIT-enabled versions of <a class="reference external" href="https://simit-arm.sourceforge.net/">SimIt-ARM</a> (<em>simit-nojit</em> and
+<em>simit-jit</em>), and <a class="reference external" href="https://wiki.qemu.org/">QEMU</a>.
+Atomic models from the gem5 simulator were chosen for comparison due their wide
+usage amongst computer architects <a class="citation-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#g" id="id10">[g]</a>.
+SimIt-ARM was selected because it is currently the highest performance
+ADL-generated DBT-ISS publicly available.
+QEMU has long been held as the gold-standard for DBT simulators due to its
+extremely high performance, however, QEMU is generally intended for usage as an
+emulator rather than a simulator <a class="citation-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#c" id="id11">[c]</a> and therefore achieves its excellent
+performance at the cost of observability.
+Unlike QEMU, all other simulators in our study faithfully track architectural
+state at an instruction level rather than block level.
+Pydgin ISSs were generated with and without JITs using the RPython translation
+toolchain in order to help quantify the performance benefit of the meta-tracing
+JIT.</p>
+<p>The figure below shows the performance of each ISS executing applications from
+the SPEC CINT2006 benchmark suite <a class="citation-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#h" id="id12">[h]</a>.
+Benchmarks were run to completion on the high-performance DBT-ISSs
+(<em>simit-jit</em>, <em>pydgin-jit</em>, and QEMU), but were terminated after only
+10 billion simulated instructions for the non-JITed interpretive ISSs
+(these would require many hours, in some cases days, to run to completion).
+Simulation performance is measured in MIPS <a class="citation-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#i" id="id13">[i]</a> and plotted on a <strong>log
+scale</strong> due to the wide variance in performance.
+The <em>WHMEAN</em> group summarizes each ISS's performance across all benchmarks
+using the weighted harmonic mean.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://4.bp.blogspot.com/-fsfrUJOQKZg/VQKqZzgcQsI/AAAAAAAACAA/20NoWKRzmvU/s1600/arm-bar-plot.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://4.bp.blogspot.com/-fsfrUJOQKZg/VQKqZzgcQsI/AAAAAAAACAA/20NoWKRzmvU/s640/arm-bar-plot.png"></a></div>
+
+<p>A few points to take away from these results:</p>
+<ul class="simple">
+<li>ISSs without JITs (<em>gem5</em>, <em>simit-nojit</em>, and <em>pydgin-nojit</em>) demonstrate
+relatively consistent performance across applications, whereas ISSs with JITs
+(<em>simit-jit</em>, <em>pydgin-jit</em>, and QEMU) demonstrate much greater
+performance variability from application-to-application.</li>
+<li>The <em>gem5</em> atomic model demonstrates particularly miserable performance, only
+2-3 MIPS!</li>
+<li>QEMU lives up to its reputation as a gold-standard for simulator performance,
+leading the pack on nearly every benchmark and reaching speeds of 240-1120
+MIPS.</li>
+<li>
+<em>pydgin-jit</em> is able to outperform <em>simit-jit</em> on four of the
+applications, including considerable performance improvements of 1.44–1.52×
+for the applications <em>456.hmmer</em>, <em>462.libquantum</em>, and <em>471.omnetpp</em>
+(managing to even outperform QEMU on <em>471.omnetpp</em>).</li>
+<li>
+<em>simit-jit</em> is able to obtain much more consistent performance (230-459
+MIPS across all applications) than <em>pydgin-jit</em> (9.6-659 MIPS).  This is
+due to <em>simit-jit</em>'s page-based approach to JIT optimization compared to
+<em>pydgin-jit</em>'s tracing-based approach.</li>
+<li>
+<em>464.h264ref</em> displays particularly bad pathological behavior in Pydgin’s
+tracing JIT and is the only application to perform worse on <em>pydgin-jit</em>
+than <em>pydgin-nojit</em> (9.6 MIPS vs. 21 MIPS).</li>
+</ul>
+<p>The pathological behavior demonstrated by <em>464.h264ref</em> was of particular
+concern because it caused <em>pydgin-jit</em> to perform even worse than having no
+JIT at all. RPython JIT logs indicated that the reason for this performance
+degradation was a large number of tracing aborts due to JIT traces growing too
+long. However, time limitations before the publication deadline prevented us
+from investigating this issue thoroughly.</p>
+<p>Since the deadline we've applied some minor bug fixes and made some small
+improvements in the memory representation.
+More importantly, we've addressed the performance degradation in <em>464.h264ref</em>
+by increasing trace lengths for the JIT.
+Below we show how the performance of <em>464.h264ref</em> changes as the
+<strong>trace_limit</strong> parameter exposed by the RPython JIT is varied from the default
+size of 6000 operations.</p>
+
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://2.bp.blogspot.com/-rOklyrr1tzY/VQKqg3GJu9I/AAAAAAAACAI/jfoHvpJbMF8/s1600/trace-length-plot.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://2.bp.blogspot.com/-rOklyrr1tzY/VQKqg3GJu9I/AAAAAAAACAI/jfoHvpJbMF8/s640/trace-length-plot.png"></a></div>
+
+<p>By quadrupling the trace limit we achieve an 11x performance improvement in
+<em>464.h264ref</em>.
+The larger trace limit allows the JIT to optimize long code paths that were
+previously triggering trace aborts, greatly helping amortize the costs of
+tracing.
+Note that arbitrarily increasing this limit can potentially hurt performance if
+longer traces are not able to detect optimizable code sequences.</p>
+<p>After performing similar experiments across the applications in the SPEC
+CINT2006 benchmark suite, we settled on a trace limit of 400,000 operations.
+In the figure below we show how the updated Pydgin ISS (<em>pydgin-400K</em>) improves
+performance across all benchmarks and fixes the performance degradation
+previously seen in <em>464.h264ref</em>. Note that the non-JITted simulators have been
+removed for clarity, and simulation performance is now plotted on a
+<strong>linear scale</strong> to more clearly distinguish the performance gap between
+each ISS.</p>
+
+<div class="separator" style="clear: both; text-align: center;"><a href="https://1.bp.blogspot.com/-DSAtuNZ7fnQ/VQKqm0HPBfI/AAAAAAAACAQ/8hYCDeZujq8/s1600/new-bar-plot.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" src="https://1.bp.blogspot.com/-DSAtuNZ7fnQ/VQKqm0HPBfI/AAAAAAAACAQ/8hYCDeZujq8/s640/new-bar-plot.png"></a></div>
+
+<p>With these improvements, we are now able to beat <em>simit-jit</em> on all but two
+benchmarks. In future work we hope to further close the gap with QEMU as well.</p>
+</div>
+<div class="section" id="conclusions-and-future-work">
+<h3>Conclusions and Future Work<a href="#conclusions-and-future-work" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Pydgin demonstrates that the impressive work put into the RPython translation
+toolchain, designed to simplify the process of building fast dynamic-language
+VMs, can also be leveraged to build fast instruction set simulators.
+Our prototype ARMv5 ISS shows that Pydgin can generate ISSs with performance
+competitive to SimIt-ARM while also providing a more productive development
+experience: RPython allowed us to develop Pydgin with only four person-months
+of work.
+Another significant benefit of the Pydgin approach is that any performance
+improvements applied to the RPython translation toolchain immediately benefit
+Pydgin ISSs after a simple software download and retranslation.
+This allows Pydgin to track the continual advances in JIT technology introduced
+by the PyPy development team.</p>
+<p>Pydgin is very much a work in progress. There are many features we would like
+to add, including:</p>
+<ul class="simple">
+<li>more concise syntax for accessing arbitrary instruction bits</li>
+<li>support for other C libraries such as glibc, uClibc, and musl
+(we currently only support binaries compiled with newlib)</li>
+<li>support for self-modifying code</li>
+<li>features for more productive debugging of target applications</li>
+<li>ISS descriptions for other ISAs such as RISC-V, ARMv8, and x86</li>
+<li>automatic generation of compilers and toolchains from Pydgin descriptions</li>
+</ul>
+<p>In addition, we think there are opportunities for even greater performance
+improvements with more advanced techniques such as:</p>
+<ul class="simple">
+<li>automatic generation of optimized instruction decoders</li>
+<li>optimizations for floating-point intensive applications</li>
+<li>multiple tracing-JITs for parallel simulation of multicore SOCs</li>
+<li>a parallel JIT compilation engine as proposed by Böhm et al. <a class="footnote-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id18" id="id14">[3]</a>
+</li>
+</ul>
+<p>We hope that Pydgin can be of use to others, so if you try it out please let us
+know what you think. Feel free to contact us if you find any of the above
+development projects interesting, or simply fork the project on GitHub and hack
+away!</p>
+<p>-- Derek Lockhart and Berkin Ilbeyi</p>
+</div>
+<div class="section" id="acknowledgements">
+<h3>Acknowledgements<a href="#acknowledgements" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p> We would like to sincerely thank Carl Friedrich Bolz and Maciej Fijalkowski for their feedback on the Pydgin publication and their guidance on improving the JIT performance of our simulators. We would also like to thank for the whole PyPy team for their incredible work on the PyPy and the RPython translation toolchain. Finally, thank you to our research advisor, Prof. Christopher Batten, and the sponsors of this work which include the National Science Foundation, the Defense Advanced Research Projects Agency, and Intel Corporation.</p>
+</div>
+<div class="section" id="footnotes">
+<h3>Footnotes<a href="#footnotes" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<table class="docutils citation" frame="void" id="a" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label"><a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id1">[a]</a></td>
+<td>Pydgin loosely stands for [Py]thon [D]SL for [G]enerating
+[In]struction set simulators and is pronounced the same as “pigeon”. The
+name is inspired by the word “pidgin” which is a grammatically simplified
+form of language and captures the intent of the Pydgin embedded-ADL.
+<a class="reference external" href="https://github.com/cornell-brg/pydgin">https://github.com/cornell-brg/pydgin</a>
+</td>
+</tr></tbody>
+</table>
+<table class="docutils citation" frame="void" id="b" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label"><a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id2">[b]</a></td>
+<td>Popular instruction set architectures (ISAs) include MIPs, ARM,
+x86, and more recently RISC-V</td>
+</tr></tbody>
+</table>
+<table class="docutils citation" frame="void" id="c" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label">[c]</td>
+<td>
+<em>(<a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id4">1</a>, <a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id11">2</a>)</em> For a good discussion of simulators vs. emulators, please see the
+following post on StackOverflow:
+<a class="reference external" href="https://stackoverflow.com/questions/1584617/simulator-or-emulator-what-is-the-difference">https://stackoverflow.com/questions/1584617/simulator-or-emulator-what-is-the-difference</a>
+</td>
+</tr></tbody>
+</table>
+<table class="docutils citation" frame="void" id="d" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label"><a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id5">[d]</a></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Dark_silicon">https://en.wikipedia.org/wiki/Dark_silicon</a></td>
+</tr></tbody>
+</table>
+<table class="docutils citation" frame="void" id="e" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label"><a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id6">[e]</a></td>
+<td>Please see the Pydgin paper for a more detailed discussion of prior work.</td>
+</tr></tbody>
+</table>
+<table class="docutils citation" frame="void" id="f" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label"><a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id8">[f]</a></td>
+<td>
+<p class="first">For more examples of Pydgin ISA specifications, please see the ISPASS
+paper <a class="footnote-reference" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id16" id="id15">[1]</a> or the Pydgin source code on GitHub.</p>
+<p>Pydgin instruction definitions for a simple MIPS-inspired ISA can be
+found here:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://github.com/cornell-brg/pydgin/blob/master/parc/isa.py">https://github.com/cornell-brg/pydgin/blob/master/parc/isa.py</a></li>
+</ul>
+<p>Pydgin instruction definitions for a simplified ARMv5 ISA can be found
+here:</p>
+<ul class="last simple">
+<li><a class="reference external" href="https://github.com/cornell-brg/pydgin/blob/master/arm/isa.py">https://github.com/cornell-brg/pydgin/blob/master/arm/isa.py</a></li>
+</ul>
+</td>
+</tr></tbody>
+</table>
+<table class="docutils citation" frame="void" id="g" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label"><a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id10">[g]</a></td>
+<td>
+<p class="first">gem5 is a cycle-level simulation framework that contains both
+functional-level (atomic) and cycle-level processor models. Although
+primarily used for detailed, cycle-approximate processor simulation,
+gem5's atomic model is a popular tool for many ISS tasks.</p>
+<ul class="last simple">
+<li><a class="reference external" href="https://www.m5sim.org/SimpleCPU">https://www.m5sim.org/SimpleCPU</a></li>
+</ul>
+</td>
+</tr></tbody>
+</table>
+<table class="docutils citation" frame="void" id="h" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label"><a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id12">[h]</a></td>
+<td>All performance measurements were taken on an unloaded server-class
+machine.</td>
+</tr></tbody>
+</table>
+<table class="docutils citation" frame="void" id="i" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label"><a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id13">[i]</a></td>
+<td>Millions of instructions per second.</td>
+</tr></tbody>
+</table>
+</div>
+<div class="section" id="references">
+<h3>References<a href="#references" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<table class="docutils footnote" frame="void" id="id16" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label">[1]</td>
+<td>
+<em>(<a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id3">1</a>, <a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id9">2</a>, <a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id15">3</a>)</em> <p>Derek Lockhart, Berkin Ilbeyi, and Christopher Batten. "Pydgin:
+Generating Fast Instruction Set Simulators from Simple Architecture
+Descriptions with Meta-Tracing JIT Compilers." IEEE Int'l Symp. on
+Performance Analysis of Systems and Software (ISPASS), Mar. 2015.</p>
+<ul class="last simple">
+<li><a class="reference external" href="https://csl.cornell.edu/~cbatten/pdfs/lockhart-pydgin-ispass2015.pdf">https://csl.cornell.edu/~cbatten/pdfs/lockhart-pydgin-ispass2015.pdf</a></li>
+<li><a class="reference external" href="https://github.com/cornell-brg/pydgin">https://github.com/cornell-brg/pydgin</a></li>
+</ul>
+</td>
+</tr></tbody>
+</table>
+<table class="docutils footnote" frame="void" id="id17" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label"><a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id7">[2]</a></td>
+<td>
+<p class="first">Derek Lockhart, Gary Zibrat, and Christopher Batten. "PyMTL: A Unified
+Framework for Vertically Integrated Computer Architecture Research." 47th
+ACM/IEEE Int'l Symp. on Microarchitecture (MICRO-47), Dec. 2014.</p>
+<ul class="last simple">
+<li><a class="reference external" href="https://csl.cornell.edu/~cbatten/pdfs/lockhart-pymtl-micro2014.pdf">https://csl.cornell.edu/~cbatten/pdfs/lockhart-pymtl-micro2014.pdf</a></li>
+<li><a class="reference external" href="https://github.com/cornell-brg/pymtl">https://github.com/cornell-brg/pymtl</a></li>
+</ul>
+</td>
+</tr></tbody>
+</table>
+<table class="docutils footnote" frame="void" id="id18" rules="none">
+<colgroup>
+<col class="label">
+<col>
+</colgroup>
+<tbody valign="top"><tr>
+<td class="label"><a class="fn-backref" href="pydgin-using-rpython-to-generate-fast-1514065178985838697.html#id14">[3]</a></td>
+<td>I. Böhm, B. Franke, and N. Topham. Generalized Just-In-Time Trace
+Compilation Using a Parallel Task Farm in a Dynamic Binary Translator.
+ACM SIGPLAN Conference on Programming Language Design and Implementation
+(PLDI), Jun 2011.</td>
+</tr></tbody>
+</table>
+</div>
+
+<br>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../02/experiments-in-pyrlang-with-rpython-8103387814587972227.html" rel="prev" title="Experiments in Pyrlang with RPython">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy-251-released-5657064769385723517.html" rel="next" title="PyPy 2.5.1 Released">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-3867318553284676076">
+        <div class="comment-header">
+          <a name="comment-3867318553284676076"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2015-03-30 12:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>For reference 3: <a href="https://groups.inf.ed.ac.uk/pasta/pub_PLDI_2011.html" rel="nofollow">https://groups.inf.ed.ac.uk/pasta/pub_PLDI_2011.html</a>.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

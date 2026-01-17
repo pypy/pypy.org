@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>linalg support in pypy/numpy | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2015/02/linalg-support-in-pypynumpy-1131217944329711855.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="mattip">
+<link rel="prev" href="numpypy-status-january-2015-5092986229783279944.html" title="NumPyPy status - January 2015" type="text/html">
+<link rel="next" href="experiments-in-pyrlang-with-rpython-8103387814587972227.html" title="Experiments in Pyrlang with RPython" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="linalg support in pypy/numpy">
+<meta property="og:url" content="https://www.pypy.org/posts/2015/02/linalg-support-in-pypynumpy-1131217944329711855.html">
+<meta property="og:description" content="Introduction
+PyPy's numpy support has matured enough that it can now support the  lapack/blas libraries through the numpy.linalg module. To install the  version of numpy this blog post refers to, inst">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2015-02-23T20:36:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">linalg support in pypy/numpy</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/mattip.html">mattip</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2015-02-23T20:36:00Z" itemprop="datePublished" title="2015-02-23 20:36">2015-02-23 20:36</time></a>
+            </p>
+                <p class="commentline">23 comments</p>
+
+                <p class="commentline">            <a href="linalg-support-in-pypynumpy-1131217944329711855.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <div dir="ltr" style="text-align: left;">
+<h2 style="text-align: left;" id="">
+<a href="#" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<h1 id="introduction">
+Introduction<a href="#introduction" class="headerlink" title="Permalink to this heading">¶</a></h1>
+PyPy's numpy support has matured enough that it can now support the  lapack/blas libraries through the numpy.linalg module. To install the  version of numpy this blog post refers to, install PyPy version 2.5.0 or  newer, and run this:<br><br><pre>pypy -m pip install git+https://bitbucket.org/pypy/numpy.git
+</pre>
+<br>
+This update is a major step forward for PyPy's numpy support. Many of  the basic matrix operations depend on linalg, even matplotlib requires  it to display legends (a pypy-friendly version of matplotlib 1.3 is  available  at <a href="https://github.com/mattip/matplotlib" rel="noreferrer">https://github.com/mattip/matplotlib</a>).<br><br>
+A number of improvements and adaptations, some of which are in the newly-released PyPy 2.5.0, made this possible:<br><ul class="task-list">
+<li>Support for an extended <tt>frompyfunc()</tt>, which in the PyPy  version supports much of the ufunc API (signatures, multiple dtypes)  allowing creation of pure-python, jit-friendly ufuncs. An additional  keyword allows choosing between <tt>out = func(in)</tt> or <tt>func(in, out)</tt> ufunc signatures. More explanation follows.</li>
+<li>Support for GenericUfuncs via PyPy's (slow) capi-compatibility  layer. The underlying mechanism actually calls the internal  implementation of <tt>frompyfunc()</tt>.</li>
+<li>A cffi version of <tt>_umath_linalg</tt>. Since cffi uses <tt>dlopen()</tt>  to call into shared objects, we added support in the numpy build system  to create non-python shared libraries from source code in the numpy  tree. We also rewrote parts of the c-based <tt>_umath_linalg.c.src</tt> in python, renamed numpy's <tt>umath_linalg</tt> capi module to <tt>umath_linag_capi</tt>, and use it as a shared object through cffi.</li>
+</ul>
+<div>
+<h1 id="status">
+<a class="anchor" href="https://gist.github.com/mattip/25680e68fe7e2856fe0c#status" name="user-content-status" rel="noreferrer"></a>Status<a href="#status" class="headerlink" title="Permalink to this heading">¶</a></h1>
+We have not completely implemented all the linalg features. dtype  resolution via casting is missing, especially for complex ndarrays,  which leads to slight numerical errors where numpy uses a more precise  type for intermediate calculations. Other missing features in PyPy's  numpy support may have implications for complete linalg support.<br><br>
+Some OSX users have noticed they need to update pip to version 6.0.8 to overcome a regression in pip, and it is not clear if we support all combinations of blas/lapack implementations on all platforms.<br><br>
+Over  the next few weeks we will be ironing out these issues.</div>
+<div>
+<h1 id="performance">
+<a class="anchor" href="https://gist.github.com/mattip/25680e68fe7e2856fe0c#performance" name="user-content-performance" rel="noreferrer"></a>Performance<a href="#performance" class="headerlink" title="Permalink to this heading">¶</a></h1>
+A simple benchmark is shown below, but let's state the obvious:  PyPy's JIT and the iterators built into PyPy's ndarray implementation  will in most cases be no faster than CPython's numpy. The JIT can help  where there is a mixture of python and numpy-array code. We do have  plans to implement lazy evaluation and to further optimize PyPy's  support for numeric python, but numpy is quite good at what it does.</div>
+<div>
+<h1 id="howto-for-pypys-extended-frompyfunc">
+<a class="anchor" href="https://gist.github.com/mattip/25680e68fe7e2856fe0c#howto-for-pypys-extended-frompyfunc" name="user-content-howto-for-pypys-extended-frompyfunc" rel="noreferrer"></a>HowTo for PyPy's extended <tt>frompyfunc</tt> <a href="#howto-for-pypys-extended-frompyfunc" class="headerlink" title="Permalink to this heading">¶</a></h1>
+The magic enabling blas support is a rewrite of the <tt>_umath_linalg</tt> c-based module as a cffi-python module that creates ufuncs via <tt>frompyfunc</tt>. We extended the numpy <tt>frompyfunc</tt> to allow it to function as a replacement for the generic ufunc available in numpy only through the c-api.<br><br>
+We start with the basic <tt>frompyfunc</tt>, which wraps a python function into a ufunc:<br><pre> </pre>
+<pre>def times2(in0):
+    return in0 * 2
+ufunc = frompyfunc(times2, 1, 1)
+</pre>
+<br>
+In cpython's numpy the dtype of the result is always object, which is  not implemented (yet) in PyPy, so this example will fail. While the  utility of object dtypes can be debated, in the meantime we add a  non-numpy-compatible keyword argument <tt>dtypes</tt> to <tt>frompyfunc</tt>. If <tt>dtype=['match']</tt> the output dtype will match the dtype of the first input ndarray:<br><br><pre>ufunc = frompyfunc(times2, 1, 1, dtype=['match'])
+ai = arange(24).reshape(3, 4, 2)
+ao = ufunc(ai)
+assert  (ao == ai * 2).all()
+</pre>
+<br>
+I hear you ask "why is the dtypes keyword argument a list?" This is so we can support the <a href="https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html" rel="noreferrer">Generalized Universal Function API</a>, which allows specifying a number of specialized functions and the input-output dtypes each specialized function accepts.<br>
+Note that the function feeds the values of <tt>ai</tt> one at a time,  the function operates on scalar values. To support more complicated  ufunc calls, the generalized ufunc API allows defining a signature,  which specifies the layout of the ndarray inputs and outputs. So we extended <tt>frompyfunc </tt>with a signature keyword as well.<br>
+We add one further extension to <tt>frompyfunc</tt>: we allow a Boolean keyword <tt>stack_inputs</tt> to specify the argument layout of the function itself. If the function is of the form:<br><pre> </pre>
+<pre>out0, out1, ... = func(in0, in1,...)
+</pre>
+<br>
+then stack_inputs is False. If it is True the function is of the form:<br><pre> </pre>
+<pre>func(in0, in1, ... out0, out1, ...)
+</pre>
+<br>
+Here is a complete example of using <tt>frompyfunc</tt> to create a ufunc, based on <a href="https://docs.scipy.org/doc/numpy/user/c-info.ufunc-tutorial.html" rel="noreferrer">this link</a>:<br><pre> </pre>
+<pre>def times2(in_array, out_array):
+    in_flat = in_array.flat
+    out_flat = out_array.flat
+    for i in range(in_array.size):
+        out_flat[i] = in_flat[i] * 2
+ufunc = frompyfunc([times2, times2], 1, 1,
+                signature='(i)-&gt;(i)',
+                dtypes=[dtype(int), dtype(int),
+                        dtype(float), dtype(float),
+                       ],
+                stack_inputs=True,
+                )
+ai = arange(10, dtype=int)
+ai2 = ufunc(ai)
+assert all(ai2 == ai * 2)
+</pre>
+<br>
+Using this extended syntax, we rewrote the lapack calls into the blas  functions in pure python, no c needed. Benchmarking this approach  actually was <b>much slower</b> than using the upstream <tt>umath_linalg</tt>  module via cpyext, as can be seen in the following benchmarks. This is  due to the need to copy c-aligned data into Fortran-aligned format. Our <tt>__getitem__</tt> and <tt>__setitem__</tt> iterators are not as fast as pointer arithmetic in C. So we next tried a hybrid approach: compile and use numpy's <tt>umath_linalg</tt> python module as a shared object, and call the optimized specific wrapper function from it.</div>
+<div>
+<h1 id="benchmarks">
+<a class="anchor" href="https://gist.github.com/mattip/25680e68fe7e2856fe0c#benchmarks" name="user-content-benchmarks" rel="noreferrer"></a>Benchmarks<a href="#benchmarks" class="headerlink" title="Permalink to this heading">¶</a></h1>
+Here are some benchmarks, running a tight loop of the different versions of <tt>linalg.inv(a)</tt>, where <tt>a</tt> is a 10x10 double ndarray. The benchmark ran on an i7 processor running ubuntu 14.04 64 bit:<br><table border="all">
+<thead valign="bottom"><tr>
+<th>Impl.</th> <th>Time after warmup</th> </tr></thead>
+<tbody valign="top">
+<tr>
+<td>CPython 2.7 + numpy 1.10.dev + lapack</td> <td>8.9 msec/1000 loops</td> </tr>
+<tr>
+<td>PyPy 2.5.0  + numpy + lapack via cpyext</td> <td>8.6 msec/1000 loops</td> </tr>
+<tr>
+<td>PyPy 2.5.0  + numpy + lapack via pure python + cffi</td> <td>19.9 msec/1000 loops</td> </tr>
+<tr>
+<td>PyPy 2.5.0  + numpy + lapack via python + c + cffi</td> <td>9.5 msec/1000 loops</td>
+</tr>
+</tbody>
+</table>
+<br><table border="all"><tbody valign="top"><tr></tr></tbody></table>
+</div>
+<div>
+<br>
+While no general conclusions may be drawn from a single micro-benchmark, it does indicate that there is some merit in the approach taken. <br><h1 id="conclusion">
+Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h1>
+PyPy's numpy now includes a working linalg module. There are still  some rough corners, but hopefully we have implemented the parts you  need. While the speed of the isolated linalg function is no faster than  CPython and upstream numpy, it should not be significantly slower  either. Your use case may see an improvement if you use a mix of python  and lapack, which is the usual case.<br><br>
+Please let us know how it goes. We love to hear success stories too.<br><br>
+We still have challenges at all levels of programming,and are always  looking for people willing to contribute, so stop by on IRC at #pypy.<br><br>
+mattip and the PyPy Team</div>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="numpypy-status-january-2015-5092986229783279944.html" rel="prev" title="NumPyPy status - January 2015">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="experiments-in-pyrlang-with-rpython-8103387814587972227.html" rel="next" title="Experiments in Pyrlang with RPython">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-6964427589034752822">
+        <div class="comment-header">
+          <a name="comment-6964427589034752822"></a>
+            <span class="author">Olivier Grisel</span> wrote on <span class="date">2015-02-24 10:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>Interesting work although benchmarking linear algebra routines on 10x10 arrays feels wrong: typical linear algebra applications use hundreds or thousands of dimensions. Would you mind re-rerunning those benchmarks on 1000x1000 arrays instead? The use of the CPU cache and multiple threads can be very impacting for such workloads.<br><br>Also some numpy / scipy developers are working on supporting OpenBLAS as the default BLAS/LAPACK by default for the Windows wheel packages and maybe later for the OSX packages as well.<br><br>Under Linux (Debian / Ubuntu) it's pretty easy to have libblas.so / liblapack.so be symlinks to either ATLAS or OpenBLAS using the update-alternative syste,</p>
+        </div>
+      </div>
+      <div class="comment comment-3338463064440291817">
+        <div class="comment-header">
+          <a name="comment-3338463064440291817"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2015-02-24 10:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>What blog post somehow fails to mention is that we do not reimplement those but reuse whatever underlaying library is there. The measurements of the actual speed is then not that interesting, because we're only interested in the overhead of call.</p>
+
+        </div>
+      </div>
+      <div class="comment comment-2207571289333943194">
+        <div class="comment-header">
+          <a name="comment-2207571289333943194"></a>
+            <span class="author">Olivier Grisel</span> wrote on <span class="date">2015-02-24 10:26</span>:
+        </div>
+        <div class="comment-content">
+          <p>It might still be interesting to run that kind of benchmarks on more realistic workloads (maybe in addition to some micro-workloads) to see the importance of the remaining overhead in a typical usage scenario.</p>
+        </div>
+      </div>
+      <div class="comment comment-7974828938642324982">
+        <div class="comment-header">
+          <a name="comment-7974828938642324982"></a>
+            <span class="author">mattip</span> wrote on <span class="date">2015-02-24 16:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>The most interesting benchmark is probably the one only you can run, i.e. how does pypy perform for you on your workload.<br><br>As far as lapack vs openblas, we will try to imitate what numpy does. If cpython/numpy supports a variation of lapack and pypy/numpy doesn't, that should be considered a bug. <br><br>Please let us know how it works for you.</p>
+        </div>
+      </div>
+      <div class="comment comment-4982838066074429452">
+        <div class="comment-header">
+          <a name="comment-4982838066074429452"></a>
+            <span class="author">Olivier Grisel</span> wrote on <span class="date">2015-02-24 17:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; The most interesting benchmark is probably the one only you can run, i.e. how does pypy perform for you on your workload.<br><br>I agree, but inverting a 10x10 matrix is probably not representative of anybody's workload.<br><br>While it's important not to introduce too much overhead in the bindings, I think it's also good to keep in mind that an overhead of the order of the micro-second is completely negligible compared to the execution time of a typical linear algebra operation running on realistically sized data. Hence my original remark.<br><br>&gt; As far as lapack vs openblas, we will try to imitate what numpy does. If cpython/numpy supports a variation of lapack and pypy/numpy doesn't, that should be considered a bug.<br><br>Just to clarify OpenBLAS is an implementation of the standard BLAS API that also includes the official LAPACK implementation from netlib linked against its own optimized BLAS routines. The 2 main open source optimized implementations of BLAS/LAPACK supported by numpy &amp; scipy are ATLAS and OpenBLAS.</p>
+        </div>
+      </div>
+      <div class="comment comment-4956345905201871571">
+        <div class="comment-header">
+          <a name="comment-4956345905201871571"></a>
+            <span class="author">Romain Guillebert</span> wrote on <span class="date">2015-02-24 19:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; While it's important not to introduce too much overhead in the bindings, I think it's also good to keep in mind that an overhead of the order of the micro-second is completely negligible compared to the execution time of a typical linear algebra operation running on realistically sized data. Hence my original remark.<br><br>But then you're just benchmarking the underlying library, which is the exact same library as numpy.</p>
+        </div>
+      </div>
+      <div class="comment comment-7295018257636297863">
+        <div class="comment-header">
+          <a name="comment-7295018257636297863"></a>
+            <span class="author">Olivier Grisel</span> wrote on <span class="date">2015-02-24 20:21</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; But then you're just benchmarking the underlying library, which is the exact same library as numpy.<br><br>Yes I agree. I just want to highlight that for most common real life use cases, a small performance overhead in those those LAPACK bindings are almost never a problem. <br><br>Otherwise your readers might be mislead into thinking that the "PyPy 2.5.0 + numpy + lapack via pure python + cffi" version is significantly suboptimal (2x slowdown!) while in practice a couple of additional microseconds might be completely undetectable compared to the actual execution time of the "inv" function that typically lasts more than a millisecond on anything that is non-toy data.</p>
+        </div>
+      </div>
+      <div class="comment comment-7230419183409976005">
+        <div class="comment-header">
+          <a name="comment-7230419183409976005"></a>
+            <span class="author">Romain Guillebert</span> wrote on <span class="date">2015-02-24 20:57</span>:
+        </div>
+        <div class="comment-content">
+          <p>ok, makes sense :)</p>
+        </div>
+      </div>
+      <div class="comment comment-7106410907157682052">
+        <div class="comment-header">
+          <a name="comment-7106410907157682052"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2015-02-24 21:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>Additional data point: repeatedly inverting a ~10x10 matrix is exactly what I need performance on - for running an extended Kalman Filter. : )</p>
+        </div>
+      </div>
+      <div class="comment comment-1313014789827047698">
+        <div class="comment-header">
+          <a name="comment-1313014789827047698"></a>
+            <span class="author">Olivier Grisel</span> wrote on <span class="date">2015-02-24 21:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>&gt; Additional data point: repeatedly inverting a ~10x10 matrix is exactly what I need performance on - for running an extended Kalman Filter. : ) <br><br>Fair enough: so there actually exists a use case for that benchmark. Optimizing the bindings overhead might thus be worthy in the end.</p>
+        </div>
+      </div>
+      <div class="comment comment-5085174953190852789">
+        <div class="comment-header">
+          <a name="comment-5085174953190852789"></a>
+            <span class="author">Yaacov</span> wrote on <span class="date">2015-03-01 22:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>I love hearing about the progress and wish I could test on my benchmarks. Any chance of windows support?</p>
+        </div>
+      </div>
+      <div class="comment comment-5764930300690008052">
+        <div class="comment-header">
+          <a name="comment-5764930300690008052"></a>
+            <span class="author">mattip</span> wrote on <span class="date">2015-03-02 11:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>Yaacov what is missing for you to try it?<br>Here is the way I verify that the code works on windows 7 64 bit and windows 8.1:<br><br>download and install compiler<br>https://www.microsoft.com/en-us/download/details.aspx?id=44266<br><br>download pypy and open the zip<br>https://bitbucket.org/pypy/pypy/downloads/pypy-2.5.0-win32.zip<br><br>install pip into pypy<br>https://bootstrap.pypa.io/get-pip.py<br><br>install numpy into pypy<br>pip install git+https://bitbucket.org/pypy/numpy.git</p>
+        </div>
+      </div>
+      <div class="comment comment-931046829961589278">
+        <div class="comment-header">
+          <a name="comment-931046829961589278"></a>
+            <span class="author">Yaacov</span> wrote on <span class="date">2015-03-06 04:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>I get a tracback ending in<br><br>\appdata\local\temp\pip-wdyqtr-build\numpy\distutils\mi<br>sc_util.py", line 872, in _get_configuration_from_setup_py<br><br>        config = setup_module.configuration(*args)<br><br>      File "numpy\linalg\setup.py", line 85, in configuration<br><br>        library_dirs = [sys.real_prefix + '/include',<br><br>    AttributeError: 'module' object has no attribute 'real_prefix'<br><br>in a warning "using unoptimized lapack"</p>
+        </div>
+      </div>
+      <div class="comment comment-2258526201919302343">
+        <div class="comment-header">
+          <a name="comment-2258526201919302343"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2015-03-06 19:24</span>:
+        </div>
+        <div class="comment-content">
+          <p>I still get non-existing conjugate method error when using, e.g., linalg.pinv. Any plan on getting this working?</p>
+        </div>
+      </div>
+      <div class="comment comment-6622089329894245029">
+        <div class="comment-header">
+          <a name="comment-6622089329894245029"></a>
+            <span class="author">mattip</span> wrote on <span class="date">2015-03-07 22:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>fixed, try a nightly (from tomorrow)</p>
+        </div>
+      </div>
+      <div class="comment comment-7290341467128346272">
+        <div class="comment-header">
+          <a name="comment-7290341467128346272"></a>
+            <span class="author">Derek Z</span> wrote on <span class="date">2015-03-13 14:56</span>:
+        </div>
+        <div class="comment-content">
+          <p>I got an error message:<br><br>OSError: Cannot load library /usr/local/Cellar/pypy/2.5.0/libexec/site-packages/numpy/linalg/libumath_linalg_cffi.so: dlopen(/usr/local/Cellar/pypy/2.5.0/libexec/site-packages/numpy/linalg/libumath_linalg_cffi.so, 2): image not found<br><br>Is there anything I am not doing right for the installation?  I have pypy 2.5, and Mac OS 10.10.</p>
+        </div>
+      </div>
+      <div class="comment comment-4873465271754498998">
+        <div class="comment-header">
+          <a name="comment-4873465271754498998"></a>
+            <span class="author">mattip</span> wrote on <span class="date">2015-03-13 15:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>Are you installing via pip, if so we have had reports of older versions of pip failing. You should have pip 6.0.8 or later. See https://bitbucket.org/pypy/numpy/issue/21</p>
+        </div>
+      </div>
+      <div class="comment comment-8102406893667165323">
+        <div class="comment-header">
+          <a name="comment-8102406893667165323"></a>
+            <span class="author">melbic</span> wrote on <span class="date">2015-03-19 11:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>Same problem here. (OSX 10.10) I've got the newest pip (6.0.8) and setuptools (14.0.3) version installed.</p>
+        </div>
+      </div>
+      <div class="comment comment-4606142989761201752">
+        <div class="comment-header">
+          <a name="comment-4606142989761201752"></a>
+            <span class="author">melbic</span> wrote on <span class="date">2015-03-19 11:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>Same problem here. (OSX 10.10) I've got the newest pip (6.0.8) and setuptools (14.0.3) version installed.</p>
+        </div>
+      </div>
+      <div class="comment comment-7593605573280519542">
+        <div class="comment-header">
+          <a name="comment-7593605573280519542"></a>
+            <span class="author">mattip</span> wrote on <span class="date">2015-03-19 17:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>I can't reproduce this as I do not have a MacOS machine. The place to follow this up is on our issue tracker, https://bitbucket.org/pypy/numpy/issue/21<br><br>It would be most helpful to attach a full log from "pip install" and 'pypy -c "import numpy"' to that issue</p>
+        </div>
+      </div>
+      <div class="comment comment-7944098347287035155">
+        <div class="comment-header">
+          <a name="comment-7944098347287035155"></a>
+            <span class="author">Nimrod</span> wrote on <span class="date">2015-03-29 15:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>One way pypy might be able to outperform numpy is by eliminating temporaries. <br><br>Just converting the BLAS functions to chain operations efficiently and sometimes update in-place rather than allocating and de-allocating arrays should help a lot.</p>
+        </div>
+      </div>
+      <div class="comment comment-8801437651437937766">
+        <div class="comment-header">
+          <a name="comment-8801437651437937766"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2015-04-05 23:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is great! But I can't use this for almost any of my code before np.einsum is supported :/ IMO, it is a super useful function for almost anything. Any plans for supporting it?</p>
+        </div>
+      </div>
+      <div class="comment comment-4450709297250405468">
+        <div class="comment-header">
+          <a name="comment-4450709297250405468"></a>
+            <span class="author">mattip</span> wrote on <span class="date">2015-04-07 09:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>Koos Zevenhoven - we have plans to implement all of numpy. With that, it looks like einsum will take quite a bit of work</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

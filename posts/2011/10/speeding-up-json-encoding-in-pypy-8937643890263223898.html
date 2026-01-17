@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speeding up JSON encoding in PyPy | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2011/10/speeding-up-json-encoding-in-pypy-8937643890263223898.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Maciej Fijalkowski">
+<link rel="prev" href="pypy-goteborg-post-halloween-sprint-nov-7335004338996313725.html" title="PyPy Göteborg Post-Hallowe'en Sprint Nov 2nd - Nov 9th" type="text/html">
+<link rel="next" href="../11/gothenburg-sprint-report-8371395613874909242.html" title="Gothenburg sprint report" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Speeding up JSON encoding in PyPy">
+<meta property="og:url" content="https://www.pypy.org/posts/2011/10/speeding-up-json-encoding-in-pypy-8937643890263223898.html">
+<meta property="og:description" content="Hi
+Recently I spent a bit of effort into speeding up JSON in PyPy. I started with
+writing a benchmark, which is admittedly not a very good one, but it's
+better than nothing (suggestions on how to impr">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2011-10-27T15:48:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Speeding up JSON encoding in PyPy</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2011-10-27T15:48:00Z" itemprop="datePublished" title="2011-10-27 15:48">2011-10-27 15:48</time></a>
+            </p>
+                <p class="commentline">13 comments</p>
+
+                <p class="commentline">            <a href="speeding-up-json-encoding-in-pypy-8937643890263223898.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Hi</p>
+<p>Recently I spent a bit of effort into speeding up JSON in PyPy. I started with
+writing a <a class="reference external" href="https://bitbucket.org/pypy/benchmarks/src/f04d6d63ba60/own/json_bench.py">benchmark</a>, which is admittedly not a very good one, but it's
+better than nothing (suggestions on how to improve it are welcome!).</p>
+<p>For this particular benchmark, the numbers are as follow. <strong>Note that CPython by
+default uses the optimized C extension, while PyPy uses the pure Python one</strong>.
+PyPy trunk contains another pure Python version which has been optimized
+specifically for the PyPy JIT. Detailed optimizations are described later in
+this post.</p>
+<p>The number reported is the time taken for the third run, when things are
+warmed up. Full session <a class="reference external" href="https://paste.pocoo.org/show/498988/">here</a>.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="68%">
+<col width="32%">
+</colgroup>
+<tbody valign="top">
+<tr>
+<td>CPython 2.6</td>
+<td>22s</td>
+</tr>
+<tr>
+<td>CPython 2.7</td>
+<td><strong>3.7s</strong></td>
+</tr>
+<tr>
+<td>CPython 2.7 no C extension</td>
+<td>44s</td>
+</tr>
+<tr>
+<td>PyPy 1.5</td>
+<td>34s</td>
+</tr>
+<tr>
+<td>PyPy 1.6</td>
+<td>22s</td>
+</tr>
+<tr>
+<td>PyPy trunk</td>
+<td><strong>3.3s</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Lessons learned:</p>
+<div class="section" id="expectations-are-high">
+<h3>Expectations are high<a href="#expectations-are-high" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>A lot of performance critical stuff in Python world is already written in a hand
+optimized C. Writing C (especially when you interface with CPython C API) is
+ugly and takes significant effort. This approach does not scale well when
+there is a lot of code to be written or when there is a very tight coupling
+between the part to be rewritten and the rest of the code. Still, people would
+expect PyPy to be better at "tasks" and not precisely at running equivalent
+code, hence a comparison between the C extension and the pure python version
+is sound. Fortunately it's possible to outperform the C extension, but requires
+a bit of effort on the programmer side as well.</p>
+</div>
+<div class="section" id="often-interface-between-the-c-and-python-part-is-ugly">
+<h3>Often interface between the C and Python part is ugly<a href="#often-interface-between-the-c-and-python-part-is-ugly" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>This is very clear if you look at json module as implemented in CPython's
+standard library. Not everything is in C (it would probably be just too
+much effort) and the interface to what is in C is guided via profiling not
+by what kind of interface makes sense. This especially is evident comparing CPython 2.6 to 2.7.
+Just adapting the code to an interface with C made the Python version slower.
+Removing this clutter improves the readability a lot and improves PyPy's version
+a bit, although I don't have hard numbers.</p>
+</div>
+<div class="section" id="jitviewer-is-crucial">
+<h3>JitViewer is crucial<a href="#jitviewer-is-crucial" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>In case you're fighting with PyPy's performance, <a class="reference external" href="https://bitbucket.org/pypy/jitviewer">jitviewer</a> is worth a shot.
+While it's not completely trivial to understand what's going on, it'll
+definitely show you what kind of loops got compiled and how.</p>
+</div>
+<div class="section" id="no-nice-and-fast-way-to-build-strings-in-python">
+<h3>No nice and fast way to build strings in Python<a href="#no-nice-and-fast-way-to-build-strings-in-python" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>PyPy has a custom thing called <tt class="docutils literal">__pypy__.builders.StringBuilder</tt>. It has
+a few a features that make it much easier to optimize than other ways like
+<tt class="docutils literal">str.join()</tt> or <tt class="docutils literal">cStringIO</tt>.</p>
+<ul class="simple">
+<li>You can specify the start size, which helps a lot if you can even provide
+a rough estimate on the size of the string (less copying)</li>
+<li>Only append and build are allowed. While  the string is being built you
+can't seek or do anything else. After it's built you can never append any more.</li>
+<li>Unicode version available as well as <tt class="docutils literal">__pypy__.builders.UnicodeBuilder</tt>.</li>
+</ul>
+</div>
+<div class="section" id="method-calls-are-ok-immutable-globals-are-ok">
+<h3>Method calls are ok, immutable globals are ok<a href="#method-calls-are-ok-immutable-globals-are-ok" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>PyPy's JIT seems to be good enough for at least the simple cases. Calling
+methods for common infrastructure or loading globals (instead of rebinding as
+locals) is fast enough and improves code readability.</p>
+</div>
+<div class="section" id="string-copying-is-expensive">
+<h3>String copying is expensive<a href="#string-copying-is-expensive" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p><b>Edit:</b> see the comment at the end</p>
+<p>If you use <tt class="docutils literal">re.sub</tt>, the current implementation will always create a copy
+of the string even if there was no match to replace.
+If you know your regexp is simple, first try to check if there is
+anything to replace. This is a pretty hard optimization to
+do automatically -- simply matching the regular expression can be too costly
+for it to make sense. In our particular example however, the regexp is really
+simple, checking ranges of characters. It also seems that this is by far the
+fastest way to escape characters as of now.</p>
+</div>
+<div class="section" id="generators-are-slower-than-they-should-be">
+<h3>Generators are slower than they should be<a href="#generators-are-slower-than-they-should-be" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>I changed the entire thing to simply call <tt class="docutils literal">builder.append</tt> instead of
+yielding to the main loop where it would be gathered. This is kind of a PyPy
+bug that using generators extensively is slower, but a bit hard to fix.
+Especially in cases where there is relatively little data being passed around
+(few bytes), it makes sense to gather it first. If I were to implement an
+efficient version of <tt class="docutils literal">iterencode</tt>, I would probably handle chunks of
+predetermined size, about 1000 bytes instead of yielding data every few bytes.</p>
+</div>
+<div class="section" id="i-must-admit-i-worked-around-pypy-s-performance-bug">
+<h3>I must admit I worked around PyPy's performance bug<a href="#i-must-admit-i-worked-around-pypy-s-performance-bug" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>For obscure (although eventually fixable) reasons, this:</p>
+<pre class="literal-block">
+for c in s: # s is string
+  del c
+</pre>
+<p>is faster than:</p>
+<pre class="literal-block">
+for c in s:
+  pass
+</pre>
+<p>This is a PyPy performance bug and should be fixed, but on a different branch ;-)</p>
+</div>
+<div class="section" id="pypy-s-jit-is-good">
+<h3>PyPy's JIT is good<a href="#pypy-s-jit-is-good" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>I was pretty surprised, but the JIT actually did make stuff work nicely.
+The changes that were done were relatively minor and straightforward, once
+the module was cleaned to the normal "pythonic" state.
+It is worth noting that it's possible to write code in Python and make it
+run really fast, but you have to be a bit careful. Again, jitviewer is your
+friend when determining why things are slow. I hope we can write more tools
+in the future that would more automatically guide people through potential
+performance pitfals.</p>
+<p>Cheers,
+fijal</p>
+<p><b>Edit:</b> I was wrong about re.sub. It just seems to be that the JIT is figuring match better than sub, will be fixed soon</p>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="pypy-goteborg-post-halloween-sprint-nov-7335004338996313725.html" rel="prev" title="PyPy Göteborg Post-Hallowe'en Sprint Nov 2nd - Nov 9th">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../11/gothenburg-sprint-report-8371395613874909242.html" rel="next" title="Gothenburg sprint report">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-7574559417447673978">
+        <div class="comment-header">
+          <a name="comment-7574559417447673978"></a>
+            <span class="author">Ian McKellar</span> wrote on <span class="date">2011-10-27 17:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>It would be neat to get UnicodeBuilder and StringBuilder in to mainline Python. They'd be more efficient in CPython than existing string construction methods and it would be easier to write more performant portable Python.</p>
+        </div>
+      </div>
+      <div class="comment comment-8806854308915764944">
+        <div class="comment-header">
+          <a name="comment-8806854308915764944"></a>
+            <span class="author">Yury S</span> wrote on <span class="date">2011-10-27 17:32</span>:
+        </div>
+        <div class="comment-content">
+          <p>Can you elaborate a bit on the slowness of generators?</p>
+        </div>
+      </div>
+      <div class="comment comment-6992109462985946837">
+        <div class="comment-header">
+          <a name="comment-6992109462985946837"></a>
+            <span class="author">Alex</span> wrote on <span class="date">2011-10-27 17:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>Ian: yes it would, python-ideas/dev has had this discussion many times, if you want to convince them of the merit of this idea, feel free to try, but I've gotten weary of this discussion</p>
+        </div>
+      </div>
+      <div class="comment comment-6177106367663044899">
+        <div class="comment-header">
+          <a name="comment-6177106367663044899"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-10-27 23:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is not meant to derail the rather nice performance numbers, but I wouldn't call the json/simplejson code "pythonic" in the first place.</p>
+        </div>
+      </div>
+      <div class="comment comment-1129306586176255834">
+        <div class="comment-header">
+          <a name="comment-1129306586176255834"></a>
+            <span class="author">Gaëtan de Menten</span> wrote on <span class="date">2011-10-28 07:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>I wonder if using a constant object to dump in each iteration doesn't skew the benchmark in favor of pypy, whereas the jit couldn't optimize as much with a varying object (which is what usually happens in real-life scenarios).</p>
+        </div>
+      </div>
+      <div class="comment comment-1199696093246607701">
+        <div class="comment-header">
+          <a name="comment-1199696093246607701"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-10-28 07:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Gaetan it certainly could in theory. In practice it does not occur here, but I only know that from looking at traces. However, creating a new object each time would make the benchmark more of an object creation one (probably GC related)</p>
+        </div>
+      </div>
+      <div class="comment comment-6674892147338886083">
+        <div class="comment-header">
+          <a name="comment-6674892147338886083"></a>
+            <span class="author">Gaëtan de Menten</span> wrote on <span class="date">2011-10-28 07:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Maciej: not if you build the list of objects to dump out of the timed loop, or did I miss something?</p>
+        </div>
+      </div>
+      <div class="comment comment-7242058997833825567">
+        <div class="comment-header">
+          <a name="comment-7242058997833825567"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-10-28 07:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>True, that might be a bit biggish though. Anyway as I said, it's good enough, JIT does not assume such things are constant. In fact it would execute exactly the same code for similarily shaped objects (different if all objects slightly differ in shape though)</p>
+        </div>
+      </div>
+      <div class="comment comment-7836719841169051889">
+        <div class="comment-header">
+          <a name="comment-7836719841169051889"></a>
+            <span class="author">James Thiele</span> wrote on <span class="date">2011-10-28 16:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>Interfacing Python to C isn't ugly if you use Cython.</p>
+        </div>
+      </div>
+      <div class="comment comment-5978054637190232838">
+        <div class="comment-header">
+          <a name="comment-5978054637190232838"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-10-28 16:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>That is probably a matter of taste which we should not discuss among gentleman, I however find pure python better than Python-Cython-C combination. Also parsing JSON in C is not fun at all.</p>
+        </div>
+      </div>
+      <div class="comment comment-1870317140367580967">
+        <div class="comment-header">
+          <a name="comment-1870317140367580967"></a>
+            <span class="author">Leonardo Santagada</span> wrote on <span class="date">2011-10-31 19:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>The guys from ultrajson have a benchmark here https://github.com/esnme/ultrajson/blob/master/python/benchmark.py<br><br>and the results are in the README https://github.com/esnme/ultrajson/blob/master/README<br><br>would be interesting to run those benchmarks (of course, first warming up the jit), and comparing the results to ultrajson.</p>
+        </div>
+      </div>
+      <div class="comment comment-1940767933922280029">
+        <div class="comment-header">
+          <a name="comment-1940767933922280029"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-10-31 20:43</span>:
+        </div>
+        <div class="comment-content">
+          <p>feel free leonardo :)</p>
+        </div>
+      </div>
+      <div class="comment comment-3417137455281533285">
+        <div class="comment-header">
+          <a name="comment-3417137455281533285"></a>
+            <span class="author">Leonardo Santagada</span> wrote on <span class="date">2011-11-01 14:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>It was just a suggestion on how to improve it, like you asked. If it was just going to be ignored I would not have bothered.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

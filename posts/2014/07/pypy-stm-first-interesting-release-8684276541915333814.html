@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy-STM: first "interesting" release | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2014/07/pypy-stm-first-interesting-release-8684276541915333814.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="../06/pypy3-231-fulcrum-3765964217640322884.html" title="PyPy3 2.3.1 - Fulcrum" type="text/html">
+<link rel="next" href="../08/a-field-test-of-software-transactional-5659022209916605798.html" title="A Field Test of Software Transactional Memory Using the RSqueak Smalltalk VM" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content='PyPy-STM: first "interesting" release'>
+<meta property="og:url" content="https://www.pypy.org/posts/2014/07/pypy-stm-first-interesting-release-8684276541915333814.html">
+<meta property="og:description" content="Hi all,
+
+PyPy-STM is now reaching a point where we can say it's good enough to be
+a GIL-less Python.  (We don't guarantee there are no more bugs, so please
+report them :-)  The first official STM rele">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2014-07-05T09:37:00Z">
+<meta property="article:tag" content="releasestm">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">PyPy-STM: first "interesting" release</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2014-07-05T09:37:00Z" itemprop="datePublished" title="2014-07-05 09:37">2014-07-05 09:37</time></a>
+            </p>
+                <p class="commentline">20 comments</p>
+
+                <p class="commentline">            <a href="pypy-stm-first-interesting-release-8684276541915333814.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Hi all,</p>
+
+<p>PyPy-STM is now reaching a point where we can say it's good enough to be
+a GIL-less Python.  (We don't guarantee there are no more bugs, so please
+report them :-)  The first official STM release:</p>
+
+<ul>
+<li>
+<a href="https://bitbucket.org/pypy/pypy/downloads/pypy-stm-2.3-r2-linux64.tar.bz2">pypy-stm-2.3-r2-linux64</a>
+<br><i>(UPDATE: this is release r2, fixing a systematic segfault at start-up on some systems)</i>
+</li>
+</ul>
+<p>This corresponds roughly to PyPy 2.3 (not 2.3.1).  It requires 64-bit
+Linux.  More precisely, this release is built for Ubuntu 12.04 to 14.04;
+you can also <a href="https://pypy.org/download.html#building-from-source">rebuild it
+from source</a> by getting the branch <strong>stmgc-c7</strong>.  You need
+clang to compile, and you need a <a href="https://bitbucket.org/pypy/stmgc/src/default/c7/llvmfix/">patched
+version of llvm</a>.</p>
+
+<p>This version's performance can reasonably be compared with a regular
+PyPy, where both include the JIT.  Thanks for following the meandering progress of PyPy-STM over the past three years --- we're finally getting somewhere really interesting!  We cannot thank enough all contributors to the <a href="https://pypy.org/tmdonate.html">previous PyPy-STM money pot</a> that made this possible.  And, although this blog post is focused on the results from that period of time, I have of course to remind you that we're running a <a href="https://pypy.org/tmdonate2.html">second call for donation</a> for future work, which I will briefly mention again later.</p>
+
+<p>A recap of what we did to get there: <a href="../02/rewrites-of-stm-core-model-again-633249729751034512.html">around the start of the year</a> we found a new model, a "redo-log"-based STM which uses a couple of hardware tricks to not require chasing pointers, giving it (in this context) exceptionally cheap read barriers.  This idea <a href="../03/hi-all-here-is-one-of-first-full-pypys-8725931424559481728.html">was developed</a> over the following months and (relatively) easily <a href="../04/stm-results-and-second-call-for-1767845182888902777.html">integrated with the JIT compiler</a>.  The most recent improvements on the Garbage Collection side are closing the gap with a regular PyPy (there is still a bit more to do there).  There is some <a href="https://pypy.readthedocs.org/en/latest/stm.html">preliminary user documentation</a>.</p>
+
+<p>Today, the result of this is a PyPy-STM that is capable of running pure Python code on multiple threads in parallel, as we will show in the benchmarks that follow.  A quick warning: this is only about pure Python code.  We didn't try so far to optimize the case where most of the time is spent in external libraries, or even manipulating "raw" memory like <code>array.array</code> or numpy arrays.  To some extent there is no point because the approach of CPython works well for this case, i.e. releasing the GIL around the long-running operations in C.  Of course it would be nice if such cases worked as well in PyPy-STM --- which they do to some extent; but checking and optimizing that is future work.</p>
+
+<p>As a starting point for our benchmarks, when running code that
+only uses one thread, we get a slow-down between 1.2 and 3: at worst,
+three times as slow; at best only 20% slower than a regular
+PyPy.  This worst case has been brought down --it used to be 10x-- by
+recent work on "card marking", a useful GC technique that is also
+present in the regular PyPy (and about which I don't find any blog post;
+maybe we should write one :-)  The main remaining issue is fork(), or
+any function that creates subprocesses: it works, but is very slow.  To
+remind you of this fact, it prints a line to stderr when used.</p>
+
+<p>Now the real main part: when you run multithreaded code, it scales very nicely with two
+threads, and less-than-linearly but still not badly with three or four
+threads.  Here is an artificial example:</p>
+
+<pre>    total = 0
+    lst1 = ["foo"]
+    for i in range(100000000):
+        lst1.append(i)
+        total += lst1.pop()</pre>
+
+<p>We run this code N times, once in each of N threads
+(<a href="https://bitbucket.org/pypy/benchmarks/raw/default/multithread/minibench1.py">full
+benchmark</a>).  Run times, best of three:</p>
+
+<table border="1" cellpadding="5"><tbody>
+<tr>
+<td>Number of threads</td>
+    <td>Regular PyPy (head)</td>
+    <td>PyPy-STM</td>
+</tr>
+<tr>
+<td>N = 1</td>
+    <td>real <strong>0.92s</strong> <br>
+user+sys 0.92s</td>
+    <td>real <strong>1.34s</strong> <br>
+user+sys 1.34s</td>
+</tr>
+<tr>
+<td>N = 2</td>
+    <td>real <strong>1.77s</strong> <br>
+user+sys 1.74s</td>
+    <td>real <strong>1.39s</strong> <br>
+user+sys 2.47s</td>
+</tr>
+<tr>
+<td>N = 3</td>
+    <td>real <strong>2.57s</strong> <br>
+user+sys 2.56s</td>
+    <td>real <strong>1.58s</strong> <br>
+user+sys 4.106s</td>
+</tr>
+<tr>
+<td>N = 4</td>
+    <td>real <strong>3.38s</strong> <br>
+user+sys 3.38s</td>
+    <td>real <strong>1.64s</strong> <br>
+user+sys 5.35s</td>
+</tr>
+</tbody></table>
+<p>(The "real" time is the wall clock time.  The "user+sys" time is the
+recorded CPU time, which can be larger than the wall clock time if
+multiple CPUs run in parallel.  This was run on a 4x2 cores machine.
+For direct comparison, avoid loops that are so trivial
+that the JIT can remove <b>all</b> allocations from them: right now
+PyPy-STM does not handle this case well.  It has to force a dummy allocation
+in such loops, which makes minor collections occur much more frequently.)</p>
+
+<p>Four threads is the limit so far: only four threads can be executed in
+parallel.  Similarly, the memory usage is limited to 2.5 GB of GC
+objects.  These two limitations are not hard to increase, but at least
+increasing the memory limit requires fighting against more LLVM bugs.
+(Include here snark remarks about LLVM.)</p>
+
+<p>Here are some measurements from more real-world benchmarks.  This time,
+the amount of work is fixed and we parallelize it on T threads.  The first benchmark is just running <a href="https://pypy.org/download.html#building-from-source">translate.py</a> on a trunk PyPy.  The last
+three benchmarks are <a href="https://bitbucket.org/pypy/benchmarks/src/default/multithread/">here</a>.</p>
+
+<table border="1" cellpadding="5"><tbody>
+<tr>
+<td>Benchmark</td>
+    <td>PyPy 2.3</td>
+    <td bgcolor="#A0A0A0">(PyPy head)</td>
+    <td>PyPy-STM, T=1</td>
+    <td>T=2</td>
+    <td>T=3</td>
+    <td>T=4</td>
+</tr>
+<tr>
+<td>
+<code>translate.py --no-allworkingmodules</code><br>
+(annotation step)</td>
+    <td>184s</td>
+    <td bgcolor="#A0A0A0">(170s)</td>
+    <td>386s (2.10x)</td>
+    <td colspan="3">n/a</td>
+</tr>
+<tr>
+<td>multithread-richards<br>
+5000 iterations</td>
+    <td>24.2s</td>
+    <td bgcolor="#A0A0A0">(16.8s)</td>
+    <td>52.5s (2.17x)</td>
+    <td>37.4s (1.55x)</td>
+    <td>25.9s (1.07x)</td>
+    <td>32.7s (1.35x)</td>
+</tr>
+<tr>
+<td>mandelbrot<br>
+divided in 16-18 bands</td>
+    <td>22.9s</td>
+    <td bgcolor="#A0A0A0">(18.2s)</td>
+    <td>27.5s (1.20x)</td>
+    <td>14.4s (0.63x)</td>
+    <td>10.3s (0.45x)</td>
+    <td>8.71s (0.38x)</td>
+</tr>
+<tr>
+<td>btree</td>
+    <td>2.26s</td>
+    <td bgcolor="#A0A0A0">(2.00s)</td>
+    <td>2.01s (0.89x)</td>
+    <td>2.22s (0.98x)</td>
+    <td>2.14s (0.95x)</td>
+    <td>2.42s (1.07x)</td>
+</tr>
+</tbody></table>
+<p>This shows various cases that can occur:</p>
+
+<ul>
+<li>The mandelbrot example runs with minimal overhead and very good parallelization.
+It's dividing the plane to compute in bands, and each of the T threads receives the
+same number of bands.
+
+</li>
+<li>Richards, a classical benchmark for PyPy (tweaked to run the iterations
+in multiple threads), is hard to beat on regular PyPy:
+we suspect that the difference is due to the fact that a lot of
+paths through the loops don't allocate, triggering the issue already
+explained above.  Moreover, the speed of Richards was again improved
+dramatically recently, in trunk.
+
+</li>
+<li>The translation benchmark measures the time <code>translate.py</code>
+takes to run the first phase only, "annotation" (for now it consumes too much memory
+to run <code>translate.py</code> to the end).  Moreover the timing starts only after the large number of
+subprocesses spawned at the beginning (mostly gcc).  This benchmark is not parallel, but we
+include it for reference here.  The slow-down factor of 2.1x is still too much, but
+we have some idea about the reasons: most likely, again the Garbage Collector, missing the regular PyPy's
+very fast small-object allocator for old objects.  Also, <code>translate.py</code>
+is an example of application that could, with
+reasonable efforts, be made largely parallel in the future using <i>atomic blocks.</i>
+
+</li>
+<li>Atomic blocks are also present in the btree benchmark.  I'm not completely sure
+but it seems that, in this case, the atomic blocks create too many
+conflicts between the threads for actual parallization: the base time is very good,
+but running more threads does not help at all.
+</li>
+</ul>
+<p>As a summary, PyPy-STM looks already useful to run CPU-bound multithreaded
+applications.  We are certainly still going to fight slow-downs, but it
+seems that there are cases where 2 threads are enough to outperform a regular
+PyPy, by a large margin.  Please try it out on your own small examples!</p>
+
+<p>And, at the same time, please don't attempt to retrofit threads inside
+an existing large program just to benefit from PyPy-STM!
+Our goal is not to send everyone down the obscure route of multithreaded
+programming and its dark traps.  We are going finally to shift our main
+focus on the <a href="https://pypy.org/tmdonate2.html">phase 2 of our
+research</a> (donations welcome): how to enable a better way of writing multi-core programs.
+The starting point is to fix and test atomic blocks.  Then we will have to
+debug common causes of conflicts and fix them or work around them; and
+try to see how common frameworks like Twisted can be adapted.</p>
+
+<p>Lots of work ahead, but lots of work behind too :-)</p>
+
+<p>Armin (thanks Remi as well for the work).</p>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/releasestm.html" rel="tag">releasestm</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="../06/pypy3-231-fulcrum-3765964217640322884.html" rel="prev" title="PyPy3 2.3.1 - Fulcrum">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../08/a-field-test-of-software-transactional-5659022209916605798.html" rel="next" title="A Field Test of Software Transactional Memory Using the RSqueak Smalltalk VM">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-847304889041641602">
+        <div class="comment-header">
+          <a name="comment-847304889041641602"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-07-05 16:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>You're just extracting and running the "bin/pypy"?  It works for me on a very close configuration, Ubuntu 14.04 too...</p>
+        </div>
+      </div>
+      <div class="comment comment-6129373448166719029">
+        <div class="comment-header">
+          <a name="comment-6129373448166719029"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-07-05 20:13</span>:
+        </div>
+        <div class="comment-content">
+          <p>Yes.  Sorry, it doesn't make sense to me.  You need to debug with gdb, probably with an executable that has got the debugging symbols.  You need to either build it yourself, or recompile the pregenerated sources from: https://cobra.cs.uni-duesseldorf.de/~buildmaster/misc/pypy-c-r72356-stm-jit-SOURCE.txz</p>
+        </div>
+      </div>
+      <div class="comment comment-1718242961576777973">
+        <div class="comment-header">
+          <a name="comment-1718242961576777973"></a>
+            <span class="author">Ernst Sjöstrand</span> wrote on <span class="date">2014-07-05 23:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>If I try virtualenv I get:<br>virtualenv stmtest -p Projekt/pypy-stm-2.3-linux64/bin/pypy <br>Running virtualenv with interpreter Projekt/pypy-stm-2.3-linux64/bin/pypy<br>[forking: for now, this operation can take some time]<br>[forking: for now, this operation can take some time]<br>New pypy executable in stmtest/bin/pypy<br>[forking: for now, this operation can take some time]<br>ERROR: The executable stmtest/bin/pypy is not functioning<br>ERROR: It thinks sys.prefix is u'/home/ernst' (should be u'/home/ernst/stmtest')<br>ERROR: virtualenv is not compatible with this system or executable</p>
+        </div>
+      </div>
+      <div class="comment comment-7417758447888372077">
+        <div class="comment-header">
+          <a name="comment-7417758447888372077"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-07-06 08:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Ernst: sorry, it works fine for me as well.  I tried the pypy-stm provided here, both on a Ubuntu 12.04 and a Ubuntu 14.04 machine.  Maybe you have a too old virtualenv?  Does it work with regular PyPy?</p>
+        </div>
+      </div>
+      <div class="comment comment-316466071949263542">
+        <div class="comment-header">
+          <a name="comment-316466071949263542"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-07-07 12:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks to the author of the now-deleted comments, we could track and fix a bug that only shows up on some Linux systems.  If pypy-stm systematically segfaults at start-up for you too, try the "2.3-r2" release (see update in the post itself).</p>
+        </div>
+      </div>
+      <div class="comment comment-9180922439710098283">
+        <div class="comment-header">
+          <a name="comment-9180922439710098283"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-07-07 20:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is exciting! One minor bug in the actual post: you can describe slowdown / speedup in two different ways, with <i>total time</i> as a percentage of original time, or with <i>time difference</i> as a percentage of original time. You mention a 20% slowdown (clearly using the latter standard) and then a 300% slowdown, which you describe as 3x (suggesting that you use the former standard). To be consistent , you should either describe them as 120% and 300%, respectively (using the former standard), or 20% and 200%, respectively (using the latter standard).<br><br>Thanks!</p>
+        </div>
+      </div>
+      <div class="comment comment-3518498281907978124">
+        <div class="comment-header">
+          <a name="comment-3518498281907978124"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-07-07 21:35</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi again,<br><br>just to play around a little I've put together https://github.com/Tinche/stm-playground for myself.<br><br>I picked a generic CPU-bound problem (primality testing) and tried comparing multithreaded implementations in CPython 2.7, ordinary PyPy and PyPy-STM.<br><br>I figured this would be easily parallelizable (low conflicts) but it doesn't seem to be the case - I don't get all my cores pegged using the STM.<br><br>bench-threadpool.py, on my machine, gives about the same time for CPython and PyPy-STM, while ordinary PyPy totally smokes them both (even with the GIL :), one order of magnitude difference (20 sec vs 2 sec).<br><br>bench-threadpool-naive will crash the STM interpreter on my system. :)<br><br>Getting away from threads, CPython will actually beat PyPy in a multi-process scenario by a factor of 2, which I found surprising. CPython does indeed use up all my cores 100% while dealing with a process pool, while PyPy has won't even come close.<br><br>For the same workload, PyPy is actually faster running multithreaded with the GIL than multi-process, and fastest running with only 1 thread (expected, with the GIL only being overhead in this scenario).</p>
+        </div>
+      </div>
+      <div class="comment comment-2112283081867579797">
+        <div class="comment-header">
+          <a name="comment-2112283081867579797"></a>
+            <span class="author">Pim</span> wrote on <span class="date">2014-07-07 21:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is good news.  For many of my applications, an important feature in the next phase will be the optimization for <i>[..] the built-in dictionary type, for which we would like accesses and writes using independent keys to be truly independent [..]</i>.  My applications are mostly server applications (Twisted-based and others) that store state information on sessions/transactions in a small number of dictionaries that can have hundreds or thousands of entries concurrently, and would be accessed constantly.<br><br>I'm glad I donated and plan do so again in the future :-)</p>
+        </div>
+      </div>
+      <div class="comment comment-5209811594865201707">
+        <div class="comment-header">
+          <a name="comment-5209811594865201707"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-07-08 10:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Tin: I would tweak bench-queue.py to avoid a million inter-thread communications via the queue.  For example, run 1000 check_primes instead of just 1 for every number received from the queue.</p>
+        </div>
+      </div>
+      <div class="comment comment-655623208312316426">
+        <div class="comment-header">
+          <a name="comment-655623208312316426"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-07-08 11:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Tin: ...no, I tried too and it doesn't seem to help.  We'll need to look into this in more details....</p>
+        </div>
+      </div>
+      <div class="comment comment-6685757942855237486">
+        <div class="comment-header">
+          <a name="comment-6685757942855237486"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-07-08 21:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin I've pushed a version of bench-queue with a tweakable batch size and concurrency level. Doing the work in batches of, say, 1000 does indeed make it go faster with all implementations.<br><br>I've noticed pypy-stm runs have a large variance. It's not like I'm doing scientific measurements here, but for the queue test I'm getting runtimes from ~15 sec to ~27 sec, whereas for example ordinary PyPy is in the range 4.6 sec - 4.9 sec, and CPython ~22.5 - ~24.7, again, relatively close. Again, this is just something I noticed along the way and not the result of serious benchmarking in isolation.</p>
+        </div>
+      </div>
+      <div class="comment comment-2934799691602993962">
+        <div class="comment-header">
+          <a name="comment-2934799691602993962"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-07-10 08:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>Ooooof.  Ok, I found out what is wrong in bench-queue.  The issue is pretty technical, but basically if you add "with __pypy__.thread.atomic:" in the main top-level loop in worker(), then it gets vastly faster.  On my machine it beats the real-time speed of a regular pypy.  See https://bpaste.net/show/450553/<br><br>It clearly needs to be fixed...</p>
+        </div>
+      </div>
+      <div class="comment comment-212615962092206453">
+        <div class="comment-header">
+          <a name="comment-212615962092206453"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-07-10 09:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>Added an answer to the question "what about PyPy3?": https://pypy.readthedocs.org/en/latest/stm.html#python-3</p>
+        </div>
+      </div>
+      <div class="comment comment-331088964102585652">
+        <div class="comment-header">
+          <a name="comment-331088964102585652"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2014-07-12 01:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin, cool! I've found that the thread pool version can be sped up ~2-3x by wrapping the contents of check_prime with 'atomic' too.<br><br>One more observation: with the atomic context manager, on PyPy-STM the queue implementation will beat the thread pool implementation (slightly), which isn't the case for CPython or ordinary PyPy.</p>
+        </div>
+      </div>
+      <div class="comment comment-971976868841362148">
+        <div class="comment-header">
+          <a name="comment-971976868841362148"></a>
+            <span class="author">geerk</span> wrote on <span class="date">2014-07-16 08:16</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is exciting news! I think pypy is the future of python.</p>
+        </div>
+      </div>
+      <div class="comment comment-1750480159387933541">
+        <div class="comment-header">
+          <a name="comment-1750480159387933541"></a>
+            <span class="author">Canesin</span> wrote on <span class="date">2014-07-19 15:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>If you guys did a facelift on the website like yours HippyVM I believe the project would gain a lot of momentum, it is unfortunate but true that most company managers would visit it and think it is not industrial quality if an employ comes saying that they should sponsor developing something in PyPy.</p>
+        </div>
+      </div>
+      <div class="comment comment-232182151094407831">
+        <div class="comment-header">
+          <a name="comment-232182151094407831"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2014-07-20 11:26</span>:
+        </div>
+        <div class="comment-content">
+          <p>r2 still doesn't work for me (ubuntu 14.04, intel  Core2 CPU T7400)<br>bash: ./pypy: cannot execute binary file: Exec format error</p>
+        </div>
+      </div>
+      <div class="comment comment-4569742965503234967">
+        <div class="comment-header">
+          <a name="comment-4569742965503234967"></a>
+            <span class="author">isomorph</span> wrote on <span class="date">2014-07-31 05:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>this is a question for the guys developing PyPy... i am completely new to Python so please bear with me.<br><br>here is what i don't understand:  it seems to me that you are reinventing the wheel because doesn't the Oracle or Azul Systems JVM already provide a super performant GC and JIT? even STM is becoming available.  and since Jython can run on the JVM, why do PyPy at all?  <br><br>wouldn't a JVM compliant implementation of Python be more performant than PyPy or CPython?<br><br>or am i missing something here?<br><br>any pointers greatly appreciated. thanks.</p>
+        </div>
+      </div>
+      <div class="comment comment-5455837696108207648">
+        <div class="comment-header">
+          <a name="comment-5455837696108207648"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2014-08-04 08:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>Having a JIT in the JVM is very different from having a JIT that can understand Python.  For proof, the best (and only) implementation of Python on the JVM, Jython, is running at around CPython speed (generally a bit slower).  I suspect that STM is similarly not designed for the purposes to which Jython would put it and would thus perform poorly.  The only part that would probably work out of the box would be the GC.  A more subtle argument against starting from the JVM is that of semantic mismatch.  See for example https://www.stups.uni-duesseldorf.de/mediawiki/images/5/51/Pypy.pdf</p>
+        </div>
+      </div>
+      <div class="comment comment-9038957033110235106">
+        <div class="comment-header">
+          <a name="comment-9038957033110235106"></a>
+            <span class="author">isomorph</span> wrote on <span class="date">2014-08-04 14:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>awesome!  thanks a lot armin.  :D</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

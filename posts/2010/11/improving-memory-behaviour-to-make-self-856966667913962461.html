@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Improving Memory Behaviour to Make Self-Hosted PyPy Translations Practical | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2010/11/improving-memory-behaviour-to-make-self-856966667913962461.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Antonio Cuni">
+<link rel="prev" href="running-large-radio-telescope-software-7600337209616168504.html" title="Running large radio telescope software on top of PyPy and twisted" type="text/html">
+<link rel="next" href="pypy-14-ouroboros-in-practice-5437628000869417542.html" title="PyPy 1.4: Ouroboros in practice" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Improving Memory Behaviour to Make Self-Hosted PyPy Translations Pract">
+<meta property="og:url" content="https://www.pypy.org/posts/2010/11/improving-memory-behaviour-to-make-self-856966667913962461.html">
+<meta property="og:description" content="In our previous blog post, we talked about how fast PyPy can translate
+itself compared to CPython.  However, the price to pay for the 2x speedup was
+an huge amount of memory: actually, it was so huge ">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2010-11-26T12:51:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Improving Memory Behaviour to Make Self-Hosted PyPy Translations Practical</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2010-11-26T12:51:00Z" itemprop="datePublished" title="2010-11-26 12:51">2010-11-26 12:51</time></a>
+            </p>
+                <p class="commentline">10 comments</p>
+
+                <p class="commentline">            <a href="improving-memory-behaviour-to-make-self-856966667913962461.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>In our <a class="reference external" href="snake-which-bites-its-tail-pypy-jitting-5161284681004717142.html">previous blog post</a>, we talked about how fast PyPy can translate
+itself compared to CPython.  However, the price to pay for the 2x speedup was
+an huge amount of memory: actually, it was so huge that a standard <tt class="docutils literal"><span class="pre">-Ojit</span></tt>
+compilation could not be completed on 32-bit because it required more than the
+4 GB of RAM that are addressable on that platform.  On 64-bit, it consumed
+8.3 GB of RAM instead of the 2.3 GB needed by CPython.</p>
+<p>This behavior was mainly caused by the JIT, because at the time we wrote the
+blog post the generated assembler was kept alive forever, together with some
+big data structure needed to execute it.</p>
+<p>In the past two weeks Anto and Armin attacked the issue in the <tt class="docutils literal"><span class="pre">jit-free</span></tt>
+branch, which has been recently <a class="reference external" href="https://codespeak.net/pipermail/pypy-svn/2010-November/045019.html">merged</a> to trunk.  The branch solves several
+issues. The main idea of the branch is that if a
+loop has not been executed for a certain amount of time (controlled by the new
+<tt class="docutils literal">loop_longevity</tt> JIT parameter) we consider it "old" and no longer needed,
+thus we deallocate it.</p>
+<p>(In the process of doing this, we also discovered and fixed an
+oversight in the implementation of generators, which led to generators being
+freed only very slowly.)</p>
+<p>To understand the freeing of loops some more, let's look at how many loops are
+actually created during a translation.
+The purple line in the following graph shows how many loops (and bridges) are
+alive at any point in time with an infinite longevity, which is equivalent to
+the situation we had before the <tt class="docutils literal"><span class="pre">jit-free</span></tt> branch.  By contrast, the blue
+line shows the number of loops that you get in the current trunk: the
+difference is evident, as now we never have more than 10000 loops alive, while
+previously we got up to about 37000 ones.  The time on the X axis is expressed
+in "Giga Ticks", where a tick is the value read out of the <a class="reference external" href="https://en.wikipedia.org/wiki/Time_Stamp_Counter">Time Stamp Counter</a>
+of the CPU.</p>
+
+<a href="https://3.bp.blogspot.com/_4gR6Ggu8oHQ/TO-wIZWQVmI/AAAAAAAAAKs/J4PKLIFxxOc/s1600/loop-longevity-64-gcdelta.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5543843324606043746" src="https://3.bp.blogspot.com/_4gR6Ggu8oHQ/TO-wIZWQVmI/AAAAAAAAAKs/J4PKLIFxxOc/s600/loop-longevity-64-gcdelta.png" style="cursor: pointer; cursor: hand; width: 600px; height: 306px;"></a>
+
+<p>The grey vertical bars represent the beginning of each phase of the
+translation:</p>
+<ul class="simple">
+<li>
+<tt class="docutils literal">annotate</tt> performs control flow graph construction and type inference.</li>
+<li>
+<tt class="docutils literal">rtype</tt> lowers the abstraction level of the control flow graphs with types to that of C.</li>
+<li>
+<tt class="docutils literal">pyjitpl</tt> constructs the JIT.</li>
+<li>
+<tt class="docutils literal">backendopt</tt> optimizes the control flow graphs.</li>
+<li>
+<tt class="docutils literal">stackcheckinsertion</tt> finds the places in the call graph that can overflow the C stack and inserts checks that raise an exception instead.</li>
+<li>
+<tt class="docutils literal">database_c</tt> produces a database of all the objects the C code will have to know about.</li>
+<li>
+<tt class="docutils literal">source_c</tt> produces the C source code.</li>
+<li>
+<tt class="docutils literal">compile_c</tt> calls the compiler to produce the executable.</li>
+</ul>
+<p>You can nicely see, how the number of alive graphs drops shortly after the
+beginning of a new phase.</p>
+<p>Those two fixes, freeing loops and generators, improve the memory usage greatly:
+now, translating PyPy
+on PyPy on 32-bit consumes 2 GB of RAM, while on CPython it consumes 1.1 GB.
+This result can even be improved somewhat, because we are not actually freeing
+the assembler code itself, but
+only the large data structures around it; we can consider it as a residual
+memory leak of around 150 MB in this case.  This will be fixed in the
+<a class="reference external" href="https://codespeak.net/svn/pypy/branch/jit-free-asm/">jit-free-asm</a> branch.</p>
+<p>The following graph shows the memory usage in more detail:</p>
+<blockquote>
+<ul class="simple">
+<li>the blue line (<strong>cpython-scaled</strong>) shows the total amount of RAM that the
+OS allocates for CPython.  Note that the X axis (the time) has been
+scaled down so that it spans as much as the PyPy one, to ease the
+comparison. Actually, CPython took more than twice as much time as PyPy to
+complete the translation</li>
+<li>the red line (<strong>VmRss</strong>) shows the total amount of RAM that the
+OS allocates for PyPy: it includes both the memory directly handled by
+our GC and the "raw memory" that we need to allocate for other tasks, such
+as the assembly code generated by the JIT</li>
+<li>the brown line (<strong>gc-before</strong>) shows how much memory is used by the GC
+before each major collection</li>
+<li>the yellow line (<strong>gc-after</strong>) shows how much memory is used by the GC
+after each major collection: this represent the amount of memory which is
+actually needed to hold our Python objects.  The difference between
+gc-before and gc-after (the <em>GC delta</em>) is the amout of memory that the GC
+uses before triggering a new major collection</li>
+</ul>
+</blockquote>
+
+<a href="https://1.bp.blogspot.com/_4gR6Ggu8oHQ/TO-wX3gomAI/AAAAAAAAAK0/sQhn6oMjWdY/s1600/memory-32.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5543843590400677890" src="https://1.bp.blogspot.com/_4gR6Ggu8oHQ/TO-wX3gomAI/AAAAAAAAAK0/sQhn6oMjWdY/s600/memory-32.png" style="cursor: pointer; cursor: hand; width: 600px; height: 306px;"></a>
+
+<p>By comparing <strong>gc-after</strong> and <strong>cpython-scaled</strong>, we can see that PyPy
+uses mostly the same amount of memory as CPython for storing the application
+objects (due to reference counting the memory usage in CPython is always very
+close to the actually necessary memory).  The extra memory
+used by PyPy is due to the GC delta, to the machine code generated by the JIT
+and probably to some other external effect (such as e.g. <a class="reference external" href="https://en.wikipedia.org/wiki/Memory_fragmentation">Memory
+Fragmentation</a>).</p>
+<p>Note that the GC delta can be set arbitrarly low (another recent addition --
+the default value depends on the actual RAM on your computer; it probably
+works to translate if your computer has precisely 2 GB, because in this
+case the GC delta and thus the total memory usage will be somewhat
+lower than reported here), but the cost is to have more
+frequent major collections and thus a higher run-time overhead.  The same is
+true for the memory needed by the JIT, which can be reduced by telling the JIT
+to compile less often or to discard old loops more frequently.  As often
+happens in computer science, there is a trade-off between space and time, and
+currently for this particular example PyPy runs twice as fast as CPython by
+doubling the memory usage. We hope to improve even more on this trade-off.</p>
+<p>On 64-bit, things are even better as shown by the the following graph:</p>
+
+<a href="https://1.bp.blogspot.com/_4gR6Ggu8oHQ/TO-whfBmjLI/AAAAAAAAAK8/eUOmx59dA80/s1600/memory-64-gcdelta.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5543843755626761394" src="https://1.bp.blogspot.com/_4gR6Ggu8oHQ/TO-whfBmjLI/AAAAAAAAAK8/eUOmx59dA80/s600/memory-64-gcdelta.png" style="cursor: pointer; cursor: hand; width: 600px; height: 306px;"></a>
+
+<p>The general shape of the lines is similar to the 32-bit graph. However, the
+relative difference to CPython is much better: we need about 3 GB of RAM, just
+24% more than the 2.4 GB needed by CPython.  And we are still more than 2x
+faster!</p>
+<p>The memory saving is due (partly?) to the vtable ptr optimization, which is
+enabled by default on 64-bit because it has no speed penalty (see
+<a class="reference external" href="../../2009/10/gc-improvements-6174120095428192954.html">Unifying the vtable ptr with the GC header</a>).</p>
+<p>The net result of our work is that now translating PyPy on PyPy is practical
+and takes less than 30 minutes.  It's impressive how quickly you get used to
+translation taking half the time -- now we cannot use CPython any more for that
+because it feels too slow :-).</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="running-large-radio-telescope-software-7600337209616168504.html" rel="prev" title="Running large radio telescope software on top of PyPy and twisted">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy-14-ouroboros-in-practice-5437628000869417542.html" rel="next" title="PyPy 1.4: Ouroboros in practice">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-4950732767191711545">
+        <div class="comment-header">
+          <a name="comment-4950732767191711545"></a>
+            <span class="author">crncosta</span> wrote on <span class="date">2010-11-26 16:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>Big huge improvement since last post. Kudos!! :-)<br><br>Please don't get me wrong, but I need to ask: is there any plan to merge pypy into cPython (or even replace it)?<br><br>BTW, I'm following the blog (please, keep this regular posts) and planing to make a donation to support your next sprint due to the regular and very well done work.<br><br>congratulations again.</p>
+        </div>
+      </div>
+      <div class="comment comment-3139180760487800094">
+        <div class="comment-header">
+          <a name="comment-3139180760487800094"></a>
+            <span class="author">Martijn Faassen</span> wrote on <span class="date">2010-11-26 17:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is incredibly cool! Congrats!</p>
+        </div>
+      </div>
+      <div class="comment comment-7025512732564064311">
+        <div class="comment-header">
+          <a name="comment-7025512732564064311"></a>
+            <span class="author">Leonardo Santagada</span> wrote on <span class="date">2010-11-26 17:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is amazing. It was kind of a let down when you reported it used too much memory. But now I can on my laptop translate pypy in 32 and 64 bits using pypy itself :)<br><br>The world is good again :)</p>
+        </div>
+      </div>
+      <div class="comment comment-8272560978038036502">
+        <div class="comment-header">
+          <a name="comment-8272560978038036502"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2010-11-26 17:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>@crncosta<br><br>There are no plans for merging PyPy to CPython. I don't think "replacing" is a good word, but you can use PyPy for a lot of things already, so it is a viable Python implementation together with CPython.</p>
+        </div>
+      </div>
+      <div class="comment comment-1957260981826150935">
+        <div class="comment-header">
+          <a name="comment-1957260981826150935"></a>
+            <span class="author">Luis</span> wrote on <span class="date">2010-11-26 18:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>I am curious... Has there ever been interest from Google to sponsor this project?<br>I know about unladen swallow, but has anyone there expressed interest in using pypy somewhere in their organization?<br><br>Sorry for the off topic question...</p>
+        </div>
+      </div>
+      <div class="comment comment-5391894609060204294">
+        <div class="comment-header">
+          <a name="comment-5391894609060204294"></a>
+            <span class="author">Peter</span> wrote on <span class="date">2010-11-26 18:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>Always fascinating to read about the work you're doing.  Please keep posting, and keep up the good work.  You really are heroes.</p>
+        </div>
+      </div>
+      <div class="comment comment-6012478128672522590">
+        <div class="comment-header">
+          <a name="comment-6012478128672522590"></a>
+            <span class="author">WI</span> wrote on <span class="date">2010-11-27 01:09</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wow! this is great news.. keep us posted on what other developments you have.</p>
+        </div>
+      </div>
+      <div class="comment comment-6113702063840466327">
+        <div class="comment-header">
+          <a name="comment-6113702063840466327"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2010-11-27 05:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>like luis i am also curious about why google doesn't show a lot more interest in pypy. unladen swallow didn't really work out or did it?</p>
+        </div>
+      </div>
+      <div class="comment comment-4495003157966448533">
+        <div class="comment-header">
+          <a name="comment-4495003157966448533"></a>
+            <span class="author">Symbol</span> wrote on <span class="date">2010-11-27 11:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Kudos!<br><br>KUTGW!!</p>
+        </div>
+      </div>
+      <div class="comment comment-7289962563710841452">
+        <div class="comment-header">
+          <a name="comment-7289962563710841452"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2010-11-28 08:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>Congrats!</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

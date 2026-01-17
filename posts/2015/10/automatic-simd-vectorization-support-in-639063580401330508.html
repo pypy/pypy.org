@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automatic SIMD vectorization support in PyPy | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2015/10/automatic-simd-vectorization-support-in-639063580401330508.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Richard Plangger">
+<link rel="prev" href="powerpc-backend-for-jit-3014100267884692148.html" title="PowerPC backend for the JIT" type="text/html">
+<link rel="next" href="pypy-400-released-jit-with-simd-8282134928733384063.html" title="PyPy 4.0.0 Released - A Jit with SIMD Vectorization and More" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Automatic SIMD vectorization support in PyPy">
+<meta property="og:url" content="https://www.pypy.org/posts/2015/10/automatic-simd-vectorization-support-in-639063580401330508.html">
+<meta property="og:description" content='Hi everyone,
+
+it took some time to catch up with the JIT refacrtorings merged in this summer. But, (drums) we are happy to announce that:
+
+
+The next release of PyPy,  "PyPy 4.0.0", will ship the new a'>
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2015-10-20T14:38:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Automatic SIMD vectorization support in PyPy</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/richard-plangger.html">Richard Plangger</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2015-10-20T14:38:00Z" itemprop="datePublished" title="2015-10-20 14:38">2015-10-20 14:38</time></a>
+            </p>
+                <p class="commentline">5 comments</p>
+
+                <p class="commentline">            <a href="automatic-simd-vectorization-support-in-639063580401330508.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <div dir="ltr" style="text-align: left;">
+Hi everyone,<br><br>
+it took some time to catch up with the JIT refacrtorings merged in this summer. <span style="font-size: small;">But, (drums) we are happy to announce that:</span><br><br><h2 style="text-align: center;" id="the-next-release-of-pypy-pypy-400-will-ship-the-new-auto-vectorizer">
+<span style="font-size: large;">The next release of PyPy,  "PyPy 4.0.0", will ship the new auto vectorizer</span>
+<a href="#the-next-release-of-pypy-pypy-400-will-ship-the-new-auto-vectorizer" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<span style="font-size: small;">The goal of this project was to increase the speed of numerical applications in both the NumPyPy library and for arbitrary Python programs. In PyPy we have focused a lot on improvements in the 'typical python workload',  which usually involves object and string manipulations, mostly for web development. We're hoping with this work that we'll continue improving the other very important Python use case - numerics.</span><br><br><h2 id="what-it-can-do">
+<span style="font-size: small;"><span style="font-size: large;">What it can do!</span> </span>
+<a href="#what-it-can-do" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<span style="font-size: small;">It targets numerics only. It 
+will not execute object manipulations faster, but it is capable of 
+enhancing common vector and matrix operations.</span><br>
+Good news is that it is not specifically targeted for the NumPy library and the PyPy 
+virtual machine. Any interpreter (written in RPython) is able make use 
+of the vectorization. For more information about that take a look <a href="https://pypyvecopt.blogspot.co.at/">here</a>, or consult the documentation. For the time being it is not turn on by default, so be sure to enable it by specifying <span>--jit vec=1<span style="font-family: inherit;"> </span></span>before running your program.<br><br>
+If your language (written in RPython) contains many array/matrix operations, you can easily integrate the optimization by adding the parameter 'vec=1' to the JitDriver.<br><br><h2 id="numpypy-improvements">
+<span style="font-size: large;">NumPyPy Improvements</span>
+<a href="#numpypy-improvements" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<span style="font-size: small;"></span>
+<span style="font-size: small;">Let's take a look at the core functions of the NumPyPy library (*). </span><br><span style="font-size: small;">The following tests tests show the speedup of the core functions commonly used in Python code interfacing with NumPy, on CPython with NumPy, on the PyPy 2.6.1 relased several weeks ago, and on PyPy 15.11 to be released soon. Timeit was used to test the time needed to run the operation in the plot title on various vector (lower case) and square matrix (upper case) sizes displayed on the X axis. The Y axis shows the speedup compared to CPython 2.7.10. <b>This means that higher is better</b>. </span><br><br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://3.bp.blogspot.com/-aqC2wMdVRaU/ViUZJYlUNoI/AAAAAAAAAXQ/FGa9DfdDZ-4/s1600/matrix-vector.png" style="clear: left; float: left; margin-bottom: 1em; margin-right: 1em;"><img border="0" height="353" src="https://3.bp.blogspot.com/-aqC2wMdVRaU/ViUZJYlUNoI/AAAAAAAAAXQ/FGa9DfdDZ-4/s640/matrix-vector.png" width="640"></a>
+</div>
+<br><div class="separator" style="clear: both; text-align: center;">
+</div>
+<div class="separator" style="clear: both; text-align: center;">
+</div>
+<span style="font-size: small;">In comparison to PyPy 2.6.1, the speedup </span><span style="font-size: small;"><span style="font-size: small;">greatly</span> improved. The hardware support really strips down the runtime of the vector and matrix operations. There is another operation we would like to highlight: the dot product.</span><br><span style="font-size: small;">It is a very common operation in numerics and PyPy now (given a moderate sized matrix and vector) decreases the time spent in that operation. See for yourself:</span><br><br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://3.bp.blogspot.com/-TMuz6OUEOXU/ViUZWEng4AI/AAAAAAAAAXY/dZOYp1LO1G0/s1600/dotproduct.png" style="clear: left; float: left; margin-bottom: 1em; margin-right: 1em;"><img border="0" height="353" src="https://3.bp.blogspot.com/-TMuz6OUEOXU/ViUZWEng4AI/AAAAAAAAAXY/dZOYp1LO1G0/s640/dotproduct.png" width="640"></a>
+</div>
+<div class="separator" style="clear: both; text-align: center;">
+</div>
+These are nice improvements in the NumPyPy library and we got to a competitive level only making use of SSE4.1.<br><br><h2 id="future-work">
+<span style="font-size: large;">Future work   </span>
+<a href="#future-work" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<br><span style="font-size: small;">This is not the end of the road. The GSoC project showed that it is possible to implement this optimization in PyPy. There might be other improvements we can make to carry this further:</span><br><ul>
+<li><span style="font-size: small;">Check alignment at runtime to increase the memory throughput of the CPU</span></li>
+<li><span style="font-size: small;">Support the AVX vector extension which (at least) doubles the size of the vector register</span></li>
+<li><span style="font-size: small;">Handle each and every corner case in Python traces to enable it  globally</span></li>
+<li><span style="font-size: small;">Do not rely only on loading operations to trigger the analysis, there might be cases where combination of floating point values could be done in parallel </span></li>
+</ul>
+Cheers,<br>
+The PyPy Team<br><h4 id="the-benchmark-code-can-be-found-here-it-was-run-using-this-configuration-i7-2600-cpu-340ghz-4-cores">
+<span style="font-size: x-small;">(*) The benchmark code can be found <a href="https://bitbucket.org/plan_rich/numpy-benchmark">here</a> it was run using this configuration: i7-2600 CPU @ 3.40GHz (4 cores). </span>
+<a href="#the-benchmark-code-can-be-found-here-it-was-run-using-this-configuration-i7-2600-cpu-340ghz-4-cores" class="headerlink" title="Permalink to this heading">¶</a></h4>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="powerpc-backend-for-jit-3014100267884692148.html" rel="prev" title="PowerPC backend for the JIT">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy-400-released-jit-with-simd-8282134928733384063.html" rel="next" title="PyPy 4.0.0 Released - A Jit with SIMD Vectorization and More">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-6415622804704063612">
+        <div class="comment-header">
+          <a name="comment-6415622804704063612"></a>
+            <span class="author">Nax</span> wrote on <span class="date">2015-10-20 20:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>Which BLAS are u using for CPython Numpy? OpenBlas?</p>
+        </div>
+      </div>
+      <div class="comment comment-1762281512266856308">
+        <div class="comment-header">
+          <a name="comment-1762281512266856308"></a>
+            <span class="author">crusaderky</span> wrote on <span class="date">2015-10-20 22:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>How does it compare to numexpr on those benchmarks?<br><br>Also, any plan of addressing one of the killer features of numexpr, that is the fact that an operation like y += a1*x1 + a2*x2 + a3*x3 will create 5 temporary vectors and make a horrible usage of the CPU cache?</p>
+        </div>
+      </div>
+      <div class="comment comment-5396005631073603997">
+        <div class="comment-header">
+          <a name="comment-5396005631073603997"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2015-10-21 05:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>I don't know anyone who uses NumPy for arrays with less than 128 elements.<br><br>Your own benchmark shows NumPypy is much slower than NumPy for large arrays...</p>
+        </div>
+      </div>
+      <div class="comment comment-1760897275212905250">
+        <div class="comment-header">
+          <a name="comment-1760897275212905250"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2015-10-21 08:44</span>:
+        </div>
+        <div class="comment-content">
+          <p>NumPyPy is currently not complete. Trying to evaluate any numexpr gives a strange error. I guess the problem is a missing field not exported by NumPyPy.<br>However we will see how far we can get with this approach. I have made some thoughts on how we could make good use of graphics cards, but this is future work.</p>
+        </div>
+      </div>
+      <div class="comment comment-3165332329721579242">
+        <div class="comment-header">
+          <a name="comment-3165332329721579242"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2015-10-21 11:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>Nice work!</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

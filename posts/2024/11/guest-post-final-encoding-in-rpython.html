@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guest Post: Final Encoding in RPython Interpreters | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2024/11/guest-post-final-encoding-in-rpython.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Corbin">
+<link rel="prev" href="../10/jit-peephole-dsl.html" title="A DSL for Peephole Transformation Rules of Integer Operations in the PyPy JIT" type="text/html">
+<link rel="next" href="../../2025/01/towards-pypy311-an-update.html" title="Towards PyPy3.11 - an update" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Guest Post: Final Encoding in RPython Interpreters">
+<meta property="og:url" content="https://www.pypy.org/posts/2024/11/guest-post-final-encoding-in-rpython.html">
+<meta property="og:description" content="Introduction
+This post started as a quick note summarizing a recent experiment I carried
+out upon a small RPython interpreter by rewriting it in an uncommon style. It
+is written for folks who have alr">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2024-11-14T08:42:36Z">
+<meta property="article:tag" content="guestpost">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Guest Post: Final Encoding in RPython Interpreters</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/corbin.html">Corbin</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2024-11-14T08:42:36Z" itemprop="datePublished" title="2024-11-14 08:42">2024-11-14 08:42</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="guest-post-final-encoding-in-rpython.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <h3 id="introduction">Introduction<a href="#introduction" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>This post started as a quick note summarizing a recent experiment I carried
+out upon a small RPython interpreter by rewriting it in an uncommon style. It
+is written for folks who have already written some RPython and want to take a
+deeper look at interpreter architecture.</p>
+<p>Some experiments are about finding solutions to problems. This experiment is
+about taking a solution which is already well-understood and applying it in
+the context of RPython to find a new approach. As we will see, there is no
+real change in functionality or the number of clauses in the interpreter; it's
+more like a comparison between endo- and exoskeletons, a different arrangement
+of equivalent bones and plates.</p>
+<h3 id="overview">Overview<a href="#overview" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>An RPython interpreter for a programming language generally does three or four
+things, in order:</p>
+<ol>
+<li>Read and parse input programs</li>
+<li>Encode concrete syntax as abstract syntax</li>
+<li>
+<em>Optionally</em>, optimize or reduce the abstract syntax</li>
+<li>Evaluate the abstract syntax: read input data, compute, print output data,
+   etc.</li>
+</ol>
+<p>Today we'll look at abstract syntax. Most programming languages admit a
+<a href="https://en.wikipedia.org/wiki/Parse_tree">concrete parse tree</a> which is
+readily abstracted to provide an <a href="https://en.wikipedia.org/wiki/Abstract_syntax_tree">abstract syntax
+tree</a> (AST). The AST is
+usually encoded with the <em>initial</em> style of encoding. An initial encoding can
+be transformed into any other encoding for the same AST, looks like a
+hierarchy of classes, and is implemented as a static structure on the heap.</p>
+<p>In contrast, there is also a <em>final</em> encoding. A final encoding can be
+transformed into by any other encoding, looks like an interface for the
+actions of the interpreter, and is implemented as an unwinding structure on
+the stack. From the RPython perspective, Python builtin modules like <code>os</code> or
+<code>sys</code> are final encodings for features of the operating system; the underlying
+implementation is different when translated or untranslated, but the interface
+used to access those features does not change.</p>
+<p>In RPython, an initial encoding is built from a hierarchy of classes. Each
+class represents a type of tree nodes, corresponding to a parser production in
+the concrete parse tree. Each class instance therefore represents an
+individual tree node. The fields of a class, particularly those filled during
+<code>.__init__()</code>, store pre-computed properties of each node; methods can be used
+to compute node properties on demand. This seems like an obvious and simple
+approach; what other approaches could there be? We need an example.</p>
+<h3 id="final-encoding-of-brainfuck">Final Encoding of Brainfuck<a href="#final-encoding-of-brainfuck" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>We will consider <a href="https://esolangs.org/wiki/Brainfuck">Brainfuck</a>, a simple
+Turing-complete programming language. An example Brainfuck program might be:</p>
+<div class="code"><pre class="code literal-block"><span class="k">[</span><span class="nb">-</span><span class="k">]</span>
+</pre></div>
+
+<p>This program is built from a loop and a decrement, and sets a cell to zero. In
+an initial encoding which follows the <a href="https://esolangs.org/wiki/Algebraic_Brainfuck">algebraic semantics of
+Brainfuck</a>, the program could
+be expressed by applying class constructors to build a structure on the heap:</p>
+<div class="code"><pre class="code literal-block"><span class="n">Loop</span><span class="p">(</span><span class="n">Plus</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+</pre></div>
+
+<p>A final encoding is similar, except that class constructors are replaced by
+methods, the structure is built on the stack, and we are parameterized over
+the choice of class:</p>
+<div class="code"><pre class="code literal-block"><span class="k">lambda</span> <span class="bp">cls</span><span class="p">:</span> <span class="bp">cls</span><span class="o">.</span><span class="n">loop</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">plus</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+</pre></div>
+
+<p>In ordinary Python, transforming between these would be trivial, and mostly is
+a matter of passing around the appropriate class. Indeed, initial and final
+encodings are equivalent; we'll return to that fact later. However, in RPython,
+all of the types must line up, and classes must be determined before
+translation. We'll need to monomorphize our final encodings, using some
+RPython tricks later on. Before that, let's see what an actual Brainfuck
+interface looks like, so that we can cover all of the difficulties with final
+encoding.</p>
+<p>Before we embark, please keep in mind that local code doesn't know what <code>cls</code>
+is. There's no type-safe way to inspect an arbitrary semantic domain. In the
+initial-encoded version, we can ask <code>isinstance(bf, Loop)</code> to see whether an
+AST node is a loop, but there simply isn't an equivalent for final-encoded
+ASTs. So, there is an implicit challenge to think about: how do we evaluate a
+program in an arbitrary semantic domain? For bonus points, how do we optimize
+a program without inspecting the types of its AST nodes?</p>
+<p>What follows is a dissection of
+<a href="https://github.com/rpypkgs/rpypkgs/blob/d439d225b79ac82e009a5f1cd1c670f00356464c/bf/bf.py">this</a>
+module at the given revision. Readers may find it satisfying to read the
+entire interpreter top to bottom first; it is less than 300 lines.</p>
+<h4 id="core-functionality">Core Functionality<a href="#core-functionality" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>Final encoding is given as methods on an interface. These five methods
+correspond precisely to the summands of the algebra of Brainfuck.</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">BF</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="c1"># Other methods elided</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">plus</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span> <span class="k">pass</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">right</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span> <span class="k">pass</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">input</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">pass</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">output</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">pass</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">loop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bfs</span><span class="p">):</span> <span class="k">pass</span>
+</pre></div>
+
+<p>Note that the <code>.loop()</code> method takes another program as an argument.
+Initial-encoded ASTs have other initial-encoded ASTs as fields on class
+instances; final-encoded ASTs have other final-encoded ASTs as parameters
+to interface methods. RPython infers all of the types, so the reader has to
+know that <code>i</code> is usually an integer while <code>bfs</code> is a sequence of Brainfuck
+operations.</p>
+<p>We're using a class to implement this functionality. Later, we'll treat it as
+a mixin, rather than a superclass, to avoid typing problems.</p>
+<h4 id="monoid">Monoid<a href="#monoid" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>In order to optimize input programs, we'll need to represent the underlying
+<a href="https://en.wikipedia.org/wiki/Monoid">monoid</a> of Brainfuck programs. To do
+this, we add the signature for a monoid:</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">BF</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="c1"># Other methods elided</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">unit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">pass</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span> <span class="k">pass</span>
+</pre></div>
+
+<p>This is technically a <a href="https://en.wikipedia.org/wiki/Magma_(algebra)">unital
+magma</a>, since RPython doesn't
+support algebraic laws, but we will enforce the algebraic laws later on during
+optimization. We also want to make use of the folklore that <a href="https://en.wikipedia.org/wiki/Free_monoid">free
+monoids</a> are lists, allowing
+callers to pass a list of actions which we'll reduce with recursion:</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">BF</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="c1"># Other methods elided</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">joinList</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bfs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">bfs</span><span class="p">:</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">unit</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">bfs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span> <span class="k">return</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">bfs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">bfs</span><span class="p">)</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">joinList</span><span class="p">(</span><span class="n">bfs</span><span class="p">[:</span><span class="n">i</span><span class="p">]),</span> <span class="bp">self</span><span class="o">.</span><span class="n">joinList</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="n">i</span><span class="p">:]))</span>
+</pre></div>
+
+<p><code>.joinList()</code> is a little bulky to implement, but Wirth's principle applies:
+the interpreter is shorter with it than without it.</p>
+<h4 id="idioms">Idioms<a href="#idioms" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>Finally, our interface includes a few high-level idioms, like the zero program
+shown earlier, which are defined in terms of low-level behaviors. In an
+initial encoding, these could be defined as module-level functions; here, we
+define them on the mixin class <code>BF</code>.</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">BF</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="c1"># Other methods elided</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">zero</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plus</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">move</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">scalemove</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">move2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">):</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">scalemove2</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">scalemove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">joinList</span><span class="p">([</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">plus</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">right</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">plus</span><span class="p">(</span><span class="n">s</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">right</span><span class="p">(</span><span class="o">-</span><span class="n">i</span><span class="p">)]))</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">scalemove2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">joinList</span><span class="p">([</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">plus</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">right</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">plus</span><span class="p">(</span><span class="n">s</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">right</span><span class="p">(</span><span class="n">j</span> <span class="o">-</span> <span class="n">i</span><span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">plus</span><span class="p">(</span><span class="n">t</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">right</span><span class="p">(</span><span class="o">-</span><span class="n">j</span><span class="p">)]))</span>
+</pre></div>
+
+<h3 id="interface-oriented-architecture">Interface-oriented Architecture<a href="#interface-oriented-architecture" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<h4 id="applying-interfaces">Applying Interfaces<a href="#applying-interfaces" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>Now, we hack at RPython's object model until everything translates. First,
+consider the task of pretty-printing. For Brainfuck, we'll simply regurgitate
+the input program as a Python string:</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">AsStr</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="n">import_from_mixin</span><span class="p">(</span><span class="n">BF</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">unit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">return</span> <span class="s2">""</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span> <span class="k">return</span> <span class="n">l</span> <span class="o">+</span> <span class="n">r</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">plus</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span> <span class="k">return</span> <span class="s1">'+'</span> <span class="o">*</span> <span class="n">i</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s1">'-'</span> <span class="o">*</span> <span class="o">-</span><span class="n">i</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">right</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span> <span class="k">return</span> <span class="s1">'&gt;'</span> <span class="o">*</span> <span class="n">i</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s1">'&lt;'</span> <span class="o">*</span> <span class="o">-</span><span class="n">i</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">loop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bfs</span><span class="p">):</span> <span class="k">return</span> <span class="s1">'['</span> <span class="o">+</span> <span class="n">bfs</span> <span class="o">+</span> <span class="s1">']'</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">input</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">return</span> <span class="s1">','</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">output</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">return</span> <span class="s1">'.'</span>
+</pre></div>
+
+<p>Via <code>rlib.objectmodel.import_from_mixin</code>, no stressing with covariance of
+return types is required. Instead, we shift from a Java-esque view of classes
+and objects, to an OCaml-ish view of prebuilt classes and constructors.
+<code>AsStr</code> is monomorphic, and any caller of it will have to create their own
+covariance somehow. For example, here are the first few lines of the parsing
+function:</p>
+<div class="code"><pre class="code literal-block"><span class="nd">@specialize</span><span class="o">.</span><span class="n">argtype</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">parse</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">domain</span><span class="p">):</span>
+    <span class="n">ops</span> <span class="o">=</span> <span class="p">[</span><span class="n">domain</span><span class="o">.</span><span class="n">unit</span><span class="p">()]</span>
+    <span class="c1"># Parser elided to preserve the reader's attention</span>
+</pre></div>
+
+<p>By invoking <code>rlib.objectmodel.specialize.argtype</code>, we make copies of the
+parsing function, up to one per call site, based on our choice of semantic
+domain. <a href="https://okmij.org/ftp/tagless-final/">Oleg</a> calls these "symantics"
+but I prefer "domain" in code. Also, note how the parsing stack starts with
+the unit of the monoid, which corresponds to the empty input string; the
+parser will repeatedly use the monoidal join to build up a parsed expression
+without inspecting it. Here's a small taste of that:</p>
+<div class="code"><pre class="code literal-block"><span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">):</span>
+    <span class="n">char</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">char</span> <span class="o">==</span> <span class="s1">'+'</span><span class="p">:</span> <span class="n">ops</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">ops</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">domain</span><span class="o">.</span><span class="n">plus</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">elif</span> <span class="n">char</span> <span class="o">==</span> <span class="s1">'-'</span><span class="p">:</span> <span class="n">ops</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">ops</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">domain</span><span class="o">.</span><span class="n">plus</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="c1"># and so on</span>
+</pre></div>
+
+<p>The reader may feel justifiably mystified; what breaks if we don't add these
+magic annotations? Well, the translator will throw <code>UnionError</code> because the
+low-level types don't match. RPython only wants to make one copy of functions
+like <code>parse()</code> in its low-level representation, and each copy of <code>parse()</code>
+will be compiled to monomorphic machine code. In this interpreter, in order to
+support parsing to an optimized string and also parsing to an evaluator, we
+need two copies of <code>parse()</code>. <strong>It is okay to not fully understand this at
+first.</strong></p>
+<h4 id="composing-interfaces">Composing Interfaces<a href="#composing-interfaces" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>Earlier, we noted that an interpreter can optionally optimize input programs
+after parsing. To support this, we'll precompose a <a href="https://en.wikipedia.org/wiki/Peephole_optimization">peephole
+optimizer</a> onto an
+arbitrary domain. We could also postcompose with a parser instead, but that
+sounds more difficult. Here are the relevant parts:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">makePeephole</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">stripDomain</span><span class="p">(</span><span class="n">bfs</span><span class="p">):</span> <span class="k">return</span> <span class="n">domain</span><span class="o">.</span><span class="n">joinList</span><span class="p">([</span><span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">bfs</span><span class="p">])</span>
+    <span class="k">class</span><span class="w"> </span><span class="nc">Peephole</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">import_from_mixin</span><span class="p">(</span><span class="n">BF</span><span class="p">)</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">unit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span> <span class="k">return</span> <span class="n">l</span> <span class="o">+</span> <span class="n">r</span>
+        <span class="c1"># Actual definition elided... for now...</span>
+    <span class="k">return</span> <span class="n">Peephole</span><span class="p">,</span> <span class="n">stripDomain</span>
+</pre></div>
+
+<p>Don't worry about the actual optimization yet. What's important here is the
+pattern of initialization of semantic domains. <code>makePeephole</code> is an
+<a href="https://en.wikipedia.org/wiki/Standard_ML">SML</a>-style functor on semantic
+domains: given a final encoding of Brainfuck, it produces another final
+encoding of Brainfuck which incorporates optimizations. The helper
+<code>stripDomain</code> is a finalizer which performs the extraction from the
+optimizer's domain to the underlying <code>cls</code> that was passed in at translation
+time. For example, let's optimize pretty-printing:</p>
+<div class="code"><pre class="code literal-block"><span class="n">AsStr</span><span class="p">,</span> <span class="n">finishStr</span> <span class="o">=</span> <span class="n">makePeephole</span><span class="p">(</span><span class="n">AsStr</span><span class="p">)</span>
+</pre></div>
+
+<p>Now, it only takes one line to parse and print an optimized AST without ever
+building it on the heap. To be pedantic, fragments of the output string will
+be heap-allocated, but the AST's node structure will only ever be
+stack-allocated. Further, to be shallow, the parser is written to prevent
+malicious input from causing a stack overflow, and this forces it to maintain
+a heap-allocated RPython list of intermediate operations inside loops.</p>
+<div class="code"><pre class="code literal-block"><span class="nb">print</span> <span class="n">finishStr</span><span class="p">(</span><span class="n">parse</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">AsStr</span><span class="p">()))</span>
+</pre></div>
+
+<h3 id="performance">Performance<a href="#performance" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>But is it fast? Yes. It's faster than the prior version, which was
+initial-encoded, and also faster than Andrew Brown's classic version (<a href="https://pypy.org/posts/2011/04/tutorial-writing-interpreter-with-pypy-3785910476193156295.html">part
+1</a>,
+<a href="https://pypy.org/posts/2011/04/tutorial-part-2-adding-jit-8121732841568309472.html">part
+2</a>).
+Since Brown's interpreter does not perform much optimization, we will focus on
+how final encoding can outperform initial encoding.</p>
+<h4 id="jit">JIT<a href="#jit" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>First, why is it faster than the same interpreter with initial encoding? Well,
+it still has initial encoding from the JIT's perspective! There is an <code>Op</code>
+class with a hierarchy of subclasses implementing individual behaviors. A
+sincere tagless-final student, or those who remember <a href="https://pyvideo.org/pycon-us-2012/stop-writing-classes.html">Stop Writing Classes
+(2012, Pycon
+US)</a>, will
+recognize that the following classes could be plain functions, and should
+think of the classes as a concession to RPython's lack of support for lambdas
+with closures rather than an initial encoding. We aren't ever going to
+directly typecheck any <code>Op</code>, but the JIT will generate typechecking guards
+anyway, so we effectively get a fully-promoted AST inlined into each JIT
+trace. First, some simple behaviors:</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">Op</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span> <span class="n">_immutable_</span> <span class="o">=</span> <span class="kc">True</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_Input</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
+    <span class="n">_immutable_</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">runOn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tape</span><span class="p">,</span> <span class="n">position</span><span class="p">):</span>
+        <span class="n">tape</span><span class="p">[</span><span class="n">position</span><span class="p">]</span> <span class="o">=</span> <span class="nb">ord</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">position</span>
+<span class="n">Input</span> <span class="o">=</span> <span class="n">_Input</span><span class="p">()</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_Output</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
+    <span class="n">_immutable_</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">runOn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tape</span><span class="p">,</span> <span class="n">position</span><span class="p">):</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">chr</span><span class="p">(</span><span class="n">tape</span><span class="p">[</span><span class="n">position</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="n">position</span>
+<span class="n">Output</span> <span class="o">=</span> <span class="n">_Output</span><span class="p">()</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Add</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
+    <span class="n">_immutable_</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">_immutable_fields_</span> <span class="o">=</span> <span class="s2">"imm"</span><span class="p">,</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imm</span><span class="p">):</span> <span class="bp">self</span><span class="o">.</span><span class="n">imm</span> <span class="o">=</span> <span class="n">imm</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">runOn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tape</span><span class="p">,</span> <span class="n">position</span><span class="p">):</span>
+        <span class="n">tape</span><span class="p">[</span><span class="n">position</span><span class="p">]</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">imm</span>
+        <span class="k">return</span> <span class="n">position</span>
+</pre></div>
+
+<p>The JIT does technically have less information than before; it no longer knows
+that a sequence of immutable operations is immutable enough to be worth
+unrolling, but a bit of <code>rlib.jit.unroll_safe</code> fixes that:</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">Seq</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
+    <span class="n">_immutable_</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">_immutable_fields_</span> <span class="o">=</span> <span class="s2">"ops[*]"</span><span class="p">,</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ops</span><span class="p">):</span> <span class="bp">self</span><span class="o">.</span><span class="n">ops</span> <span class="o">=</span> <span class="n">ops</span>
+    <span class="nd">@unroll_safe</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">runOn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tape</span><span class="p">,</span> <span class="n">position</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">:</span> <span class="n">position</span> <span class="o">=</span> <span class="n">op</span><span class="o">.</span><span class="n">runOn</span><span class="p">(</span><span class="n">tape</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">position</span>
+</pre></div>
+
+<p>Finally, the JIT entry point is at the head of each loop, just like with prior
+interpreters. Since Brainfuck doesn't support mid-loop jumps, there's no
+penalty for only allowing merge points at the head of the loop.</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">Loop</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
+    <span class="n">_immutable_</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">_immutable_fields_</span> <span class="o">=</span> <span class="s2">"op"</span><span class="p">,</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="p">):</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="n">op</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">runOn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tape</span><span class="p">,</span> <span class="n">position</span><span class="p">):</span>
+        <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span>
+        <span class="k">while</span> <span class="n">tape</span><span class="p">[</span><span class="n">position</span><span class="p">]:</span>
+            <span class="n">jitdriver</span><span class="o">.</span><span class="n">jit_merge_point</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="n">op</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="n">position</span><span class="p">,</span> <span class="n">tape</span><span class="o">=</span><span class="n">tape</span><span class="p">)</span>
+            <span class="n">position</span> <span class="o">=</span> <span class="n">op</span><span class="o">.</span><span class="n">runOn</span><span class="p">(</span><span class="n">tape</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">position</span>
+</pre></div>
+
+<p>That's the end of the implicit challenge. There's no secret to it; just
+evaluate the AST. Here's part of the semantic domain for evaluation, as well
+as the "functor" to optimize it. In <code>AsOps.join()</code> are the <em>only</em>
+<code>isinstance()</code> calls in the entire interpreter! This is acceptable because
+<code>Seq</code> is effectively a type wrapper for an RPython list, so that a list of
+operations is also an operation; its list is initial-encoded and available for
+inspection.</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">AsOps</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="n">import_from_mixin</span><span class="p">(</span><span class="n">BF</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">unit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">return</span> <span class="n">Shift</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">Seq</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">Seq</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">Seq</span><span class="p">(</span><span class="n">l</span><span class="o">.</span><span class="n">ops</span> <span class="o">+</span> <span class="n">r</span><span class="o">.</span><span class="n">ops</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">Seq</span><span class="p">):</span> <span class="k">return</span> <span class="n">Seq</span><span class="p">(</span><span class="n">l</span><span class="o">.</span><span class="n">ops</span> <span class="o">+</span> <span class="p">[</span><span class="n">r</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">Seq</span><span class="p">):</span> <span class="k">return</span> <span class="n">Seq</span><span class="p">([</span><span class="n">l</span><span class="p">]</span> <span class="o">+</span> <span class="n">r</span><span class="o">.</span><span class="n">ops</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Seq</span><span class="p">([</span><span class="n">l</span><span class="p">,</span> <span class="n">r</span><span class="p">])</span>
+    <span class="c1"># Other methods elided!</span>
+
+<span class="n">AsOps</span><span class="p">,</span> <span class="n">finishOps</span> <span class="o">=</span> <span class="n">makePeephole</span><span class="p">(</span><span class="n">AsOps</span><span class="p">)</span>
+</pre></div>
+
+<p>And finally here is the actual top-level code to evaluate the input program.
+As before, once everything is composed, the actual invocation only takes one
+line.</p>
+<div class="code"><pre class="code literal-block"><span class="n">tape</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="s2">"</span><span class="se">\x00</span><span class="s2">"</span> <span class="o">*</span> <span class="n">cells</span><span class="p">)</span>
+<span class="n">finishOps</span><span class="p">(</span><span class="n">parse</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">AsOps</span><span class="p">()))</span><span class="o">.</span><span class="n">runOn</span><span class="p">(</span><span class="n">tape</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</pre></div>
+
+<h4 id="peephole-optimization">Peephole Optimization<a href="#peephole-optimization" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<p>Our peephole optimizer is an <a href="https://en.wikipedia.org/wiki/Abstract_interpretation">abstract
+interpreter</a> with one
+instruction of lookahead/rewrite buffer. It implements the aforementioned
+algebraic laws of the Brainfuck monoid. It also implements idiom recognition
+for loops. First, the abstract interpreter. The abstract domain has six
+elements:</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">AbstractDomain</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span> <span class="k">pass</span>
+<span class="n">meh</span><span class="p">,</span> <span class="n">aLoop</span><span class="p">,</span> <span class="n">aZero</span><span class="p">,</span> <span class="n">theIdentity</span><span class="p">,</span> <span class="n">anAdd</span><span class="p">,</span> <span class="n">aRight</span> <span class="o">=</span> <span class="p">[</span><span class="n">AbstractDomain</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">)]</span>
+</pre></div>
+
+<p>We'll also tag everything with an integer, so that <code>anAdd</code> or <code>aRight</code> can be
+exact annotations. <em>This</em> is the actual <code>Peephole.join()</code> method:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">l</span><span class="p">:</span> <span class="k">return</span> <span class="n">r</span>
+    <span class="n">rv</span> <span class="o">=</span> <span class="n">l</span><span class="p">[:]</span>
+    <span class="n">bfHead</span><span class="p">,</span> <span class="n">adHead</span><span class="p">,</span> <span class="n">immHead</span> <span class="o">=</span> <span class="n">rv</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">bf</span><span class="p">,</span> <span class="n">ad</span><span class="p">,</span> <span class="n">imm</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">ad</span> <span class="ow">is</span> <span class="n">theIdentity</span><span class="p">:</span> <span class="k">continue</span>
+        <span class="k">elif</span> <span class="n">adHead</span> <span class="ow">is</span> <span class="n">aLoop</span> <span class="ow">and</span> <span class="n">ad</span> <span class="ow">is</span> <span class="n">aLoop</span><span class="p">:</span> <span class="k">continue</span>
+        <span class="k">elif</span> <span class="n">adHead</span> <span class="ow">is</span> <span class="n">theIdentity</span><span class="p">:</span>
+            <span class="n">bfHead</span><span class="p">,</span> <span class="n">adHead</span><span class="p">,</span> <span class="n">immHead</span> <span class="o">=</span> <span class="n">bf</span><span class="p">,</span> <span class="n">ad</span><span class="p">,</span> <span class="n">imm</span>
+        <span class="k">elif</span> <span class="n">adHead</span> <span class="ow">is</span> <span class="n">anAdd</span> <span class="ow">and</span> <span class="n">ad</span> <span class="ow">is</span> <span class="n">aZero</span><span class="p">:</span>
+            <span class="n">bfHead</span><span class="p">,</span> <span class="n">adHead</span><span class="p">,</span> <span class="n">immHead</span> <span class="o">=</span> <span class="n">bf</span><span class="p">,</span> <span class="n">ad</span><span class="p">,</span> <span class="n">imm</span>
+        <span class="k">elif</span> <span class="n">adHead</span> <span class="ow">is</span> <span class="n">anAdd</span> <span class="ow">and</span> <span class="n">ad</span> <span class="ow">is</span> <span class="n">anAdd</span><span class="p">:</span>
+            <span class="n">immHead</span> <span class="o">+=</span> <span class="n">imm</span>
+            <span class="k">if</span> <span class="n">immHead</span><span class="p">:</span> <span class="n">bfHead</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">plus</span><span class="p">(</span><span class="n">immHead</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">rv</span><span class="p">:</span> <span class="n">bfHead</span><span class="p">,</span> <span class="n">adHead</span><span class="p">,</span> <span class="n">immHead</span> <span class="o">=</span> <span class="n">rv</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">bfHead</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">unit</span><span class="p">()</span>
+                <span class="n">adHead</span> <span class="o">=</span> <span class="n">theIdentity</span>
+        <span class="k">elif</span> <span class="n">adHead</span> <span class="ow">is</span> <span class="n">aRight</span> <span class="ow">and</span> <span class="n">ad</span> <span class="ow">is</span> <span class="n">aRight</span><span class="p">:</span>
+            <span class="n">immHead</span> <span class="o">+=</span> <span class="n">imm</span>
+            <span class="k">if</span> <span class="n">immHead</span><span class="p">:</span> <span class="n">bfHead</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">right</span><span class="p">(</span><span class="n">immHead</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">rv</span><span class="p">:</span> <span class="n">bfHead</span><span class="p">,</span> <span class="n">adHead</span><span class="p">,</span> <span class="n">immHead</span> <span class="o">=</span> <span class="n">rv</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">bfHead</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">unit</span><span class="p">()</span>
+                <span class="n">adHead</span> <span class="o">=</span> <span class="n">theIdentity</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">rv</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">bfHead</span><span class="p">,</span> <span class="n">adHead</span><span class="p">,</span> <span class="n">immHead</span><span class="p">))</span>
+            <span class="n">bfHead</span><span class="p">,</span> <span class="n">adHead</span><span class="p">,</span> <span class="n">immHead</span> <span class="o">=</span> <span class="n">bf</span><span class="p">,</span> <span class="n">ad</span><span class="p">,</span> <span class="n">imm</span>
+    <span class="n">rv</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">bfHead</span><span class="p">,</span> <span class="n">adHead</span><span class="p">,</span> <span class="n">immHead</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">rv</span>
+</pre></div>
+
+<p>If this were to get much longer, then <a href="https://pypy.org/posts/2024/10/jit-peephole-dsl.html">implementing a
+DSL</a> would be worth it,
+but this is a short-enough method to inline. The abstract interpretation is
+assumed by induction for the left-hand side of the join, save for the final
+instruction, which is loaded into a rewrite register. Each instruction on the
+right-hand side is inspected exactly once. The logic for <code>anAdd</code> followed by
+<code>anAdd</code> is exactly the same as for <code>aRight</code> followed by <code>aRight</code> because they
+both have underlying <a href="https://en.wikipedia.org/wiki/Abelian_group">Abelian
+groups</a> given by the integers.
+The rewrite register is carefully pushed onto and popped off from the
+left-hand side in order to cancel out <code>theIdentity</code>, which itself is merely a
+unifier for <code>anAdd</code> or <code>aRight</code> of 0.</p>
+<p>Note that we generate a lot of garbage. For example, parsing a string of <em>n</em>
+'+' characters will cause the peephole optimizer to allocate <em>n</em> instances of
+the underlying <code>domain.plus()</code> action, from <code>domain.plus(1)</code> up to
+<code>domain.plus(n)</code>. An older initial-encoded version of this interpreter used
+<a href="https://en.wikipedia.org/wiki/Hash_consing">hash consing</a> to avoid ever
+building an op more than once, even loops. It appears more efficient to
+generate lots of immutable garbage than to repeatedly hash inputs and search
+mutable hash tables, at least for optimizing Brainfuck incrementally during
+parsing.</p>
+<p>Finally, let's look at idiom recognition. RPython lists are initial-coded, so
+we can dispatch based on the length of the list, and then inspect the abstract
+domains of each action.</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">isConstAdd</span><span class="p">(</span><span class="n">bf</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span> <span class="k">return</span> <span class="n">bf</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">anAdd</span> <span class="ow">and</span> <span class="n">bf</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="n">i</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">oppositeShifts</span><span class="p">(</span><span class="n">bf1</span><span class="p">,</span> <span class="n">bf2</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">bf1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">bf2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">aRight</span> <span class="ow">and</span> <span class="n">bf1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="o">-</span><span class="n">bf2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">oppositeShifts2</span><span class="p">(</span><span class="n">bf1</span><span class="p">,</span> <span class="n">bf2</span><span class="p">,</span> <span class="n">bf3</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">bf1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">bf2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">bf3</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">aRight</span> <span class="ow">and</span>
+            <span class="n">bf1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">bf2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">bf3</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">loop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bfs</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">bfs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">bf</span><span class="p">,</span> <span class="n">ad</span><span class="p">,</span> <span class="n">imm</span> <span class="o">=</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">ad</span> <span class="ow">is</span> <span class="n">anAdd</span> <span class="ow">and</span> <span class="n">imm</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[(</span><span class="n">domain</span><span class="o">.</span><span class="n">zero</span><span class="p">(),</span> <span class="n">aZero</span><span class="p">,</span> <span class="mi">0</span><span class="p">)]</span>
+    <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">bfs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">isConstAdd</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="ow">and</span>
+            <span class="n">bfs</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">anAdd</span> <span class="ow">and</span>
+            <span class="n">oppositeShifts</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">3</span><span class="p">])):</span>
+            <span class="k">return</span> <span class="p">[(</span><span class="n">domain</span><span class="o">.</span><span class="n">scalemove</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">2</span><span class="p">]),</span> <span class="n">aLoop</span><span class="p">,</span> <span class="mi">0</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">isConstAdd</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="ow">and</span>
+            <span class="n">bfs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">anAdd</span> <span class="ow">and</span>
+            <span class="n">oppositeShifts</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">2</span><span class="p">])):</span>
+            <span class="k">return</span> <span class="p">[(</span><span class="n">domain</span><span class="o">.</span><span class="n">scalemove</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">2</span><span class="p">]),</span> <span class="n">aLoop</span><span class="p">,</span> <span class="mi">0</span><span class="p">)]</span>
+    <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">bfs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">6</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">isConstAdd</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="ow">and</span>
+            <span class="n">bfs</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">4</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">anAdd</span> <span class="ow">and</span>
+            <span class="n">oppositeShifts2</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">5</span><span class="p">])):</span>
+            <span class="k">return</span> <span class="p">[(</span><span class="n">domain</span><span class="o">.</span><span class="n">scalemove2</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span>
+                                       <span class="n">bfs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span>
+                                       <span class="n">bfs</span><span class="p">[</span><span class="mi">4</span><span class="p">][</span><span class="mi">2</span><span class="p">]),</span> <span class="n">aLoop</span><span class="p">,</span> <span class="mi">0</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">isConstAdd</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">5</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="ow">and</span>
+            <span class="n">bfs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="n">anAdd</span> <span class="ow">and</span>
+            <span class="n">oppositeShifts2</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">4</span><span class="p">])):</span>
+            <span class="k">return</span> <span class="p">[(</span><span class="n">domain</span><span class="o">.</span><span class="n">scalemove2</span><span class="p">(</span><span class="n">bfs</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span>
+                                       <span class="n">bfs</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">bfs</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span>
+                                       <span class="n">bfs</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="mi">2</span><span class="p">]),</span> <span class="n">aLoop</span><span class="p">,</span> <span class="mi">0</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="p">[(</span><span class="n">domain</span><span class="o">.</span><span class="n">loop</span><span class="p">(</span><span class="n">stripDomain</span><span class="p">(</span><span class="n">bfs</span><span class="p">)),</span> <span class="n">aLoop</span><span class="p">,</span> <span class="mi">0</span><span class="p">)]</span>
+</pre></div>
+
+<p>This ends the bonus question. How do we optimize an unknown semantic domain?
+We must maintain an abstract context which describes elements of the domain.
+In initial encoding, we ask an AST about itself. In final encoding, we already
+know everything relevant about the AST.</p>
+<p>The careful reader will see that I didn't really answer that opening question
+in the JIT section. Because the JIT still ranges over the same operations as
+before, it can't really be slower; but why is it now faster? Because the
+optimizer is now slightly better in a few edge cases. It performs the same
+optimizations as before, but the rigor of abstract interpretation causes it to
+emit slightly better operations to the JIT backend.</p>
+<p>Concretely, improving the optimizer can shorten pretty-printed programs. The
+<a href="https://bbgauge.info/">Busy Beaver Gauge</a> measures the length of programs
+which search for solutions to mathematical problems. After implementing and
+debugging the final-encoded interpreter, I found that two of my entries on the
+<a href="https://bbgauge.info/brainfuck.html">Busy Beaver Gauge for Brainfuck</a> had
+become shorter by about 2%. (Most other entries are already hand-optimized
+according to the standard algebra and have no optimization opportunities.)</p>
+<h3 id="discussion">Discussion<a href="#discussion" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Given that initial and final encodings are equivalent, and noting that
+RPython's toolchain is written to prefer initial encodings, what did we
+actually gain? Did we gain anything?</p>
+<p>One obvious downside to final encoding in RPython is interpreter size. The
+example interpreter shown here is a rewrite of an initial-encoded interpreter
+which can be seen
+<a href="https://github.com/rpypkgs/rpypkgs/blob/659c8a26d428a1e04fdff614b28e464a50d4647b/bf/bf.py">here</a>
+for comparison. Final encoding adds about 20% more code in this case.</p>
+<p>Final encoding is not necessarily more code than initial encoding, though. All
+AST encodings in interpreters are subject to the <a href="https://en.wikipedia.org/wiki/Expression_problem">Expression
+Problem</a>, which states that
+there is generally a quadratic amount of code required to implement multiple
+behaviors for an AST with multiple types of nodes; specifically, <em>n</em> behaviors
+for <em>m</em> types of nodes require <em>n</em> × <em>m</em> methods. Initial encodings improve the
+cost of adding new types of nodes; final encodings improve the cost of adding
+new behaviors. Final encoding may tend to win in large codebases for mature
+languages, where the language does not change often but new behaviors are added
+frequently and maintained for long periods.</p>
+<p>Optimizations in final encoding require a bit of planning. The
+abstract-interpretation approach is solid but relies upon the monoid and its
+algebraic laws. In the worst case, an entire class hierarchy could be required
+to encode the abstraction.</p>
+<p>It is remarkable to find <strong>a 2% improvement in residual program size</strong> merely
+by reimplementing an optimizer as an abstract interpreter respecting the
+algebraic laws. This could be the most important lesson for compiler
+engineers, if it happens to generalize.</p>
+<p>Final encoding was popularized via the tagless-final movement in OCaml and
+Scala, including famously in a series of tutorials by <a href="https://okmij.org/ftp/tagless-final/">Kiselyov et
+al</a>. A "tag", in this jargon, is a
+runtime identifier for an object's type or class; a tagless encoding
+effectively doesn't allow <code>isinstance()</code> at all. In the above presentation,
+tags could be hacked in, but were not materially relevant to most steps. Tags
+were required for the final evaluation step, though, and the tagless-final
+insight is that certain type systems can express type-safe evaluation without
+those tags. We won't go further in this direction because tags also
+communicate valuable information to the JIT.</p>
+<h4 id="summarizing-table">Summarizing Table<a href="#summarizing-table" class="headerlink" title="Permalink to this heading">¶</a></h4>
+<table>
+<thead><tr>
+<th>Initial Encoding</th>
+<th>Final Encoding</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>hierarchy of classes</td>
+<td>signature of interfaces</td>
+</tr>
+<tr>
+<td>class constructors</td>
+<td>method calls</td>
+</tr>
+<tr>
+<td>built on the heap</td>
+<td>built on the stack</td>
+</tr>
+<tr>
+<td>traversals allocate stack</td>
+<td>traversals allocate heap</td>
+</tr>
+<tr>
+<td>tags are available with <code>isinstance()</code>
+</td>
+<td>tags are only available through hacks</td>
+</tr>
+<tr>
+<td>cost of adding a new AST node: one class</td>
+<td>cost of adding a new AST node: one method on every other class</td>
+</tr>
+<tr>
+<td>cost of adding a new behavior: one method on every other class</td>
+<td>cost of adding a new behavior: one class</td>
+</tr>
+</tbody>
+</table>
+<h3 id="credits">Credits<a href="#credits" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Thanks to folks in <code>#pypy</code> on Libera Chat: arigato for the idea, larstiq for
+pushing me to write it up, and cfbolz and mattip for reviewing and finding
+mistakes. The original IRC discussion leading to this blog post is available
+<a href="https://gist.github.com/MostAwesomeDude/fd86ad2d2e38af7aa67b6e548aabe008">here</a>.</p>
+<p>This interpreter is part of the <a href="https://github.com/rpypkgs/rpypkgs">rpypkgs</a>
+suite, a Nix flake for RPython interpreters. Readers with Nix installed can
+run this interpreter directly from the flake:</p>
+<div class="code"><pre class="code literal-block">$<span class="w"> </span>nix-prefetch-url<span class="w"> </span>https://github.com/MG-K/pypy-tutorial-ko/raw/refs/heads/master/mandel.b
+$<span class="w"> </span>nix<span class="w"> </span>run<span class="w"> </span>github:rpypkgs/rpypkgs#bf<span class="w"> </span>--<span class="w"> </span>/nix/store/ngnphbap9ncvz41d0fkvdh61n7j2bg21-mandel.b
+</pre></div>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/guestpost.html" rel="tag">guestpost</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="../10/jit-peephole-dsl.html" rel="prev" title="A DSL for Peephole Transformation Rules of Integer Operations in the PyPy JIT">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../../2025/01/towards-pypy311-an-update.html" rel="next" title="Towards PyPy3.11 - an update">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="Guest Post: Final Encoding in RPython Interpreters" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

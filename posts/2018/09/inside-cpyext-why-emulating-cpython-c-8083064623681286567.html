@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inside cpyext: Why emulating CPython C API is so Hard | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2018/09/inside-cpyext-why-emulating-cpython-c-8083064623681286567.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Antonio Cuni">
+<link rel="prev" href="the-first-15-years-of-pypy-3412615975376972020.html" title="The First 15 Years of PyPy — a Personal Retrospective" type="text/html">
+<link rel="next" href="../11/guest-post-implementing-calculator-repl-6271483514675006846.html" title="Guest Post: Implementing a Calculator REPL in RPython" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Inside cpyext: Why emulating CPython C API is so Hard">
+<meta property="og:url" content="https://www.pypy.org/posts/2018/09/inside-cpyext-why-emulating-cpython-c-8083064623681286567.html">
+<meta property="og:description" content="cpyext is PyPy's subsystem which provides a compatibility
+layer to compile and run CPython C extensions inside PyPy.  Often people ask
+why a particular C extension doesn't work or is very slow on PyPy">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2018-09-21T16:32:00Z">
+<meta property="article:tag" content="cpyext">
+<meta property="article:tag" content="profiling">
+<meta property="article:tag" content="speed">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Inside cpyext: Why emulating CPython C API is so Hard</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/antonio-cuni.html">Antonio Cuni</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2018-09-21T16:32:00Z" itemprop="datePublished" title="2018-09-21 16:32">2018-09-21 16:32</time></a>
+            </p>
+                <p class="commentline">3 comments</p>
+
+                <p class="commentline">            <a href="inside-cpyext-why-emulating-cpython-c-8083064623681286567.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <br><div class="document" id="inside-cpyext-why-emulating-cpython-c-api-is-so-hard">
+<tt class="docutils literal">cpyext</tt> is PyPy's subsystem which provides a compatibility
+layer to compile and run CPython C extensions inside PyPy.  Often people ask
+why a particular C extension doesn't work or is very slow on PyPy.
+Usually it is hard to answer without going into technical details. The goal of
+this blog post is to explain some of these technical details, so that we can
+simply link here instead of explaining again and again :).<br>
+From a 10.000 foot view, <tt class="docutils literal">cpyext</tt> is PyPy's version of <tt class="docutils literal">"Python.h"</tt>. Every time
+you compile an extension which uses that header file, you are using <tt class="docutils literal">cpyext</tt>.
+This includes extension explicitly written in C (such as <tt class="docutils literal">numpy</tt>) and
+extensions which are generated from other compilers/preprocessors
+(e.g. <tt class="docutils literal">Cython</tt>).<br>
+At the time of writing, the current status is that most C extensions "just
+work". Generally speaking, you can simply <tt class="docutils literal">pip install</tt> them,
+provided they use the public, <a class="reference external" href="https://docs.python.org/2/c-api/index.html">official C API</a> instead of poking at private
+implementation details.  However, the performance of cpyext is generally
+poor. A Python program which makes heavy use of <tt class="docutils literal">cpyext</tt> extensions
+is likely to be slower on PyPy than on CPython.<br>
+Note: in this blog post we are talking about Python 2.7 because it is still
+the default version of PyPy: however most of the implementation of <tt class="docutils literal">cpyext</tt> is
+shared with PyPy3, so everything applies to that as well.<br><div class="section" id="c-api-overview">
+<h1>
+C API Overview<a href="#c-api-overview" class="headerlink" title="Permalink to this heading">¶</a></h1>
+In CPython, which is written in C, Python objects are represented as <tt class="docutils literal">PyObject*</tt>,
+i.e. (mostly) opaque pointers to some common "base struct".<br>
+CPython uses a very simple memory management scheme: when you create an
+object, you allocate a block of memory of the appropriate size on the heap.
+Depending on the details, you might end up calling different allocators, but
+for the sake of simplicity, you can think that this ends up being a call to
+<tt class="docutils literal">malloc()</tt>. The resulting block of memory is initialized and casted to to
+<tt class="docutils literal">PyObject*</tt>: this address never changes during the object lifetime, and the
+C code can freely pass it around, store it inside containers, retrieve it
+later, etc.<br>
+Memory is managed using reference counting. When you create a new reference to
+an object, or you discard a reference you own, you have to <a class="reference external" href="https://docs.python.org/2/c-api/refcounting.html#c.Py_INCREF">increment</a> or
+<a class="reference external" href="https://docs.python.org/2/c-api/refcounting.html#c.Py_DECREF">decrement</a> the reference counter accordingly. When the reference counter goes to
+0, it means that the object is no longer used and can safely be
+destroyed. Again, we can simplify and say that this results in a call to
+<tt class="docutils literal">free()</tt>, which finally releases the memory which was allocated by <tt class="docutils literal">malloc()</tt>.<br>
+Generally speaking, the only way to operate on a <tt class="docutils literal">PyObject*</tt> is to call the
+appropriate API functions. For example, to convert a given <tt class="docutils literal">PyObject*</tt> to a C
+integer, you can use <a class="reference external" href="https://docs.python.org/2/c-api/int.html#c.PyInt_AsLong">PyInt_AsLong()</a>; to add two objects together, you can
+call <a class="reference external" href="https://docs.python.org/2/c-api/number.html#c.PyNumber_Add">PyNumber_Add()</a>.<br>
+Internally, PyPy uses a similar approach. All Python objects are subclasses of
+the RPython <tt class="docutils literal">W_Root</tt> class, and they are operated by calling methods on the
+<tt class="docutils literal">space</tt> singleton, which represents the interpreter.<br>
+At first, it looks very easy to write a compatibility layer: just make
+<tt class="docutils literal">PyObject*</tt> an alias for <tt class="docutils literal">W_Root</tt>, and write simple RPython functions
+(which will be translated to C by the RPython compiler) which call the
+<tt class="docutils literal">space</tt> accordingly:<br><pre class="code python literal-block"><span class="keyword">def</span> <span class="name function">PyInt_AsLong</span><span class="punctuation">(</span><span class="name">space</span><span class="punctuation">,</span> <span class="name">o</span><span class="punctuation">):</span>
+    <span class="keyword">return</span> <span class="name">space</span><span class="operator">.</span><span class="name">int_w</span><span class="punctuation">(</span><span class="name">o</span><span class="punctuation">)</span>
+
+<span class="keyword">def</span> <span class="name function">PyNumber_Add</span><span class="punctuation">(</span><span class="name">space</span><span class="punctuation">,</span> <span class="name">o1</span><span class="punctuation">,</span> <span class="name">o2</span><span class="punctuation">):</span>
+    <span class="keyword">return</span> <span class="name">space</span><span class="operator">.</span><span class="name">add</span><span class="punctuation">(</span><span class="name">o1</span><span class="punctuation">,</span> <span class="name">o2</span><span class="punctuation">)</span>
+</pre>
+Actually, the code above is not too far from the real
+implementation. However, there are tons of gory details which make it much
+harder than it looks, and much slower unless you pay a lot of attention
+to performance.</div>
+<div class="section" id="the-pypy-gc">
+<h1>
+The PyPy GC<a href="#the-pypy-gc" class="headerlink" title="Permalink to this heading">¶</a></h1>
+To understand some of <tt class="docutils literal">cpyext</tt> challenges, you need to have at least a rough
+idea of how the PyPy GC works.<br>
+Contrarily to the popular belief, the "Garbage Collector" is not only about
+collecting garbage: instead, it is generally responsible for all memory
+management, including allocation and deallocation.<br>
+Whereas CPython uses a combination of malloc/free/refcounting to manage
+memory, the PyPy GC uses a completely different approach. It is designed
+assuming that a dynamic language like Python behaves the following way:<br><blockquote>
+<ul class="simple">
+<li>You create, either directly or indirectly, lots of objects.</li>
+<li>Most of these objects are temporary and very short-lived. Think e.g. of
+doing <tt class="docutils literal">a + b + c</tt>: you need to allocate an object to hold the temporary
+result of <tt class="docutils literal">a + b</tt>, then it dies very quickly because you no longer need it
+when you do the final <tt class="docutils literal">+ c</tt> part.</li>
+<li>Only small fraction of the objects survive and stay around for a while.</li>
+</ul>
+</blockquote>
+So, the strategy is: make allocation as fast as possible; make deallocation of
+short-lived objects as fast as possible; find a way to handle the remaining
+small set of objects which actually survive long enough to be important.<br>
+This is done using a <strong>Generational GC</strong>: the basic idea is the following:<br><blockquote>
+<ol class="arabic simple">
+<li>We have a nursery, where we allocate "young objects" very quickly.</li>
+<li>When the nursery is full, we start what we call a "minor collection".<ul>
+<li>We do a quick scan to determine the small set of objects which survived so
+far</li>
+<li>We <strong>move</strong> these objects out of the nursery, and we place them in the
+area of memory which contains the "old objects". Since the address of the
+objects changes, we fix all the references to them accordingly.</li>
+</ul>
+</li>
+</ol>
+<ol class="arabic simple" start="4">
+<li>now the nursery contains only objects which "died young". We can
+discard all of them very quickly, reset the nursery, and use the same area
+of memory to allocate new objects from now.</li>
+</ol>
+</blockquote>
+In practice, this scheme works very well and it is one of the reasons why PyPy
+is much faster than CPython.  However, careful readers have surely noticed
+that this is a problem for <tt class="docutils literal">cpyext</tt>. On one hand, we have PyPy objects which
+can potentially move and change their underlying memory address; on the other
+hand, we need a way to represent them as fixed-address <tt class="docutils literal">PyObject*</tt> when we
+pass them to C extensions.  We surely need a way to handle that.</div>
+<div class="section" id="pyobject-in-pypy">
+<h1>
+<tt class="docutils literal">PyObject*</tt> in PyPy<a href="#pyobject-in-pypy" class="headerlink" title="Permalink to this heading">¶</a></h1>
+Another challenge is that sometimes, <tt class="docutils literal">PyObject*</tt> structs are not completely
+opaque: there are parts of the public API which expose to the user specific
+fields of some concrete C struct. For example the definition of <a class="reference external" href="https://docs.python.org/2/c-api/typeobj.html">PyTypeObject</a>
+which exposes many of the <tt class="docutils literal">tp_*</tt> slots to the user.
+Since the low-level layout of PyPy <tt class="docutils literal">W_Root</tt> objects is completely different
+than the one used by CPython, we cannot simply pass RPython objects to C; we
+need a way to handle the difference.<br>
+So, we have two issues so far: objects can move, and incompatible
+low-level layouts. <tt class="docutils literal">cpyext</tt> solves both by decoupling the RPython and the C
+representations. We have two "views" of the same entity, depending on whether
+we are in the PyPy world (the movable <tt class="docutils literal">W_Root</tt> subclass) or in the C world
+(the non-movable <tt class="docutils literal">PyObject*</tt>).<br><tt class="docutils literal">PyObject*</tt> are created lazily, only when they are actually needed. The
+vast majority of PyPy objects are never passed to any C extension, so we don't
+pay any penalty in that case. However, the first time we pass a <tt class="docutils literal">W_Root</tt> to
+C, we allocate and initialize its <tt class="docutils literal">PyObject*</tt> counterpart.<br>
+The same idea applies also to objects which are created in C, e.g. by calling
+<a class="reference external" href="https://docs.python.org/2/c-api/allocation.html#c.PyObject_New">PyObject_New()</a>. At first, only the <tt class="docutils literal">PyObject*</tt> exists and it is
+exclusively managed by reference counting. As soon as we pass it to the PyPy
+world (e.g. as a return value of a function call), we create its <tt class="docutils literal">W_Root</tt>
+counterpart, which is managed by the GC as usual.<br>
+Here we start to see why calling cpyext modules is more costly in PyPy than in
+CPython. We need to pay some penalty for all the conversions between
+<tt class="docutils literal">W_Root</tt> and <tt class="docutils literal">PyObject*</tt>.<br>
+Moreover, the first time we pass a <tt class="docutils literal">W_Root</tt> to C we also need to allocate
+the memory for the <tt class="docutils literal">PyObject*</tt> using a slowish "CPython-style" memory
+allocator. In practice, for all the objects which are passed to C we pay more
+or less the same costs as CPython, thus effectively "undoing" the speedup
+guaranteed by PyPy's Generational GC under normal circumstances.</div>
+<div class="section" id="maintaining-the-link-between-w-root-and-pyobject">
+<h1>
+Maintaining the link between <tt class="docutils literal">W_Root</tt> and <tt class="docutils literal">PyObject*</tt>
+<a href="#maintaining-the-link-between-w-root-and-pyobject" class="headerlink" title="Permalink to this heading">¶</a></h1>
+We now need a way to convert between <tt class="docutils literal">W_Root</tt> and <tt class="docutils literal">PyObject*</tt> and
+vice-versa; also, we need to to ensure that the lifetime of the two entities
+are in sync. In particular:<br><blockquote>
+<ol class="arabic simple">
+<li>as long as the <tt class="docutils literal">W_Root</tt> is kept alive by the GC, we want the
+<tt class="docutils literal">PyObject*</tt> to live even if its refcount drops to 0;</li>
+<li>as long as the <tt class="docutils literal">PyObject*</tt> has a refcount greater than 0, we want to
+make sure that the GC does not collect the <tt class="docutils literal">W_Root</tt>.</li>
+</ol>
+</blockquote>
+The <tt class="docutils literal">PyObject*</tt> ⇨ <tt class="docutils literal">W_Root</tt> link is maintained by the special field
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/parse/cpyext_object.h#lines-5">ob_pypy_link</a> which is added to all <tt class="docutils literal">PyObject*</tt>. On a 64 bit machine this
+means that all <tt class="docutils literal">PyObject*</tt> have 8 bytes of overhead, but then the
+conversion is very quick, just reading the field.<br>
+For the other direction, we generally don't want to do the same: the
+assumption is that the vast majority of <tt class="docutils literal">W_Root</tt> objects will never be
+passed to C, and adding an overhead of 8 bytes to all of them is a
+waste. Instead, in the general case the link is maintained by using a
+dictionary, where <tt class="docutils literal">W_Root</tt> are the keys and <tt class="docutils literal">PyObject*</tt> the values.<br>
+However, for a <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/pyobject.py#lines-66">few selected</a> <tt class="docutils literal">W_Root</tt> subclasses we <strong>do</strong> maintain a
+direct link using the special <tt class="docutils literal">_cpy_ref</tt> field to improve performance. In
+particular, we use it for <tt class="docutils literal">W_TypeObject</tt> (which is big anyway, so a 8 bytes
+overhead is negligible) and <tt class="docutils literal">W_NoneObject</tt>. <tt class="docutils literal">None</tt> is passed around very
+often, so we want to ensure that the conversion to <tt class="docutils literal">PyObject*</tt> is very
+fast. Moreover it's a singleton, so the 8 bytes overhead is negligible as
+well.<br>
+This means that in theory, passing an arbitrary Python object to C is
+potentially costly, because it involves doing a dictionary lookup.  We assume
+that this cost will eventually show up in the profiler: however, at the time
+of writing there are other parts of <tt class="docutils literal">cpyext</tt> which are even more costly (as we
+will show later), so the cost of the dict lookup is never evident in the
+profiler.</div>
+<div class="section" id="crossing-the-border-between-rpython-and-c">
+<h1>
+Crossing the border between RPython and C<a href="#crossing-the-border-between-rpython-and-c" class="headerlink" title="Permalink to this heading">¶</a></h1>
+There are two other things we need to care about whenever we cross the border
+between RPython and C, and vice-versa: exception handling and the GIL.<br>
+In the C API, exceptions are raised by calling <a class="reference external" href="https://docs.python.org/2/c-api/exceptions.html#c.PyErr_SetString">PyErr_SetString()</a> (or one of
+<a class="reference external" href="https://docs.python.org/2/c-api/exceptions.html#exception-handling">many other functions</a> which have a similar effect), which basically works by
+creating an exception value and storing it in some global variable. The
+function then signals that an exception has occurred by returning an error value,
+usually <tt class="docutils literal">NULL</tt>.<br>
+On the other hand, in the PyPy interpreter, exceptions are propagated by raising the
+RPython-level <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/interpreter/error.py#lines-20">OperationError</a> exception, which wraps the actual app-level
+exception values. To harmonize the two worlds, whenever we return from C to
+RPython, we need to check whether a C API exception was raised and if so turn it
+into an <tt class="docutils literal">OperationError</tt>.<br>
+We won't dig into details of <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-205">how the GIL is handled in cpyext</a>.
+For the purpose of this post, it is enough to know that whenever we enter
+C land, we store the current thread id into a global variable which is
+accessible also from C; conversely, whenever we go back from RPython to C, we
+restore this value to 0.<br>
+Similarly, we need to do the inverse operations whenever you need to cross the
+border between C and RPython, e.g. by calling a Python callback from C code.<br>
+All this complexity is automatically handled by the RPython function
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-1757">generic_cpy_call</a>. If you look at the code you see that it takes care of 4
+things:<br><blockquote>
+<ol class="arabic simple">
+<li>Handling the GIL as explained above.</li>
+<li>Handling exceptions, if they are raised.</li>
+<li>Converting arguments from <tt class="docutils literal">W_Root</tt> to <tt class="docutils literal">PyObject*</tt>.</li>
+<li>Converting the return value from <tt class="docutils literal">PyObject*</tt> to <tt class="docutils literal">W_Root</tt>.</li>
+</ol>
+</blockquote>
+So, we can see that calling C from RPython introduce some overhead.
+Can we measure it?<br>
+Assuming that the conversion between <tt class="docutils literal">W_Root</tt> and <tt class="docutils literal">PyObject*</tt> has a
+reasonable cost (as explained by the previous section), the overhead
+introduced by a single border-cross is still acceptable, especially if the
+callee is doing some non-negligible amount of work.<br>
+However this is not always the case. There are basically three problems that
+make (or used to make) <tt class="docutils literal">cpyext</tt> super slow:<br><blockquote>
+<ol class="arabic simple">
+<li>Paying the border-crossing cost for trivial operations which are called
+very often, such as <tt class="docutils literal">Py_INCREF</tt>.</li>
+<li>Crossing the border back and forth many times, even if it's not strictly
+needed.</li>
+<li>Paying an excessive cost for argument and return value conversions.</li>
+</ol>
+</blockquote>
+The next sections explain in more detail each of these problems.</div>
+<div class="section" id="avoiding-unnecessary-roundtrips">
+<h1>
+Avoiding unnecessary roundtrips<a href="#avoiding-unnecessary-roundtrips" class="headerlink" title="Permalink to this heading">¶</a></h1>
+Prior to the <a class="reference external" href="../../2017/10/cape-of-good-hope-for-pypy-hello-from-3656631725712879033.html">2017 Cape Town Sprint</a>, <tt class="docutils literal">cpyext</tt> was horribly slow, and we were
+well aware of it: the main reason was that we never really paid too much
+attention to performance. As explained in the blog post, emulating all the
+CPython quirks is basically a nightmare, so better to concentrate on
+correctness first.<br>
+However, we didn't really know <strong>why</strong> it was so slow. We had theories and
+assumptions, usually pointing at the cost of conversions between <tt class="docutils literal">W_Root</tt>
+and <tt class="docutils literal">PyObject*</tt>, but we never actually measured it.<br>
+So, we decided to write a set of <a class="reference external" href="https://github.com/antocuni/cpyext-benchmarks">cpyext microbenchmarks</a> to measure the
+performance of various operations.  The result was somewhat surprising: the
+theory suggests that when you do a cpyext C call, you should pay the
+border-crossing costs only once, but what the profiler told us was that we
+were paying the cost of <tt class="docutils literal">generic_cpy_call</tt> several times more than what we expected.<br>
+After a bit of investigation, we discovered this was ultimately caused by our
+"correctness-first" approach. For simplicity of development and testing, when
+we started <tt class="docutils literal">cpyext</tt> we wrote everything in RPython: thus, every single API call
+made from C (like the omnipresent <a class="reference external" href="https://docs.python.org/2/c-api/arg.html#c.PyArg_ParseTuple">PyArg_ParseTuple()</a>, <a class="reference external" href="https://docs.python.org/2/c-api/int.html#c.PyInt_AsLong">PyInt_AsLong()</a>, etc.)
+had to cross back the C-to-RPython border. This was especially daunting for
+very simple and frequent operations like <tt class="docutils literal">Py_INCREF</tt> and <tt class="docutils literal">Py_DECREF</tt>,
+which CPython implements as a single assembly instruction!<br>
+Another source of slow down was the implementation of <tt class="docutils literal">PyTypeObject</tt> slots.
+At the C level, these are function pointers which the interpreter calls to do
+certain operations, e.g. <a class="reference external" href="https://docs.python.org/2/c-api/typeobj.html#c.PyTypeObject.tp_new">tp_new</a> to allocate a new instance of that type.<br>
+As usual, we have some magic to implement slots in RPython; in particular,
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/api.py#lines-362">_make_wrapper</a> does the opposite of <tt class="docutils literal">generic_cpy_call</tt>: it takes a
+RPython function and wraps it into a C function which can be safely called
+from C, handling the GIL, exceptions and argument conversions automatically.<br>
+This was very handy during the development of cpyext, but it might result in
+some bad nonsense; consider what happens when you call the following C
+function:<br><pre class="code C literal-block"><span class="keyword">static</span> <span class="name">PyObject</span><span class="operator">*</span> <span class="name function">foo</span><span class="punctuation">(</span><span class="name">PyObject</span><span class="operator">*</span> <span class="name">self</span><span class="punctuation">,</span> <span class="name">PyObject</span><span class="operator">*</span> <span class="name">args</span><span class="punctuation">)</span>
+<span class="punctuation">{</span>
+    <span class="name">PyObject</span><span class="operator">*</span> <span class="name">result</span> <span class="operator">=</span> <span class="name">PyInt_FromLong</span><span class="punctuation">(</span><span class="literal number integer">1234</span><span class="punctuation">);</span>
+    <span class="keyword">return</span> <span class="name">result</span><span class="punctuation">;</span>
+<span class="punctuation">}</span>
+</pre>
+<ol class="arabic simple">
+<li>you are in RPython and do a cpyext call to <tt class="docutils literal">foo</tt>: <strong>RPython-to-C</strong>;</li>
+<li>
+<tt class="docutils literal">foo</tt> calls <tt class="docutils literal">PyInt_FromLong(1234)</tt>, which is implemented in RPython:
+<strong>C-to-RPython</strong>;</li>
+<li>the implementation of <tt class="docutils literal">PyInt_FromLong</tt> indirectly calls
+<tt class="docutils literal">PyIntType.tp_new</tt>, which is a C function pointer: <strong>RPython-to-C</strong>;</li>
+<li>however, <tt class="docutils literal">tp_new</tt> is just a wrapper around an RPython function, created
+by <tt class="docutils literal">_make_wrapper</tt>: <strong>C-to-RPython</strong>;</li>
+<li>finally, we create our RPython <tt class="docutils literal">W_IntObject(1234)</tt>; at some point
+during the <strong>RPython-to-C</strong> crossing, its <tt class="docutils literal">PyObject*</tt> equivalent is
+created;</li>
+<li>after many layers of wrappers, we are again in <tt class="docutils literal">foo</tt>: after we do
+<tt class="docutils literal">return result</tt>, during the <strong>C-to-RPython</strong> step we convert it from
+<tt class="docutils literal">PyObject*</tt> to <tt class="docutils literal">W_IntObject(1234)</tt>.</li>
+</ol>
+Phew! After we realized this, it was not so surprising that <tt class="docutils literal">cpyext</tt> was very
+slow :). And this was a simplified example, since we are not passing a
+<tt class="docutils literal">PyObject*</tt> to the API call. When we do, we need to convert it back and
+forth at every step.  Actually, I am not even sure that what I described was
+the exact sequence of steps which used to happen, but you get the general
+idea.<br>
+The solution is simple: rewrite as much as we can in C instead of RPython,
+to avoid unnecessary roundtrips. This was the topic of most of the Cape Town
+sprint and resulted in the <tt class="docutils literal"><span class="pre">cpyext-avoid-roundtrip</span></tt> branch, which was
+eventually <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/cpyext_avoid-roundtrip">merged</a>.<br>
+Of course, it is not possible to move <strong>everything</strong> to C: there are still
+operations which need to be implemented in RPython. For example, think of
+<tt class="docutils literal">PyList_Append</tt>: the logic to append an item to a list is complex and
+involves list strategies, so we cannot replicate it in C.  However, we
+discovered that a large subset of the C API can benefit from this.<br>
+Moreover, the C API is <strong>huge</strong>. While we invented this new way of writing
+<tt class="docutils literal">cpyext</tt> code, we still need to
+convert many of the functions to the new paradigm.  Sometimes the rewrite is
+not automatic
+or straighforward. <tt class="docutils literal">cpyext</tt> is a delicate piece of software, so it happens often
+that we make a mistake and end up staring at a segfault in gdb.<br>
+However, the most important takeaway is that the performance improvements we got
+from this optimization are impressive, as we will detail later.</div>
+<div class="section" id="conversion-costs">
+<h1>
+Conversion costs<a href="#conversion-costs" class="headerlink" title="Permalink to this heading">¶</a></h1>
+The other potential big source of slowdown is the conversion of arguments
+between <tt class="docutils literal">W_Root</tt> and <tt class="docutils literal">PyObject*</tt>.<br>
+As explained earlier, the first time you pass a <tt class="docutils literal">W_Root</tt> to C, you need to
+allocate its <tt class="docutils literal">PyObject*</tt> counterpart. Suppose you have a <tt class="docutils literal">foo</tt> function
+defined in C, which takes a single int argument:<br><pre class="code python literal-block"><span class="keyword">for</span> <span class="name">i</span> <span class="operator word">in</span> <span class="name builtin">range</span><span class="punctuation">(</span><span class="name">N</span><span class="punctuation">):</span>
+    <span class="name">foo</span><span class="punctuation">(</span><span class="name">i</span><span class="punctuation">)</span>
+</pre>
+To run this code, you need to create a different <tt class="docutils literal">PyObject*</tt> for each value
+of <tt class="docutils literal">i</tt>: if implemented naively, it means calling <tt class="docutils literal">N</tt> times <tt class="docutils literal">malloc()</tt>
+and <tt class="docutils literal">free()</tt>, which kills performance.<br>
+CPython has the very same problem, which is solved by using a <a class="reference external" href="https://en.wikipedia.org/wiki/Free_list">free list</a> to
+<a class="reference external" href="https://github.com/python/cpython/blob/2.7/Objects/intobject.c#L16">allocate ints</a>. So, what we did was to simply <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/commit/d8754ab9ba6371c83eaeb80cdf8cc13a37ee0c89">steal the code</a> from CPython
+and do the exact same thing. This was also done in the
+<tt class="docutils literal"><span class="pre">cpyext-avoid-roundtrip</span></tt> branch, and the benchmarks show that it worked
+perfectly.<br>
+Every type which is converted often to <tt class="docutils literal">PyObject*</tt> must have a very fast
+allocator. At the moment of writing, PyPy uses free lists only for ints and
+<a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/commit/35e2fb9903f2483940d7970bd83ce8c65aa1c1a3">tuples</a>: one of the next steps on our TODO list is certainly to use this
+technique with more types, like <tt class="docutils literal">float</tt>.<br>
+Conversely, we also need to optimize the conversion from <tt class="docutils literal">PyObject*</tt> to
+<tt class="docutils literal">W_Root</tt>: this happens when an object is originally allocated in C and
+returned to Python. Consider for example the following code:<br><pre class="code python literal-block"><span class="keyword namespace">import</span> <span class="name namespace">numpy</span> <span class="keyword namespace">as</span> <span class="name namespace">np</span>
+<span class="name">myarray</span> <span class="operator">=</span> <span class="name">np</span><span class="operator">.</span><span class="name">random</span><span class="operator">.</span><span class="name">random</span><span class="punctuation">(</span><span class="name">N</span><span class="punctuation">)</span>
+<span class="keyword">for</span> <span class="name">i</span> <span class="operator word">in</span> <span class="name builtin">range</span><span class="punctuation">(</span><span class="name builtin">len</span><span class="punctuation">(</span><span class="name">arr</span><span class="punctuation">)):</span>
+    <span class="name">myarray</span><span class="punctuation">[</span><span class="name">i</span><span class="punctuation">]</span>
+</pre>
+At every iteration, we get an item out of the array: the return type is a an
+instance of <tt class="docutils literal">numpy.float64</tt> (a numpy scalar), i.e. a <tt class="docutils literal">PyObject'*</tt>: this is
+something which is implemented by numpy entirely in C, so completely
+opaque to <tt class="docutils literal">cpyext</tt>. We don't have any control on how it is allocated,
+managed, etc., and we can assume that allocation costs are the same as on
+CPython.<br>
+As soon as we return these <tt class="docutils literal">PyObject*</tt> to Python, we need to allocate
+their <tt class="docutils literal">W_Root</tt> equivalent. If you do it in a small loop like in the example
+above, you end up allocating all these <tt class="docutils literal">W_Root</tt> inside the nursery, which is
+a good thing since allocation is super fast (see the section above about the
+PyPy GC).<br>
+However, we also need to keep track of the <tt class="docutils literal">W_Root</tt> to <tt class="docutils literal">PyObject*</tt> link.
+Currently, we do this by putting all of them in a dictionary, but it is very
+inefficient, especially because most of these objects die young and thus it
+is wasted work to do that for them.  Currently, this is one of the biggest
+unresolved problem in <tt class="docutils literal">cpyext</tt>, and it is what causes the two microbenchmarks
+<tt class="docutils literal">allocate_int</tt> and <tt class="docutils literal">allocate_tuple</tt> to be very slow.<br>
+We are well aware of the problem, and we have a plan for how to fix it. The
+explanation is too technical for the scope of this blog post as it requires a
+deep knowledge of the GC internals to be understood, but the details are
+<a class="reference external" href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/extradoc/planning/cpyext.txt#L27">here</a>.</div>
+<div class="section" id="c-api-quirks">
+<h1>
+C API quirks<a href="#c-api-quirks" class="headerlink" title="Permalink to this heading">¶</a></h1>
+Finally, there is another source of slowdown which is beyond our control. Some
+parts of the CPython C API are badly designed and expose some of the
+implementation details of CPython.<br>
+The major example is reference counting. The <tt class="docutils literal">Py_INCREF</tt> / <tt class="docutils literal">Py_DECREF</tt> API
+is designed in such a way which forces other implementation to emulate
+refcounting even in presence of other GC management schemes, as explained
+above.<br>
+Another example is borrowed references. There are API functions which <strong>do
+not</strong> incref an object before returning it, e.g. <a class="reference external" href="https://docs.python.org/2/c-api/list.html#c.PyList_GetItem">PyList_GetItem()</a>.  This is
+done for performance reasons because we can avoid a whole incref/decref pair,
+if the caller needs to handle the returned item only temporarily: the item is
+kept alive because it is in the list anyway.<br>
+For PyPy, this is a challenge: thanks to <a class="reference external" href="../../2011/10/more-compact-lists-with-list-strategies-8229304944653956829.html">list strategies</a>, lists are often
+represented in a compact way. For example, a list containing only integers is
+stored as a C array of <tt class="docutils literal">long</tt>.  How to implement <tt class="docutils literal">PyList_GetItem</tt>? We
+cannot simply create a <tt class="docutils literal">PyObject*</tt> on the fly, because the caller will never
+decref it and it will result in a memory leak.<br>
+The current solution is very inefficient. The first time we do a
+<tt class="docutils literal">PyList_GetItem</tt>, we <a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/py3.6/pypy/module/cpyext/listobject.py#lines-28">convert</a> the <strong>whole</strong> list to a list of
+<tt class="docutils literal">PyObject*</tt>. This is bad in two ways: the first is that we potentially pay a
+lot of unneeded conversion cost in case we will never access the other items
+of the list. The second is that by doing that we lose all the performance
+benefit granted by the original list strategy, making it slower for the
+rest of the pure-python code which will manipulate the list later.<br><tt class="docutils literal">PyList_GetItem</tt> is an example of a bad API because it assumes that the list
+is implemented as an array of <tt class="docutils literal">PyObject*</tt>: after all, in order to return a
+borrowed reference, we need a reference to borrow, don't we?<br>
+Fortunately, (some) CPython developers are aware of these problems, and there
+is an ongoing project to <a class="reference external" href="https://pythoncapi.readthedocs.io/">design a better C API</a> which aims to fix exactly
+this kind of problem.<br>
+Nonetheless, in the meantime we still need to implement the current
+half-broken APIs. There is no easy solution for that, and it is likely that
+we will always need to pay some performance penalty in order to implement them
+correctly.<br>
+However, what we could potentially do is to provide alternative functions
+which do the same job but are more PyPy friendly: for example, we could think
+of implementing <tt class="docutils literal">PyList_GetItemNonBorrowed</tt> or something like that: then, C
+extensions could choose to use it (possibly hidden inside some macro and
+<tt class="docutils literal">#ifdef</tt>) if they want to be fast on PyPy.</div>
+<div class="section" id="current-performance">
+<h1>
+Current performance<a href="#current-performance" class="headerlink" title="Permalink to this heading">¶</a></h1>
+During the whole blog post we claimed <tt class="docutils literal">cpyext</tt> is slow. How
+slow it is, exactly?<br>
+We decided to concentrate on <a class="reference external" href="https://github.com/antocuni/cpyext-benchmarks">microbenchmarks</a> for now. It should be evident
+by now there are simply too many issues which can slow down a <tt class="docutils literal">cpyext</tt>
+program, and microbenchmarks help us to concentrate on one (or few) at a
+time.<br>
+The microbenchmarks measure very simple things, like calling functions and
+methods with the various calling conventions (no arguments, one arguments,
+multiple arguments); passing various types as arguments (to measure conversion
+costs); allocating objects from C, and so on.<br>
+Here are the results from the old PyPy 5.8 relative and normalized to CPython
+2.7, the lower the better:<br><br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://4.bp.blogspot.com/-5QV9jBfeXfo/W6UOCRA9YqI/AAAAAAAABX4/H2zgbv_XFQEHD4Lb2lj5Ve4Ob_YMuSXLwCLcBGAs/s1600/pypy58.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="480" src="https://4.bp.blogspot.com/-5QV9jBfeXfo/W6UOCRA9YqI/AAAAAAAABX4/H2zgbv_XFQEHD4Lb2lj5Ve4Ob_YMuSXLwCLcBGAs/s640/pypy58.png" width="640"></a>
+</div>
+<br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://www.blogger.com/blogger.g?blogID=3971202189709462152" style="margin-left: 1em; margin-right: 1em;"></a>
+</div>
+<div class="separator" style="clear: both; text-align: center;">
+<a href="https://www.blogger.com/blogger.g?blogID=3971202189709462152" style="margin-left: 1em; margin-right: 1em;"></a>
+</div>
+<br>
+PyPy was horribly slow everywhere, ranging from 2.5x to 10x slower. It is
+particularly interesting to compare <tt class="docutils literal">simple.noargs</tt>, which measures the cost
+of calling an empty function with no arguments, and <tt class="docutils literal">simple.onearg(i)</tt>,
+which measures the cost calling an empty function passing an integer argument:
+the latter is ~2x slower than the former, indicating that the conversion cost
+of integers is huge.<br>
+PyPy 5.8 was the last release before the famous Cape Town sprint, when we
+started to look at cpyext performance seriously. Here are the performance data for
+PyPy 6.0, the latest release at the time of writing:<br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://1.bp.blogspot.com/-MRkRoxtCeOE/W6UOL5txl1I/AAAAAAAABX8/i0ZiOyS2MOgiSyxFAyMOkKcB6xqjSihBACLcBGAs/s1600/pypy60.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="480" src="https://1.bp.blogspot.com/-MRkRoxtCeOE/W6UOL5txl1I/AAAAAAAABX8/i0ZiOyS2MOgiSyxFAyMOkKcB6xqjSihBACLcBGAs/s640/pypy60.png" width="640"></a>
+</div>
+<br><br>
+The results are amazing! PyPy is now massively faster than before, and for
+most benchmarks it is even faster than CPython: yes, you read it correctly:
+PyPy is faster than CPython at doing CPython's job, even considering all the
+extra work it has to do to emulate the C API.  This happens thanks to the JIT,
+which produces speedups high enough to counterbalance the slowdown caused by
+cpyext.<br>
+There are two microbenchmarks which are still slower though: <tt class="docutils literal">allocate_int</tt>
+and <tt class="docutils literal">allocate_tuple</tt>, for the reasons explained in the section about
+<a class="reference internal" href="https://www.blogger.com/blogger.g?blogID=3971202189709462152#conversion-costs">Conversion costs</a>.</div>
+<div class="section" id="next-steps">
+<h1>
+Next steps<a href="#next-steps" class="headerlink" title="Permalink to this heading">¶</a></h1>
+Despite the spectacular results we got so far, <tt class="docutils literal">cpyext</tt> is still slow enough to
+kill performance in most real-world code which uses C extensions extensively
+(e.g., the omnipresent numpy).<br>
+Our current approach is something along these lines:<br><blockquote>
+<ol class="arabic simple">
+<li>run a real-world small benchmark which exercises cpyext</li>
+<li>measure and find the major bottleneck</li>
+<li>write a corresponding microbenchmark</li>
+<li>optimize it</li>
+<li>repeat</li>
+</ol>
+</blockquote>
+On one hand, this is a daunting task because the C API is huge and we need to
+tackle functions one by one.  On the other hand, not all the functions are
+equally important, and is is enough to optimize a relatively small subset to
+improve many different use cases.<br>
+Where a year ago we announced we have a working answer to run c-extension in
+PyPy, we now have a clear picture of what are the performance bottlenecks, and
+we have developed some technical solutions to fix them. It is "only" a matter
+of tackling them, one by one.  It is worth noting that most of the work was
+done during two sprints, for a total 2-3 person-months of work.<br>
+We think this work is important for the Python ecosystem. PyPy has established
+a baseline for performance in pure python code, providing an answer for the
+"Python is slow" detractors. The techniques used to make <tt class="docutils literal">cpyext</tt> performant
+will let PyPy become an alternative for people who mix C extensions with
+Python, which, it turns out, is just about everyone, in particular those using
+the various scientific libraries. Today, many developers are forced to seek
+performance by converting code from Python to a lower language. We feel there
+is no reason to do this, but in order to prove it we must be able to run both
+their python and their C extensions performantly, then we can begin to educate
+them how to write JIT-friendly code in the first place.<br>
+We envision a future in which you can run arbitrary Python programs on PyPy,
+with the JIT speeding up the pure Python parts and the C parts running as fast
+as today: the best of both worlds!</div>
+</div>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/cpyext.html" rel="tag">cpyext</a></li>
+            <li><a class="tag p-category" href="../../../categories/profiling.html" rel="tag">profiling</a></li>
+            <li><a class="tag p-category" href="../../../categories/speed.html" rel="tag">speed</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="the-first-15-years-of-pypy-3412615975376972020.html" rel="prev" title="The First 15 Years of PyPy — a Personal Retrospective">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../11/guest-post-implementing-calculator-repl-6271483514675006846.html" rel="next" title="Guest Post: Implementing a Calculator REPL in RPython">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-8304134191082279078">
+        <div class="comment-header">
+          <a name="comment-8304134191082279078"></a>
+            <span class="author">AlbertMietus</span> wrote on <span class="date">2018-09-22 08:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks fo this nice article!<br><br>—Albert</p>
+        </div>
+      </div>
+      <div class="comment comment-3520388495855845072">
+        <div class="comment-header">
+          <a name="comment-3520388495855845072"></a>
+            <span class="author">Pixy Misa</span> wrote on <span class="date">2018-09-22 09:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great work guys!  I should benchmark some of my apps again - a couple of things that were dependent on C extensions didn't show much speedup previously.</p>
+        </div>
+      </div>
+      <div class="comment comment-970515122157794012">
+        <div class="comment-header">
+          <a name="comment-970515122157794012"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2018-09-22 15:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>Great work man !</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

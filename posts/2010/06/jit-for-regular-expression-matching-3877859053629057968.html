@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A JIT for Regular Expression Matching | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2010/06/jit-for-regular-expression-matching-3877859053629057968.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="../05/pypy-in-googles-summer-of-code-2010-5321939902318322352.html" title="PyPy in Google's Summer of Code 2010" type="text/html">
+<link rel="next" href="pypy-13-released-8546085566902489304.html" title="PyPy 1.3 released" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="A JIT for Regular Expression Matching">
+<meta property="og:url" content="https://www.pypy.org/posts/2010/06/jit-for-regular-expression-matching-3877859053629057968.html">
+<meta property="og:description" content="This is part 2 of a series, see Part 1 for an introduction. In this post
+I want to describe how the JIT generator of the PyPy project can be used to turn
+the elegant but not particularly fast regular ">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2010-06-08T12:53:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">A JIT for Regular Expression Matching</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2010-06-08T12:53:00Z" itemprop="datePublished" title="2010-06-08 12:53">2010-06-08 12:53</time></a>
+            </p>
+                <p class="commentline">11 comments</p>
+
+                <p class="commentline">            <a href="jit-for-regular-expression-matching-3877859053629057968.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>This is <strong>part 2</strong> of a series, see <a class="reference external" href="../05/efficient-and-elegant-regular-2727904462179540436.html">Part 1</a> for an introduction. In this post
+I want to describe how the JIT generator of the PyPy project can be used to turn
+the elegant but not particularly fast regular expression matcher from the first
+part into a rather fast implementation. In addition, I will show some speed
+measurements against various regular expression implementations.</p>
+<p>Again, note the <strong>disclaimer</strong>: This technology could not easily be used
+to implement Python's <tt class="docutils literal">re</tt>-module.</p>
+<div class="section" id="example-expression-and-first-numbers">
+<h2>Example Expression and First Numbers<a href="#example-expression-and-first-numbers" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>The regular expression I will use as an example in the rest of this paper is
+the expression <tt class="docutils literal"><span class="pre">(a|b)*a(a|b){20}a(a|b)*</span></tt>. It matches all strings that have two
+<tt class="docutils literal">a</tt> with exactly 20 characters between them. This regular expression has
+the property that the corresponding DFA needs <tt class="docutils literal"><span class="pre">2**(n+1)</span></tt> different states. As
+an input string, we use a random string (of varying lengths) that does <em>not</em>
+match the regular expression. I will give all results as number of chars matched
+per second. While this is not a particularly typical regular expression, it
+should still be possible to get some ballpark numbers for the speeds of various
+implementations – as we will see, the differences between implementations are
+huge anyway.</p>
+<p>All the benchmarks were performed on my laptop, which has an Intel Core2 Duo
+P8400 processor with 2.26 GHz and 3072 KB of cache on a machine with 3GB RAM
+running Ubuntu Linux 10.04.</p>
+<p>To get a feeling for the orders of magnitude involved, the <a class="reference external" href="https://docs.python.org/library/re.html">CPython re module</a>
+(which is implemented in C and quite optimized) can match 2'500'000 chars/s.
+Google's new <a class="reference external" href="https://code.google.com/p/re2/">re2 implementation</a> still matches 550'000 chars/s. Google's
+implementation is slower, but their algorithm gives complexity and space
+guarantees similar to our implementation in the last blog post.</p>
+<p>On the other end of the performance scale is the pure-Python code from the last
+blog post running on CPython. It can match only 12'200 chars/s and is thus 200
+times slower than the <tt class="docutils literal">re</tt> module.</p>
+</div>
+<div class="section" id="translating-the-matcher">
+<h2>Translating the Matcher<a href="#translating-the-matcher" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>The code described in the last blog post is not only normal Python code, but
+also perfectly valid RPython code. Nothing particularly dynamic is going on in
+the code, thus it can be translated with PyPy's translation toolchain to C code.
+The resulting binary is considerably faster and can match 720'000 chars/s, 60
+times faster than the untranslated version.</p>
+<p>Another approach is to write equivalent versions of the algorithms in lower
+level languages. This has been done for C++ by Sebastian Fischer and for Java by
+Baltasar Trancón y Widemann. The algorithm is object-oriented enough to be
+mapped very closely to the respective languages. The C++ version is
+a little bit faster than the RPython version translated to C, at 750'000 chars/s. That's
+not very surprising, given their similarity. The Java version is more than twice
+as fast, with 1'920'000 chars/s. Apparently the Java JIT compiler is a lot
+better at optimizing the method calls in the algorithm or does some other
+optimizations. One reason for this could be that the Java JIT can assume that
+the classes it sees are all there are (and it will invalidate the generated
+machine code if more classes are loaded), whereas the C++ compiler needs to
+generate code that works even in the presence of more regular expression
+classes.</p>
+</div>
+<div class="section" id="generating-a-jit">
+<h2>Generating a JIT<a href="#generating-a-jit" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>To get even more performance out of the RPython code, it is possible to generate
+a JIT for it with the help of the PyPy translation toolchain. To do this, the
+matching code needs to be extended somewhat by some hints that tell PyPy's JIT
+generator how this is to be done. The JIT generator can automatically produce a
+JIT compiler from an RPython interpreter of the source language. In our case,
+we view the regular expression matcher as an interpreter for regular
+expressions. Then the <tt class="docutils literal">match</tt> function corresponds to the
+dispatch loop of a traditional interpreter.</p>
+<p>Our regular expression matcher is a very peculiar interpreter. The matcher
+works by running exactly one loop (the one in <tt class="docutils literal">match</tt>) as many times as the
+input string is long, irrespective of the "program", i.e. the particular
+regular expressions. In addition, within the loop there are no conditions (e.g.
+if statements) at all, it is just linear code. This makes it almost perfectly
+suited
+to the JIT generator, which produces a tracing JIT. A tracing JIT compiles the
+hot loops of a program (i.e. regular expression) and has to do extra work if
+there are conditions in the loop. In our case, there is exactly one loop per
+regular expression, without any condition.</p>
+<div class="section" id="jit-hints">
+<h3>JIT Hints<a href="#jit-hints" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The hints that are needed for the <tt class="docutils literal">match</tt> function of the last blog post can
+be seen here (the function is slightly rewritten, e.g. the JIT does only
+properly support a <tt class="docutils literal">while</tt> loop as the main dispatch loop):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;">jitdriver <span style="color: #555555;">=</span> jit<span style="color: #555555;">.</span>JitDriver(reds<span style="color: #555555;">=</span>[<span style="color: #CC3300;">"i"</span>, <span style="color: #CC3300;">"result"</span>, <span style="color: #CC3300;">"s"</span>], greens<span style="color: #555555;">=</span>[<span style="color: #CC3300;">"re"</span>])
+
+<span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">match</span>(re, s):
+    <span style="color: #006699; font-weight: bold;">if</span> <span style="color: #000000; font-weight: bold;">not</span> s:
+        <span style="color: #006699; font-weight: bold;">return</span> re<span style="color: #555555;">.</span>empty
+    <span style="color: #0099FF; font-style: italic;"># shift a mark in from the left</span>
+    result <span style="color: #555555;">=</span> re<span style="color: #555555;">.</span>shift(s[<span style="color: #FF6600;">0</span>], <span style="color: #FF6600;">1</span>)
+    i <span style="color: #555555;">=</span> <span style="color: #FF6600;">1</span>
+    <span style="color: #006699; font-weight: bold;">while</span> i <span style="color: #555555;">&lt;</span> <span style="color: #336666;">len</span>(s):
+        jitdriver<span style="color: #555555;">.</span>can_enter_jit(i<span style="color: #555555;">=</span>i, result<span style="color: #555555;">=</span>result, s<span style="color: #555555;">=</span>s, re<span style="color: #555555;">=</span>re)
+        jitdriver<span style="color: #555555;">.</span>jit_merge_point(i<span style="color: #555555;">=</span>i, result<span style="color: #555555;">=</span>result, s<span style="color: #555555;">=</span>s, re<span style="color: #555555;">=</span>re)
+        <span style="color: #0099FF; font-style: italic;"># shift the internal marks around</span>
+        result <span style="color: #555555;">=</span> re<span style="color: #555555;">.</span>shift(s[i], <span style="color: #FF6600;">0</span>)
+        i <span style="color: #555555;">+=</span> <span style="color: #FF6600;">1</span>
+    re<span style="color: #555555;">.</span>reset()
+    <span style="color: #006699; font-weight: bold;">return</span> result
+</pre></div>
+<p>The <tt class="docutils literal">jitdriver</tt> is an instance describing the data of the interpreter we are
+dealing with. The arguments to the constructor need to list all local variables
+of the dispatch loop. The local variables are classified into two classes, red
+ones and green ones. The green ones hold the objects that make up the program
+that the interpreter currently runs and which position in the program is
+currently being executed. In a typical bytecode interpreter, the bytecode object
+and the program counter would be green. In our case, the regular expression is
+the program, so it is green. The rest of the variables are red.</p>
+<p>The green variables are treated specially by the JIT generator. At runtime, for
+a given value of the green variables, one piece of machine code will be
+generated. This piece of machine code can therefore assume that the value of
+the green variable is constant.</p>
+<p>There are two additional hints, which are method calls on the
+<tt class="docutils literal">jitdriver</tt> instance. The <tt class="docutils literal">jit_merge_point</tt> method marks the beginning of
+the main interpreter loop. The <tt class="docutils literal">can_enter_jit</tt> function marks the point where
+a loop in the user program can be closed, which in our case is trivial, it's
+just at the end of the interpreter loop (for technical reasons it is put at the beginning, because nothing must happen between the <tt class="docutils literal">can_enter_jit</tt> and <tt class="docutils literal">jit_merge_point</tt> invocations).</p>
+<p>Those are the hints that the JIT generator needs to function at all. We added
+some additional hints, that give the JIT generator more information to work
+with. Those hints are immutability information, which means that certain
+instance fields can not be changed after the object has been constructed. Apart
+from the <tt class="docutils literal">marked</tt> field, none of the fields of any of the <tt class="docutils literal">Regex</tt> subclasses
+can change. For example for the <tt class="docutils literal">Char</tt> class this is expressed in the
+following way:</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #006699; font-weight: bold;">class</span> <span style="color: #00AA88; font-weight: bold;">Char</span>(Regex):
+    _immutable_fields_ <span style="color: #555555;">=</span> [<span style="color: #CC3300;">"c"</span>]
+    <span style="color: #006699; font-weight: bold;">def</span> <span style="color: #CC00FF;">__init__</span>(<span style="color: #336666;">self</span>, c):
+        <span style="color: #555555;">...</span>
+</pre></div>
+<p>These hints allow the generated JIT to constant-fold reads out of the immutable
+fields in some situations.</p>
+</div>
+<div class="section" id="adaptions-to-the-original-code">
+<h3>Adaptions to the Original Code<a href="#adaptions-to-the-original-code" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>In the introduction above I wrote that the code within the loop in <tt class="docutils literal">match</tt>
+uses no conditions. It is indeed true that none of the <tt class="docutils literal">_shift</tt> methods
+have an <tt class="docutils literal">if</tt> statement or similar. However, there are some hidden conditions
+due to the fact that the <tt class="docutils literal">and</tt> and <tt class="docutils literal">or</tt> boolean operators are used, which
+are short-circuiting. Therefore the JIT-version of the code needs to be adapted
+to use the non-short-circuiting operators <tt class="docutils literal">&amp;</tt> and <tt class="docutils literal">|</tt>.</p>
+</div>
+<div class="section" id="jit-example">
+<h3>JIT Example<a href="#jit-example" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>To get an impression of how the generated machine code looks like, consider the
+regular expression <tt class="docutils literal">(a|b)*</tt>. As regular expression objects this would be
+<tt class="docutils literal"><span class="pre">Repetition(Alternative(Char('a'),</span> <span class="pre">Char('b')))</span></tt>. The machine code in its intermediate,
+machine-independent form looks as follows (I have slightly cleaned it up and
+added comments for clarity):</p>
+<div class="highlight" style="background: #f0f3f3;"><pre style="line-height: 125%;"><span style="color: #0099FF; font-style: italic;"># arguments of the loop</span>
+<span style="color: #0099FF; font-style: italic;"># i0 is i in the match function</span>
+<span style="color: #0099FF; font-style: italic;"># result0 is result in the match function</span>
+<span style="color: #0099FF; font-style: italic;"># s0 is s in the match function</span>
+[i0, result0, s0] <span style="color: #0099FF; font-style: italic;"># those are the arguments to the machine code</span>
+char <span style="color: #555555;">=</span> s0[i0] <span style="color: #0099FF; font-style: italic;"># read the character</span>
+<span style="color: #0099FF; font-style: italic;"># read the current mark:</span>
+i5 <span style="color: #555555;">=</span> ConstPtr(ptr_repetition)<span style="color: #555555;">.</span>marked
+i7 <span style="color: #555555;">=</span> char <span style="color: #555555;">==</span> <span style="color: #CC3300;">'a'</span> <span style="color: #0099FF; font-style: italic;"># is the character equal to 'a'</span>
+i8 <span style="color: #555555;">=</span> i5 <span style="color: #555555;">&amp;</span> i7
+i10 <span style="color: #555555;">=</span> char <span style="color: #555555;">==</span> <span style="color: #CC3300;">'b'</span> <span style="color: #0099FF; font-style: italic;"># is the character equal to 'b'</span>
+i11 <span style="color: #555555;">=</span> i5 <span style="color: #555555;">&amp;</span> i10
+<span style="color: #0099FF; font-style: italic;"># write new mark</span>
+ConstPtr(ptr_chara)<span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> i8
+i13 <span style="color: #555555;">=</span> i8 <span style="color: #555555;">|</span> i11
+<span style="color: #0099FF; font-style: italic;"># write new mark</span>
+ConstPtr(ptr_charb)<span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> i11
+<span style="color: #0099FF; font-style: italic;"># write new mark</span>
+ConstPtr(ptr_alternative)<span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> i13
+<span style="color: #0099FF; font-style: italic;"># increment the index</span>
+i17 <span style="color: #555555;">=</span> i0 <span style="color: #555555;">+</span> <span style="color: #FF6600;">1</span>
+i18 <span style="color: #555555;">=</span> <span style="color: #336666;">len</span>(s0)
+<span style="color: #0099FF; font-style: italic;"># write new mark</span>
+ConstPtr(ptr_repetition)<span style="color: #555555;">.</span>marked <span style="color: #555555;">=</span> i13
+<span style="color: #0099FF; font-style: italic;"># check that index is smaller than the length of the string</span>
+i19 <span style="color: #555555;">=</span> i17 <span style="color: #555555;">&lt;</span> i18
+<span style="color: #006699; font-weight: bold;">if</span> <span style="color: #000000; font-weight: bold;">not</span> i19:
+    go back to normally running match
+jump(i17, i13, s0) <span style="color: #0099FF; font-style: italic;"># start from the top again</span>
+</pre></div>
+<p>The various <tt class="docutils literal">ConstPtr(ptr_*)</tt> denote constant addresses of parts of the regular
+expression tree:</p>
+<ul class="simple">
+<li>
+<tt class="docutils literal">ptr_repetition</tt> is the <tt class="docutils literal">Repetition</tt>
+</li>
+<li>
+<tt class="docutils literal">ptr_chara</tt> is <tt class="docutils literal"><span class="pre">Char('a')</span></tt>
+</li>
+<li>
+<tt class="docutils literal">ptr_charb</tt> is <tt class="docutils literal"><span class="pre">Char('b')</span></tt>
+</li>
+<li>
+<tt class="docutils literal">ptr_alternative</tt> is the <tt class="docutils literal">Alternative</tt>
+</li>
+</ul>
+<p>Essentially the machine code reads the next char out of the string, the current
+mark out of the <tt class="docutils literal">Repetition</tt> and then performs some boolean operations on
+those, writing back the new marks. Note in particular how the generated
+machine code does not need to do any method calls to <tt class="docutils literal">shift</tt> and <tt class="docutils literal">_shift</tt> and
+that most field reads out of the regular expression classes have been optimized
+away, because the fields are immutable. Therefore the machine code does not
+need to deconstruct the tree of regular expression objects at all, it just
+knows where in memory the various parts of it are, and encodes that directly
+into the code.</p>
+</div>
+<div class="section" id="performance-results-with-jit">
+<h3>Performance Results With JIT<a href="#performance-results-with-jit" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>With the regular expression matcher translated to C and with a generated JIT,
+the regular expression performance increases significantly. Our running example
+can match 16'500'000 chars/s, which is more than six times faster than the
+<tt class="docutils literal">re</tt> module. This is not an entirely fair comparison, because the <tt class="docutils literal">re</tt>
+module can give more information than just "matches" or "doesn't match", but
+it's still interesting to see. A more relevant comparison is that between the
+program with and without a JIT: Generating a JIT speeds the matcher up by more
+than 20 times.</p>
+</div>
+</div>
+<div class="section" id="conclusion">
+<h2>Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>So, what have we actually won? We translated the relatively simple and very slow
+regular expression matching algorithm from the last post to C and were thus able
+to speed it up significantly. The real win is gained by also generating a JIT
+for the matcher, which can be regarded as a simple interpreter. The resulting
+matcher is rather fast.</p>
+<p>The lesson from these posts is <strong>not</strong> that you can or should write a practical
+and general regular expression module in this way – indeed, enhancing the
+algorithm to support more features of the <tt class="docutils literal">re</tt> module would be a lot of work
+and it is also unclear what the speed results for more realistic regular
+expressions would be. However, it makes for a great case study of the JIT
+generator. It was relatively straightforward to generate a JIT for the regex
+matcher, and the speed results were great (Admittedly I know rather a lot about
+PyPy's JIT though). This approach is generalizable to many programs that are
+sufficiently "interpreter-like" (whatever that exactly means).</p>
+<p>All the results that appeared at various points in this blog post can be seen
+here:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="48%">
+<col width="16%">
+<col width="35%">
+</colgroup>
+<tbody valign="top">
+<tr>
+<td><strong>Implementation</strong></td>
+<td><strong>chars/s</strong></td>
+<td><strong>speedup over pure Python</strong></td>
+</tr>
+<tr>
+<td>Pure Python code</td>
+<td>12'200</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Python <tt class="docutils literal">re</tt> module</td>
+<td>2'500'000</td>
+<td>205</td>
+</tr>
+<tr>
+<td>Google's <tt class="docutils literal">re2</tt> implementation</td>
+<td>550'000</td>
+<td>45</td>
+</tr>
+<tr>
+<td>RPython implementation translated to C</td>
+<td>720'000</td>
+<td>59</td>
+</tr>
+<tr>
+<td>C++ implementation</td>
+<td>750'000</td>
+<td>61</td>
+</tr>
+<tr>
+<td>Java implementation</td>
+<td>1'920'000</td>
+<td>157</td>
+</tr>
+<tr>
+<td>RPython implementation with JIT</td>
+<td>16'500'000</td>
+<td>1352</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="sources">
+<h3>Sources<a href="#sources" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>All the source code can be found in my Subversion <a class="reference external" href="https://codespeak.net/svn/user/cfbolz/hack/regex">user directory</a> on Codespeak.</p>
+</div>
+</div>
+<p><strong>Edit:</strong></p>
+<p> Armin is right (see first comment). I fixed the problem.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../05/pypy-in-googles-summer-of-code-2010-5321939902318322352.html" rel="prev" title="PyPy in Google's Summer of Code 2010">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy-13-released-8546085566902489304.html" rel="next" title="PyPy 1.3 released">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-7148682435671001579">
+        <div class="comment-header">
+          <a name="comment-7148682435671001579"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2010-06-08 13:11</span>:
+        </div>
+        <div class="comment-content">
+          <p>Warning: the first example is wrong: there should be no code executed between can_enter_jit() and jit_merge_point().  In this case, there is the exit condition of the loop.  It needs to be rewritten as a "while True:" loop with a "break" just before can_enter_jit().</p>
+        </div>
+      </div>
+      <div class="comment comment-5216728773885194369">
+        <div class="comment-header">
+          <a name="comment-5216728773885194369"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2010-06-08 13:35</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin: Damn, you're right. I fixed the blog post.</p>
+        </div>
+      </div>
+      <div class="comment comment-768245725832846480">
+        <div class="comment-header">
+          <a name="comment-768245725832846480"></a>
+            <span class="author">Nelson Elhage</span> wrote on <span class="date">2010-06-08 15:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>What happens if you don't replace <b>and</b> and <b>or</b>?<br><br>Without those changes, the modifications for JIT really are prety small --<br>mostly just some annotations in the main loop and at toplevel for each<br>class. With those changes, though, you need to potentially check the entire<br>codebase of your interpreter.<br><br>Pretty fun performance results, though.</p>
+        </div>
+      </div>
+      <div class="comment comment-5311693952284725836">
+        <div class="comment-header">
+          <a name="comment-5311693952284725836"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2010-06-08 16:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Nelson: If you don't change the "and" and "or" you get a lot of assembler code generated, and it's not particularly fast.<br><br>Note that this "and" and "or" business is quite specific to this particular example. Usually you can work more incrementally by generating a JIT, then looking at the produced assembler and then doing some small changes in the interpreter to improve parts of it. Each such change is usually localized to one part of the interpreter improves the performance of some language feature.<br><br>This example is not really large enough to show this way of working, though :-). Maybe at some point I should write a walk-through for some interpreter.</p>
+        </div>
+      </div>
+      <div class="comment comment-4573159838151913018">
+        <div class="comment-header">
+          <a name="comment-4573159838151913018"></a>
+            <span class="author">Kumo</span> wrote on <span class="date">2010-06-08 22:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>Would it be possible to create a pypy or cpython extension module this way?</p>
+        </div>
+      </div>
+      <div class="comment comment-6739734310347894753">
+        <div class="comment-header">
+          <a name="comment-6739734310347894753"></a>
+            <span class="author">Jared Forsyth</span> wrote on <span class="date">2010-06-09 21:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>Could you post your 'test runner' code? I'm running some tests (with your) code and getting drastically different numbers...</p>
+        </div>
+      </div>
+      <div class="comment comment-7759046243692984696">
+        <div class="comment-header">
+          <a name="comment-7759046243692984696"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2010-06-10 10:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>@jabapyth: there is no test runner code. I am simply running something like<br><br>genrandom 20 1000000 | time regex-c<br><br>What performance results are you getting? Are you sure that you translated jitregex.py with -Ojit? Otherwise the JIT is not put into the executable.</p>
+        </div>
+      </div>
+      <div class="comment comment-5523496639679186016">
+        <div class="comment-header">
+          <a name="comment-5523496639679186016"></a>
+            <span class="author">Maxim Yegorushkin</span> wrote on <span class="date">2010-08-02 00:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>boost::regex is not mentioned. It's got both recursive and non-recursive implementations. And it is the base of the standard C++ TR1 regex. Would be interesting to stack it up against other results because it is</p>
+        </div>
+      </div>
+      <div class="comment comment-8419051637289499089">
+        <div class="comment-header">
+          <a name="comment-8419051637289499089"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2010-08-02 08:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>We can't possibly include all regex engines (even if we would like to). However, sources are out there and you can always rerun those benchmarks and see how it compares :-)<br><br>Cheers,<br>fijal</p>
+        </div>
+      </div>
+      <div class="comment comment-3637081753993436602">
+        <div class="comment-header">
+          <a name="comment-3637081753993436602"></a>
+            <span class="author">Nikhil</span> wrote on <span class="date">2013-01-12 21:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>I'm not able to access the code on codespeak.net. Has the code been moved to some other place?</p>
+        </div>
+      </div>
+      <div class="comment comment-8717716605101751071">
+        <div class="comment-header">
+          <a name="comment-8717716605101751071"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2013-01-12 22:40</span>:
+        </div>
+        <div class="comment-content">
+          <p>The code has been merged to PyPy since I think. Look up cfbolz repos on bitbucket though</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

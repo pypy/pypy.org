@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture of Cppyy | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2012/06/architecture-of-cppyy-9077100041707701102.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="release-01-of-cffi-4760622823232463868.html" title="Release 0.1 of CFFI" type="text/html">
+<link rel="next" href="europython-sprint-5668923199392472912.html" title="EuroPython sprint" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Architecture of Cppyy">
+<meta property="og:url" content="https://www.pypy.org/posts/2012/06/architecture-of-cppyy-9077100041707701102.html">
+<meta property="og:description" content="The cppyy module makes it possible to call into C++ from PyPy through the
+Reflex package.
+Work started about two years ago, with a follow-up sprint a year later.
+The module has now reached an acceptab">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2012-06-25T14:32:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Architecture of Cppyy</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2012-06-25T14:32:00Z" itemprop="datePublished" title="2012-06-25 14:32">2012-06-25 14:32</time></a>
+            </p>
+                <p class="commentline">11 comments</p>
+
+                <p class="commentline">            <a href="architecture-of-cppyy-9077100041707701102.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>The cppyy module makes it possible to call into C++ from PyPy through the
+<a class="reference external" href="https://root.cern.ch/drupal/content/reflex">Reflex package</a>.
+Work started about <a class="reference external" href="../../2010/07/cern-sprint-report-wrapping-c-libraries-6547377950791793143.html">two years ago</a>, with a <a class="reference external" href="../../2011/08/wrapping-c-libraries-with-reflection-3916959558080483711.html">follow-up sprint</a> a year later.
+The module has now reached an acceptable level of maturity and initial
+documentation with setup instructions, as well as a list of the currently
+supported language features, are now <a class="reference external" href="https://doc.pypy.org/en/latest/cppyy.html">available here</a>.
+There is a sizable (non-PyPy) set of unit and application tests that is still
+being worked through, not all of them of general applicability, so development
+continues its current somewhat random walk towards full language coverage.
+However, if you find that cppyy by and large works for you except for certain
+specific features, feel free to ask for them to be given higher priority.</p>
+<p>Cppyy handles bindings differently than what is typically found in other
+tools with a similar objective, so this update walks through some of these
+differences, and explains why choices were made as they are.</p>
+<p>The most visible difference, is from the viewpoint of the Python programmer
+interacting with the module.
+The two canonical ways of making Python part of a larger environment, are to
+either embed or extend it.
+The latter is done with so-called <a class="reference external" href="https://docs.python.org/release/2.7.3/extending/extending.html">extension modules</a>, which are explicitly
+constructed to be very similar in their presentation to the Python programmer
+as normal Python modules.
+In cppyy, however, the external C++ world is presented from a single entrance
+point, the global C++ namespace (in the form of the variable <tt class="docutils literal">cppyy.gbl</tt>).
+Thus, instead of importing a package that contains your C++ classes, usage
+looks like this (assuming class <tt class="docutils literal">MyClass</tt> in the global namespace):</p>
+<pre class="literal-block">
+&gt;&gt;&gt;&gt; import cppyy
+&gt;&gt;&gt;&gt; m = cppyy.gbl.MyClass()
+&gt;&gt;&gt;&gt; # etc.
+</pre>
+<p>This is more natural than it appears at first: C++ classes and functions are,
+once compiled, represented by unique linker symbols, so it makes sense to give
+them their own unique place on the Python side as well.
+This organization allows pythonizations of C++ classes to propagate from one
+code to another, ensures that all normal Python introspection (such as
+<tt class="docutils literal">issubclass</tt> and <tt class="docutils literal">isinstance</tt>) works as expected in all cases, and that it
+is possible to represent C++ constructs such as typedefs simply by Python
+references.
+Achieving this unified presentation would clearly require a lot of internal
+administration to track all C++ entities if they each lived in their own,
+pre-built extension modules.
+So instead, cppyy generates the C++ bindings at run-time, which brings us to
+the next difference.</p>
+<p>Then again, that is not really a difference: when writing or generating a
+Python extension module, the result is some C code that consists of calls into
+Python, which then gets compiled.
+However, it is not the bindings themselves that are compiled; it is the code
+that creates the bindings that gets compiled.
+In other words, any generated or hand-written extension module does exactly
+what cppyy does, except that they are much more specific in that the bound
+code is hard-wired with e.g. fixed strings and external function calls.
+The upshot is that in Python, where all objects are first-class and run-time
+constructs, there is no difference whatsoever between bindings generated at
+run-time, and bindings generated at ... well, run-time really.
+There is a difference in organization, though, which goes back to the first
+point of structuring the C++ class proxies in Python: given that a class will
+settle in a unique place once bound, instead of inside a module that has no
+meaning in the C++ world, it follows that it can also be uniquely located in
+the first place.
+In other words, cppyy can, and does, make use of a <a class="reference external" href="https://doc.pypy.org/en/latest/cppyy.html#automatic-class-loader">class loader</a> to
+auto-load classes on-demand.</p>
+<p>If at this point, this all reminds you of a bit ctypes, just with some extra
+bells and whistles, you would be quite right.
+In fact, internally cppyy makes heavy use of the RPython modules that form the
+guts of ctypes.
+The difficult part of ctypes, however, is the requirement to annotate
+functions and structures.
+That is not very pleasant in C, but in C++ there is a whole other level of
+complexity in that the C++ standard specifies many low-level details, that are
+required for dispatching calls and understanding object layout, as
+"implementation defined."
+Of course, in the case of Open Source compilers, getting at those details is
+doable, but having to reverse engineer closed-source compilers gets old rather
+quickly in more ways than one.
+More generally, these implementation defined details prevent a clean interface,
+i.e. without a further dependency on the compiler, into C++ like the one that
+the <a class="reference external" href="release-01-of-cffi-4760622823232463868.html">CFFI module</a> provides for C.
+Still, once internal pointers have been followed, offsets have been calculated,
+<tt class="docutils literal">this</tt> objects have been provided, etc., etc., the final dispatch into binary
+C++ is no different than that into C, and cppyy will therefore be able to make
+use of CFFI internally, like it does with ctypes today.
+This is especially relevant in the <a class="reference external" href="https://root.cern.ch/drupal/content/cling">CLang/LLVM</a> world, where stub functions
+are done away with.
+To get the required low-level details then, cppyy relies on a back-end, rather
+than getting it from the programmer, and this is where Reflex (together with
+the relevant C++ compiler) comes in, largely automating this tedious process.</p>
+<p>There is nothing special about Reflex per se, other than that it is relatively
+lightweight, available, and has proven to be able to handle huge code bases.
+It was a known quantity when work on cppyy started, and given the number
+of moving parts in learning PyPy, that was a welcome relief.
+Reflex is based on <a class="reference external" href="https://www.gccxml.org">gccxml</a>, and can therefore handle pretty much any C or
+C++ code that you care to throw at it.
+It is also technically speaking obsolete as it will not support C++11, since
+gccxml won't, but its expected replacement, based on CLang/LLVM, is not
+quite there yet (we are looking at Q3 of this year).
+In cppyy, access to Reflex, or any back-end for that matter, is through a
+thin C API (see the schematic below): cppyy asks high level questions to the
+back-end, and receives low-level results, some of which are in the form of
+opaque handles.
+This ensures that cppyy is not tied to any specific back-end.
+In fact, currently it already supports another, <a class="reference external" href="https://root.cern.ch/root/Cint.html">CINT</a>, but that back-end is
+of little interest outside of High Energy Physics (HEP).
+The Python side is always the same, however, so any Python code based on cppyy
+does not have to change if the back-end changes.
+To use the system,  a back-end specific tool (<tt class="docutils literal">genreflex</tt> for Reflex) is
+first run on a set of header files with a <a class="reference external" href="https://doc.pypy.org/en/latest/cppyy.html#advanced-example">selection file</a> for choosing the
+required classes.
+This produces a C++ file that must be compiled into a shared library, and a
+corresponding map file for the class loader.
+These shared libraries, with their map files alongside, can be put anywhere
+as long as they can be located through the standard paths for the dynamic
+loader.
+With that in place, the setup is ready, and the C++ classes are available to
+be used from cppyy.</p>
+<a href="https://1.bp.blogspot.com/-GTr_ubhX0As/T-hoMQZdtSI/AAAAAAAACIM/tMAZnQEL5GY/s1600/cppyy_architecture.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="253" src="https://1.bp.blogspot.com/-GTr_ubhX0As/T-hoMQZdtSI/AAAAAAAACIM/tMAZnQEL5GY/s400/cppyy_architecture.png" width="400"></a>
+<p>So far, nothing that has been described is specific to PyPy.
+In fact, most of the technologies described have been used for a long time
+on CPython already, so why the need for a new, PyPy-specific, module?
+To get to that, it is important to first understand how a call is mediated
+between Python and C++.
+In Python, there is the concept of a PyObject, which has a reference count, a
+pointer to a type object, and some payload.
+There are APIs to extract the low-level information from the payload for use
+in the C++ call, and to repackage any results from the call.
+This marshalling is where the bulk of the time is spent when dispatching.
+To be absolutely precise, most C++ extension module generators produce slow
+dispatches because they don't handle overloads efficiently, but even in there,
+they still spend most of their time in the marshalling code, albeit in calls
+that fail before trying the next overload.
+In PyPy, speed is gained by having the JIT unbox objects into the payload only,
+allowing it to become part of compiled traces.
+If the same marshalling APIs were used, the JIT is forced to rebox the payload,
+hand it over through the API, only to have it unboxed again by the binding.
+Doing so is dreadfully inefficient.
+The objective of cppyy, then, is to keep all code transparent to the JIT until
+the absolute last possible moment, i.e. the call into C++ itself, therefore
+allowing it to (more or less) directly pass the payload it already has, with
+an absolute minimal amount of extra work.
+In the extreme case when the binding is not to a call, but to a data member of
+an object (or to a global variable), the memory address is delivered to the
+JIT and this results in direct access with no overhead.
+Note the interplay: cppyy in PyPy does not work like a binding in the CPython
+sense that is a back-and-forth between the interpreter and the extension.
+Instead, it does its work by being transparent to the JIT, allowing the JIT to
+dissolve the binding.
+And with that, we have made a full circle: if to work well with the JIT, and
+in so doing achieve the best performance, you can not have marshalling or do
+any other API-based driving, then the concept of compiled extension modules is
+out, and the better solution is in run-time generated bindings.</p>
+<p>That leaves one final point.
+What if you do want to present an extension module-like interface to
+programmers that use your code?
+But of course, this is Python: everything consists of first-class objects,
+whose behavior can be changed on the fly.
+In CPython, you might hesitate to make such changes, as every overlay or
+indirection results in quite a bit of overhead.
+With PyPy, however, these layers are all optimized out of existences, making
+that a non-issue.</p>
+<p>This posting laid out the reasoning behind the organization of cppyy.
+A follow-up is planned, to explain how C++ objects are handled and
+represented internally.</p>
+<p>Wim Lavrijsen</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="release-01-of-cffi-4760622823232463868.html" rel="prev" title="Release 0.1 of CFFI">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="europython-sprint-5668923199392472912.html" rel="next" title="EuroPython sprint">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-634144513467333427">
+        <div class="comment-header">
+          <a name="comment-634144513467333427"></a>
+            <span class="author">Fernando Perez</span> wrote on <span class="date">2012-06-25 21:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>Thanks for this excellent post; any chance you'll make it to Scipy'2012 in Austin?  I still remember your talk at one of the very old Scipys at Caltech as one of the best we've had; it would be great to catch up on the implications of your continued work on this front since.  With the recent progress on cython and numpy/numba, fresh ideas on the C++ front are a great complement.</p>
+        </div>
+      </div>
+      <div class="comment comment-8404754595118564106">
+        <div class="comment-header">
+          <a name="comment-8404754595118564106"></a>
+            <span class="author">Sebastien Binet</span> wrote on <span class="date">2012-06-26 09:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wim,<br><br>I know you are quite attached to details so I was surprised by:<br><br>"""<br>Reflex is based on gccxml, and can therefore handle pretty much any C or C++ code that you care to throw at it<br>"""<br><br>but that's not true: gccxml being an interesting and useful hack of the C++ frontend of GCC, it can only correctly parse the subset of C which is valid C++.<br><br>here are a few links:<br>https://stackoverflow.com/questions/1201593/c-subset-of-c-where-not-examples<br><br>https://en.wikipedia.org/wiki/Compatibility_of_C_and_C%2B%2B<br><br>I discovered it the hard way...</p>
+        </div>
+      </div>
+      <div class="comment comment-48000453198536673">
+        <div class="comment-header">
+          <a name="comment-48000453198536673"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-06-26 09:45</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Sebastien, GCC-XML must be able to parse the entirety of C, since it has to support "extern C" blocks, mustn't it?</p>
+        </div>
+      </div>
+      <div class="comment comment-8060571880848308986">
+        <div class="comment-header">
+          <a name="comment-8060571880848308986"></a>
+            <span class="author">Sebastien Binet</span> wrote on <span class="date">2012-06-26 12:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>"extern C" is "just" modifying the symbol mangling mechanism of the identifiers inside the extern-C block.<br><br>just try this example from the link I posted earlier:<br>https://stackoverflow.com/questions/1201593/c-subset-of-c-where-not-examples<br><br>"""<br>struct A { struct B { int a; } b; int c; };<br>struct B b; // ill-formed: b has incomplete type (*not* A::B)<br>"""<br><br>even if you create a foo.h like so:<br><br>"""<br>#ifdef __cplusplus<br>extern "C" {<br>#endif<br><br>struct A { struct B { int a; } b; int c; };<br>  struct B b;<br>#ifdef __cplusplus<br>}<br>#endif<br>"""<br><br>and compile some main.c/cxx (which just includes that header) with gcc/g++, you'll get:<br><br>"""<br>$ gcc main.c<br>$ echo $?<br>0<br><br>$ g++ main.cxx<br>In file included from main.cxx:2:0:<br>foo.h:7:12: error: aggregate ‘B b’ has incomplete type and cannot be defined<br>zsh: exit 1     g++ main.cxx<br>"""<br><br>gccxml is using the C++ parser, thus my first remark :}</p>
+        </div>
+      </div>
+      <div class="comment comment-3169343557206536483">
+        <div class="comment-header">
+          <a name="comment-3169343557206536483"></a>
+            <span class="author">Sebastien Binet</span> wrote on <span class="date">2012-06-26 12:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>Also, as we are in the nitpicking and parsing department, any C++ keyword which isn't a C one, can be correctly used in a C file, making that file landing in the valid-C-which-isnt-in-the-C++-subset-of-C <br>(e.g.: class,new,this to name a few of the most popular types or identifiers one can find in C codebases)</p>
+        </div>
+      </div>
+      <div class="comment comment-4633617385746992359">
+        <div class="comment-header">
+          <a name="comment-4633617385746992359"></a>
+            <span class="author">Wim Lavrijsen</span> wrote on <span class="date">2012-06-26 17:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Fernando: no, no travel for me anytime soon. If Py4Science is still going, though, I can always walk down the hill, of course. :)<br><br>I've seen Numba (Stefan brought it up on the pypy-dev list), but it appears to be focused on C. With LLVM, we are using the AST directly. I don't think you can drive C++ through llvm-py.<br><br>@Sebastien: the "details" that you are missing are in that "pretty much any" is not the same as "all." Worse, Reflex has a whole toolchain of gccxml, genreflex, C++ compiler, and finally the Reflex API. You lose information at every step along the way. It's one more reason for CLang/LLVM, but as said, that's for Q3/2012.<br><br>Note though that there are two kinds of C headers that one may encounter. Those that are in a pure C environment, and those for mixed C/C++ use (e.g. Python.h and the system headers). In the former case, no-one would drag in the dependency on a C++ compiler, just to use Reflex. Using e.g. CFFI is  a much better option. In the other case, there is no problem either way.<br><br>Cheers,<br>Wim</p>
+        </div>
+      </div>
+      <div class="comment comment-2823826907591616713">
+        <div class="comment-header">
+          <a name="comment-2823826907591616713"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-06-27 11:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>On a similar note, what's the state of embedding PyPy into C++ (or does cppyy make that case fully obsolete?)?</p>
+        </div>
+      </div>
+      <div class="comment comment-2552367849729563488">
+        <div class="comment-header">
+          <a name="comment-2552367849729563488"></a>
+            <span class="author">Wim Lavrijsen</span> wrote on <span class="date">2012-06-27 18:16</span>:
+        </div>
+        <div class="comment-content">
+          <p>@anonymous: there was a recent thread on pypy-dev, showing a successful embedding: <a href="https://mail.python.org/pipermail/pypy-dev/2012-March/009661.html" rel="nofollow">https://mail.python.org/pipermail/pypy-dev/2012-March/009661.html</a><br><br>If done through C++, you can use the Python C-API (through cpyext), but AFAIK, that doesn't play nicely with threads yet.<br><br>Cheers,<br>Wim</p>
+        </div>
+      </div>
+      <div class="comment comment-7784286799367824147">
+        <div class="comment-header">
+          <a name="comment-7784286799367824147"></a>
+            <span class="author">Matthias</span> wrote on <span class="date">2012-06-28 16:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>From my past experience wrapping a C++ library to python is a whole lot more than just being able to call functions and having objects. <br><br>For example using a binding generator like SWIG you need to annotate your source, because the source alone does not have sufficient information to generate proper bindings (at least no bindings that feel python-like).<br><br>So I am wondering how Cppyy behaves in this area. <br><br>E.g. how does this play with templates? I will probably still need to define up-front which instantiations I need to be available in python?<br><br>How does it deal with object ownership? E.g. what happens if the C++ code decides to delete an object that python still points to? Or how are shared pointers dealt with?<br><br>How is type mapping handled? E.g. you might want to call functions taking MyString with "standard" python strings instead of having to construct MyString() objects first and then passing those.</p>
+        </div>
+      </div>
+      <div class="comment comment-3856956611950613798">
+        <div class="comment-header">
+          <a name="comment-3856956611950613798"></a>
+            <span class="author">Wim Lavrijsen</span> wrote on <span class="date">2012-06-28 18:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Matthias: there are several follow-up posts planned to explain everything in detail, so just a few quick answers now.<br><br>Pythonizations are handled automatically based on signature, otherwise by allowing user defined pythonization functions.<br><br>Template instantiations are still needed in the Reflex world, but with CLang/LLVM, those can be generated by the backend (CINT can perform the instantiations automatically as well).<br><br>Object ownership can be handled heuristically if the C++ side behaves (this is e.g. the case for most of ROOT). If that's not the case, extra annotations per function or per object are needed. In addition, communication with the memory regulator (a tracker of all proxies on the python side) through a callback on both sides is possible.<br><br>Type mappings happen through custom converters that are to be coded up in either Python or C++. Standard mappings (e.g. the use of std::string in the way that you describe for MyString) have been added by default. Type mappings can also be done based on signature in some cases.<br><br>Not everything of the above is implemented in cppyy yet, but all have been solved before in PyROOT on CPython. It's just a matter of time to implement things for cppyy. The important point, however, is that none of this needs a separate language: most of it can be handled automatically, with a little work of the programmer in python proper or, worst case, with a C++ helper.<br><br>Cheers,<br>Wim</p>
+        </div>
+      </div>
+      <div class="comment comment-4824882868842200018">
+        <div class="comment-header">
+          <a name="comment-4824882868842200018"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-09-20 06:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hmm is anyone else experiencing problems with the pictures on this blog loading?<br>I'm trying to find out if its a problem on my end or if it's the <br>blog. Any feed-back would be greatly appreciated.<br><br>my site ... Splendyr REview - <a href="https://livingwaychristianfriendshipgroup.com/members/starcormi/activity/932712/" rel="nofollow">https://livingwaychristianfriendshipgroup.com/members/starcormi/activity/932712/</a> -</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

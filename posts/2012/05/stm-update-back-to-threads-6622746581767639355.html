@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STM update: back to threads? | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2012/05/stm-update-back-to-threads-6622746581767639355.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="../04/stm-update-and-thanks-everybody-6071745734932940294.html" title="STM update (and thanks everybody)" type="text/html">
+<link rel="next" href="../06/py3k-status-update-4-4834053219477515637.html" title="Py3k status update #4" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="STM update: back to threads?">
+<meta property="og:url" content="https://www.pypy.org/posts/2012/05/stm-update-back-to-threads-6622746581767639355.html">
+<meta property="og:description" content="Hi again,
+
+Here is another update on the status of Software Transactional Memory on PyPy.
+
+Those of you who have been closely following this blog since last year know that, from the very first post ab">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2012-05-07T20:58:00Z">
+<meta property="article:tag" content="stm">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">STM update: back to threads?</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2012-05-07T20:58:00Z" itemprop="datePublished" title="2012-05-07 20:58">2012-05-07 20:58</time></a>
+            </p>
+                <p class="commentline">20 comments</p>
+
+                <p class="commentline">            <a href="stm-update-back-to-threads-6622746581767639355.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Hi again,<br><br>
+Here is another update on the status of Software Transactional Memory on PyPy.<br><br>
+Those of you who have been closely following this blog since last year know that, from the <a href="../../2011/06/global-interpreter-lock-or-how-to-kill-8270246310848099963.html">very first post about STM</a>, I explored various design ideas about the API that we should get when programming in Python.<br><br>
+I went a full circle, and now I am back to where I started (with, important difference, <a href="https://foss.heptapod.net/pypy/pypy/-/tree/branch/stm-thread">a very roughly working implementation</a> of pypy-stm).<br><br>
+What I realized is that the "thread" module is not that bad after all --- I mean, yes, it is a horribly low-level interface, but it is general enough to build various interesting things on top of it.  What the "stm-thread" branch of PyPy contains is, basically, the regular "thread" module in which the GIL was replaced with STM.  It gives multicore capabilities to any program based on multiple threads.  (This is so far exactly the idea same than the one being investigated for Hardware Transactional Memory.  It is roughly also what you would get if you managed to convince GCC 4.7 to compile CPython using STM.)<br><br>
+Now while this might already be quite interesting to some people, here is how it relates to all I said previously: namely, threads are bad, and some new "transaction" module would be a better idea.<br><br>
+There is <i>one</i> new core functionality in the "stm-thread" branch: it is "thread.atomic", a context manager that can be used in a "with" statement (exact name subject to change).  In terms of the GIL, it prevents the GIL from being released in the "with" block.  In terms of STM, it prevents a "transaction break", which means that the whole "with" statement runs in one single transaction.  (From the Python programmer's point of view, the net effect is the same.)<br><br>
+So far, no ground-breaking news.  But what I missed previously is that this is enough to give multicore capabilities <i>even to a program that is not using threads so far.</i>  It is possible to rewrite an equivalent of the old <a href="https://foss.heptapod.net/pypy/pypy/-/tree/branch//stm-gc/lib_pypy/transaction.py">transaction</a> module in a few pages of pure Python, using "thread.atomic".  Something along the following lines: start N threads that each reads from a Queue.Queue() the next job to do, and does it in a "with thread.atomic" block.  The STM version of PyPy is then able to run these atomic blocks concurrently.  The key point is that the slightly delicate handling of threads should be nicely hidden inside the new "transaction" module, and from outside the observed behavior would be exactly as if the transactions that we schedule are run serially.<br><br>
+The point I kept missing was that, yes, this sounds like nonsense, because it seems that we create N threads just to serialize their work again in "thread.atomic" sections.  In fact this would be nonsense in any model that would "just" remove the GIL to let multiple threads run concurrently without crashing.  Indeed, you have multiple threads, but their atomic blocks would be again a sort of GIL: only one of them would run at a time.  And this is indeed the simple model of execution that you get <i>even with STM</i> --- but not the model of performance.  The performance with STM scales with the number of cores, as long as there is enough non-conflicting work to do.<br><br>
+So in summary the complete circle back to the starting point is that threads might be a good low-level model.  It mends itself naturally to, say, a kind of program in which the main thread polls file descriptors using select() or the Linux epoll(), and the work received is split along N other threads --- which is the kind of program you would naturally write in other languages that don't have a GIL, say Java.  The other threads can then use "thread.atomic" blocks to protect sections of their work.  The traditional Transactional Memory point of view is that you use such blocks to guard the short sections of code that communicate with other threads or modify global state, but nothing prevents you from using much larger sections: you should be able to scale them up to the size of a native "unit of work", so that every unit is naturally atomic.  And then it's only a matter of design: you can tweak an existing module that does the thread pooling to add one "with thread.atomic"; or do it yourself from scratch; or (if the design is compatible enough) just plug in the proposed pure-Python "transaction" module.  Or if you feel like it you can even use threads directly (but keep in mind that using threads too explicitly is not a <a href="https://en.wikipedia.org/wiki/Software_transactional_memory#Composable_operations">composable</a> abstraction, whereas higher-level designs typically are).<br><br>
+At the end of the day, you can write or reuse programs whose global structure you are already familiar with, for example with a thread pool (that can be hidden in a library if you prefer), or any other structure with or without explicit threads.  But you can do so without all the mess that comes with threads like locks and deadlocks.  From that angle it is really similar to Garbage Collection: e.g. the Boehm GC (now used by GCC itself) lets you write C code like you are used to, but forgeting all you had to learn about careful explicit memory management.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/stm.html" rel="tag">stm</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="../04/stm-update-and-thanks-everybody-6071745734932940294.html" rel="prev" title="STM update (and thanks everybody)">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../06/py3k-status-update-4-4834053219477515637.html" rel="next" title="Py3k status update #4">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-949412754465247368">
+        <div class="comment-header">
+          <a name="comment-949412754465247368"></a>
+            <span class="author">Benjamin</span> wrote on <span class="date">2012-05-08 04:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>So I'm not sure if I fully grok STM, but my basic understanding of the workflow for a transaction is this:<br><br>1. Make a copy of whatever it is you're planning to use, ie, 'stuff'.<br>2. Do anything that doesn't have side effects (writing to memory/disk).<br>3. Acquire a lock &amp; compare the state of the parts of 'stuff' you want to change to the current state.<br>4a. If 'stuff to write' is unchanged, write it and release lock.<br>4b. Otherwise, release lock and restart transaction.<br><br>With the context manager, how is 'stuff' determined? Does it record everything in locals()?  That seems like it might be excessive. Would it make sense to expose 'stuff' to the programmer?<br><br>If you were to expose 'stuff' to the programmer, I'd think you'd want a new local context where the only variables available were those explicitly specified as 'stuff' (and builtins, etc) so as to avoid congruency accidents. Something like:<br><br>with atomic(f, x, y, z, q) as f, x, y, z, q:<br>    z += f(x, y)<br>    y = x<br>    x = q.pop()<br><br>This would also help remind folks to keep their transactions small.<br><br>Furthermore, this could easily be transformed into a very useful (function) decorator that uses the function's arguments as the 'stuff'.<br><br>Am I missing something? Are my suggestions reasonable?</p>
+        </div>
+      </div>
+      <div class="comment comment-7627661849074849657">
+        <div class="comment-header">
+          <a name="comment-7627661849074849657"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-05-08 06:09</span>:
+        </div>
+        <div class="comment-content">
+          <a href="https://code.google.com/p/disruptor" rel="nofollow">this</a> might give you some insight into another approach for passing messages (aka information) between threads which might be GIL friendly.
+        </div>
+      </div>
+      <div class="comment comment-1837731522753426562">
+        <div class="comment-header">
+          <a name="comment-1837731522753426562"></a>
+            <span class="author">Frankier</span> wrote on <span class="date">2012-05-08 07:29</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Benjamin:<br><br>My understanding is STM is using these type of transactions: https://en.wikipedia.org/wiki/Optimistic_concurrency_control</p>
+        </div>
+      </div>
+      <div class="comment comment-8714743568967598432">
+        <div class="comment-header">
+          <a name="comment-8714743568967598432"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-05-08 08:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Benjamin: no, that's not reasonable at all in the context of large transactions.  "Help remind folks to keep their transactions small" is precisely what I don't want: I want <i>large</i> transactions.  This might be harder to do efficiently, it might be more conflict-prone, etc.; but what I <i>don't</i> want is the classical situation where you have to be very careful about keeping your transactions as small as possible, because that's just as hard and error-prone as using locks.<br><br>What I want is for "the average programmer" to not use the "thread" module at all, including "thread.atomic".  This should be part of a library that does thread pooling and dispatching (large) transactions.</p>
+        </div>
+      </div>
+      <div class="comment comment-4407253057248073828">
+        <div class="comment-header">
+          <a name="comment-4407253057248073828"></a>
+            <span class="author">Kristján Valur</span> wrote on <span class="date">2012-05-08 11:33</span>:
+        </div>
+        <div class="comment-content">
+          <p>You know, of course, that stackless has an "atomic" property, and stacklesslib has an stacklesslib.utils.atomic ctxtmgr.<br><br>I recently modified stackless so that the "atomic" property also inhibited GIL release, so that inter-thread tasklet operations could be made safe.<br><br>On a whim I scoured the python archives and found that such a property had been proposed to cPython but rejected (unwisely imho) in favor of general locking.<br><br>Perhaps we can get them to reconsider?</p>
+        </div>
+      </div>
+      <div class="comment comment-3815561712303808126">
+        <div class="comment-header">
+          <a name="comment-3815561712303808126"></a>
+            <span class="author">Kristján Valur</span> wrote on <span class="date">2012-05-08 11:41</span>:
+        </div>
+        <div class="comment-content">
+          <p>Oh, and btw:<br>an "atomic" property in regular cPython (and stackless) of course only prevents preemptive release of the GIL.  Any blocking IO calls will still cause a "co-operative" GIL release.  For this reason, "atomic" cannot be replace generic locks completely.<br><br>How does this play with longer "transactions" in STM?</p>
+        </div>
+      </div>
+      <div class="comment comment-4052041925794156379">
+        <div class="comment-header">
+          <a name="comment-4052041925794156379"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-05-08 11:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Kris: ah, interesting.  You did the same as what I attempted in my hack of CPython at https://bitbucket.org/arigo/cpython-withatomic .  This didn't really work out, though, because the stdlib (including file objects) use regular locks.  A simple "print" in an atomic block could lead to deadlocks: the atomic block can block waiting for the stdout's file lock to be released, but it does so without releasing the GIL.  Now the lock would typically be released by another thread --- if only it could grab the GIL for a short while.<br><br>You can see the workaround I found in the last few commit messages of the above repository, but I'm not satisfied with it...  In general I'm still unsure what the best way is.  For now in pypy-stm I'm going to hack on a case-by-case basis to convert the locks to atomic sections.<br><br>Perhaps it is possible to do it semi-generically, e.g. convert all syntactically nested "with lock:" statements in the user code into "with atomic:" statements (similar to next year's Intel CPUs, which will have "lock elision" to help convert from lock-based to HTM programs).  As far as I know, this idea doesn't work in all situations, e.g. if you acquire a lock in one thread and release it in another thread.<br><br>As far as I can say, this issue is the main blocker preventing any further progress on the CPython side.  It is certainly the reason I stopped pushing for it last year.</p>
+        </div>
+      </div>
+      <div class="comment comment-671309105404345554">
+        <div class="comment-header">
+          <a name="comment-671309105404345554"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-05-08 11:58</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Kris: ah, ok: you have a version of "atomic" that doesn't prevent the GIL from being released around I/O calls.  This is different from the version described in this post, which is also what I assumed in my previous answer.  In a "with atomic" block, the GIL is not released under any circumstance (equivalently, the whole "atomic" block runs as a single transaction), so that the programmer can assume that a "with atomic" block is truly atomic.</p>
+        </div>
+      </div>
+      <div class="comment comment-1318245391259391694">
+        <div class="comment-header">
+          <a name="comment-1318245391259391694"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-05-08 12:59</span>:
+        </div>
+        <div class="comment-content">
+          <p>How would a code example look for thread.atomic?</p>
+        </div>
+      </div>
+      <div class="comment comment-5409418058441905177">
+        <div class="comment-header">
+          <a name="comment-5409418058441905177"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-05-08 13:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Arne: here is an example using directly thread.atomic.  In your multithreaded application, at some point, you want to remove an item from list1 and add it to list2, knowing that list1 and list2 are also accessed by other threads.  Then you write:<br><br>with thread.atomic:<br>    x = list1.pop()<br>    list2.append(x)<br><br>This is a classical STM example.  What I'm pushing for is not that, though: it is for not writing multithreaded code in the first place.  With the proper library code you can write code like the first few lines of <a href="https://foss.heptapod.net/pypy/pypy/-/tree/branch//stm-gc/lib_pypy/transaction.py" rel="nofollow">transaction</a>.  The library code would itself use thread.atomic, but not you directly.</p>
+        </div>
+      </div>
+      <div class="comment comment-4714147678465543748">
+        <div class="comment-header">
+          <a name="comment-4714147678465543748"></a>
+            <span class="author">Kristján Valur</span> wrote on <span class="date">2012-05-08 15:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>Yes, sorry for not being clear, Armin.  But an "atomic" flag that inhibits involountary thread switching is useful too, because it is a fast "lock" around all kinds of code:<br><br>with atomic:<br>  foo = foo+1 #multi-threading-safe<br><br>without the overhead of real locks.<br>In our GIL world, real locks only benefit areas that incur thread-blocking operations such as IO.<br><br>Anyway, that is off-topic, I suppose :)</p>
+        </div>
+      </div>
+      <div class="comment comment-8664937597408632986">
+        <div class="comment-header">
+          <a name="comment-8664937597408632986"></a>
+            <span class="author">Kristján Valur</span> wrote on <span class="date">2012-05-08 15:06</span>:
+        </div>
+        <div class="comment-content">
+          <p>Of course, we cannot replace thread._Lock with an "atomic" equivalent, because it is a non-recursive entity, also used for such things as condition variables!.<br><br>Not a very wise move, in retrospect.</p>
+        </div>
+      </div>
+      <div class="comment comment-7774825949489887436">
+        <div class="comment-header">
+          <a name="comment-7774825949489887436"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-05-08 16:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Kris: indeed.  I found out a way that should in all cases either work or raise an exception if unsupported (and not unexpectedly deadlock).<br><br>The unsupported situation is: we are in a "with atomic" block trying to acquire a lock, and this lock is acquired already.  In this case, there is nothing the interpreter can do automatically.  It can only complain rather than deadlocking: no other thread is going to run in parallel to release the lock.<br><br>This should let the "common use case" work, which is locks used as scoped mutexes.  Caveat: only as long as you use them either only in "with atomic" blocks --- because they appear to be fully serialized, so the mutex will never block --- or only outside "with atomic" blocks.<br><br>This leaves the case of mixed usage as unsupported, but I don't see how it could reasonably be supported.<br><br>So for now, pypy-stm will raise "oups deadlock" if you try to use "print" statements both inside and outside atomic blocks in parallel...  that's the best I could come up with so far.</p>
+        </div>
+      </div>
+      <div class="comment comment-598859044443630201">
+        <div class="comment-header">
+          <a name="comment-598859044443630201"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-05-09 00:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>thanks for the article.   might want to reword "This is so far exactly the idea same than the one being investigated for Hardware Transactional Memory.".    :)</p>
+        </div>
+      </div>
+      <div class="comment comment-5790328126053393982">
+        <div class="comment-header">
+          <a name="comment-5790328126053393982"></a>
+            <span class="author">Ole Laursen</span> wrote on <span class="date">2012-05-11 12:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>To expand slightly on what someone else commented, there was <a href="https://www.infoq.com/presentations/LMAX" rel="nofollow">a talk</a> not too long ago by some guys who found out using queues to communicate between threads can be pretty hefty bottleneck. They were using the JVM.<br><br>The talk is interesting because they actually measured the stuff they do and compared it with how it affects the CPU pipelines/caches. The queue discussion is around 32 minutes into the talk.<br><br>It's perhaps not relevant for pypy-stm at the moment, but it's definitely relevant for anyone interested in high-performance multithreaded code.</p>
+        </div>
+      </div>
+      <div class="comment comment-9048605839194282305">
+        <div class="comment-header">
+          <a name="comment-9048605839194282305"></a>
+            <span class="author">Dima Q</span> wrote on <span class="date">2012-05-18 10:03</span>:
+        </div>
+        <div class="comment-content">
+          <p>Good job, Armin!<br><br>This is exactly what Python needs, and if turns out hard rather than insanely hard, all the better!</p>
+        </div>
+      </div>
+      <div class="comment comment-9214945209291164064">
+        <div class="comment-header">
+          <a name="comment-9214945209291164064"></a>
+            <span class="author">Jonas W.</span> wrote on <span class="date">2012-05-21 17:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>I am not entirely sure about the concept which is being implemented in PyPy-stm or better, which is planned for a parallel PyPy in the future.<br><br>I think am a pretty conservative programmer, and I actually dislike the idea of running code twice because of conflicts which could have been foreseen at development time ;). I still see the advantages STM brings regarding development time.<br><br>So I'm wondering about a point which was not entirely clear in your post. You're saying you don't want people to (be forced to?) write short transactions. However, I could still in a project which is both CPU and memory intensive try to keep the thread.atomic sections as small as possible to avoid unneccessary overheads but still get effective logs?</p>
+        </div>
+      </div>
+      <div class="comment comment-8986531617131272077">
+        <div class="comment-header">
+          <a name="comment-8986531617131272077"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2012-05-21 22:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Jonas: it is not always obvious at development time -- to say the least -- how to avoid all conflicts.  Think about how hard it is to add automatic GC to C++ in a large project: it's messy but you might get pretty far with just reference counting -- until some point when you loose because of cyclic references.  If instead you had used a proper GC-managed language, the problem would just not exist.  It's the same about Transactional Memory and conflicts: you can either think harder and harder about using locks correctly, until your programs becomes really messy; then you give up and use TM, solving the issue instantly and letting you think again about your original problem.<br><br>Regarding the transaction size: with a good implementation, big transactions should not be slower than small transactions.  The only potential drawback of having big transactions is that the risks of conflicts might increase (depending on your program).<br><br>Note that this question has a different answer for Python than for C, where code outside transactions runs faster than code within transactions.  It is not so in Python.  The reason is that transactions are always needed in Python: either explicitly, or implicitly in order to protect the interpreter structures (in replacement of the famous GIL).</p>
+        </div>
+      </div>
+      <div class="comment comment-2628648278989185335">
+        <div class="comment-header">
+          <a name="comment-2628648278989185335"></a>
+            <span class="author">Connelly Barnes</span> wrote on <span class="date">2012-05-30 05:53</span>:
+        </div>
+        <div class="comment-content">
+          <p>Is there any plan to add type declarations as some optional mode in PyPy, like Cython allows? Because PyPy can sometimes give some speed up, but when it doesn't it seems the alternative for the user is to go back to CPython + Cython.</p>
+        </div>
+      </div>
+      <div class="comment comment-4620530333605154730">
+        <div class="comment-header">
+          <a name="comment-4620530333605154730"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2012-06-05 12:26</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Armin: Looks nice!<br><br>But you’re right: The explicit transaction still looks nicer.<br><br>I think though, that both can nicely complement each other: <br><br>(1) The transaction is efficient for pushing out parts of the code from the main run to get it multithreaded (think “#pragma omp parallel for” from OpenMP).<br><br>(2) The thread.atomic is efficient for protecting stuff inside a threaded application. Also I like that I don’t have to explicitely state which variables I want to protect. And I like that it is not full locking: If I don’t actually get a conflict, other code still runs in parallel.<br><br>The first actually looks more interesting though, because it might be possible to make every for-loop run like this, as long as later runs are not dependent on the result of previous runs. This would require quite heavy runtime analysis, though.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

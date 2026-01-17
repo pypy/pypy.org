@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>More Compact Lists with List Strategies | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2011/10/more-compact-lists-with-list-strategies-8229304944653956829.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="../09/py3k-for-pypy-fundraiser-8139653689520709617.html" title="Py3k for PyPy fundraiser" type="text/html">
+<link rel="next" href="numpy-funding-and-status-update-2380711174693638392.html" title="Numpy funding and status update" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="More Compact Lists with List Strategies">
+<meta property="og:url" content="https://www.pypy.org/posts/2011/10/more-compact-lists-with-list-strategies-8229304944653956829.html">
+<meta property="og:description" content="Since we come closer to merging the list-strategy branch I want to try to explain this memory optimization today. Datatypes in PyPy are stored as W_&lt;type&gt;Objects (e.g. W_StringObject to represent stri">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2011-10-11T11:25:00Z">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">More Compact Lists with List Strategies</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2011-10-11T11:25:00Z" itemprop="datePublished" title="2011-10-11 11:25">2011-10-11 11:25</time></a>
+            </p>
+                <p class="commentline">16 comments</p>
+
+                <p class="commentline">            <a href="more-compact-lists-with-list-strategies-8229304944653956829.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Since we come closer to merging the list-strategy branch I want to try to explain this memory optimization today. </p>
+<p>Datatypes in PyPy are stored as <tt>W_&lt;type&gt;Objects</tt> (e.g. <tt>W_StringObject to represent strings, W_IntObject</tt> to represent ints). This is necessary due to the dynamic nature of Python. So the actual value (e.g. string, integer) is stored inside that box, resulting in an indirection. When having a large amount of such boxed objects, for example in a list, the wasted memory can become quite large. </p>
+<a href="https://3.bp.blogspot.com/-0-qMMmAxRro/TpQoKo728xI/AAAAAAAAAYA/Z5nNNEYYquk/s1600/overhead_before.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5662194794763842322" src="https://3.bp.blogspot.com/-0-qMMmAxRro/TpQoKo728xI/AAAAAAAAAYA/Z5nNNEYYquk/s400/overhead_before.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 183px;"></a>  <p>If you have a closer look at such lists, you will see that in many of them only one type of data is stored and only few (and smaller) lists store mixed types. Another thing to observe is that those lists often won't change the types of the objects they contain at runtime very often. For instance a list of a million integers is very unlikely to suddenly get a string appended to it. </p>
+<h2 id="list-strategies">List Strategies<a href="#list-strategies" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>The goal of this work is to write an optimization that exploits this behaviour. Instead of wrapping all items in a list, we implement lists in a way that they are optimized for storing certain (primitive) datatypes. These implementations store the content of the list in unwrapped form, getting rid of the extra indirection and wrapper objects. </p>
+<p>One approach would be to add a level of indirection, making each <tt>W_ListObject</tt> instance point to another object that stores the actual content. For this other object, several implementations would exist, for every datatype we want to store without wrapping it (as well as a general one that deals with arbitrary content). The data layout would look something like this:</p>
+<a href="https://3.bp.blogspot.com/-LWtyy4ORb00/TpQohbOjg2I/AAAAAAAAAYM/kgpVemG8-9o/s1600/with_special_impl.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5662195186221155170" src="https://3.bp.blogspot.com/-LWtyy4ORb00/TpQohbOjg2I/AAAAAAAAAYM/kgpVemG8-9o/s400/with_special_impl.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 193px;"></a>  <p>This approach has the problem that we need two indirections to get to the data and that the implementation instances need memory themselves.</p>
+<p>What we would like to do is to make the <tt>W_ListObject</tt> point to an RPython list directly, that contains either wrapped or unwrapped data. This plan has the problem that storing different unwrapped data is not directly possible in RPython.  </p>
+<p>To solve the problem, we use the <tt>rerased</tt> RPython library module. It allows us to erase the type of an object, in this case lists, and returns something similar to <tt>void-star</tt> in C, or <tt>Object</tt> in Java. This object is then stored on the <tt>W_ListObject</tt> in the field <tt>storage</tt>. If we want to work with the list, for example to append or delete items, we need to unerase the storage again.</p>
+<p>Example for rerase: </p>
+<pre>storage = erase([1 ,2 ,3 ,4])
+# storage is an opaque object that you can do nothing with
+....
+l = unerase(storage)
+l.clear()
+</pre>
+<p>Now that we know how to make the <tt>W_ListObject</tt> point directly to wrapped or unwrapped data, we need to find out how to actually do any operations on this data. This can be accomplished by adding another field to our <tt>W_ListObject</tt>. This field points to a <tt>ListStrategy</tt> object. The actual implementation of <tt>W_ListObject</tt> is now deferred to those <tt>ListStrategy</tt> classes. For instance, a <tt>W_ListObject</tt> which holds only integers will use the <tt>IntegerListStrategy</tt>.</p>
+<p>When the type of content is being changed, we need to change the used strategy as well as the storage in compatible ways. For example when we add a string to the list of integers we need to switch to the <tt>ObjectListStrategy</tt> and change the storage to be a list of wrapped objects. Thus the currently used strategy always knows what to do with what is currently in the storage.</p>
+<a href="https://4.bp.blogspot.com/-hFXLNQ0Ry0I/TpQohnZHRpI/AAAAAAAAAYY/-AUuRfoFYqA/s1600/with_strategies.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5662195189486667410" src="https://4.bp.blogspot.com/-hFXLNQ0Ry0I/TpQohnZHRpI/AAAAAAAAAYY/-AUuRfoFYqA/s400/with_strategies.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 130px;"></a>  <p>As you can see, we now save one level of indirections by storing some of the data unwrapped. Of course each operation on a list needs to go via the strategy, but since we save one indirection for each element stored in that list and the <tt>Strategy</tt> classes are singletons, the benefits outweigh the costs.</p>
+<p>Currently there are only strategies for integers and strings since many lists seem to have these datatypes. Other strategies i.e for floats and unicode strings are planned. We also implemented two special strategies for empty lists and range-lists. The <tt>EmptyListStrategy</tt>'s storage is <tt>None</tt>. If objects are added to the list we just switch to the appropriate strategy (determined by the item's type). <tt>RangeListsStrategies</tt> do not store any items at all. Instead they only store values describing the range of the list, i.e. start, step and length. On any operations that changes the data of the list we switch to the <tt>IntegerStrategy</tt>.</p>
+<p>A nice side-effect of storing unwrapped datatypes is that we can implement optimized methods for certain cases. For instance, since comparison of unwrapped integers is now much faster than comparison between arbitrary objects, we can rewrite the sorting methods for lists containing integers.</p>
+<h2 id="microbenchmarks">Microbenchmarks<a href="#microbenchmarks" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Finally here is an early overview of the memory consumption of different Python implementations: <tt>CPython, PyPy</tt> and <tt>PyPy-list</tt> which uses list-strategies. To demonstrate how powerful list-strategies can be in the best case, we wrote benchmarks that create a list of integers, a list of strings and a range-list each with one million elements each and then reads out the heap size of the process as reported by the OS. </p>
+<p>The results are as follows: </p>
+<a href="https://2.bp.blogspot.com/-FG6r9y8tXF4/TpQohzPkeNI/AAAAAAAAAYk/h-oZpthkFEQ/s1600/osheapsize.png"><img alt="" border="0" id="BLOGGER_PHOTO_ID_5662195192667863250" src="https://2.bp.blogspot.com/-FG6r9y8tXF4/TpQohzPkeNI/AAAAAAAAAYk/h-oZpthkFEQ/s400/osheapsize.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 400px; height: 252px;"></a>   <p>The savings on integers and strings in this ideal case are quite big.</p>
+<p>The benchmark for range-lists is a little unfair, since in <tt>CPython</tt> one could accomplish the same memory behaviour using <tt>xrange</tt>. However, in PyPy users won't notice that internally the list does not store all items, making it still possible to use all list methods, such as <tt>append</tt> or <tt>delete</tt>.</p>
+<h2 id="conclusion">Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>We hope that list strategies bring memory savings for applications that use homogeneous lists of primitive types. Furthermore, operations on such lists tend to be somewhat faster as well. This also integrates well with the JIT. The list strategies optimizations will be merged to the PyPy's default branch at some point in the next months. An equivalent optimization for dictionaries has already been merged (and is part of PyPy 1.6), one for sets is coming in the future.</p>
+<p>Lukas Diekmann and Carl Friedrich Bolz</p>
+      </div>
+      <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../09/py3k-for-pypy-fundraiser-8139653689520709617.html" rel="prev" title="Py3k for PyPy fundraiser">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="numpy-funding-and-status-update-2380711174693638392.html" rel="next" title="Numpy funding and status update">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-2876446533628197895">
+        <div class="comment-header">
+          <a name="comment-2876446533628197895"></a>
+            <span class="author">Winston Ewert</span> wrote on <span class="date">2011-10-11 13:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>Nice.<br><br>But isn't there a small change in semantics to do that? If a push a python int object onto a list and then pop it back off I'll have the exact same object. But if you unwrap the object and store it as a plain int and then repop it I don't have the exact same object. I've a got a new object.</p>
+        </div>
+      </div>
+      <div class="comment comment-8682412757584252996">
+        <div class="comment-header">
+          <a name="comment-8682412757584252996"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-10-11 13:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>It seems to be very nice.<br><br>By the way, are object attributes optimized the same way? Objects of the same class can be expected to frequently store data of the same type in the same attribute.<br>I've found a nearly-year-old post on maps ( https://morepypy.blogspot.com/2010/11/efficiently-implementing-python-objects.html ), but it does not mention attribute value types... has this idea been considered?</p>
+        </div>
+      </div>
+      <div class="comment comment-4052963990889114210">
+        <div class="comment-header">
+          <a name="comment-4052963990889114210"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2011-10-11 13:25</span>:
+        </div>
+        <div class="comment-content">
+          <p>I can see float support presenting some interesting challenges being emblematic of a wider issue.  It would be very easy for someone to have a list of "floats" but if they populated it with any literals, most likely they'll be integer literals, missing any of the float optimization.<br><br>For most apps this won't be a problem but if someone is trying to optimize their application they might see this as a performance heisenbug.  For example they write a hard coded list and it is slow, read it from a file and it is fast.<br><br>One approach is for there to be a document on some website (that gets out of date) that lists PyPy micro-optimizations.  Someone would then need continually audit their code against that list.  This doesn't seem practical.<br><br>I've seen posted some low level visualization tools.  I'd be curious how practical it would be to have a higher level profiler tool integrate with the JIT to detect patterns like the list of mixed float/int situation to flag these micro-optimizations in a more automated fashion.</p>
+        </div>
+      </div>
+      <div class="comment comment-6391255579021902201">
+        <div class="comment-header">
+          <a name="comment-6391255579021902201"></a>
+            <span class="author">Alex</span> wrote on <span class="date">2011-10-11 13:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>Winston: Indeed, very clever of you to notice :)  However, we noticed as well, going forward integers (and other primitives) identity will be a function of their value, not the identity of their box.  This means that for all ints `i is x` if and only if `i == x`.  This also means that `id()` is now a function of value for primitives.  Don't rely on that though!  Just like we don't want people relying on `i is x` if `i == x and -100 &lt; i &lt; 200`, we don't want people relying on this either.<br><br>Anonymous:<br><br>Yes, this is definitely a consideration, I keep meaning to make time to work on this.</p>
+        </div>
+      </div>
+      <div class="comment comment-3503256972437840441">
+        <div class="comment-header">
+          <a name="comment-3503256972437840441"></a>
+            <span class="author">evilpies</span> wrote on <span class="date">2011-10-11 14:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>Well interesting, SpiderMonkey is considering to implement something like this, because NaN-boxing usually wastes a lot of memory.</p>
+        </div>
+      </div>
+      <div class="comment comment-9065215242356577912">
+        <div class="comment-header">
+          <a name="comment-9065215242356577912"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-10-11 19:52</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Ed I think float list can accomodate a limited set of integer values (those that can be represented correctly when interpreted as float) without any issue. You would then however need to tag which one is integer and which one is float, having to keep a bitmap. That's certainly possible, but a bit of a mess.</p>
+        </div>
+      </div>
+      <div class="comment comment-3153874564188090101">
+        <div class="comment-header">
+          <a name="comment-3153874564188090101"></a>
+            <span class="author">Alex</span> wrote on <span class="date">2011-10-11 20:23</span>:
+        </div>
+        <div class="comment-content">
+          <p>fijal: I think better than obscure hacks like a bitmap allowing integers as floats, perhaps it would be better just to eventually have logging of when you get fallbacks like that. For eventual integration with the jitviewer of course :)</p>
+        </div>
+      </div>
+      <div class="comment comment-5501196602760962078">
+        <div class="comment-header">
+          <a name="comment-5501196602760962078"></a>
+            <span class="author">Winston Ewert</span> wrote on <span class="date">2011-10-11 20:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>A general runtime warning system that could say things like: "list of floats decaying to list of objects because of adding int", "two ints being compared via is", etc. might be useful. That could handle any number of situations with surprising semantics or performance.</p>
+        </div>
+      </div>
+      <div class="comment comment-8789804036786317191">
+        <div class="comment-header">
+          <a name="comment-8789804036786317191"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-10-11 21:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>This is very interesting. I have been thinking along somewhat similar lines for a while (but for performance reasons, rather than memory size), and so have already reviewed how I use lists in my own code. In my own programs, having non-uniform data types in a list is extremely rare. However, some lists are lists of lists (or tuples or dictionaries). The most common large lists however tend to be lists of strings.<br><br>1) If I correctly understand your explanation of what you are doing, your "list strategies" are effectively marking uniform lists as being either of one of a few known basic types (e.g. IntegerListStrategy), or just a traditional list of objects. Is that correct?<br><br>2) Do you think there are any meaningful performance optimsations which could be gained when the list type is known in advance? <br><br>3) What about built-in functions such as all(), any(), len(), min(), max(), etc? Would they be able to make use of this to improve their performance? <br><br>4) Would the underlying array data format be exposed for people who want to write extensions making direct use of it (e.g. for things like SIMD libraries)? <br><br>5) Could this allow a list to be in shared memory and directly accessed by another program?<br><br>6) Would the new list format be compatible with a "memoryview" (as str and bytearray are)?<br><br>7) My own earlier thoughts had involved marking a list as being of a uniform or non-uniform data when the list is created or altered, and using optimised code for the expected type for uniform lists. One sticky point however was threading, as a different type could be appended in another thread, which means that the consuming function would have to somehow be aware of this. Would your concept have a problem with threading if appending a string to an integer list suddenly required changing the underlying list strategy while another thread was accessing the same list?<br><br>8) Python 3.x seems to favour iterators over creating lists (e.g. map, filter, range are replaced by what used to be imap, ifilter, and xrange), and generators were introduced to complement list comprehensions in order to save memory. Does this have any implications for what you are doing?<br><br>9) Could your list concept be applied by the CPython developers to CPython? This might help ensure that any subtle semantic issues which arise as a result apply equally to CPython, rather than having people call them "Pypy bugs". <br><br>10) What about changing the Python language semantics to allow a user to specify that a list must be of a specific uniform type, and raising a type error if an element(s) of an unexpected type is added to the list? This is actually a language feature that I would like to have in order to catch errors without having to write code to examine each individual data element (as that can be slow and error prone in itself). <br><br>11) Finally, why is there such a large start-up memory use in your micro-benchmarks when comparing Pypy-list to CPython? Is this just general overhead from Pypy itself, or is that due to something related to converting the list format to a particular "list strategy"?</p>
+        </div>
+      </div>
+      <div class="comment comment-4327769528149421078">
+        <div class="comment-header">
+          <a name="comment-4327769528149421078"></a>
+            <span class="author">Alex</span> wrote on <span class="date">2011-10-11 23:14</span>:
+        </div>
+        <div class="comment-content">
+          <p>Anonymous: Wow a lot of questions, I'll try to answer them :)<br><br>1) Yes.<br><br>2) Probably not, you get the most performance gains when you have a large list, and if it's large the very-very-very-small initial transition is amortized over many elements.<br><br>3) Many of those are pure-python and will thus automatically gain these benefits, max() and min() unfortunately are not.<br><br>4) Probably not, we don't expose this data in any other place nor do we have any APIs for it.<br><br>5) I suppose in theory, again we have no API for it.<br><br>6) No, it wouldn't be, since that's not a part of the list API.  We don't define the language, we just implement it (faster).<br><br>7) No, there's no problem with this, you simply need to lock (or whatever the equivilant in STM) is the list and do the modifications.<br><br>8) No, I don't think it does.<br><br>9) Yes, it could be applied to CPython with slightly more difficulty, and it would see the memory gains.  However, it would see performance losses (as you do with teh array module on CPython) because it would need to box/unbox at every iteraction, whereas teh JIT is able to remove that.<br><br>10) Propose it to python-ideas, we don't define the language.<br><br>11) I can't understand the charts, so I can't answer this one.</p>
+        </div>
+      </div>
+      <div class="comment comment-4149801701855589450">
+        <div class="comment-header">
+          <a name="comment-4149801701855589450"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-10-12 03:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>Alex: I'm the anonymous with all the questions. Thank you for your detailed answers. I completely understand that there are side issues that you don't want to deal with at this time. <br><br>As for the possible performance effects of the proposed new list data format if applied to CPython, doing the operation: "y = reduce(operator.add, x, 0)" where x is either a list or array of 1,000,000 integers does not seem to produce a measurable difference in speed for me (Python 2.6 on 64 bit Ubuntu). Any differences seem to go either way when the test is repeated, so they seem equivalent within the margin of error. An equivalent for loop yields the same result (except for being slower, of course). <br><br>When extracting or replacing slices for lists and arrays (e.g. "y = x[i:i + 50]" and "x[i:i + 50] = y") within a for loop, the array version seems to be significantly *faster* than the list version for large slices (e.g. 50), and approximately the same for small slices (e.g. 5). <br><br>Theoretically, yes the implementation with array should always be slower, but I can't seem to get that result when I attempt to measure it. Perhaps I'm doing something wrong, but it appears from the (admittedly minimal) testing that I have done that significant speed penalties for CPython cannot simply be assumed. <br><br>I realize that ultimately this isn't a matter for the Pypy developers to concern themselves with, but should the question ever arise I don't think it can be dismissed out of hand.</p>
+        </div>
+      </div>
+      <div class="comment comment-8827061726108938667">
+        <div class="comment-header">
+          <a name="comment-8827061726108938667"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2011-10-12 08:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>Some additional thoughts to @Anonymous questions:<br><br><i>3) What about built-in functions such as all(), any(), len(), min(), max(), etc? Would they be able to make use of this to improve their performance?</i><br><br>len does not depend on the content of the list, so it does not win. all, any, min and max could be improved, yes.<br><br><i>7) My own earlier thoughts had involved marking a list as being of a uniform or non-uniform data when the list is created or altered, and using optimised code for the expected type for uniform lists. One sticky point however was threading, as a different type could be appended in another thread, which means that the consuming function would have to somehow be aware of this. Would your concept have a problem with threading if appending a string to an integer list suddenly required changing the underlying list strategy while another thread was accessing the same list?</i><br><br>The JIT does indeed produce special optimized code for the type of list it is currently observing, making operations faster. The fact that another thread could change the type of the list is not a problem, because we have a GIL and thus the JIT knows at which points another thread can run.<br><br><i>10) What about changing the Python language semantics to allow a user to specify that a list must be of a specific uniform type, and raising a type error if an element(s) of an unexpected type is added to the list? This is actually a language feature that I would like to have in order to catch errors without having to write code to examine each individual data element (as that can be slow and error prone in itself).</i><br><br>this already exists. it's called the array module.<br><br><i>11) Finally, why is there such a large start-up memory use in your micro-benchmarks when comparing Pypy-list to CPython? Is this just general overhead from Pypy itself, or is that due to something related to converting the list format to a particular "list strategy"?</i><br><br>The higher startup memory is also there in the PyPy without list strategies, so those have nothing to do with it.</p>
+        </div>
+      </div>
+      <div class="comment comment-571856896041855629">
+        <div class="comment-header">
+          <a name="comment-571856896041855629"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-10-13 09:54</span>:
+        </div>
+        <div class="comment-content">
+          <p>I too had trouble understanding the chart. The vertical axis doesn't have negative numbers to represent a delta, just ignore the signs.<br><br>The blue area is an algebraically positive area, representing the startup memory use. The yellow area represents the memory use delta after doing the 1e6 items list operations.</p>
+        </div>
+      </div>
+      <div class="comment comment-5862200887140172974">
+        <div class="comment-header">
+          <a name="comment-5862200887140172974"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2011-10-19 13:26</span>:
+        </div>
+        <div class="comment-content">
+          <p>Re list of floats-and-ints: a fully compatible way is to use the NaN-tagging idea from SpiderMonkey, i.e. have a special encoding of NaN that is normally not used, and that still leaves 32 bits of extra information.  We would then represent ints in the list as such a NaN-encoded float.  (At least it works as long as the integer is not too large, on 64-bit platforms.)</p>
+        </div>
+      </div>
+      <div class="comment comment-2022265183145067816">
+        <div class="comment-header">
+          <a name="comment-2022265183145067816"></a>
+            <span class="author">Ole Laursen</span> wrote on <span class="date">2011-11-18 14:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>Neat!<br><br>Nice work people. I'm amazed it's so simple do to afterall, just switch type based on what the first element is. It must be a big boon for garbage collection, too?</p>
+        </div>
+      </div>
+      <div class="comment comment-7316745693596613762">
+        <div class="comment-header">
+          <a name="comment-7316745693596613762"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-12-16 14:07</span>:
+        </div>
+        <div class="comment-content">
+          <p>The benchmark measures virtual memory (don't know on which architecture); measuring RSS would be more representative of the actual amount of RAM spent storing the data. Presumably it would also be more favourable to PyPy, since moving garbage collection doubles the amount of virtual memory.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

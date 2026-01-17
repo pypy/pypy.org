@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JIT in Prolog | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2008/06/hi-all-some-news-from-jit-front-7534695765973581706.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Armin Rigo">
+<link rel="prev" href="pypy-code-swarm-7038411918926116477.html" title="PyPy code swarm" type="text/html">
+<link rel="next" href="../07/pypy-at-europython-2008-1488914968455397674.html" title="PyPy at the EuroPython 2008" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="JIT in Prolog">
+<meta property="og:url" content="https://www.pypy.org/posts/2008/06/hi-all-some-news-from-jit-front-7534695765973581706.html">
+<meta property="og:description" content="Hi all,
+
+Some news from the JIT front.  Progress on the JIT has been low-profile
+in the past few months.  No big results to announce yet, but we have
+played with some new ideas, and they are now docum">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2008-06-30T19:17:00Z">
+<meta property="article:tag" content="jit">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">JIT in Prolog</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/armin-rigo.html">Armin Rigo</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2008-06-30T19:17:00Z" itemprop="datePublished" title="2008-06-30 19:17">2008-06-30 19:17</time></a>
+            </p>
+                <p class="commentline">13 comments</p>
+
+                <p class="commentline">            <a href="hi-all-some-news-from-jit-front-7534695765973581706.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>Hi all,</p>
+
+<p>Some news from the JIT front.  Progress on the JIT has been low-profile
+in the past few months.  No big results to announce yet, but we have
+played with some new ideas, and they are now documented as a draft
+research paper: <a href="https://codespeak.net/svn/user/cfbolz/jitpl/paper/prologjit1.pdf">Towards Just-In-Time Compilation and Specialisation of Prolog.</a></p>
+
+<p>Prolog?  Yes.  To understand this slightly unusual choice of programming
+language, here is first some background about our JIT.</p>
+
+<p>PyPy contains not a JIT but a <i>JIT generator,</i> which means that we
+only write an interpreter for a language (say, the complete Python
+language), and we get a JIT "for free".  More precisely, it's not for
+free: we had to write the JIT generator, of course, as well as some
+amount of subtle generic support code.  The JIT generator preprocesses
+the (complete Python) interpreter that we wrote and links the result
+with the generic support code; the result is a (complete Python) JIT.</p>
+
+<p>The way that this works so far gives us a generated JIT that is very
+similar to <a href="https://psyco.sourceforge.net">Psyco</a> in the way
+it works.
+But Psyco has issues (and so the current PyPy JITs have the same issues):
+it can sometimes produce too much machine code,
+e.g. by failing to notice that two versions of the machine code are
+close enough that they should really be one; and it can also sometimes
+fail in the opposite way, by making a single sub-efficient version of
+the machine code instead of several efficient specialized versions.</p>
+
+<p>A few months ago we have chosen to experiment with improving this
+instead of finishing and polishing what we had so far.  The choice was
+mostly because we were (and still are) busy finishing and polishing
+everything else in PyPy, so it was more fun to keep at least the JIT on
+the experimental side.  Besides, PyPy is now getting to a rather good
+and complete state, and it is quite usable without the JIT already.</p>
+
+<p>Anyway, enough excuses.  Why is this about Prolog?</p>
+
+<p>In PyPy, both the (complete Python) interpreter and the JIT support code
+are in RPython.  Now RPython is not
+an extremely complicated language, but still, it is far from the top on a
+minimalism scale.  In general, this is a good in practice (or at least I
+think so): it gives
+a reasonable balance because it is convenient to write interpreters
+in RPython, while not being so bloated that it makes our translation
+toolchain horribly complicated (e.g. writing garbage collectors for
+RPython - or even JIT generators - is reasonable).  Still, it is not the
+best choice for early research-level experimentation.</p>
+
+<p>So what we did instead recently is hand-write, in Prolog, a JIT that
+looks similar to what we would like to achieve for RPython with our JIT
+generator.  This gave much quicker turnaround times than we were used to
+when we played around directly with RPython.  We wrote tiny example
+interpreters in Prolog (of course not a complete Python interpreter).
+Self-inspection is trivial in Prolog, and generating Prolog code at
+runtime is very easy too.  Moreover, many other issues are also easier
+in Prolog: for example, all data structures are immutable "terms".
+Other languages than Prolog would have worked, too, but it happens to be
+one that we (Carl Friderich, Michael Leuschel and myself) are familiar
+with -- not to mention that it's basically a nice small dynamic
+language.</p>
+
+<p>Of course, all this is closely related to what we want to do in PyPy.
+The fundamental issues are the same.  Indeed, in PyPy, the major goals
+of the JIT are to remove, first, the overhead of allocating objects all
+the time (e.g. integers), and second, the overhead of dynamic dispatch
+(e.g. finding out that it's integers we are adding).  The equivalent
+goals in Prolog are, first, to avoid creating short-lived terms, and
+second, to remove the overhead of dispatch (typically, the dispatching
+to multiple clauses).  If you are familiar with Prolog you can find more
+details about this <a href="https://codespeak.net/svn/user/cfbolz/jitpl/paper/prologjit1.pdf">in the paper.</a> So far we already played with many possible solutions
+in the Prolog JIT, and the paper describes the most mature one; we have
+more experimentation in mind.  The main point here is that these are
+mostly language-independent techniques (anything that works both in
+Prolog and in RPython has to be language-independent, right? :-)</p>
+
+<p>In summary, besides the nice goal of speeding up Prolog, we are trying
+to focus our Prolog JIT on the issues and goals that have equivalents in
+the PyPy JIT generator.  So in the end we are pretty convinced that it
+will give us something that we can backport to PyPy -- good ideas about
+what works and what doesn't, as well as some concrete algorithms.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/jit.html" rel="tag">jit</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="pypy-code-swarm-7038411918926116477.html" rel="prev" title="PyPy code swarm">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../07/pypy-at-europython-2008-1488914968455397674.html" rel="next" title="PyPy at the EuroPython 2008">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-7925992697655582130">
+        <div class="comment-header">
+          <a name="comment-7925992697655582130"></a>
+            <span class="author">Shalabh</span> wrote on <span class="date">2008-06-30 21:00</span>:
+        </div>
+        <div class="comment-content">
+          <p>What is the reason you would back-port the Prolog implementation to RPython, and not make Prolog itself the standard language for implementing the JIT?</p>
+        </div>
+      </div>
+      <div class="comment comment-5934632075065702900">
+        <div class="comment-header">
+          <a name="comment-5934632075065702900"></a>
+            <span class="author">Michael Foord</span> wrote on <span class="date">2008-06-30 21:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>THat sounds like the great subject of a thesis for Carl. :-)<br><br>Congratulations guys.</p>
+        </div>
+      </div>
+      <div class="comment comment-6064818579953886592">
+        <div class="comment-header">
+          <a name="comment-6064818579953886592"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2008-06-30 22:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>shalabh: because (hopefully) porting back to rpython is saner than porting all of our interpreter (including modules) to prolog.</p>
+        </div>
+      </div>
+      <div class="comment comment-7252357664789799973">
+        <div class="comment-header">
+          <a name="comment-7252357664789799973"></a>
+            <span class="author">nekto0n</span> wrote on <span class="date">2008-07-01 00:22</span>:
+        </div>
+        <div class="comment-content">
+          <p>A bit unsual approach =)<br>Hope it'll help...</p>
+        </div>
+      </div>
+      <div class="comment comment-2050116373673677354">
+        <div class="comment-header">
+          <a name="comment-2050116373673677354"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-07-01 00:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>What about making PyPy useful? <br><br>There's still a need for a python compiler, but so far, you can't run standard libraries (eg PyObjC) and you run slow that cPython. -- Even Javascript is faster than you (squirrelfish).</p>
+        </div>
+      </div>
+      <div class="comment comment-5126875891277709142">
+        <div class="comment-header">
+          <a name="comment-5126875891277709142"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-07-01 02:12</span>:
+        </div>
+        <div class="comment-content">
+          <p>One thing I've never quite understood: how will the JIT-generation transform interact with more traditional optimization schemes?<br><br>Concrete example: say in a function I want to perform some algebraic reductions of math operations which will change a lot of the instructions.  Since the JIT generation turns the interpreter into a JIT, presumably I have to write the optimization at the interpreter level.  <br><br>I can see how that could work for the simplest kind of optimizations (special cases should be specialized at runtime after they go green, if I understand the rainbow colour scheme.)<br><br>I don't see yet how the more complex optimizations I'd write on static, fixed-type code will look in this context.  IIUC at interpreter level I can only access the JIT's observations via tests like "if type(a) == FloatType" which should be filled after they're known-- but that's inside the function itself, and I don't see how to access that information from anything outside.</p>
+        </div>
+      </div>
+      <div class="comment comment-4970404440866740911">
+        <div class="comment-header">
+          <a name="comment-4970404440866740911"></a>
+            <span class="author">Armin Rigo</span> wrote on <span class="date">2008-07-01 16:31</span>:
+        </div>
+        <div class="comment-content">
+          <p>dsm: This is a two-level approach, corresponding to two levels of optimisations that are useful for dynamic languages like Python: the "high level" is the unboxing and dispatching removing that I describe in the post (which by itself can give something like a factor 50-100 speed-up in the best cases).  Traditional "low level" optimisations can be performed on top of that, by optimising the generated code that comes out of the "high level" (and this could give another 2-4x speed-up, i.e. the same difference as between "gcc" and "gcc -O3").<br><br>In this Prolog experiment we are only focusing on how to get the high level optimisations.</p>
+        </div>
+      </div>
+      <div class="comment comment-1534291136007513398">
+        <div class="comment-header">
+          <a name="comment-1534291136007513398"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-07-02 00:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>The references in the paper are not properly numbered -- any idea if it could be fixed?</p>
+        </div>
+      </div>
+      <div class="comment comment-6322028480582889272">
+        <div class="comment-header">
+          <a name="comment-6322028480582889272"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2008-07-02 00:39</span>:
+        </div>
+        <div class="comment-content">
+          <p>Michel: Thanks for noticing, it should be fixed.</p>
+        </div>
+      </div>
+      <div class="comment comment-5449182178087582978">
+        <div class="comment-header">
+          <a name="comment-5449182178087582978"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-07-02 09:34</span>:
+        </div>
+        <div class="comment-content">
+          <p>Could you possibly profit from generating a JIT compiler for Lua (www.lua.org) and compare it to Mike Pall's Lua-Jit (https://luajit.org/)?</p>
+        </div>
+      </div>
+      <div class="comment comment-729158573274541624">
+        <div class="comment-header">
+          <a name="comment-729158573274541624"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2008-07-03 09:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>While the paper was too difficult for me to understand fully, it was still an interesting read and I appreciate you posting it.</p>
+        </div>
+      </div>
+      <div class="comment comment-8083935640091102269">
+        <div class="comment-header">
+          <a name="comment-8083935640091102269"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2008-09-26 02:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>FYI: There is a project called Pyke which adds Prolog-like inferencing to Python.  This integrates with Python allowing you to include Python code snippets in your rules.<br><br>Don't know if this would be useful, but you can check it out at https://pyke.sourceforge.net.</p>
+        </div>
+      </div>
+      <div class="comment comment-4394044907341560484">
+        <div class="comment-header">
+          <a name="comment-4394044907341560484"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2009-01-09 23:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>Shalabh: It's also important to note 3 big benefits of implementing a language in the language itself, or a subset thereof ("turtles all the way down").<br><br>(1) Debugging and testing tools for programs written in the language then (hopefully) also work for debugging and testing the language implementation with minimal (or no) modification.  This also HUGELY lowers the bar for ordinary users of the language to find and fix implementation bugs.  This isn't a fault of Prolog, but 99.99% of Python users won't touch a Prolog debugger with a 10-foot pole.<br><br>(2) The largest pool of people most interested in improving the language is presumably the expert heavy users of the language.  Forcing them to learn a new language and/or implement the language in a language outside their expertise is a large disadvatage.<br><br>(3) The difference between language builtins and user code is reduced.  Also, it forces certain powerful constructs to (at times) be exposed in the language when they might otherwise only be exposed in the implementation language.  Also, with "turtles all the way down", performance improvements in the language itself also often apply to the language builtins, which increases the benefit of improvements, which is important in the cost/benefit analysis for undertaking the performance improvements in the first place.  Having "turtles all the way down" make some optimizations worthwhile that otherwise would be too much trouble to implement.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

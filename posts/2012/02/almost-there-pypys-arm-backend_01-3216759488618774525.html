@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Almost There - PyPy's ARM Backend | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2012/02/almost-there-pypys-arm-backend_01-3216759488618774525.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="David Schneider">
+<link rel="prev" href="../01/simple-tracer-for-flow-graph-language-6930951890987229484.html" title="A Simple Tracer for the Flow Graph Language" type="text/html">
+<link rel="next" href="optimizing-traces-of-flow-graph-4169388883059419385.html" title="Optimizing Traces of the Flow Graph Language" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Almost There - PyPy's ARM Backend">
+<meta property="og:url" content="https://www.pypy.org/posts/2012/02/almost-there-pypys-arm-backend_01-3216759488618774525.html">
+<meta property="og:description" content="In this post I want to give an update on the status of the ARM backend for PyPy's JIT and describe some of the issues and details of the backend.
+
+
+
+
+
+
+
+Current Status
+It has been a more than a year t">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2012-02-01T09:43:00Z">
+<meta property="article:tag" content="arm">
+<meta property="article:tag" content="jit">
+<meta property="article:tag" content="pypy">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Almost There - PyPy's ARM Backend</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/david-schneider.html">David Schneider</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2012-02-01T09:43:00Z" itemprop="datePublished" title="2012-02-01 09:43">2012-02-01 09:43</time></a>
+            </p>
+                <p class="commentline">18 comments</p>
+
+                <p class="commentline">            <a href="almost-there-pypys-arm-backend_01-3216759488618774525.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <div style="text-align: left;">
+In this post I want to give an update on the status of the ARM backend for PyPy's JIT and describe some of the issues and details of the backend.</div>
+<div class="section" id="current-status">
+<br><h2>
+
+
+
+
+Current Status<a href="#current-status" class="headerlink" title="Permalink to this heading">¶</a></h2>
+It has been a more than a year that I have been working on the ARM backend. Now it is in a shape, that we can measure meaningful numbers and also ask for some feedback. Since the <a class="reference external" href="../../2011/01/jit-backend-for-arm-processors-5994810755839586463.html">last post about the backend</a> we have added support floating point operations as well as for PyPy's framework GC's. Another area of work was to keep up with the constant improvements done in the main development branch, such as out-of-line guards, labels, etc. It has been possible for about a year to cross-translate the PyPy Python interpreter and other interpreters such as <a class="reference external" href="https://bitbucket.org/cfbolz/pyrolog/">Pyrolog</a>, with a JIT, to run benchmarks on ARM. Up until now there remained some hard to track bugs that would cause the interpreter to crash with a segmentation fault in certain cases when running with the JIT on ARM. Lately it was possible to run all benchmarks without problems, but when running the translation toolchain itself it would crash. During the last PyPy sprint in <a class="reference external" href="../../2011/12/leysin-winter-sprint-6862532189897876336.html">Leysin</a> Armin and I managed to fix several of these hard to track bugs in the ARM backend with the result that, it is now possible to run the PyPy translator on ARM itself (at least unless until it runs out of memory), which is a kind of litmus test for the backend itself and used to crash before. Just to point it out, we are not able to complete a PyPy translation on ARM, because on the hardware we have currently available there is not enough memory. But up to the point we run out of memory the JIT does not hit any issues.<br><br>
+</div>
+<div class="section" id="implementation-details">
+<h2>
+
+
+
+
+Implementation Details<a href="#implementation-details" class="headerlink" title="Permalink to this heading">¶</a></h2>
+The hardware requirements to run the JIT on ARM follow those for Ubuntu on ARM which targets ARMv7 with a VFP unit running in little endian mode. The JIT can be translated without floating point support, but there might be a few places that need to be fixed to fully work in this setting. We are targeting the ARM instruction set, because at least at the time we decided to use it seemed to be the best choice in terms of speed while having some size overhead compared to the Thumb2 instruction set. It appears that the Thumb2 instruction set should give comparable speed with better code density but has a few restriction on the number of registers available and the use of conditional execution. Also the implementation is a bit easier using a fixed width instruction set and we can use the full set of registers in the generated code when using the ARM instruction set.<br><br>
+</div>
+<div class="section" id="the-calling-convention-on-arm">
+<h2>
+
+
+
+
+The calling convention on ARM<a href="#the-calling-convention-on-arm" class="headerlink" title="Permalink to this heading">¶</a></h2>
+The calling convention on ARM uses 4 of the general purpose registers to pass arguments to functions, further arguments are passed on the stack. The presence of a floating point unit is not required for ARM cores, for this reason there are different ways of handling floats with relation to the calling convention. There is a so called soft-float calling convention that is independent of the presence of a floating point unit. For this calling convention floating point arguments to functions are stored in the general purpose registers and on the stack. Passing floats around this way works with software and hardware floating point implementations. But in presence of a floating point unit it produces some overhead, because floating point numbers need to be moved from the floating point unit to the core registers to do a call and moved back to the floating point registers by the callee. The alternative calling convention is the so-called hard-float calling convention which requires the presence of a floating point unit but has the advantage of getting rid of the overhead of moving floating point values around when performing a call. Although it would be better in the long term to support the hard-float calling convention, we need to be able to interoperate with external code compiled for the operating system we are running on. For this reason at the moment we only support the soft-float to interoperate with external code. We implemented and tested the backend on a <a class="reference external" href="https://beagleboard.org/hardware-xM/">BeagleBoard-xM</a> with a <a class="reference external" href="https://www.arm.com/products/processors/cortex-a/cortex-a8.php">Cortex-A8</a> processor running <a class="reference external" href="https://wiki.ubuntu.com/ARM">Ubuntu 11.04 for ARM</a>.<br><br>
+</div>
+<div class="section" id="translating-for-arm">
+<h2>
+
+
+
+
+Translating for ARM<a href="#translating-for-arm" class="headerlink" title="Permalink to this heading">¶</a></h2>
+The toolchain used to translate PyPy currently is based on a <a class="reference external" href="https://maemo.gitorious.org/scratchbox2/pages/Home">Scratchbox2</a>. Scratchbox2 is a cross-compiling environment. Development had stopped for a while, but it seems to have revived again. We run a 32-bit Python interpreter on the host system and perform all calls to the compiler using a Scratchbox2 based environment. A description on how to setup the cross translation toolchain can be found <a class="reference external" href="https://bitbucket.org/pypy/pypy/src/1f07ea8076c9/pypy/doc/arm.rst">here</a>.<br><br>
+</div>
+<div class="section" id="results">
+<h2>
+
+
+
+
+Results<a href="#results" class="headerlink" title="Permalink to this heading">¶</a></h2>
+The current results on ARM, as shown in the graph below, show that the JIT currently gives a speedup of about 3.5 times compared to CPython on ARM. The benchmarks were run on the before mentioned BeagleBoard-xM with a 1GHz ARM Cortex-A8 processor and 512MB of memory. The operating system on the board is Ubuntu 11.04 for ARM. We measured the PyPy interpreter with the JIT enabled and disabled comparing each to CPython Python 2.7.1+ (r271:86832) for ARM. The graph shows the speedup or slowdown of both PyPy versions for the different benchmarks from our benchmark suite normalized to the runtime of CPython. The data used for the graph can be seen below.<br><div class="separator" style="clear: both; text-align: center;">
+<a href="https://2.bp.blogspot.com/-uckc9tOWgnM/TykHMuuGT9I/AAAAAAAAAKg/J8_fC6RS-QA/s1600/graph.png" style="margin-left: 1em; margin-right: 1em;"><img border="0" height="258" src="https://2.bp.blogspot.com/-uckc9tOWgnM/TykHMuuGT9I/AAAAAAAAAKg/J8_fC6RS-QA/s400/graph.png" width="400"></a>
+</div>
+<br>
+The speedup is less than the speedup of 5.2 times we currently  get on x86 on our own benchmark suite (see <a class="reference external" href="https://speed.pypy.org/">https://speed.pypy.org</a> for details). There are several possible reasons for this. Comparing the results for the interpreter without the JIT on ARM and x86 suggests that the interpreter generated by PyPy, without the JIT, has a worse performance when compared to CPython that it does on x86. Also it is quite possible that the code we are generating with the JIT is not yet optimal. Also there are some architectural constraints produce some overhead. One of these differences is the handling of constants, most ARM instructions only support 8 bit (that can be shifted) immediate values, larger constants need to be loaded into a register, something that is not necessary on x86.<br><br><table border="1" class="docutils">
+<colgroup></colgroup>
+<colgroup><col width="40%"></colgroup>
+<colgroup><col width="32%"></colgroup>
+<colgroup><col width="28%"></colgroup>
+<tbody valign="top">
+<tr>
+<td>Benchmark</td>
+<td>PyPy JIT</td>
+<td>PyPy no JIT</td>
+</tr>
+<tr>
+<td>ai</td>
+<td>0.484439780047</td>
+<td>3.72756749625</td>
+</tr>
+<tr>
+<td>chaos</td>
+<td>0.0807291691934</td>
+<td>2.2908692212</td>
+</tr>
+<tr>
+<td>crypto_pyaes</td>
+<td>0.0711114832245</td>
+<td>3.30112318509</td>
+</tr>
+<tr>
+<td>django</td>
+<td>0.0977743245519</td>
+<td>2.56779947601</td>
+</tr>
+<tr>
+<td>fannkuch</td>
+<td>0.210423735698</td>
+<td>2.49163632938</td>
+</tr>
+<tr>
+<td>float</td>
+<td>0.154275334675</td>
+<td>2.12053281495</td>
+</tr>
+<tr>
+<td>go</td>
+<td>0.330483034202</td>
+<td>5.84628320479</td>
+</tr>
+<tr>
+<td>html5lib</td>
+<td>0.629264389862</td>
+<td>3.60333138526</td>
+</tr>
+<tr>
+<td>meteor-contest</td>
+<td>0.984747426912</td>
+<td>2.93838610037</td>
+</tr>
+<tr>
+<td>nbody_modified</td>
+<td>0.236969593082</td>
+<td>1.40027234936</td>
+</tr>
+<tr>
+<td>pyflate-fast</td>
+<td>0.367447191807</td>
+<td>2.72472422146</td>
+</tr>
+<tr>
+<td>raytrace-simple</td>
+<td>0.0290527461437</td>
+<td>1.97270054339</td>
+</tr>
+<tr>
+<td>richards</td>
+<td>0.034575573553</td>
+<td>3.29767342015</td>
+</tr>
+<tr>
+<td>slowspitfire</td>
+<td>0.786642551908</td>
+<td>3.7397367403</td>
+</tr>
+<tr>
+<td>spambayes</td>
+<td>0.660324379456</td>
+<td>3.29059863111</td>
+</tr>
+<tr>
+<td>spectral-norm</td>
+<td>0.063610783731</td>
+<td>4.01788986233</td>
+</tr>
+<tr>
+<td>spitfire</td>
+<td>0.43617131165</td>
+<td>2.72050579076</td>
+</tr>
+<tr>
+<td>spitfire_cstringio</td>
+<td>0.255538702134</td>
+<td>1.7418593111</td>
+</tr>
+<tr>
+<td>telco</td>
+<td>0.102918930413</td>
+<td>3.86388866047</td>
+</tr>
+<tr>
+<td>twisted_iteration</td>
+<td>0.122723986805</td>
+<td>4.33632475491</td>
+</tr>
+<tr>
+<td>twisted_names</td>
+<td>2.42367797135</td>
+<td>2.99878698076</td>
+</tr>
+<tr>
+<td>twisted_pb</td>
+<td>1.30991837431</td>
+<td>4.48877805486</td>
+</tr>
+<tr>
+<td>twisted_tcp</td>
+<td>0.927033354055</td>
+<td>2.8161624665</td>
+</tr>
+<tr>
+<td>waf</td>
+<td>1.02059811932</td>
+<td>1.03793427321</td>
+</tr>
+</tbody>
+</table>
+</div>
+<br><br><div class="section" id="the-next-steps-and-call-for-help">
+<h2>
+
+
+
+
+The next steps and call for help<a href="#the-next-steps-and-call-for-help" class="headerlink" title="Permalink to this heading">¶</a></h2>
+Although there probably still are some remaining issues which have not surfaced yet, the JIT backend for ARM is working. Before we can merge the backend into the main development line there are some things that we would like to do first, in particular it we are looking for a way to run the all PyPy tests to verify that things work on ARM before we can merge. Additionally there are some other longterm ideas. To do this we are looking for people willing to help, either by contributing to implement the open features or that can help us with hardware to test.<br><br>
+The incomplete list of open topics:<br><ul class="simple">
+<li>We are looking for a better way to translate PyPy for ARM, than the one describe above. I am not sure if there currently is hardware with enough memory to directly translate PyPy on an ARM based system, this would require between 1.5 or 2 Gig of memory. A fully <a class="reference external" href="https://wiki.qemu.org/Main_Page">QEMU</a> based approach could also work, instead of Scratchbox2 that uses QEMU under the hood.</li>
+<li>Test the JIT on different hardware.</li>
+<li>Experiment with the JIT settings to find the optimal thresholds for ARM.</li>
+<li>Continuous integration: We are looking for a way to run the PyPy test suite to make sure everything works as expected on ARM, here QEMU also might provide an alternative.</li>
+<li>A long term plan would be to port the backend to ARMv5 ISA and improve the support for systems without a floating point unit. This would require to implement the ISA and create different code paths and improve the instruction selection depending on the target architecture.</li>
+<li>Review of the generated machine code the JIT generates on ARM to see if the instruction selection makes sense for ARM.</li>
+<li>Build a version that runs on Android.</li>
+<li>Improve the tools, i.e. integrate with <a class="reference external" href="https://bitbucket.org/pypy/jitviewer">jitviewer</a>.</li>
+</ul>
+So if you are interested or willing to help in any way contact us.</div>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/arm.html" rel="tag">arm</a></li>
+            <li><a class="tag p-category" href="../../../categories/jit.html" rel="tag">jit</a></li>
+            <li><a class="tag p-category" href="../../../categories/pypy.html" rel="tag">pypy</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="../01/simple-tracer-for-flow-graph-language-6930951890987229484.html" rel="prev" title="A Simple Tracer for the Flow Graph Language">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="optimizing-traces-of-flow-graph-4169388883059419385.html" rel="next" title="Optimizing Traces of the Flow Graph Language">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-7465482082921266586">
+        <div class="comment-header">
+          <a name="comment-7465482082921266586"></a>
+            <span class="author">Michael Hudson-Doyle</span> wrote on <span class="date">2012-02-02 00:20</span>:
+        </div>
+        <div class="comment-content">
+          <p>Awesome news.  We might be able to donate some time in the Linaro validation lab to running tests, I'll see what we can do...</p>
+        </div>
+      </div>
+      <div class="comment comment-8507175046008718049">
+        <div class="comment-header">
+          <a name="comment-8507175046008718049"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-02 21:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>"Just to point it out, we are not able to complete a PyPy translation on ARM, because on the hardware we have currently available there is not enough memory."<br><br>Can't you just add more swap?</p>
+        </div>
+      </div>
+      <div class="comment comment-4486072884680676135">
+        <div class="comment-header">
+          <a name="comment-4486072884680676135"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2012-02-03 09:08</span>:
+        </div>
+        <div class="comment-content">
+          <p>You wrote: "The speedup is less than the speedup of 5.2 times you currently get on x86."<br><br>The removed comment was meant to point out that the author of the blog post does not (and cannot) know the actual speedups (and slowdowns) people are getting on their machines.<br><br>The speedup of 5.2 you mentioned is contradicting my own experience.<br><br>I suggest you rewrite your sentence into "The speedup is less than the speedup of 5.2 times we currently get on x86."</p>
+        </div>
+      </div>
+      <div class="comment comment-4864633761964548991">
+        <div class="comment-header">
+          <a name="comment-4864633761964548991"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-02-03 09:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>"The speedup of 5.2 you mentioned is contradicting my own experience."<br><br>Did you run the very same benchmark suite or some arbitrary programs? If arbitrary programs then sorry, but it's seriously impossible for us to optimize stuff we don't know about. Please submit bug tracker issues for that.<br><br>I agree the speedup should be qualified "on our own benchmark suite", but if you don't contribute benchmarks, you can't complain.</p>
+        </div>
+      </div>
+      <div class="comment comment-5546022386257269483">
+        <div class="comment-header">
+          <a name="comment-5546022386257269483"></a>
+            <span class="author">David Schneider</span> wrote on <span class="date">2012-02-03 11:30</span>:
+        </div>
+        <div class="comment-content">
+          <p>@⚛ to avoid misunderstandings I updated the sentence in question to make it clear that I was comparing the performance of the ARM backend running our own benchmark suite to the results of the benchmarks as shown on speed.pypy.org.</p>
+        </div>
+      </div>
+      <div class="comment comment-357867687383619487">
+        <div class="comment-header">
+          <a name="comment-357867687383619487"></a>
+            <span class="author">Naos</span> wrote on <span class="date">2012-02-03 23:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>Every time I visit comments to blog posts on this page I see some hater or two or even more who, don't know why, have wierd problems without a reason. People chill out, you get this brilliant piece of software and you do not have to pay for it.</p>
+        </div>
+      </div>
+      <div class="comment comment-649719125364436650">
+        <div class="comment-header">
+          <a name="comment-649719125364436650"></a>
+            <span class="author">Jan Ziak (atomsymbol)</span> wrote on <span class="date">2012-02-04 08:36</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Naos: I do *not* hate PyPy. I like it and want to make it better. To do that, I am using a method different from your method. I would like the PyPy team to figure out how to run my benchmark faster without me disclosing the name of the benchmark. I believe that in the end this method will lead to a couple of universal optimizations in PyPy.</p>
+        </div>
+      </div>
+      <div class="comment comment-3697214829700473557">
+        <div class="comment-header">
+          <a name="comment-3697214829700473557"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2012-02-04 09:38</span>:
+        </div>
+        <div class="comment-content">
+          <p>@⚛ Contrary to what you might believe, this ends up with you being annoying and nothing else. If you think we don't think all the time about general improvements, you're wrong, but pointless, unscientific complaining is not welcomed here.</p>
+        </div>
+      </div>
+      <div class="comment comment-5737333706142015107">
+        <div class="comment-header">
+          <a name="comment-5737333706142015107"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-06 10:55</span>:
+        </div>
+        <div class="comment-content">
+          <p>will it work on the raspberry pi or does it use a different arm architecture?<br><br>(i am confused by arms. :) apparently it isn't like in the x86 world where everything is compatible with each other.)</p>
+        </div>
+      </div>
+      <div class="comment comment-1987835752350568972">
+        <div class="comment-header">
+          <a name="comment-1987835752350568972"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-06 11:46</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous<br><br>&gt; The hardware requirements to run the JIT on ARM follow those for Ubuntu on ARM which targets ARMv7 with a VFP unit running in little endian mode.<br><br>This is higher than Raspberry Pi's ARMv6.</p>
+        </div>
+      </div>
+      <div class="comment comment-1284420885683877247">
+        <div class="comment-header">
+          <a name="comment-1284420885683877247"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-06 22:14</span>:
+        </div>
+        <div class="comment-content">
+          <b>A long term plan would be to port the backend to ARMv5 ISA and improve the support for systems without a floating point unit. This would require to implement the ISA and create different code paths and improve the instruction selection depending on the target architecture.</b><br><br>so someday it will support the v6 too? or isn't v5 and v6 compatible either?
+        </div>
+      </div>
+      <div class="comment comment-1799650818342377804">
+        <div class="comment-header">
+          <a name="comment-1799650818342377804"></a>
+            <span class="author">David Schneider</span> wrote on <span class="date">2012-02-09 14:18</span>:
+        </div>
+        <div class="comment-content">
+          <p>@Anonymous ARMv6 should be backwards compatible to the ARMv5 ISA. So it should be possible to use the JIT on ARMv6 once it works for ARMv5.</p>
+        </div>
+      </div>
+      <div class="comment comment-1722977824918113754">
+        <div class="comment-header">
+          <a name="comment-1722977824918113754"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2012-02-10 08:10</span>:
+        </div>
+        <div class="comment-content">
+          <p>Really nice with raspberry Pi being released and ARM proto boards gaining traction. Looking forward to develop w/ this on rPi</p>
+        </div>
+      </div>
+      <div class="comment comment-2372873309925743589">
+        <div class="comment-header">
+          <a name="comment-2372873309925743589"></a>
+            <span class="author">d.q.</span> wrote on <span class="date">2012-03-14 16:42</span>:
+        </div>
+        <div class="comment-content">
+          <p>I have an arm system with enough swap, microsd or cifs or both... though a setup like this will probably take until next release to translate pypy, won't it?<br>Can also do usermode qemu of course.</p>
+        </div>
+      </div>
+      <div class="comment comment-2339667312085320662">
+        <div class="comment-header">
+          <a name="comment-2339667312085320662"></a>
+            <span class="author">David Schneider</span> wrote on <span class="date">2012-04-18 10:05</span>:
+        </div>
+        <div class="comment-content">
+          <p>@d.q. It would at least take until the next release, if not several...<br>A qemu based solution would be interesting. If you are interested I would propose you join #pypy on IRC to discuss</p>
+        </div>
+      </div>
+      <div class="comment comment-8392965845470921501">
+        <div class="comment-header">
+          <a name="comment-8392965845470921501"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2013-03-01 01:28</span>:
+        </div>
+        <div class="comment-content">
+          <p>I'm pretty sure the guys over at Boundary Devices are making a SabreLite variant with 2GB ram.<br><br>https://boundarydevices.com/imx6-options-single-dual-core-2gb-ddr/<br><br>You may need to email them directly to purchase it still, but they're responsive and a pleasure to work with.</p>
+        </div>
+      </div>
+      <div class="comment comment-4878646708367241892">
+        <div class="comment-header">
+          <a name="comment-4878646708367241892"></a>
+            <span class="author">Eric van Riet Paap</span> wrote on <span class="date">2013-03-19 14:15</span>:
+        </div>
+        <div class="comment-content">
+          <p>Anyone try to create a qemu based solution? Even if only a build system. I would be interested in having some documentation about how to build pypy for Raspberry Pi. I know it's a non-compatible ARM version but we have to start somewhere. Plus I have a very RPi's laying around  to play with...</p>
+        </div>
+      </div>
+      <div class="comment comment-290956699714032338">
+        <div class="comment-header">
+          <a name="comment-290956699714032338"></a>
+            <span class="author">Eric van Riet Paap</span> wrote on <span class="date">2013-03-19 14:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>Anyone tried to build with a qemu setup? I have several Raspberry Pi's around that I could play with. I know the JIT will not work because of the difference in ARM versions but it's a start.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

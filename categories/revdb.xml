@@ -1,0 +1,457 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about revdb)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/revdb.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:36 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>Reverse debugging for Python</title><link>https://www.pypy.org/posts/2016/07/reverse-debugging-for-python-8854823774141612670.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;div class="section" id="revpdb"&gt;
+&lt;h3&gt;RevPDB&lt;/h3&gt;
+&lt;p&gt;A "reverse debugger" is a debugger where you can go forward and
+backward in time.  It is an uncommon feature, at least in the open
+source world, but I have no idea why.  I have used &lt;a class="reference external" href="https://undo.io/"&gt;undodb-gdb&lt;/a&gt; and
+&lt;a class="reference external" href="https://rr-project.org/"&gt;rr&lt;/a&gt;, which are reverse debuggers for C code, and I can only say that
+they saved me many, many days of poking around blindly in gdb.&lt;/p&gt;
+&lt;p&gt;The PyPy team is pleased to give you "RevPDB", a reverse-debugger
+similar to &lt;tt class="docutils literal"&gt;rr&lt;/tt&gt; but for Python.&lt;/p&gt;
+&lt;p&gt;An example is worth a thousand words.  Let's say your big Python
+program has a bug that shows up inconsistently.  You have nailed it
+down to something like:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;start &lt;tt class="docutils literal"&gt;x.py&lt;/tt&gt;, which does stuff (maybe involving processing files,
+answering some web requests that you simulate from another terminal,
+etc.);&lt;/li&gt;
+&lt;li&gt;sometimes, after a few minutes, your program's state becomes
+inconsistent and you get a failing assert or another exception.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This is the case where RevPDB is useful.&lt;/p&gt;
+&lt;p&gt;RevPDB is available only on 64-bit Linux and OS/X right now, but should
+not be too hard to port to other OSes.  It is very much &lt;em&gt;alpha-level!&lt;/em&gt;
+(It is a debugger full of bugs.  Sorry about that.)  I believe it is
+still useful---it helped me in one &lt;a class="reference external" href="https://bitbucket.org/pypy/pypy/commits/bd220c268bc9"&gt;real use case&lt;/a&gt; already.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="how-to-get-revpdb"&gt;
+&lt;h3&gt;How to get RevPDB&lt;/h3&gt;
+&lt;p&gt;The following demo was done with an alpha version for 64-bit Linux,
+compiled for Arch Linux.  I won't provide the binary; it should be
+easy enough to retranslate (much faster than a regular PyPy because it
+contains neither a JIT nor a custom GC).  Grab the &lt;a class="reference external" href="https://pypy.org/download.html#building-from-source"&gt;PyPy sources&lt;/a&gt; from
+Mercurial, and then:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+hg update reverse-debugger
+# or "hg update ff376ccacb36" for exactly this demo
+cd pypy/goal
+../../rpython/bin/rpython -O2 --revdb targetpypystandalone.py  \
+                  --withoutmod-cpyext --withoutmod-micronumpy
+&lt;/pre&gt;
+&lt;p&gt;and possibly rename the final &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-c&lt;/span&gt;&lt;/tt&gt; to &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-revdb&lt;/span&gt;&lt;/tt&gt; to avoid
+confusion.&lt;/p&gt;
+&lt;p&gt;Other platforms than 64-bit Linux and OS/X need some fixes before they work.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="demo"&gt;
+&lt;h3&gt;Demo&lt;/h3&gt;
+&lt;p&gt;For this demo, we're going to use this &lt;tt class="docutils literal"&gt;x.py&lt;/tt&gt; as the "big program":&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+import os
+
+class Foo(object):
+    value = 5
+
+lst1 = [Foo() for i in range(100)]
+lst1[50].value += 1
+for x in lst1:
+    x.value += 1
+
+for x in lst1:
+    if x.value != 6:
+        print 'oops!'
+        os._exit(1)
+&lt;/pre&gt;
+&lt;p&gt;Of course, it is clear what occurs in this small example: the check
+fails on item 50.  For this demo, the check has been written with
+&lt;tt class="docutils literal"&gt;os._exit(1)&lt;/tt&gt;, because this exits immediately the program.  If it
+was written with an &lt;tt class="docutils literal"&gt;assert&lt;/tt&gt;, then its failure would execute things
+in the &lt;tt class="docutils literal"&gt;traceback&lt;/tt&gt; module afterwards, to print the traceback; it
+would be a minor mess just to find the exact point of the failing
+&lt;tt class="docutils literal"&gt;assert&lt;/tt&gt;.  (This and other issues are supposed to be fixed in the
+future, but for now it is alpha-level.)&lt;/p&gt;
+&lt;p&gt;Anyway, with a regular &lt;tt class="docutils literal"&gt;assert&lt;/tt&gt; and a regular post-mortem &lt;tt class="docutils literal"&gt;pdb&lt;/tt&gt;,
+we could observe that &lt;tt class="docutils literal"&gt;x.value&lt;/tt&gt; is indeed 7 instead of 6 when the
+assert fails.  Imagine that the program is much bigger: how would we
+find the exact chain of events that caused this value 7 to show up on
+this particular &lt;tt class="docutils literal"&gt;Foo&lt;/tt&gt; object?  This is what RevPDB is for.&lt;/p&gt;
+&lt;p&gt;&lt;strike&gt;First, we need for now to disable Address Space Layout Randomization
+(ASLR), otherwise replaying will not work.  This is done once with the
+following command line, which changes the state until the next
+reboot:&lt;/strike&gt;&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
+&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;UPDATE:&lt;/strong&gt; the above is no longer necessary from revision ff376ccacb36.&lt;/p&gt;
+&lt;p&gt;Run &lt;tt class="docutils literal"&gt;x.py&lt;/tt&gt; with RevPDB's version of PyPy instead of the regular
+interpreter (CPython or PyPy):&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+PYPYRDB=log.rdb ./pypy-revdb x.py
+&lt;/pre&gt;
+&lt;p&gt;This &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-revdb&lt;/span&gt;&lt;/tt&gt; executable is like a slow PyPy executable, running
+(for now) without a JIT.  This produces a file &lt;tt class="docutils literal"&gt;log.rdb&lt;/tt&gt; which
+contains a complete log of this execution.  (If the bug we are
+tracking occurs rarely, we need to re-run it several times until we
+get the failure.  But once we got the failure, then we're done with
+this step.)&lt;/p&gt;
+&lt;p&gt;Start:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+rpython/translator/revdb/revdb.py log.rdb
+&lt;/pre&gt;
+&lt;p&gt;We get a pdb-style debugger.  This &lt;tt class="docutils literal"&gt;revdb.py&lt;/tt&gt; is a normal Python
+program, which you run with an unmodified Python; internally, it looks
+inside the log for the path to &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-revdb&lt;/span&gt;&lt;/tt&gt; and run it as needed (as
+one forking subprocess, in a special mode).&lt;/p&gt;
+&lt;p&gt;Initially, we are at the start of the program---not at the end, like
+we'd get in a regular debugger:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+File "&amp;lt;builtin&amp;gt;/app_main.py", line 787 in setup_bootstrap_path:
+(1)$
+&lt;/pre&gt;
+&lt;p&gt;The list of commands is available with &lt;tt class="docutils literal"&gt;help&lt;/tt&gt;.&lt;/p&gt;
+&lt;p&gt;Go to the end with &lt;tt class="docutils literal"&gt;continue&lt;/tt&gt; (or &lt;tt class="docutils literal"&gt;c&lt;/tt&gt;):&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+(1)$ continue
+File "/tmp/x.py", line 14 in &amp;lt;module&amp;gt;:
+...
+  lst1 = [Foo() for i in range(100)]
+  lst1[50].value += 1
+  for x in lst1:
+      x.value += 1
+
+  for x in lst1:
+      if x.value != 6:
+          print 'oops!'
+&amp;gt;         os._exit(1)
+(19727)$
+&lt;/pre&gt;
+&lt;p&gt;We are now at the beginning of the last executed line.  The number
+19727 is the "time", measured in number of lines executed.  We can go
+backward with the &lt;tt class="docutils literal"&gt;bstep&lt;/tt&gt; command (backward step, or &lt;tt class="docutils literal"&gt;bs&lt;/tt&gt;), line
+by line, and forward again with the &lt;tt class="docutils literal"&gt;step&lt;/tt&gt; command.  There are also
+commands &lt;tt class="docutils literal"&gt;bnext&lt;/tt&gt;, &lt;tt class="docutils literal"&gt;bcontinue&lt;/tt&gt; and &lt;tt class="docutils literal"&gt;bfinish&lt;/tt&gt; and their forward
+equivalents.  There is also "&lt;tt class="docutils literal"&gt;go TIME&lt;/tt&gt;" to jump directly to the specified
+time.  (Right now the debugger only stops at "line start"
+events, not at function entry or exit, which makes some cases a bit
+surprising: for example, a &lt;tt class="docutils literal"&gt;step&lt;/tt&gt; from the return statement of
+function &lt;tt class="docutils literal"&gt;foo()&lt;/tt&gt; will jump directly to the caller's caller, if the
+caller's current line was &lt;tt class="docutils literal"&gt;return foo() + 2&lt;/tt&gt;, because no "line
+start" event occurs in the caller after &lt;tt class="docutils literal"&gt;foo()&lt;/tt&gt; returns to it.)&lt;/p&gt;
+&lt;p&gt;We can print Python expressions and statements using the &lt;tt class="docutils literal"&gt;p&lt;/tt&gt;
+command:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+(19727)$ p x
+$0 = &amp;lt;__main__.Foo object at 0xfffffffffffeab3e&amp;gt;
+(19727)$ p x.value
+$1 = 7
+(19727)$ p x.value + 1
+8
+&lt;/pre&gt;
+&lt;p&gt;The "&lt;tt class="docutils literal"&gt;$NUM =&lt;/tt&gt;" prefix is only shown when we print an object that
+really exists in the debugged program; that's why the last line does
+not contain it.  Once a &lt;tt class="docutils literal"&gt;$NUM&lt;/tt&gt; has been printed, then we can use
+it in further expressions---even at a different point time.  It
+becomes an anchor that always refers to the same object:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+(19727)$ bstep
+
+File "/tmp/x.py", line 13 in &amp;lt;module&amp;gt;:
+...
+
+  lst1 = [Foo() for i in range(100)]
+  lst1[50].value += 1
+  for x in lst1:
+      x.value += 1
+
+  for x in lst1:
+      if x.value != 6:
+&amp;gt;         print 'oops!'
+          os._exit(1)
+(19726)$ p $0.value
+$1 = 7
+&lt;/pre&gt;
+&lt;p&gt;In this case, we want to know when this value 7 was put in this
+attribute.  This is the job of a watchpoint:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+(19726)$ watch $0.value
+Watchpoint 1 added
+updating watchpoint value: $0.value =&amp;gt; 7
+&lt;/pre&gt;
+&lt;p&gt;This watchpoint means that &lt;tt class="docutils literal"&gt;$0.value&lt;/tt&gt; will be evaluated at each line.
+When the &lt;tt class="docutils literal"&gt;repr()&lt;/tt&gt; of this expression changes, the watchpoint activates
+and execution stops:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+(19726)$ bcontinue
+[searching 19629..19726]
+[searching 19338..19629]
+
+updating watchpoint value: $0.value =&amp;gt; 6
+Reverse-hit watchpoint 1: $0.value
+File "/tmp/x.py", line 9 in &amp;lt;module&amp;gt;:
+  import os
+
+  class Foo(object):
+      value = 5
+
+  lst1 = [Foo() for i in range(100)]
+  lst1[50].value += 1
+  for x in lst1:
+&amp;gt;     x.value += 1
+
+  for x in lst1:
+      if x.value != 6:
+          print 'oops!'
+          os._exit(1)
+(19524)$
+&lt;/pre&gt;
+&lt;p&gt;Note that using the &lt;tt class="docutils literal"&gt;$NUM&lt;/tt&gt; syntax is essential in watchpoints.  You
+can't say "&lt;tt class="docutils literal"&gt;watch x.value&lt;/tt&gt;", because the variable &lt;tt class="docutils literal"&gt;x&lt;/tt&gt; will go out
+of scope very soon when we move forward or backward in time.  In fact
+the watchpoint expression is always evaluated inside an environment
+that contains the builtins but not the current locals and globals.
+But it also contains all the &lt;tt class="docutils literal"&gt;$NUM&lt;/tt&gt;, which can be used to refer to
+known objects.  It is thus common to watch &lt;tt class="docutils literal"&gt;$0.attribute&lt;/tt&gt; if &lt;tt class="docutils literal"&gt;$0&lt;/tt&gt;
+is an object, or to watch &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;len($1)&lt;/span&gt;&lt;/tt&gt; if &lt;tt class="docutils literal"&gt;$1&lt;/tt&gt; is some list.  The
+watch expression can also be a simple boolean: for example, "&lt;tt class="docutils literal"&gt;watch
+$2 in $3&lt;/tt&gt;" where &lt;tt class="docutils literal"&gt;$3&lt;/tt&gt; is some dict and &lt;tt class="docutils literal"&gt;$2&lt;/tt&gt; is some object that
+you find now in the dict; you would use this to find out the time when
+&lt;tt class="docutils literal"&gt;$2&lt;/tt&gt; was put inside &lt;tt class="docutils literal"&gt;$3&lt;/tt&gt;, or removed from it.&lt;/p&gt;
+&lt;p&gt;Use "&lt;tt class="docutils literal"&gt;info watchpoints&lt;/tt&gt;" and "&lt;tt class="docutils literal"&gt;delete &amp;lt;watchpointnum&amp;gt;&lt;/tt&gt;" to manage
+watchpoints.&lt;/p&gt;
+&lt;p&gt;There are also regular breakpoints, which you set with "&lt;tt class="docutils literal"&gt;b
+FUNCNAME&lt;/tt&gt;".  It breaks whenever there is a call to a function that
+happens to have the given name.  (It might be annoying to use for a
+function like &lt;tt class="docutils literal"&gt;__init__()&lt;/tt&gt; which has many homonyms.  There is no
+support for breaking on a fully-qualified name or at a given line
+number for now.)&lt;/p&gt;
+&lt;p&gt;In our demo, we stop at the line &lt;tt class="docutils literal"&gt;x.value += 1&lt;/tt&gt;, which is where the
+value was changed from 6 to 7.  Use &lt;tt class="docutils literal"&gt;bcontinue&lt;/tt&gt; again to stop at the
+line &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;lst1[50].value&lt;/span&gt; += 1&lt;/tt&gt;, which is where the value was changed from
+5 to 6.  Now we know how this &lt;tt class="docutils literal"&gt;value&lt;/tt&gt; attribute ends up being 7.&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+(19524)$ bcontinue
+[searching 19427..19524]
+[searching 19136..19427]
+
+updating watchpoint value: $0.value =&amp;gt; 5
+Reverse-hit watchpoint 1: $0.value
+File "/tmp/x.py", line 7 in &amp;lt;module&amp;gt;:
+  import os
+
+  class Foo(object):
+      value = 5
+
+  lst1 = [Foo() for i in range(100)]
+&amp;gt; lst1[50].value += 1
+  for x in lst1:
+      x.value += 1
+
+  for x in lst1:
+      if x.value != 6:
+...
+(19422)$
+&lt;/pre&gt;
+&lt;p&gt;Try to use &lt;tt class="docutils literal"&gt;bcontinue&lt;/tt&gt; yet another time.  It will stop now just before
+&lt;tt class="docutils literal"&gt;$0&lt;/tt&gt; is created.  At that point in time, &lt;tt class="docutils literal"&gt;$0&lt;/tt&gt; refers to
+an object that does not exist yet, so the watchpoint now evaluates to
+an error message (but it continues to work as before, with that error
+message as the string it currently evaluates to).&lt;/p&gt;
+&lt;pre class="literal-block"&gt;
+(19422)$ bcontinue
+[searching 19325..19422]
+
+updating watchpoint value: $0.value =&amp;gt; RuntimeError:
+               '$0' refers to an object created later in time
+Reverse-hit watchpoint 1: $0.value
+File "/tmp/x.py", line 6 in &amp;lt;module&amp;gt;:
+  import os
+
+  class Foo(object):
+      value = 5
+
+&amp;gt; lst1 = [Foo() for i in range(100)]
+  lst1[50].value += 1
+  for x in lst1:
+      x.value += 1
+
+  for x in lst1:
+...
+(19371)$
+&lt;/pre&gt;
+&lt;p&gt;In big programs, the workflow is similar, just more complex.  Usually
+it works this way: we find interesting points in time with some
+combination of watchpoints and some direct commands to move around.
+We write down on a piece of (real or virtual) paper these points in
+history, including most importantly their time, so that we can
+construct an ordered understanding of what is going on.&lt;/p&gt;
+&lt;p&gt;The current &lt;tt class="docutils literal"&gt;revdb&lt;/tt&gt; can be annoying and sometimes even crash; but
+the history you reconstruct can be kept.  All the times and
+expressions printed are still valid when you restart &lt;tt class="docutils literal"&gt;revdb&lt;/tt&gt;.  The
+only thing "lost" is the &lt;tt class="docutils literal"&gt;$NUM&lt;/tt&gt; objects, which you need to print
+again.  (Maybe instead of &lt;tt class="docutils literal"&gt;$0&lt;/tt&gt;, &lt;tt class="docutils literal"&gt;$1&lt;/tt&gt;, ...  we should use &lt;tt class="docutils literal"&gt;$&amp;lt;big
+number&amp;gt;&lt;/tt&gt;, where the big number identifies uniquely the object by its
+creation time.  These numbers would continue to be valid even after
+&lt;tt class="docutils literal"&gt;revdb&lt;/tt&gt; is restarted.  They are more annoying to use than just
+&lt;tt class="docutils literal"&gt;$0&lt;/tt&gt; though.)&lt;/p&gt;
+&lt;p&gt;&lt;b&gt;Screencast:&lt;/b&gt; Here's a (slightly typo-y) screencast of cfbolz using the reverse debugger:
+&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="current-issues"&gt;
+&lt;h3&gt;Current issues&lt;/h3&gt;
+&lt;p&gt;General issues:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;If you are using &lt;tt class="docutils literal"&gt;revdb&lt;/tt&gt; on a log that took more than a few
+minutes to record, then it can be painfully slow.  This is because
+&lt;tt class="docutils literal"&gt;revdb&lt;/tt&gt; needs to replay again big parts of the log for some
+operations.&lt;/li&gt;
+&lt;li&gt;The &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-revdb&lt;/span&gt;&lt;/tt&gt; is currently missing the following modules:&lt;ul&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;thread&lt;/tt&gt; (implementing multithreading is possible, but not done
+yet);&lt;/li&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;cpyext&lt;/tt&gt; (the CPython C API compatibility layer);&lt;/li&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;micronumpy&lt;/tt&gt; (minor issue only);&lt;/li&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;_continuation&lt;/tt&gt; (for greenlets).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Does not contain a JIT, and does not use our fast garbage
+collectors.  You can expect &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-revdb&lt;/span&gt;&lt;/tt&gt; to be maybe 3 times
+slower than CPython.&lt;/li&gt;
+&lt;li&gt;Only works on Linux and OS/X.  There is no fundamental reason for
+this restriction, but it is some work to fix.&lt;/li&gt;
+&lt;li&gt;Replaying a program uses a &lt;em&gt;lot&lt;/em&gt; more memory; maybe 15x as much than
+during the recording.  This is because it creates many forks.  If
+you have a program that consumes 10% of your RAM or more, you will
+need to reduce &lt;tt class="docutils literal"&gt;MAX_SUBPROCESSES&lt;/tt&gt; in &lt;tt class="docutils literal"&gt;process.py&lt;/tt&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Replaying also comes with a bunch of user interface issues:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;Attempted to do I/O or access raw memory&lt;/tt&gt;: we get this whenever
+trying to &lt;tt class="docutils literal"&gt;print&lt;/tt&gt; some expression that cannot be evaluated with
+only the GC memory---or which can, but then the &lt;tt class="docutils literal"&gt;__repr__()&lt;/tt&gt;
+method of the result cannot.  We need to reset the state with
+&lt;tt class="docutils literal"&gt;bstep&lt;/tt&gt; + &lt;tt class="docutils literal"&gt;step&lt;/tt&gt; before we can print anything else.  However,
+if only the &lt;tt class="docutils literal"&gt;__repr__()&lt;/tt&gt; crashes, you still see the &lt;tt class="docutils literal"&gt;$NUM =&lt;/tt&gt;
+prefix, and you can use that &lt;tt class="docutils literal"&gt;$NUM&lt;/tt&gt; afterwards.&lt;/li&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;id()&lt;/tt&gt; is globally unique, returning a reproducible 64-bit number,
+so sometimes using &lt;tt class="docutils literal"&gt;id(x)&lt;/tt&gt; is a workaround for when using &lt;tt class="docutils literal"&gt;x&lt;/tt&gt;
+doesn't work because of &lt;tt class="docutils literal"&gt;Attempted to do I/O&lt;/tt&gt; issues (e.g.  &lt;tt class="docutils literal"&gt;p
+[id(x) for x in somelist]&lt;/tt&gt;).&lt;/li&gt;
+&lt;li&gt;as explained in the demo, next/bnext/finish/bfinish might jump
+around a bit non-predictably.&lt;/li&gt;
+&lt;li&gt;similarly, breaks on watchpoints can stop at apparently unexpected
+places (when going backward, try to do "step" once).  The issue is
+that it can only stop at the beginning of every line.  In the
+extreme example, if a line is &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;foo(somelist.pop(getindex()))&lt;/span&gt;&lt;/tt&gt;,
+then &lt;tt class="docutils literal"&gt;somelist&lt;/tt&gt; is modified in the middle.  Immediately before
+this modification occurs, we are in &lt;tt class="docutils literal"&gt;getindex()&lt;/tt&gt;, and
+immediately afterwards we are in &lt;tt class="docutils literal"&gt;foo()&lt;/tt&gt;.  The watchpoint will
+stop the program at the end of &lt;tt class="docutils literal"&gt;getindex()&lt;/tt&gt; if running backward,
+and at the start of &lt;tt class="docutils literal"&gt;foo()&lt;/tt&gt; if running forward, but never
+actually on the line doing the change.&lt;/li&gt;
+&lt;li&gt;watchpoint expressions &lt;em&gt;must not&lt;/em&gt; have any side-effect at all.  If
+they do, the replaying will get out of sync and &lt;tt class="docutils literal"&gt;revdb.py&lt;/tt&gt; will
+complain about that.  Regular &lt;tt class="docutils literal"&gt;p&lt;/tt&gt; expressions and statements can
+have side-effects; these effects are discarded as soon as you move
+in time again.&lt;/li&gt;
+&lt;li&gt;sometimes even "&lt;tt class="docutils literal"&gt;p import foo&lt;/tt&gt;" will fail with &lt;tt class="docutils literal"&gt;Attempted to do
+I/O&lt;/tt&gt;.  Use instead "&lt;tt class="docutils literal"&gt;p import sys; foo = &lt;span class="pre"&gt;sys.modules['foo']&lt;/span&gt;&lt;/tt&gt;".&lt;/li&gt;
+&lt;li&gt;use &lt;tt class="docutils literal"&gt;help&lt;/tt&gt; to see all commands.  &lt;tt class="docutils literal"&gt;backtrace&lt;/tt&gt; can be useful.
+There is no &lt;tt class="docutils literal"&gt;up&lt;/tt&gt; command; you have to move in time instead,
+e.g. using &lt;tt class="docutils literal"&gt;bfinish&lt;/tt&gt; to go back to the point where the current
+function was called.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class="section" id="how-revpdb-is-done"&gt;
+&lt;h3&gt;How RevPDB is done&lt;/h3&gt;
+&lt;p&gt;If I had to pick the main advantage of PyPy over CPython, it is that
+we have got with the RPython translation toolchain a real place for
+experimentation.  Every now and then, we build inside RPython some
+feature that gives us an optionally tweaked version of the PyPy
+interpreter---tweaked in a way that would be hard to do with CPython,
+because it would require systematic changes everywhere.  The most
+obvious and successful examples are the GC and the JIT.  But there
+have been many other experiments along the same lines, from the
+so-called &lt;a class="reference external" href="https://foss.heptapod.net/pypy/extradoc/-/blob/branch/default/tip/eu-report/D07.1_Massive_Parallelism_and_Translation_Aspects-2007-02-28.pdf"&gt;stackless transformation&lt;/a&gt; in the early days, to the STM
+version of PyPy.&lt;/p&gt;
+&lt;p&gt;RevPDB works in a similar way.  It is a version of PyPy in which some
+operations are systematically replaced with other operations.&lt;/p&gt;
+&lt;p&gt;To keep the log file at a reasonable size, we duplicate the content of
+all GC objects during replaying---by repeating the same actions on
+them, without writing anything in the log file.  So that means that in
+the &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;pypy-revdb&lt;/span&gt;&lt;/tt&gt; binary, the operations that do arithmetic or
+read/write GC-managed memory are not modified.  Most operations are
+like that.  However, the other operations, the ones that involve
+either non-GC memory or calls to external C functions, are tweaked.
+Each of these operations is replaced with code that works in two
+modes, based on a global flag:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;in "recording" mode, we log the result of the operation (but not the
+arguments);&lt;/li&gt;
+&lt;li&gt;in "replaying" mode, we don't really do the operation at all, but
+instead just fetch the result from the log.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Hopefully, all remaining unmodified operations (arithmetic and GC
+load/store) are completely deterministic.  So during replaying, every
+integer or non-GC pointer variable will have exactly the same value as
+it had during recording.  Interestingly, it means that if the
+recording process had a big array in non-GC memory, then in the
+replaying process, the array is not allocated at all; it is just
+represented by the same address, but there is nothing there.  When we
+record "read item 123 from the array", we record the result of the
+read (but not the "123").  When we replay, we're seeing again the same
+"read item 123 from the array" operation.  At that point, we don't
+read anything; we just return the result from the log.  Similarly,
+when recording a "write" to the array, we record nothing (this write
+operation has no result); so that when replaying, we redo nothing.&lt;/p&gt;
+&lt;p&gt;Note how that differs from anything managed by GC memory: GC objects
+(including GC arrays) are really allocated, writes really occur, and
+reads are redone.  We don't touch the log in this case.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="other-reverse-debuggers-for-python"&gt;
+&lt;h3&gt;Other reverse debuggers for Python&lt;/h3&gt;
+&lt;p&gt;There are already some Python experiments about &lt;a class="reference external" href="https://en.wikipedia.org/wiki/Debugger#Reverse_debugging"&gt;reverse debugging&lt;/a&gt;.
+This is also known as "omniscient debugging".  However, I claim that
+the result they get to is not very useful (for the purpose presented
+here).  How they work is typically by recording changes to some
+objects, like lists and dictionaries, in addition to recording the
+history of where your program passed through.  However, the problem of
+Python is that lists and dictionaries are not the end of the story.
+There are many, many, many types of objects written in C which are
+mutable---in fact, the immutable ones are the exception.  You can try
+to systematically record all changes, but it is a huge task and easy
+to forget a detail.&lt;/p&gt;
+&lt;p&gt;In other words it is a typical use case for tweaking the RPython
+translation toolchain, rather than tweaking the CPython (or PyPy)
+interpreter directly.  The result that we get here with RevPDB is more
+similar to &lt;a class="reference external" href="https://rr-project.org/"&gt;rr&lt;/a&gt; anyway, in that only a relatively small number of
+external events are recorded---not every single change to every single
+list and dictionary.&lt;/p&gt;
+&lt;p&gt;Some links:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;epdb: &lt;a class="reference external" href="https://github.com/native-human/epdb"&gt;https://github.com/native-human/epdb&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;pode: &lt;a class="reference external" href="https://github.com/rodsenra/pode"&gt;https://github.com/rodsenra/pode&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;For C:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;rr: &lt;a class="reference external" href="https://rr-project.org/"&gt;https://rr-project.org/&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;undodb-gdb: &lt;a class="reference external" href="https://undo.io/"&gt;https://undo.io/&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class="section" id="future-work"&gt;
+&lt;h3&gt;Future work&lt;/h3&gt;
+&lt;p&gt;As mentioned above, it is alpha-level, and only works on Linux and OS/X.
+So the plans for the immediate future are to fix the various
+issues described above, and port to more operating systems.  The core of the system
+is in the C file and headers in &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;rpython/translator/revdb/src-revdb&lt;/span&gt;&lt;/tt&gt;.&lt;/p&gt;
+&lt;p&gt;For interested people, there is also the &lt;a class="reference external" href="https://bitbucket.org/pypy/duhton/"&gt;Duhton&lt;/a&gt; interpreter and its
+&lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;reverse-debugger&lt;/span&gt;&lt;/tt&gt; branch, which is where I prototyped the RPython
+concept before moving to PyPy.  The basics should work for any
+interpreter written in RPython, but they require some specific code to
+interface with the language; in the case of PyPy, it is in
+&lt;tt class="docutils literal"&gt;pypy/interpreter/reverse_debugging.py&lt;/tt&gt;.&lt;/p&gt;
+&lt;p&gt;In parallel, there are various user interface improvements that people
+could be interested in, like a more "pdb++" experience.  (And the script
+at &lt;tt class="docutils literal"&gt;rpython/translator/revdb/revdb.py&lt;/tt&gt; should be moved out into some
+more "official" place, and the &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;reverse-debugger&lt;/span&gt;&lt;/tt&gt; branch should be
+merged back to default.)&lt;/p&gt;
+&lt;p&gt;I would certainly welcome any help!&lt;/p&gt;
+&lt;p&gt;-+- Armin&lt;/p&gt;
+&lt;/div&gt;</description><category>revdb</category><guid>https://www.pypy.org/posts/2016/07/reverse-debugging-for-python-8854823774141612670.html</guid><pubDate>Fri, 08 Jul 2016 11:39:00 GMT</pubDate></item></channel></rss>

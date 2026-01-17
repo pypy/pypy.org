@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyPy numeric experiments | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2009/07/pypy-numeric-experiments-2221073696038673235.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Maciej Fijalkowski">
+<link rel="prev" href="ecoop-2009-8415055006373020774.html" title="ECOOP 2009" type="text/html">
+<link rel="next" href="../08/gothenburg-jit-sprint-report-3309138497953458138.html" title="Gothenburg JIT sprint report" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="PyPy numeric experiments">
+<meta property="og:url" content="https://www.pypy.org/posts/2009/07/pypy-numeric-experiments-2221073696038673235.html">
+<meta property="og:description" content="Because PyPy will be presenting at the upcoming euroscipy conference, I have been playing recently with the idea of NumPy and PyPy integration. My idea is to integrate PyPy's JIT with NumPy or at leas">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2009-07-17T18:40:00Z">
+<meta property="article:tag" content="numpy">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">PyPy numeric experiments</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/maciej-fijalkowski.html">Maciej Fijalkowski</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2009-07-17T18:40:00Z" itemprop="datePublished" title="2009-07-17 18:40">2009-07-17 18:40</time></a>
+            </p>
+                <p class="commentline">11 comments</p>
+
+                <p class="commentline">            <a href="pypy-numeric-experiments-2221073696038673235.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>
+Because PyPy will be presenting at the upcoming <a href="https://www.euroscipy.org/">euroscipy</a> conference, I have been playing recently with the idea of NumPy and PyPy integration. My idea is to integrate PyPy's JIT with NumPy or at least a very basic subset of it.  Time constraints make it impossible to hand write a JIT compiler that understands NumPy. But given PyPy's architecture we actually have a <b>JIT generator</b>, so we don't need to write one :-)
+</p>
+
+<p>
+Our JIT has shown that it can speed up small arithmetic examples <a href="../03/good-news-everyone-421421336094214242.html">significantly</a>. What happens with something like NumPy?
+</p>
+<p>
+I wrote a very minimal subset of NumPy in RPython, called micronumpy (only single-dimension int arrays that can only get and set items), and a <a href="https://paste.pocoo.org/show/129187/">benchmark</a> against it. The point of this benchmark is to compare the performance of a builtin function (numpy.minimum) against the equivalent hand-written function, written in pure Python and compiled by our JIT.
+</p>
+<p>
+The goal is to prove that it is possible to write algorithms in Python instead of C without loss of efficiency. Sure, we can write some functions (like minimum in the following example), but there is a whole universe of other ufuncs which would be cool to have in Python instead, assuming this could be done without a huge loss in efficiency.
+</p>
+<p>
+Here are the results. This is comparing PyPy svn revision 66303 in the pyjitpl5 branch against python 2.6 with NumPy 1.2.1. The builtin numpy.minimum in PyPy is just a naive implementation in RPython, which is comparable to the speed of a naive implementation written in C (and thus a bit slower than the optimized
+version in NumPy):
+</p>
+<table>
+<tr>
+<td>NumPy (builtin function)</td>
+<td>0.12s</td>
+</tr>
+<tr>
+<td>PyPy's micronumpy (builtin function)</td>
+<td>0.28s</td>
+</tr>
+<tr>
+<td>CPython (pure Python)</td>
+<td>11s</td>
+</tr>
+<tr>
+<td>PyPy with JIT (pure Python)</td>
+<td>0.91s</td>
+</tr>
+</table>
+<p>
+As we can see, PyPy's JIT is slower than the optmized NumPy's C version, but still much faster than CPython (12x).
+</p>
+<p>
+Why is it slower? When you actually look at assembler, it's pretty obvious that it's atrocious. There's a lot of speedup to be gained out of just doing simple optimizations on resulting assembler. There are also pretty obvious limitations, like x86 backend not being able to emit opcodes for floats or x86_64 not being there. Those limitations are not fundamental in any sense and can be relatively straightforward to overcome. Therefore it seems we can get C-level speeds for pure Python implementations of numeric algorithms using NumPy arrays in PyPy. I think it's an interesting perspective that Python has the potential of becoming less of a glue language and more of a real implementation language in the scientific field.
+</p>
+Cheers,<br>
+fijal
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/numpy.html" rel="tag">numpy</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="ecoop-2009-8415055006373020774.html" rel="prev" title="ECOOP 2009">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../08/gothenburg-jit-sprint-report-3309138497953458138.html" rel="next" title="Gothenburg JIT sprint report">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-8725105973283575067">
+        <div class="comment-header">
+          <a name="comment-8725105973283575067"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-07-17 20:50</span>:
+        </div>
+        <div class="comment-content">
+          <p>I have the feeling your are confessing pypys secrete goal ;-).</p>
+        </div>
+      </div>
+      <div class="comment comment-6349201532622800530">
+        <div class="comment-header">
+          <a name="comment-6349201532622800530"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-07-18 08:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>a really efficient python for science: THAT would be a real milestone for dynamic languages; and start their era...</p>
+        </div>
+      </div>
+      <div class="comment comment-5749531097597913312">
+        <div class="comment-header">
+          <a name="comment-5749531097597913312"></a>
+            <span class="author">tobami</span> wrote on <span class="date">2009-07-21 10:51</span>:
+        </div>
+        <div class="comment-content">
+          <p>Very, very interesting.<br><br>Something I missed though was a real naive C implementation. You state it is about as fast as "PyPy's micronumpy", but it would have been nice to post the numbers. Of course, the problem is that the code would be different (C, instead of Python), but still...</p>
+        </div>
+      </div>
+      <div class="comment comment-6235183031175769307">
+        <div class="comment-header">
+          <a name="comment-6235183031175769307"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-07-22 09:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>What would it take to get this really started? Some of our group would happily help here, if there is a sort of a guideline (a TODO list?) that tells what must be done (i.e. as a friend put it, we would be codemonkeys).</p>
+        </div>
+      </div>
+      <div class="comment comment-87852507526971122">
+        <div class="comment-header">
+          <a name="comment-87852507526971122"></a>
+            <span class="author">Yosef</span> wrote on <span class="date">2009-07-27 07:19</span>:
+        </div>
+        <div class="comment-content">
+          <p>The difference in pure-python speed is what is most interesting for me, as however much NumPy you use, sometimes important parts of the software still can't be easily vectorized (or at all). If PyPy can let me run compiled NumPy (or Cython) code glued with lightning-fast Python, this leaves me with almost no performance problems. Add to that the convenience of vectorization as a means of writing short, readable code, and its a winning combination.</p>
+        </div>
+      </div>
+      <div class="comment comment-4307959028478392660">
+        <div class="comment-header">
+          <a name="comment-4307959028478392660"></a>
+            <span class="author">Zeev</span> wrote on <span class="date">2009-07-29 09:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Saying that implementing efficient code generation for floating point code on x86 in your jit is going to be straight forward is disingenuous.</p>
+        </div>
+      </div>
+      <div class="comment comment-4607621755593021039">
+        <div class="comment-header">
+          <a name="comment-4607621755593021039"></a>
+            <span class="author">René Dudfield</span> wrote on <span class="date">2009-07-30 04:02</span>:
+        </div>
+        <div class="comment-content">
+          <p>Here's a project using corepy, runtime assembler to create a faster numpy:<br><br>https://numcorepy.blogspot.com/<br><br>There's also projects like pycuda, and pygpu which generate numpy code to run on GPUs.<br><br>It gets many times than standard numpy.<br><br>pygame uses SDL blitters, and its own blitters - which are specialised array operations for images... these are many times faster than numpy in general - since they are hand optimized assembler, or very efficiently optimised C.<br><br>Remember that hand optimized assembler can be 10x faster than even C, and that not all C code is equal.<br><br>So it seems that even the pypy generated C code could even be faster.<br><br>What about applying pypy to CUDA, or OpenCL C like languages?<br><br>cu,</p>
+        </div>
+      </div>
+      <div class="comment comment-3831251480309348111">
+        <div class="comment-header">
+          <a name="comment-3831251480309348111"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2009-08-02 22:17</span>:
+        </div>
+        <div class="comment-content">
+          <p>@ilume<br><br>I think you're completely missing the point. These experiments are performed using <b>pure-python</b> code that happens to operate on numpy arrays. Assembler generation happens when interpreting this code by the interpreter, so it's not really even the level of hand-written C. Corenumpy on the other hand is trying to speed up numpy operations itself (which is also a nice goal, but completely different).<br><br>Cheers,<br>fijal</p>
+        </div>
+      </div>
+      <div class="comment comment-5012767657801010725">
+        <div class="comment-header">
+          <a name="comment-5012767657801010725"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-04-13 09:48</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi Maciej! Would you mind blogging an update on PyPy / C interfaces and NumPy?<br><br>I am extensively using NumPy / SciPy / NLopt (apart from apart from the stuff I import from there, my stuff is mostly pure Python algorithms, which interpreter spends most time working on).<br><br>The latest improvements in PyPy JIT really sound like if they could magically dramatically speed up my stuff...<br><br>I don't mind trying PyPy out in production if it will yield significant speedups and otherwise debugging why wouldn't it, but I need access to C stuff from within Python.</p>
+        </div>
+      </div>
+      <div class="comment comment-756185602066636075">
+        <div class="comment-header">
+          <a name="comment-756185602066636075"></a>
+            <span class="author">Maciej Fijalkowski</span> wrote on <span class="date">2011-04-13 09:53</span>:
+        </div>
+        <div class="comment-content">
+          <p>Stay tuned, I'll blog about it when I have more results. The progress has been slow so far, but it might accelerate</p>
+        </div>
+      </div>
+      <div class="comment comment-5782646563554367432">
+        <div class="comment-header">
+          <a name="comment-5782646563554367432"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2011-04-13 13:37</span>:
+        </div>
+        <div class="comment-content">
+          <p>Hi! Thanks, can't wait for it... :-)</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

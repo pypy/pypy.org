@@ -1,0 +1,649 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about sponsors)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/sponsors.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:36 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>PyPy for low-latency systems</title><link>https://www.pypy.org/posts/2019/01/pypy-for-low-latency-systems-613165393301401965.html</link><dc:creator>Antonio Cuni</dc:creator><description>&lt;h1 class="title"&gt;
+PyPy for low-latency systems&lt;/h1&gt;
+Recently I have merged the gc-disable branch, introducing a couple of features
+which are useful when you need to respond to certain events with the lowest
+possible latency.  This work has been kindly sponsored by &lt;a class="reference external" href="https://www.gambitresearch.com/"&gt;Gambit Research&lt;/a&gt;
+(which, by the way, is a very cool and geeky place where to &lt;a class="reference external" href="https://www.gambitresearch.com/jobs.html"&gt;work&lt;/a&gt;, in case you
+are interested).  Note also that this is a very specialized use case, so these
+features might not be useful for the average PyPy user, unless you have the
+same problems as described here.&lt;br&gt;
+&lt;br&gt;
+The PyPy VM manages memory using a generational, moving Garbage Collector.
+Periodically, the GC scans the whole heap to find unreachable objects and
+frees the corresponding memory.  Although at a first look this strategy might
+sound expensive, in practice the total cost of memory management is far less
+than e.g. on CPython, which is based on reference counting.  While maybe
+counter-intuitive, the main advantage of a non-refcount strategy is
+that allocation is very fast (especially compared to malloc-based allocators),
+and deallocation of objects which die young is basically for free. More
+information about the PyPy GC is available &lt;a class="reference external" href="https://pypy.readthedocs.io/en/latest/gc_info.html#incminimark"&gt;here&lt;/a&gt;.&lt;br&gt;
+&lt;br&gt;
+As we said, the total cost of memory managment is less on PyPy than on
+CPython, and it's one of the reasons why PyPy is so fast.  However, one big
+disadvantage is that while on CPython the cost of memory management is spread
+all over the execution of the program, on PyPy it is concentrated into GC
+runs, causing observable pauses which interrupt the execution of the user
+program.&lt;br&gt;
+To avoid excessively long pauses, the PyPy GC has been using an &lt;a class="reference external" href="https://www.pypy.org/posts/2013/10/incremental-garbage-collector-in-pypy-8956893523842234676.html"&gt;incremental
+strategy&lt;/a&gt; since 2013. The GC runs as a series of "steps", letting the user
+program to progress between each step.&lt;br&gt;
+&lt;br&gt;
+The following chart shows the behavior of a real-world, long-running process:&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://3.bp.blogspot.com/-44yKwUVK3BE/XC4X9XL4BII/AAAAAAAABbE/XdTCIoyA-eYxvxIgJhFHaKnzxjhoWStHQCEwYBhgL/s1600/gc-timing.png" style="margin-right: 1em;"&gt;&lt;img border="0" height="246" src="https://3.bp.blogspot.com/-44yKwUVK3BE/XC4X9XL4BII/AAAAAAAABbE/XdTCIoyA-eYxvxIgJhFHaKnzxjhoWStHQCEwYBhgL/s640/gc-timing.png" width="640"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+&lt;br&gt;
+The orange line shows the total memory used by the program, which
+increases linearly while the program progresses. Every ~5 minutes, the GC
+kicks in and the memory usage drops from ~5.2GB to ~2.8GB (this ratio is controlled
+by the &lt;a class="reference external" href="https://pypy.readthedocs.io/en/latest/gc_info.html#environment-variables"&gt;PYPY_GC_MAJOR_COLLECT&lt;/a&gt; env variable).&lt;br&gt;
+The purple line shows aggregated data about the GC timing: the whole
+collection takes ~1400 individual steps over the course of ~1 minute: each
+point represent the &lt;strong&gt;maximum&lt;/strong&gt; time a single step took during the past 10
+seconds. Most steps take ~10-20 ms, although we see a horrible peak of ~100 ms
+towards the end. We have not investigated yet what it is caused by, but we
+suspect it is related to the deallocation of raw objects.&lt;br&gt;
+&lt;br&gt;
+These multi-millesecond pauses are a problem for systems where it is important
+to respond to certain events with a latency which is both low and consistent.
+If the GC kicks in at the wrong time, it might causes unacceptable pauses during
+the collection cycle.&lt;br&gt;
+&lt;br&gt;
+Let's look again at our real-world example. This is a system which
+continuously monitors an external stream; when a certain event occurs, we want
+to take an action. The following chart shows the maximum time it takes to
+complete one of such actions, aggregated every minute:&lt;br&gt;
+&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://4.bp.blogspot.com/-FO9uFHSqZzU/XC4YC8LZUpI/AAAAAAAABa8/B8ZOrEgbVJUHoO65wxvCMVpvciO_d_0TwCLcBGAs/s1600/normal-max.png" style="margin-right: 1em;"&gt;&lt;img border="0" height="240" src="https://4.bp.blogspot.com/-FO9uFHSqZzU/XC4YC8LZUpI/AAAAAAAABa8/B8ZOrEgbVJUHoO65wxvCMVpvciO_d_0TwCLcBGAs/s640/normal-max.png" width="640"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+You can clearly see that the baseline response time is around ~20-30
+ms. However, we can also see periodic spikes around ~50-100 ms, with peaks up
+to ~350-450 ms! After a bit of investigation, we concluded that most (although
+not all) of the spikes were caused by the GC kicking in at the wrong time.&lt;br&gt;
+&lt;br&gt;
+The work I did in the &lt;tt class="docutils literal"&gt;&lt;span class="pre"&gt;gc-disable&lt;/span&gt;&lt;/tt&gt; branch aims to fix this problem by
+introducing &lt;a class="reference external" href="https://pypy.readthedocs.io/en/latest/gc_info.html#semi-manual-gc-management"&gt;two new features&lt;/a&gt; to the &lt;tt class="docutils literal"&gt;gc&lt;/tt&gt; module:&lt;br&gt;
+&lt;blockquote&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;gc.disable()&lt;/tt&gt;, which previously only inhibited the execution of
+finalizers without actually touching the GC, now disables the GC major
+collections. After a call to it, you will see the memory usage grow
+indefinitely.&lt;/li&gt;
+&lt;li&gt;&lt;tt class="docutils literal"&gt;gc.collect_step()&lt;/tt&gt; is a new function which you can use to manually
+execute a single incremental GC collection step.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/blockquote&gt;
+It is worth to specify that &lt;tt class="docutils literal"&gt;gc.disable()&lt;/tt&gt; disables &lt;strong&gt;only&lt;/strong&gt; the major
+collections, while minor collections still runs.  Moreover, thanks to the
+JIT's virtuals, many objects with a short and predictable lifetime are not
+allocated at all. The end result is that most objects with short lifetime are
+still collected as usual, so the impact of &lt;tt class="docutils literal"&gt;gc.disable()&lt;/tt&gt; on memory growth
+is not as bad as it could sound.&lt;br&gt;
+&lt;br&gt;
+Combining these two functions, it is possible to take control of the GC to
+make sure it runs only when it is acceptable to do so.  For an example of
+usage, you can look at the implementation of a &lt;a class="reference external" href="https://github.com/antocuni/pypytools/blob/master/pypytools/gc/custom.py"&gt;custom GC&lt;/a&gt; inside &lt;a class="reference external" href="https://pypi.org/project/pypytools/"&gt;pypytools&lt;/a&gt;.
+The peculiarity is that it also defines a "&lt;tt class="docutils literal"&gt;with &lt;span class="pre"&gt;nogc():"&lt;/span&gt;&lt;/tt&gt; context manager
+which you can use to mark performance-critical sections where the GC is not
+allowed to run.&lt;br&gt;
+&lt;br&gt;
+The following chart compares the behavior of the default PyPy GC and the new
+custom GC, after a careful placing of &lt;tt class="docutils literal"&gt;nogc()&lt;/tt&gt; sections:&lt;br&gt;
+&lt;br&gt;
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;
+&lt;a href="https://1.bp.blogspot.com/-bGqs0WrOEBk/XC4YJN0uZfI/AAAAAAAABbA/4EXOASvy830IKBoTFtrnmY22Vyd_api-ACLcBGAs/s1600/nogc-max.png" style="margin-right: 1em;"&gt;&lt;img border="0" height="242" src="https://1.bp.blogspot.com/-bGqs0WrOEBk/XC4YJN0uZfI/AAAAAAAABbA/4EXOASvy830IKBoTFtrnmY22Vyd_api-ACLcBGAs/s640/nogc-max.png" width="640"&gt;&lt;/a&gt;&lt;/div&gt;
+&lt;br&gt;
+The yellow line is the same as before, while the purple line shows the new
+system: almost all spikes have gone, and the baseline performance is about 10%
+better. There is still one spike towards the end, but after some investigation
+we concluded that it was &lt;strong&gt;not&lt;/strong&gt; caused by the GC.&lt;br&gt;
+&lt;br&gt;
+Note that this does &lt;strong&gt;not&lt;/strong&gt; mean that the whole program became magically
+faster: we simply moved the GC pauses in some other place which is &lt;strong&gt;not&lt;/strong&gt;
+shown in the graph: in this specific use case this technique was useful
+because it allowed us to shift the GC work in places where pauses are more
+acceptable.&lt;br&gt;
+&lt;br&gt;
+All in all, a pretty big success, I think.  These functionalities are already
+available in the nightly builds of PyPy, and will be included in the next
+release: take this as a New Year present :)&lt;br&gt;
+&lt;br&gt;
+Antonio Cuni and the PyPy team</description><category>gc</category><category>sponsors</category><guid>https://www.pypy.org/posts/2019/01/pypy-for-low-latency-systems-613165393301401965.html</guid><pubDate>Thu, 03 Jan 2019 14:21:00 GMT</pubDate></item><item><title>PyPy v5.8 released</title><link>https://www.pypy.org/posts/2017/06/pypy-v58-released-739876359584854017.html</link><dc:creator>mattip</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+The PyPy team is proud to release both PyPy2.7 v5.8 (an interpreter supporting
+Python 2.7 syntax), and a beta-quality PyPy3.5 v5.8 (an interpreter for Python
+3.5 syntax). The two releases are both based on much the same codebase, thus
+the dual release.  Note that PyPy3.5 supports Linux 64bit only for now.&lt;br&gt;
+&lt;br&gt;
+This new PyPy2.7 release includes the upstream stdlib version 2.7.13, and
+PyPy3.5 includes the upstream stdlib version 3.5.3.&lt;br&gt;
+&lt;br&gt;
+We fixed critical bugs in the &lt;a class="reference external" href="https://doc.pypy.org/en/latest/config/translation.gcrootfinder.html"&gt;shadowstack&lt;/a&gt; rootfinder garbage collector
+strategy that crashed multithreaded programs and very rarely showed up
+even in single threaded programs.&lt;br&gt;
+&lt;br&gt;
+We added native PyPy support to profile frames in the &lt;a class="reference external" href="https://vmprof.readthedocs.io/"&gt;vmprof&lt;/a&gt; statistical
+profiler.&lt;br&gt;
+&lt;br&gt;
+The &lt;code class="docutils literal"&gt;&lt;span class="pre"&gt;struct&lt;/span&gt;&lt;/code&gt; module functions &lt;code class="docutils literal"&gt;&lt;span class="pre"&gt;pack*&lt;/span&gt;&lt;/code&gt; and &lt;code class="docutils literal"&gt;&lt;span class="pre"&gt;unpack*&lt;/span&gt;&lt;/code&gt; are now much faster,
+especially on raw buffers and bytearrays. Microbenchmarks show a 2x to 10x
+speedup. Thanks to &lt;a class="reference external" href="https://gambitresearch.com/"&gt;Gambit Research&lt;/a&gt; for sponsoring this work.&lt;br&gt;
+&lt;br&gt;
+This release adds (but disables by default) link-time optimization and
+&lt;a class="reference external" href="https://pythonfiles.wordpress.com/2017/05/12/enabling-profile-guided-optimizations-for-pypy"&gt;profile guided optimization&lt;/a&gt; of the base interpreter, which may make
+unjitted code run faster. To use these, translate with appropriate
+&lt;a class="reference external" href="https://doc.pypy.org/en/latest/config/commandline.html#general-translation-options"&gt;options&lt;/a&gt;.  Be aware of &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues/2572/link-time-optimization-lto-disabled"&gt;issues with gcc toolchains&lt;/a&gt;, though.&lt;br&gt;
+&lt;br&gt;
+Please let us know if your use case is slow, we have ideas how to make things
+faster but need real-world examples (not micro-benchmarks) of problematic code.&lt;br&gt;
+&lt;br&gt;
+Work sponsored by a Mozilla &lt;a class="reference external" href="https://www.pypy.org/posts/2016/08/pypy-gets-funding-from-mozilla-for-5569307998787871200.html"&gt;grant&lt;/a&gt; continues on PyPy3.5; numerous fixes from
+CPython were ported to PyPy and PEP 489 was fully implemented. Of course the
+bug fixes and performance enhancements mentioned above are part of both PyPy
+2.7 and PyPy 3.5.&lt;br&gt;
+&lt;br&gt;
+&lt;a class="reference external" href="https://cffi.readthedocs.io/en/latest/whatsnew.html"&gt;CFFI&lt;/a&gt;, which is part of the PyPy release, has been updated to an unreleased 1.10.1,
+improving an already great package for interfacing with C.&lt;br&gt;
+&lt;br&gt;
+Anyone using &lt;a href="https://docs.scipy.org/doc/numpy-dev/release.html"&gt;NumPy 1.13.0&lt;/a&gt;, must upgrade PyPy to this release since we implemented some previously missing C-API functionality. Many other c-extension modules now work with PyPy, let us know if yours does not.&lt;br&gt;
+&lt;br&gt;
+As always, this release fixed many issues and bugs raised by the
+growing community of PyPy users. We strongly recommend updating.&lt;br&gt;
+&lt;br&gt;
+You can download the v5.8 release here:&lt;br&gt;
+&lt;blockquote&gt;
+&lt;div&gt;
+&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/div&gt;
+&lt;/blockquote&gt;
+We would like to thank our donors and contributors, and
+encourage new people to join the project. PyPy has many
+layers and we need help with all of them: &lt;a class="reference external" href="https://doc.pypy.org/en/latest/index.html"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org/"&gt;RPython&lt;/a&gt; documentation
+improvements, tweaking popular &lt;a class="reference external" href="https://doc.pypy.org/en/latest/project-ideas.html#make-more-python-modules-pypy-friendly"&gt;modules&lt;/a&gt; to run on PyPy, or general &lt;a class="reference external" href="https://doc.pypy.org/en/latest/project-ideas.html"&gt;help&lt;/a&gt;
+with making RPython’s JIT even better.&lt;br&gt;
+&lt;br&gt;
+&lt;h2 style="text-align: center;"&gt;
+What is PyPy?&lt;/h2&gt;
+PyPy is a very compliant Python interpreter, almost a drop-in replacement for CPython 2.7 and CPython 3.5. It’s fast (&lt;a class="reference external" href="https://speed.pypy.org/"&gt;PyPy and CPython 2.7.x&lt;/a&gt; performance comparison) due to its integrated tracing JIT compiler.&lt;br&gt;
+We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython can do for them.&lt;br&gt;
+The PyPy 2.7 release supports:&lt;br&gt;
+&lt;blockquote&gt;
+&lt;div&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;b&gt;x86&lt;/b&gt; machines on most common operating systems (Linux 32/64 bits, Mac OS X 64 bits, Windows 32 bits, OpenBSD, FreeBSD)&lt;/li&gt;
+&lt;li&gt;newer &lt;b&gt;ARM&lt;/b&gt; hardware (ARMv6 or ARMv7, with VFPv3) running Linux,&lt;/li&gt;
+&lt;li&gt;big- and little-endian variants of &lt;b&gt;PPC64&lt;/b&gt; running Linux,&lt;/li&gt;
+&lt;li&gt;&lt;b&gt;s390x&lt;/b&gt; running Linux &lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/blockquote&gt;
+&lt;br&gt;
+&lt;h2 style="text-align: center;"&gt;
+What else is new?&lt;/h2&gt;
+&lt;div style="text-align: left;"&gt;
+PyPy 5.7 was released in March, 2017.&lt;/div&gt;
+&lt;div style="text-align: left;"&gt;
+There are many incremental improvements to RPython and PyPy, the complete listing is &lt;a href="https://doc.pypy.org/en/latest/release-v5.8.0.html"&gt;here.&lt;/a&gt;&lt;/div&gt;
+&lt;div style="text-align: left;"&gt;
+  &lt;/div&gt;
+Please update, and continue to help us make PyPy better.&lt;br&gt;
+&lt;br&gt;
+Cheers, The PyPy team&lt;br&gt;
+&lt;br&gt;&lt;/div&gt;</description><category>release</category><category>sponsors</category><guid>https://www.pypy.org/posts/2017/06/pypy-v58-released-739876359584854017.html</guid><pubDate>Thu, 08 Jun 2017 23:20:00 GMT</pubDate></item><item><title>PyPy gets funding from Mozilla for Python 3.5 support</title><link>https://www.pypy.org/posts/2016/08/pypy-gets-funding-from-mozilla-for-5569307998787871200.html</link><dc:creator>Armin Rigo</dc:creator><description>&lt;p&gt;"Python 2.x versus Python 3.x": this is by now an old question.  In the eyes of some people Python 2 is here to stay, and in the eyes of others Python has long been 3 only.&lt;/p&gt;
+
+&lt;p&gt;PyPy's own position is that PyPy will support Python 2.7 forever---the RPython language in which PyPy is written is a subset of  2.7, and we have no plan to upgrade that.  But at the same time, we want to support 3.x.  This is particularly true now: a relatively recent development is that Python 3.5 seems to attract more and more people.  The "switch" to Python 3.x might be starting to happen.&lt;/p&gt;
+
+&lt;p&gt;Correspondingly, PyPy has been searching for a while for a way to support a larger-scale development effort.  The goal is to support not just any old version of Python 3.x, but Python 3.5, as this seems to be the version that people are switching to.  PyPy is close to supporting all of Python 3.3 now; but the list of what is new in Python &lt;a href="https://docs.python.org/3/whatsnew/3.4.html"&gt;3.4&lt;/a&gt; and &lt;a href="https://docs.python.org/3/whatsnew/3.5.html"&gt;3.5&lt;/a&gt; is far, far longer than anyone imagines.  The long-term goal is also to get a version of "PyPy3" that is as good as "PyPy2" is, including its performance and its cpyext layer (CPython C API interoperability), for example.&lt;/p&gt;
+
+&lt;p&gt;So, the end result: &lt;a href="https://blog.mozilla.org/blog/2016/08/04/mozilla-awards-585000-to-nine-open-source-projects-in-q2-2016/"&gt;Mozilla recently decided to award $200,000&lt;/a&gt; to &lt;a href="https://baroquesoftware.com/"&gt;Baroque Software&lt;/a&gt; to work on PyPy as part of its Mozilla Open Source Support (MOSS) initiative.  This money will be used to implement the Python 3.5 features in PyPy. Within the next year, we plan to use the money to pay four core PyPy developers half-time to work on the missing features and on some of the big performance and cpyext issues. This should speed up the progress of catching up with Python 3.x significantly. We are extremely thankful to Mozilla for supporting us in this way, and will keep you updated on the progress via this blog.&lt;/p&gt;</description><category>sponsors</category><guid>https://www.pypy.org/posts/2016/08/pypy-gets-funding-from-mozilla-for-5569307998787871200.html</guid><pubDate>Tue, 09 Aug 2016 16:38:00 GMT</pubDate></item><item><title>Couchbase contribution to PyPy</title><link>https://www.pypy.org/posts/2014/10/couchbase-contribution-to-pypy-2360892117372790069.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+&lt;p&gt;Hello everyone!&lt;/p&gt;
+&lt;p&gt;We always offer to put on the blog info about our sponsors who donate substantial amounts of money. So far most people decided to stay anonymous, so this is the first blog post describing our sponsor and his relationship to PyPy, hopefully not the last. We'll also publish a full blog post about the PSF-matched fundraiser soon. This is a guest post by Brent Woodruff from Couchbase.&lt;/p&gt;
+&lt;p&gt;
+&lt;/p&gt;&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://www.couchbase.com/images/logo.svg" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://www.couchbase.com/images/logo.svg" width="300px"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;p&gt;
+Couchbase is a leading NoSQL document database that provides a flexible data model, high performance, scalability, and high availability. Couchbase is a commercially supported open source project. Visit us at &lt;a href="https://www.couchbase.com"&gt;https://www.couchbase.com&lt;/a&gt; and &lt;a href="https://github.com/couchbase"&gt;https://github.com/couchbase&lt;/a&gt;.
+&lt;/p&gt;
+&lt;p&gt;
+Couchbase Inc. donated $2000.00, and employees of Couchbase personally contributed a disclosed additional $230.00, towards Pypy progress during the September funding drive. These funds will see a match from the Python Software Foundation.
+&lt;/p&gt;&lt;p&gt;
+Pypy is primarily used by Couchbase employees to perform product analysis and troubleshooting using internally developed tools. Every customer of Couchbase benefits from the use of Pypy; both due to the rapid development provided by Python, and the speed of the resulting tools provided by the Pypy JIT interpreter.
+&lt;/p&gt;&lt;p&gt;
+“PyPy is great - it gave us a 4x speedup in our CPU-intensive internal application over CPython”
+-Dave Rigby and Daniel Owen, Couchbase Engineers
+&lt;/p&gt;
+&lt;p&gt;
+Additionally, Couchbase has a preliminary &lt;a href="https://github.com/couchbaselabs/couchbase-python-cffi"&gt;CFFI based Couchbase client&lt;/a&gt; available for Pypy users.
+&lt;/p&gt;
+
+&lt;br&gt;&lt;/div&gt;</description><category>sponsors</category><guid>https://www.pypy.org/posts/2014/10/couchbase-contribution-to-pypy-2360892117372790069.html</guid><pubDate>Tue, 14 Oct 2014 17:40:00 GMT</pubDate></item><item><title>pygame_cffi: pygame on PyPy</title><link>https://www.pypy.org/posts/2014/03/pygamecffi-pygame-on-pypy-8679802461301121984.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+&lt;p&gt;The Raspberry Pi aims to be a low-cost educational tool that anyone can use to learn about electronics and programming. Python and &lt;a class="reference external" href="https://pygame.org/news.html"&gt;pygame&lt;/a&gt; are included in the Pi's programming toolkit. And since last year, thanks in part to sponsorship from the &lt;a class="reference external" href="https://www.raspberrypi.org/"&gt;Raspberry Pi Foundation&lt;/a&gt;, PyPy also works on the Pi (read more &lt;a class="reference external" href="https://www.pypy.org/posts/2013/05/pypy-20-alpha-for-arm-2318299473927531503.html"&gt;here&lt;/a&gt;).&lt;/p&gt;
+&lt;p&gt;With PyPy working on the Pi, game logic written in Python stands to gain an awesome performance boost. However, the original pygame is a Python C extension. This means it performs poorly on PyPy and negates any speedup in the Python parts of the game code.&lt;/p&gt;
+&lt;p&gt;One solution to making pygame games run faster on PyPy, and eventually on the Raspberry Pi, comes in the form of &lt;a class="reference external" href="https://github.com/CTPUG/pygame_cffi"&gt;pygame_cffi&lt;/a&gt;. pygame_cffi uses &lt;a class="reference external" href="https://cffi.readthedocs.org/"&gt;CFFI&lt;/a&gt; to wrap the underlying SDL library instead of a C extension. A few months ago, the Raspberry Pi Foundation sponsored a &lt;a class="reference external" href="https://www.pypy.org/posts/2013/12/pygame-cffi-8991437796535033699.html"&gt;Cape Town Python User Group hackathon&lt;/a&gt; to build a proof-of-concept pygame using CFFI. This hackathon was a success and it produced an early working version of pygame_cffi.&lt;/p&gt;
+&lt;p&gt;So for the last 5 weeks Raspberry Pi has been funding work on pygame_cffi. The goal was a complete implementation of the core modules. We also wanted benchmarks to illuminate performance differences between pygame_cffi on PyPy and pygame on CPython. We are happy to report that those goals were met. So without further ado, here's a rundown of what works.&lt;/p&gt;
+&lt;div class="section" id="current-functionality"&gt;
+&lt;h3&gt;Current functionality&lt;/h3&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://www.pygame.org/docs/ref/surface.html"&gt;Surfaces&lt;/a&gt; support all the usual flags for SDL and OpenGL rendering (more about OpenGL &lt;a class="reference internal" href="https://www.pypy.org/posts/2014/03/pygamecffi-pygame-on-pypy-8679802461301121984.html#pyopenglperformance"&gt;below&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;The graphics-related modules &lt;a class="reference external" href="https://www.pygame.org/docs/ref/color.html"&gt;color&lt;/a&gt;, &lt;a class="reference external" href="https://www.pygame.org/docs/ref/display.html"&gt;display&lt;/a&gt;, &lt;a class="reference external" href="https://www.pygame.org/docs/ref/font.html"&gt;font&lt;/a&gt; and &lt;a class="reference external" href="https://www.pygame.org/docs/ref/image.html"&gt;image&lt;/a&gt;, and parts of &lt;a class="reference external" href="https://www.pygame.org/docs/ref/draw.html"&gt;draw&lt;/a&gt; and &lt;a class="reference external" href="https://www.pygame.org/docs/ref/transform.html"&gt;transform&lt;/a&gt; are mostly complete.&lt;/li&gt;
+&lt;li&gt;&lt;a class="reference external" href="https://www.pygame.org/docs/ref/event.html"&gt;Events&lt;/a&gt;! No &lt;a class="reference external" href="https://www.pygame.org/docs/ref/fastevent.html"&gt;fastevent&lt;/a&gt; module yet, though.&lt;/li&gt;
+&lt;li&gt;Mouse and keyboard functionality, as provided by the &lt;a class="reference external" href="https://www.pygame.org/docs/ref/mouse.html"&gt;mouse&lt;/a&gt; and &lt;a class="reference external" href="https://www.pygame.org/docs/ref/key.html"&gt;key&lt;/a&gt; modules, is complete.&lt;/li&gt;
+&lt;li&gt;Sound functionality, as provided by the &lt;a class="reference external" href="https://www.pygame.org/docs/ref/mixer.html"&gt;mixer&lt;/a&gt; and &lt;a class="reference external" href="https://www.pygame.org/docs/ref/music.html"&gt;music&lt;/a&gt; modules, is complete.&lt;/li&gt;
+&lt;li&gt;Miscellaneous modules, &lt;a class="reference external" href="https://www.pygame.org/docs/ref/cursors.html"&gt;cursors&lt;/a&gt;, &lt;a class="reference external" href="https://www.pygame.org/docs/ref/rect.html"&gt;rect&lt;/a&gt;, &lt;a class="reference external" href="https://www.pygame.org/docs/ref/sprite.html"&gt;sprite&lt;/a&gt; and &lt;a class="reference external" href="https://www.pygame.org/docs/ref/time.html"&gt;time&lt;/a&gt; are also complete.&lt;/li&gt;
+&lt;/ul&gt;
+
+Invention screenshot:
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://3.bp.blogspot.com/-1ZVah86dW3s/UzL9ZhiDiKI/AAAAAAAABvI/kMO9Pnmq9FY/s1600/invention_screenshot.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://3.bp.blogspot.com/-1ZVah86dW3s/UzL9ZhiDiKI/AAAAAAAABvI/kMO9Pnmq9FY/s320/invention_screenshot.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+Mutable mamba screenshot:
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://2.bp.blogspot.com/-JZzDhMwp43s/UzL9g4lktwI/AAAAAAAABvQ/WuCvtbCA3Lc/s1600/mutable_mamba_screenshot.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://2.bp.blogspot.com/-JZzDhMwp43s/UzL9g4lktwI/AAAAAAAABvQ/WuCvtbCA3Lc/s320/mutable_mamba_screenshot.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;p&gt;With the above-mentioned functionality in place we could get 10+ of the pygame examples to work, and a number of &lt;a class="reference external" href="https://pyweek.org/"&gt;PyWeek&lt;/a&gt; games. At the time of writing, if a game doesn't work it is most likely due to an unimplemented &lt;a class="reference external" href="https://www.pygame.org/docs/ref/transform.html"&gt;transform&lt;/a&gt; or &lt;a class="reference external" href="https://www.pygame.org/docs/ref/draw.html"&gt;draw&lt;/a&gt; function. That will be remedied soon.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="performance"&gt;
+&lt;h3&gt;Performance&lt;/h3&gt;
+&lt;p&gt;In terms of performance, pygame_cffi on PyPy is showing a lot of promise. It beats pygame on CPython by a significant margin in our events processing and collision detection benchmarks, while blit and fill benchmarks perform similarly. The pygame examples we checked also perform better.&lt;/p&gt;
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://3.bp.blogspot.com/-tSV6v3J5rwc/UzL-4CbkqCI/AAAAAAAABwQ/NFDuq4biNqY/s1600/collision_increase.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://3.bp.blogspot.com/-tSV6v3J5rwc/UzL-4CbkqCI/AAAAAAAABwQ/NFDuq4biNqY/s400/collision_increase.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://1.bp.blogspot.com/-HJCdpeVHbj0/UzL-0e5eGMI/AAAAAAAABwI/3eKRVRpP45s/s1600/examples_bench.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://1.bp.blogspot.com/-HJCdpeVHbj0/UzL-0e5eGMI/AAAAAAAABwI/3eKRVRpP45s/s400/examples_bench.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;p&gt;However, there is still work to be done to identify and eliminate bottlenecks. On the Raspberry Pi performance is markedly worse compared to pygame (barring collision detection). The PyWeek games we tested also performed slightly worse. Fortunately there is room for improvement in various places.&lt;/p&gt;
+
+Invention &amp;amp; Mutable Mamba (x86)
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://4.bp.blogspot.com/-jYdr73oj154/UzL-u4aAwWI/AAAAAAAABwA/cv_vNSFtb0Q/s1600/pyweek_games_bench.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://4.bp.blogspot.com/-jYdr73oj154/UzL-u4aAwWI/AAAAAAAABwA/cv_vNSFtb0Q/s400/pyweek_games_bench.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+Standard pygame examples (Raspberry Pi)
+
+&lt;div class="separator" style="clear: both; text-align: center;"&gt;&lt;a href="https://2.bp.blogspot.com/-gd9KEHANb_I/UzL-oKCx5BI/AAAAAAAABv4/frssbcGhI9A/s1600/examples_bench_rasp.png" style="margin-left: 1em; margin-right: 1em;"&gt;&lt;img border="0" src="https://2.bp.blogspot.com/-gd9KEHANb_I/UzL-oKCx5BI/AAAAAAAABv4/frssbcGhI9A/s400/examples_bench_rasp.png"&gt;&lt;/a&gt;&lt;/div&gt;
+
+&lt;p&gt;Here's a summary of some of the benchmarks. Relative speed refers to the frame rate obtained in pygame_cffi on PyPy relative to pygame on CPython.&lt;/p&gt;
+&lt;table border="1" class="docutils"&gt;
+&lt;colgroup&gt;
+&lt;col width="76%"&gt;
+&lt;col width="24%"&gt;
+&lt;/colgroup&gt;
+&lt;thead valign="bottom"&gt;
+&lt;tr&gt;&lt;th class="head"&gt;Benchmark&lt;/th&gt;
+&lt;th class="head"&gt;Relative speed (pypy speedup)&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;Events (x86)&lt;/td&gt;
+&lt;td&gt;1.41&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Events (Pi)&lt;/td&gt;
+&lt;td&gt;0.58&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;N&lt;sup&gt;2&lt;/sup&gt; collision detection on 100 sprites (x86)&lt;/td&gt;
+&lt;td&gt;4.14&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;N&lt;sup&gt;2&lt;/sup&gt; collision detection on 100 sprites (Pi)&lt;/td&gt;
+&lt;td&gt;1.01&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Blit 100 surfaces (x86)&lt;/td&gt;
+&lt;td&gt;1.06&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Blit 100 surfaces (Pi)&lt;/td&gt;
+&lt;td&gt;0.60&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Invention (x86)&lt;/td&gt;
+&lt;td&gt;0.95&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Mutable Mamba (x86)&lt;/td&gt;
+&lt;td&gt;0.72&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;stars example (x86)&lt;/td&gt;
+&lt;td&gt;1.95&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;stars example (Pi)&lt;/td&gt;
+&lt;td&gt;0.84&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;div class="section" id="opengl"&gt;
+&lt;h2&gt;OpenGL&lt;/h2&gt;
+&lt;p id="pyopenglperformance"&gt;Some not-so-great news is that &lt;a class="reference external" href="https://pyopengl.sourceforge.net/"&gt;PyOpenGL&lt;/a&gt; performs poorly on PyPy since PyOpenGL uses ctypes. This translates into a nasty reduction in frame rate for games that use OpenGL surfaces. It might be worthwhile creating a CFFI-powered version of PyOpenGL as well.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="section" id="where-to-now"&gt;
+&lt;h3&gt;Where to now?&lt;/h3&gt;
+&lt;p&gt;Work on pygame_cffi is ongoing. Here are some things that are in the pipeline:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;Get pygame_cffi on PyPy to a place where it is consistently faster than pygame on CPython.&lt;/li&gt;
+&lt;li&gt;Implement the remaining modules and functions, starting with &lt;a class="reference external" href="https://www.pygame.org/docs/ref/draw.html"&gt;draw&lt;/a&gt; and &lt;a class="reference external" href="https://www.pygame.org/docs/ref/transform.html"&gt;transform&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Improve test coverage.&lt;/li&gt;
+&lt;li&gt;Reduce the time it takes for CFFI to parse the cdef. This makes the initial pygame import slow.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;If you want to contribute you can find pygame_cffi &lt;a class="reference external" href="https://github.com/CTPUG/pygame_cffi"&gt;on Github&lt;/a&gt;.
+Feel free to find us on #pypy on freenode or post issues on github.&lt;/p&gt;
+&lt;p&gt;Cheers,&lt;br&gt;
+Rizmari Versfeld&lt;/p&gt;
+&lt;/div&gt;
+&lt;br&gt;&lt;/div&gt;</description><category>sponsors</category><guid>https://www.pypy.org/posts/2014/03/pygamecffi-pygame-on-pypy-8679802461301121984.html</guid><pubDate>Wed, 26 Mar 2014 16:28:00 GMT</pubDate></item><item><title>PyPy 2.0 alpha for ARM</title><link>https://www.pypy.org/posts/2013/05/pypy-20-alpha-for-arm-2318299473927531503.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;div dir="ltr" style="text-align: left;"&gt;
+
+&lt;p&gt;Hello.&lt;/p&gt;
+&lt;p&gt;We're pleased to announce an alpha release of PyPy 2.0 for ARM. This is mostly
+a technology preview, as we know the JIT is not yet stable enough for the
+full release. However please try your stuff on ARM and report back.&lt;/p&gt;
+&lt;p&gt;This is the first release that supports a range of ARM devices - anything with
+ARMv6 (like the Raspberry Pi) or ARMv7 (like Beagleboard, Chromebook,
+Cubieboard, etc.) that supports VFPv3 should work. We provide builds with
+support for both ARM EABI variants: hard-float and some older operating
+systems soft-float.&lt;/p&gt;
+&lt;p&gt;This release comes with a list of limitations, consider it alpha quality,
+not suitable for production:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;stackless support is missing.&lt;/li&gt;
+&lt;li&gt;assembler produced is not always correct, but we successfully managed to
+run large parts of our extensive benchmark suite, so most stuff should work.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;You can download the PyPy 2.0 alpha ARM release here (including a deb for raspbian):&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/blockquote&gt;
+&lt;p&gt;Part of the work was sponsored by the &lt;a class="reference external" href="https://www.raspberrypi.org/"&gt;Raspberry Pi foundation&lt;/a&gt;.&lt;/p&gt;
+&lt;div class="section" id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a very compliant Python interpreter, almost a drop-in replacement for
+CPython 2.7.3. It's fast due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;This release supports ARM machines running Linux 32bit. Both hard-float
+&lt;tt class="docutils literal"&gt;armhf&lt;/tt&gt; and soft-float &lt;tt class="docutils literal"&gt;armel&lt;/tt&gt; builds are provided.  &lt;tt class="docutils literal"&gt;armhf&lt;/tt&gt; builds are
+created using the Raspberry Pi custom &lt;a class="reference external" href="https://github.com/raspberrypi"&gt;cross-compilation toolchain&lt;/a&gt; based on
+gcc-arm-linux-gnueabihf and should work on ARMv6 and ARMv7 devices running at
+least debian or ubuntu. &lt;tt class="docutils literal"&gt;armel&lt;/tt&gt; builds are built using gcc-arm-linux-gnuebi
+toolchain provided by ubuntu and currently target ARMv7.  If there is interest
+in other builds, such as gnueabi for ARMv6 or without requiring a VFP let us
+know in the comments or in IRC.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="benchmarks"&gt;
+&lt;h3&gt;Benchmarks&lt;/h3&gt;
+&lt;p&gt;Everybody loves benchmarks. Here is a table of our benchmark suite
+(for ARM we don't provide it yet on &lt;a class="reference external" href="https://speed.pypy.org"&gt;https://speed.pypy.org&lt;/a&gt;,
+unfortunately).&lt;/p&gt;
+&lt;p&gt;This is a comparison of Cortex A9 processor with 4M cache and Xeon W3580 with
+8M of L3 cache. The set of benchmarks is a subset of what we run for
+&lt;a class="reference external" href="https://speed.pypy.org"&gt;https://speed.pypy.org&lt;/a&gt; that finishes in reasonable time. The ARM machine
+was provided by Calxeda.
+Columns are respectively:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;benchmark name&lt;/li&gt;
+&lt;li&gt;PyPy speedup over CPython on ARM (Cortex A9)&lt;/li&gt;
+&lt;li&gt;PyPy speedup over CPython on x86 (Xeon)&lt;/li&gt;
+&lt;li&gt;speedup on Xeon vs Cortex A9, as measured on CPython&lt;/li&gt;
+&lt;li&gt;speedup on Xeon vs Cortex A9, as measured on PyPy&lt;/li&gt;
+&lt;li&gt;relative speedup (how much bigger the x86 speedup is over ARM speedup)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table border="1" class="docutils"&gt;
+&lt;colgroup&gt;
+&lt;col width="16%"&gt;
+&lt;col width="18%"&gt;
+&lt;col width="18%"&gt;
+&lt;col width="15%"&gt;
+&lt;col width="18%"&gt;
+&lt;col width="14%"&gt;
+&lt;/colgroup&gt;
+&lt;tbody valign="top"&gt;
+&lt;tr&gt;&lt;td&gt;Benchmark&lt;/td&gt;
+&lt;td&gt;PyPy vs CPython (arm)&lt;/td&gt;
+&lt;td&gt;PyPy vs CPython (x86)&lt;/td&gt;
+&lt;td&gt;x86 vs arm (pypy)&lt;/td&gt;
+&lt;td&gt;x86 vs arm (cpython)&lt;/td&gt;
+&lt;td&gt;relative speedup&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;ai&lt;/td&gt;
+&lt;td&gt;3.61&lt;/td&gt;
+&lt;td&gt;3.16&lt;/td&gt;
+&lt;td&gt;7.70&lt;/td&gt;
+&lt;td&gt;8.82&lt;/td&gt;
+&lt;td&gt;0.87&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;bm_mako&lt;/td&gt;
+&lt;td&gt;3.41&lt;/td&gt;
+&lt;td&gt;2.11&lt;/td&gt;
+&lt;td&gt;8.56&lt;/td&gt;
+&lt;td&gt;13.82&lt;/td&gt;
+&lt;td&gt;0.62&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;chaos&lt;/td&gt;
+&lt;td&gt;21.82&lt;/td&gt;
+&lt;td&gt;17.80&lt;/td&gt;
+&lt;td&gt;6.93&lt;/td&gt;
+&lt;td&gt;8.50&lt;/td&gt;
+&lt;td&gt;0.82&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;crypto_pyaes&lt;/td&gt;
+&lt;td&gt;22.53&lt;/td&gt;
+&lt;td&gt;19.48&lt;/td&gt;
+&lt;td&gt;6.53&lt;/td&gt;
+&lt;td&gt;7.56&lt;/td&gt;
+&lt;td&gt;0.86&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;django&lt;/td&gt;
+&lt;td&gt;13.43&lt;/td&gt;
+&lt;td&gt;11.16&lt;/td&gt;
+&lt;td&gt;7.90&lt;/td&gt;
+&lt;td&gt;9.51&lt;/td&gt;
+&lt;td&gt;0.83&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;eparse&lt;/td&gt;
+&lt;td&gt;1.43&lt;/td&gt;
+&lt;td&gt;1.17&lt;/td&gt;
+&lt;td&gt;6.61&lt;/td&gt;
+&lt;td&gt;8.12&lt;/td&gt;
+&lt;td&gt;0.81&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;fannkuch&lt;/td&gt;
+&lt;td&gt;6.22&lt;/td&gt;
+&lt;td&gt;5.36&lt;/td&gt;
+&lt;td&gt;6.18&lt;/td&gt;
+&lt;td&gt;7.16&lt;/td&gt;
+&lt;td&gt;0.86&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;float&lt;/td&gt;
+&lt;td&gt;5.22&lt;/td&gt;
+&lt;td&gt;6.00&lt;/td&gt;
+&lt;td&gt;9.68&lt;/td&gt;
+&lt;td&gt;8.43&lt;/td&gt;
+&lt;td&gt;1.15&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;go&lt;/td&gt;
+&lt;td&gt;4.72&lt;/td&gt;
+&lt;td&gt;3.34&lt;/td&gt;
+&lt;td&gt;5.91&lt;/td&gt;
+&lt;td&gt;8.37&lt;/td&gt;
+&lt;td&gt;0.71&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;hexiom2&lt;/td&gt;
+&lt;td&gt;8.70&lt;/td&gt;
+&lt;td&gt;7.00&lt;/td&gt;
+&lt;td&gt;7.69&lt;/td&gt;
+&lt;td&gt;9.56&lt;/td&gt;
+&lt;td&gt;0.80&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;html5lib&lt;/td&gt;
+&lt;td&gt;2.35&lt;/td&gt;
+&lt;td&gt;2.13&lt;/td&gt;
+&lt;td&gt;6.59&lt;/td&gt;
+&lt;td&gt;7.26&lt;/td&gt;
+&lt;td&gt;0.91&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;json_bench&lt;/td&gt;
+&lt;td&gt;1.12&lt;/td&gt;
+&lt;td&gt;0.93&lt;/td&gt;
+&lt;td&gt;7.19&lt;/td&gt;
+&lt;td&gt;8.68&lt;/td&gt;
+&lt;td&gt;0.83&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;meteor-contest&lt;/td&gt;
+&lt;td&gt;2.13&lt;/td&gt;
+&lt;td&gt;1.68&lt;/td&gt;
+&lt;td&gt;5.95&lt;/td&gt;
+&lt;td&gt;7.54&lt;/td&gt;
+&lt;td&gt;0.79&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;nbody_modified&lt;/td&gt;
+&lt;td&gt;8.19&lt;/td&gt;
+&lt;td&gt;7.78&lt;/td&gt;
+&lt;td&gt;6.08&lt;/td&gt;
+&lt;td&gt;6.40&lt;/td&gt;
+&lt;td&gt;0.95&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;pidigits&lt;/td&gt;
+&lt;td&gt;1.27&lt;/td&gt;
+&lt;td&gt;0.95&lt;/td&gt;
+&lt;td&gt;14.67&lt;/td&gt;
+&lt;td&gt;19.66&lt;/td&gt;
+&lt;td&gt;0.75&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;pyflate-fast&lt;/td&gt;
+&lt;td&gt;3.30&lt;/td&gt;
+&lt;td&gt;3.57&lt;/td&gt;
+&lt;td&gt;10.64&lt;/td&gt;
+&lt;td&gt;9.84&lt;/td&gt;
+&lt;td&gt;1.08&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;raytrace-simple&lt;/td&gt;
+&lt;td&gt;46.41&lt;/td&gt;
+&lt;td&gt;29.00&lt;/td&gt;
+&lt;td&gt;5.14&lt;/td&gt;
+&lt;td&gt;8.23&lt;/td&gt;
+&lt;td&gt;0.62&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;richards&lt;/td&gt;
+&lt;td&gt;31.48&lt;/td&gt;
+&lt;td&gt;28.51&lt;/td&gt;
+&lt;td&gt;6.95&lt;/td&gt;
+&lt;td&gt;7.68&lt;/td&gt;
+&lt;td&gt;0.91&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;slowspitfire&lt;/td&gt;
+&lt;td&gt;1.28&lt;/td&gt;
+&lt;td&gt;1.14&lt;/td&gt;
+&lt;td&gt;5.91&lt;/td&gt;
+&lt;td&gt;6.61&lt;/td&gt;
+&lt;td&gt;0.89&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;spambayes&lt;/td&gt;
+&lt;td&gt;1.93&lt;/td&gt;
+&lt;td&gt;1.27&lt;/td&gt;
+&lt;td&gt;4.15&lt;/td&gt;
+&lt;td&gt;6.30&lt;/td&gt;
+&lt;td&gt;0.66&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;sphinx&lt;/td&gt;
+&lt;td&gt;1.01&lt;/td&gt;
+&lt;td&gt;1.05&lt;/td&gt;
+&lt;td&gt;7.76&lt;/td&gt;
+&lt;td&gt;7.45&lt;/td&gt;
+&lt;td&gt;1.04&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;spitfire&lt;/td&gt;
+&lt;td&gt;1.55&lt;/td&gt;
+&lt;td&gt;1.58&lt;/td&gt;
+&lt;td&gt;5.62&lt;/td&gt;
+&lt;td&gt;5.49&lt;/td&gt;
+&lt;td&gt;1.02&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;spitfire_cstringio&lt;/td&gt;
+&lt;td&gt;9.61&lt;/td&gt;
+&lt;td&gt;5.74&lt;/td&gt;
+&lt;td&gt;5.43&lt;/td&gt;
+&lt;td&gt;9.09&lt;/td&gt;
+&lt;td&gt;0.60&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;sympy_expand&lt;/td&gt;
+&lt;td&gt;1.42&lt;/td&gt;
+&lt;td&gt;0.97&lt;/td&gt;
+&lt;td&gt;3.86&lt;/td&gt;
+&lt;td&gt;5.66&lt;/td&gt;
+&lt;td&gt;0.68&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;sympy_integrate&lt;/td&gt;
+&lt;td&gt;1.60&lt;/td&gt;
+&lt;td&gt;0.95&lt;/td&gt;
+&lt;td&gt;4.24&lt;/td&gt;
+&lt;td&gt;7.12&lt;/td&gt;
+&lt;td&gt;0.60&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;sympy_str&lt;/td&gt;
+&lt;td&gt;0.72&lt;/td&gt;
+&lt;td&gt;0.48&lt;/td&gt;
+&lt;td&gt;3.68&lt;/td&gt;
+&lt;td&gt;5.56&lt;/td&gt;
+&lt;td&gt;0.66&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;sympy_sum&lt;/td&gt;
+&lt;td&gt;1.99&lt;/td&gt;
+&lt;td&gt;1.19&lt;/td&gt;
+&lt;td&gt;3.83&lt;/td&gt;
+&lt;td&gt;6.38&lt;/td&gt;
+&lt;td&gt;0.60&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;telco&lt;/td&gt;
+&lt;td&gt;14.28&lt;/td&gt;
+&lt;td&gt;9.36&lt;/td&gt;
+&lt;td&gt;3.94&lt;/td&gt;
+&lt;td&gt;6.02&lt;/td&gt;
+&lt;td&gt;0.66&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;twisted_iteration&lt;/td&gt;
+&lt;td&gt;11.60&lt;/td&gt;
+&lt;td&gt;7.33&lt;/td&gt;
+&lt;td&gt;6.04&lt;/td&gt;
+&lt;td&gt;9.55&lt;/td&gt;
+&lt;td&gt;0.63&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;twisted_names&lt;/td&gt;
+&lt;td&gt;3.68&lt;/td&gt;
+&lt;td&gt;2.83&lt;/td&gt;
+&lt;td&gt;5.01&lt;/td&gt;
+&lt;td&gt;6.50&lt;/td&gt;
+&lt;td&gt;0.77&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;twisted_pb&lt;/td&gt;
+&lt;td&gt;4.94&lt;/td&gt;
+&lt;td&gt;3.02&lt;/td&gt;
+&lt;td&gt;5.10&lt;/td&gt;
+&lt;td&gt;8.34&lt;/td&gt;
+&lt;td&gt;0.61&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;It seems that Cortex A9, while significantly slower than Xeon, has higher
+slowdowns with a large interpreter (CPython) than a JIT compiler (PyPy). This
+comes as a surprise to me, especially that our ARM assembler is not nearly
+as polished as our x86 assembler. As for the causes, various people mentioned
+branch predictor, but I would not like to speculate without actually knowing.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="how-to-use-pypy"&gt;
+&lt;h3&gt;How to use PyPy?&lt;/h3&gt;
+&lt;p&gt;We suggest using PyPy from a &lt;a class="reference external" href="https://www.virtualenv.org/en/latest/"&gt;virtualenv&lt;/a&gt;. Once you have a virtualenv
+installed, you can follow instructions from &lt;a class="reference external" href="https://doc.pypy.org/en/latest/getting-started.html#installing-using-virtualenv"&gt;pypy documentation&lt;/a&gt; on how
+to proceed. This document also covers other &lt;a class="reference external" href="https://doc.pypy.org/en/latest/getting-started.html#installing-pypy"&gt;installation schemes&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;We would not recommend using in production PyPy on ARM just quite yet,
+however the day of a stable PyPy ARM release is not far off.&lt;/p&gt;
+&lt;p&gt;Cheers,&lt;br&gt;
+fijal, bivab, arigo and the whole PyPy team&lt;/p&gt;
+&lt;/div&gt;
+&lt;br&gt;&lt;/div&gt;</description><category>arm</category><category>sponsors</category><guid>https://www.pypy.org/posts/2013/05/pypy-20-alpha-for-arm-2318299473927531503.html</guid><pubDate>Tue, 07 May 2013 13:35:00 GMT</pubDate></item><item><title>A thank you to the PSF</title><link>https://www.pypy.org/posts/2011/03/thank-you-to-psf-5934275567667314914.html</link><dc:creator>Maciej Fijalkowski</dc:creator><description>&lt;p&gt;This year's PyCon was an incredible time; several members of the PyPy team were
+there, and we'll be blogging more about our experiences in the coming days.
+However, we quickly wanted to extend a thank you to the &lt;a class="reference external" href="https://www.python.org/psf/"&gt;Python Software
+Foundation (PSF)&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;As you may have heard, on Friday morning at PyCon Jesse Noller handed the PyPy
+team a check for $10,000, on behalf of the PSF.  This was in recognition of our
+success over the past few years in bringing PyPy from a research project
+to a fast, compliant, production-ready Python implementation, and to allow us
+to continue our work on making it faster and more up-to-date with upstream
+version changes.&lt;/p&gt;
+&lt;p&gt;Beyond the large check, we're grateful for the endorsement this represents,
+not only of our work on PyPy, but also of all alternatve Python VMs.
+The PSF has shifted its focus from representing just CPython to representing
+the Python Language, reguardless of its implementation, something we are very
+appreciative of.&lt;/p&gt;
+&lt;a href="https://3.bp.blogspot.com/-yLUKuyRgjdg/TYfklB5Jg4I/AAAAAAAABKM/_5Rv2thqzA0/s1600/pycon_cheque.jpg"&gt;&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5586685187590816642" src="https://3.bp.blogspot.com/-yLUKuyRgjdg/TYfklB5Jg4I/AAAAAAAABKM/_5Rv2thqzA0/s320/pycon_cheque.jpg" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 320px; height: 269px;"&gt;&lt;/a&gt;
+&lt;p&gt;From left to right, PyPy people present at PyCon 2011: Maciej Fijałkowski, Armin Rigo, Alex Gaynor, Laura Creighton and Jacob Hallén&lt;/p&gt;
+
+&lt;p&gt;Thank you, PSF.&lt;/p&gt;</description><category>sponsors</category><guid>https://www.pypy.org/posts/2011/03/thank-you-to-psf-5934275567667314914.html</guid><pubDate>Mon, 21 Mar 2011 23:50:00 GMT</pubDate></item></channel></rss>

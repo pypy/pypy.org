@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How fast can the RPython GC allocate? | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2025/06/rpython-gc-allocation-speed.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="CF Bolz-Tereick">
+<link rel="prev" href="../04/prospero-in-rpython.html" title="Doing the Prospero-Challenge in RPython" type="text/html">
+<link rel="next" href="../07/pypy-v7320-release.html" title="PyPy v7.3.20 release" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="How fast can the RPython GC allocate?">
+<meta property="og:url" content="https://www.pypy.org/posts/2025/06/rpython-gc-allocation-speed.html">
+<meta property="og:description" content="While working on a paper about allocation profiling in
+VMProf I got curious
+about how quickly the RPython GC can allocate an object. I wrote a small
+RPython benchmark program to get an idea of the ord">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2025-06-15T15:48:30+02:00">
+<meta property="article:tag" content="benchmarking">
+<meta property="article:tag" content="gc">
+<meta property="article:tag" content="rpython">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">How fast can the RPython GC allocate?</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/cf-bolz-tereick.html">CF Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2025-06-15T15:48:30+02:00" itemprop="datePublished" title="2025-06-15 15:48">2025-06-15 15:48</time></a>
+            </p>
+            
+                <p class="commentline">            <a href="rpython-gc-allocation-speed.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>While working on a paper about <a href="https://pypy.org/posts/2025/02/pypy-gc-sampling.html">allocation profiling in
+VMProf</a> I got curious
+about how quickly the RPython GC can allocate an object. I wrote a small
+RPython benchmark program to get an idea of the order of magnitude.</p>
+<p>The basic idea is to just allocate an instance in a tight loop:</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">A</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="n">loops</span><span class="p">):</span>
+    <span class="c1"># preliminary idea, see below</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">loops</span><span class="p">):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">A</span><span class="p">()</span>
+        <span class="n">a</span><span class="o">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">i</span>
+</pre></div>
+
+<p>The RPython type inference will find out that instances of <code>A</code> have a single
+<code>i</code> field, which is an integer. In addition to that field, every RPython object
+needs one word of GC meta-information. Therefore one instance of <code>A</code> needs 16
+bytes on a 64-bit architecture.</p>
+<p>However, measuring like this is not good enough, because the RPython static
+optimizer would remove the allocation since the object isn't used. But we can
+confuse the escape analysis sufficiently by always keeping two instances alive
+at the same time:</p>
+<div class="code"><pre class="code literal-block"><span class="k">class</span><span class="w"> </span><span class="nc">A</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="n">loops</span><span class="p">):</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">prev</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">loops</span><span class="p">):</span>
+        <span class="n">prev</span> <span class="o">=</span> <span class="n">a</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">A</span><span class="p">()</span>
+        <span class="n">a</span><span class="o">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">i</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">prev</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span> <span class="c1"># print the instances at the end</span>
+</pre></div>
+
+<p>(I confirmed that the allocation isn't being removed by looking at the C code
+that the RPython compiler generates from this.)</p>
+<p>This is doing a little bit more work than needed, because of the <code>a.i = i</code>
+instance attribute write. We can also (optionally) leave the field
+uninitialized.</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="n">initialize_field</span><span class="p">,</span> <span class="n">loops</span><span class="p">):</span>
+    <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">initialize_field</span><span class="p">:</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">prev</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">loops</span><span class="p">):</span>
+            <span class="n">prev</span> <span class="o">=</span> <span class="n">a</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="n">A</span><span class="p">()</span>
+            <span class="n">a</span><span class="o">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">i</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">prev</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span> <span class="c1"># make sure always two objects are alive</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">prev</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">loops</span><span class="p">):</span>
+            <span class="n">prev</span> <span class="o">=</span> <span class="n">a</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="n">A</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">prev</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+    <span class="n">t2</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">t2</span> <span class="o">-</span> <span class="n">t1</span><span class="p">,</span> <span class="s1">'s'</span><span class="p">)</span>
+    <span class="n">object_size_in_words</span> <span class="o">=</span> <span class="mi">2</span> <span class="c1"># GC header, one integer field</span>
+    <span class="n">mem</span> <span class="o">=</span> <span class="n">loops</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="n">object_size_in_words</span> <span class="o">/</span> <span class="mf">1024.0</span> <span class="o">/</span> <span class="mf">1024.0</span> <span class="o">/</span> <span class="mf">1024.0</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">mem</span><span class="p">,</span> <span class="s1">'GB'</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">mem</span> <span class="o">/</span> <span class="p">(</span><span class="n">t2</span> <span class="o">-</span> <span class="n">t1</span><span class="p">),</span> <span class="s1">'GB/s'</span><span class="p">)</span>
+</pre></div>
+
+<p>Then we need to add some RPython scaffolding:</p>
+<div class="code"><pre class="code literal-block"><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">argv</span><span class="p">):</span>
+    <span class="n">loops</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">with_init</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+    <span class="k">if</span> <span class="n">with_init</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">"with initialization"</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">"without initialization"</span><span class="p">)</span>
+    <span class="n">run</span><span class="p">(</span><span class="n">with_init</span><span class="p">,</span> <span class="n">loops</span><span class="p">)</span>
+    <span class="k">return</span> <span class="mi">0</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">target</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">main</span>
+</pre></div>
+
+<p>To build a binary:</p>
+<div class="code"><pre class="code literal-block"><span class="go">pypy rpython/bin/rpython targetallocatealot.py</span>
+</pre></div>
+
+<p>Which will turn the RPython code into C code and use a C compiler to turn that
+into a binary, containing both our code above as well as the RPython garbage
+collector.</p>
+<p>Then we can run it (all results again from my AMD Ryzen 7 PRO 7840U, running
+Ubuntu Linux 24.04.2):</p>
+<div class="code"><pre class="code literal-block"><span class="gp">$ </span>./targetallocatealot-c<span class="w"> </span><span class="m">1000000000</span><span class="w"> </span><span class="m">0</span>
+<span class="go">without initialization</span>
+<span class="go">&lt;A object at 0x7c71ad84cf60&gt; &lt;A object at 0x7c71ad84cf70&gt;</span>
+<span class="go">0.433825 s</span>
+<span class="go">14.901161 GB</span>
+<span class="go">34.348322 GB/s</span>
+<span class="gp">$ </span>./targetallocatealot-c<span class="w"> </span><span class="m">1000000000</span><span class="w"> </span><span class="m">1</span>
+<span class="go">with initialization</span>
+<span class="go">&lt;A object at 0x71b41c82cf60&gt; &lt;A object at 0x71b41c82cf70&gt;</span>
+<span class="go">0.501856 s</span>
+<span class="go">14.901161 GB</span>
+<span class="go">29.692100 GB/s</span>
+</pre></div>
+
+<p>Let's compare it with the Boehm GC:</p>
+<div class="code"><pre class="code literal-block"><span class="gp">$ </span>pypy<span class="w"> </span>rpython/bin/rpython<span class="w"> </span>--gc<span class="o">=</span>boehm<span class="w"> </span>--output<span class="o">=</span>targetallocatealot-c-boehm<span class="w"> </span>targetallocatealot.py<span class="w"> </span>
+<span class="go">...</span>
+<span class="gp">$ </span>./targetallocatealot-c-boehm<span class="w"> </span><span class="m">1000000000</span><span class="w"> </span><span class="m">0</span>
+<span class="go">without initialization</span>
+<span class="go">&lt;A object at 0xffff8bd058a6e3af&gt; &lt;A object at 0xffff8bd058a6e3bf&gt;</span>
+<span class="go">9.722585 s</span>
+<span class="go">14.901161 GB</span>
+<span class="go">1.532634 GB/s</span>
+<span class="gp">$ </span>./targetallocatealot-c-boehm<span class="w"> </span><span class="m">1000000000</span><span class="w"> </span><span class="m">1</span>
+<span class="go">with initialization</span>
+<span class="go">&lt;A object at 0xffff88e1132983af&gt; &lt;A object at 0xffff88e1132983bf&gt;</span>
+<span class="go">9.684149 s</span>
+<span class="go">14.901161 GB</span>
+<span class="go">1.538717 GB/s</span>
+</pre></div>
+
+<p>This is not a fair comparison, because the Boehm GC uses conservative stack
+scanning, therefore it cannot move objects, which requires much more
+complicated allocation.</p>
+<h3 id="lets-look-at-perf-stats">Let's look at <code>perf stats</code>
+<a href="#lets-look-at-perf-stats" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>We can use <code>perf</code> to get some statistics about the executions:</p>
+<div class="code"><pre class="code literal-block"><span class="gp">$ </span>perf<span class="w"> </span>stat<span class="w"> </span>-e<span class="w"> </span>cache-references,cache-misses,cycles,instructions,branches,faults,migrations<span class="w"> </span>./targetallocatealot-c<span class="w"> </span><span class="m">10000000000</span><span class="w"> </span><span class="m">0</span>
+<span class="go">without initialization</span>
+<span class="go">&lt;A object at 0x7aa260e35980&gt; &lt;A object at 0x7aa260e35990&gt;</span>
+<span class="go">4.301442 s</span>
+<span class="go">149.011612 GB</span>
+<span class="go">34.642245 GB/s</span>
+
+<span class="go"> Performance counter stats for './targetallocatealot-c 10000000000 0':</span>
+
+<span class="go">     7,244,117,828      cache-references                                                      </span>
+<span class="go">        23,446,661      cache-misses                     #    0.32% of all cache refs         </span>
+<span class="go">    21,074,240,395      cycles                                                                </span>
+<span class="go">   110,116,790,943      instructions                     #    5.23  insn per cycle            </span>
+<span class="go">    20,024,347,488      branches                                                              </span>
+<span class="go">             1,287      faults                                                                </span>
+<span class="go">                24      migrations                                                            </span>
+
+<span class="go">       4.303071693 seconds time elapsed</span>
+
+<span class="go">       4.297557000 seconds user</span>
+<span class="go">       0.003998000 seconds sys</span>
+
+<span class="gp">$ </span>perf<span class="w"> </span>stat<span class="w"> </span>-e<span class="w"> </span>cache-references,cache-misses,cycles,instructions,branches,faults,migrations<span class="w"> </span>./targetallocatealot-c<span class="w"> </span><span class="m">10000000000</span><span class="w"> </span><span class="m">1</span>
+<span class="go">with initialization</span>
+<span class="go">&lt;A object at 0x77ceb0235980&gt; &lt;A object at 0x77ceb0235990&gt;</span>
+<span class="go">5.016772 s</span>
+<span class="go">149.011612 GB</span>
+<span class="go">29.702688 GB/s</span>
+
+<span class="go"> Performance counter stats for './targetallocatealot-c 10000000000 1':</span>
+
+<span class="go">     7,571,461,470      cache-references                                                      </span>
+<span class="go">       241,915,266      cache-misses                     #    3.20% of all cache refs         </span>
+<span class="go">    24,503,497,532      cycles                                                                </span>
+<span class="go">   130,126,387,460      instructions                     #    5.31  insn per cycle            </span>
+<span class="go">    20,026,280,693      branches                                                              </span>
+<span class="go">             1,285      faults                                                                </span>
+<span class="go">                21      migrations                                                            </span>
+
+<span class="go">       5.019444749 seconds time elapsed</span>
+
+<span class="go">       5.012924000 seconds user</span>
+<span class="go">       0.005999000 seconds sys</span>
+</pre></div>
+
+<p>This is pretty cool, we can run this loop with &gt;5 instructions per cycle. Every
+allocation takes <code>110116790943 / 10000000000 ≈ 11</code> instructions and
+<code>21074240395 / 10000000000 ≈ 2.1</code> cycles, including the loop around it.</p>
+<h3 id="how-often-does-the-gc-run">How often does the GC run?<a href="#how-often-does-the-gc-run" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The RPython GC queries the L2 cache size to determine the size of the nursery.
+We can find out what it is by turning on PYPYLOG, selecting the proper logging
+categories, and printing to <code>stdout</code> via <code>:-</code>:</p>
+<div class="code"><pre class="code literal-block"><span class="gp">$ </span><span class="nv">PYPYLOG</span><span class="o">=</span>gc-set-nursery-size,gc-hardware:-<span class="w"> </span>./targetallocatealot-c<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">1</span>
+<span class="go">[f3e6970465723] {gc-set-nursery-size</span>
+<span class="go">nursery size: 270336</span>
+<span class="go">[f3e69704758f3] gc-set-nursery-size}</span>
+<span class="go">[f3e697047b9a1] {gc-hardware</span>
+<span class="go">L2cache = 1048576</span>
+<span class="go">[f3e69705ced19] gc-hardware}</span>
+<span class="go">[f3e69705d11b5] {gc-hardware</span>
+<span class="go">memtotal = 32274210816.000000</span>
+<span class="go">[f3e69705f4948] gc-hardware}</span>
+<span class="go">[f3e6970615f78] {gc-set-nursery-size</span>
+<span class="go">nursery size: 4194304</span>
+<span class="go">[f3e697061ecc0] gc-set-nursery-size}</span>
+<span class="go">with initialization</span>
+<span class="go">NULL &lt;A object at 0x7fa7b1434020&gt;</span>
+<span class="go">0.000008 s</span>
+<span class="go">0.000000 GB</span>
+<span class="go">0.001894 GB/s</span>
+</pre></div>
+
+<p>So the nursery is 4 MiB. This means that when we allocate 14.9 GiB the GC needs to perform <code>10000000000 * 16 / 4194304 ≈ 38146</code> minor collections. Let's confirm that:</p>
+<div class="code"><pre class="code literal-block"><span class="gp">$ </span><span class="nv">PYPYLOG</span><span class="o">=</span>gc-minor:out<span class="w"> </span>./targetallocatealot-c<span class="w"> </span><span class="m">10000000000</span><span class="w"> </span><span class="m">1</span>
+<span class="go">with initialization</span>
+<span class="go">w&lt;A object at 0x7991e3835980&gt; &lt;A object at 0x7991e3835990&gt;</span>
+<span class="go">5.315511 s</span>
+<span class="go">149.011612 GB</span>
+<span class="go">28.033356 GB/s</span>
+<span class="gp">$ </span>head<span class="w"> </span>out
+<span class="go">[f3ee482f4cd97] {gc-minor</span>
+<span class="go">[f3ee482f53874] {gc-minor-walkroots</span>
+<span class="go">[f3ee482f54117] gc-minor-walkroots}</span>
+<span class="go">minor collect, total memory used: 0</span>
+<span class="go">number of pinned objects: 0</span>
+<span class="go">total size of surviving objects: 0</span>
+<span class="go">time taken: 0.000029</span>
+<span class="go">[f3ee482f67b7e] gc-minor}</span>
+<span class="go">[f3ee4838097c5] {gc-minor</span>
+<span class="go">[f3ee48380c945] {gc-minor-walkroots</span>
+<span class="gp">$ </span>grep<span class="w"> </span><span class="s2">"{gc-minor-walkroots"</span><span class="w"> </span>out<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+<span class="go">38147</span>
+</pre></div>
+
+<p>Each minor collection is very quick, because a minor collection is
+O(surviving objects), and in this program only one object survive each time
+(the other instance is in the process of being allocated).
+Also, the GC root shadow stack is only one entry, so walking that is super
+quick as well. The time the minor collections take is logged to the out file:</p>
+<div class="code"><pre class="code literal-block"><span class="gp">$ </span>grep<span class="w"> </span><span class="s2">"time taken"</span><span class="w"> </span>out<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail
+<span class="go">time taken: 0.000002</span>
+<span class="go">time taken: 0.000002</span>
+<span class="go">time taken: 0.000002</span>
+<span class="go">time taken: 0.000002</span>
+<span class="go">time taken: 0.000002</span>
+<span class="go">time taken: 0.000002</span>
+<span class="go">time taken: 0.000002</span>
+<span class="go">time taken: 0.000003</span>
+<span class="go">time taken: 0.000002</span>
+<span class="go">time taken: 0.000002</span>
+<span class="gp">$ </span>grep<span class="w"> </span><span class="s2">"time taken"</span><span class="w"> </span>out<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-o<span class="w"> </span><span class="s2">"0.*"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>numsum
+<span class="go">0.0988160000000011</span>
+</pre></div>
+
+<p>(This number is super approximate due to float formatting rounding.)</p>
+<p>that means that <code>0.0988160000000011 / 5.315511 ≈ 2%</code> of the time is spent in the GC.</p>
+<h3 id="what-does-the-generated-machine-code-look-like">What does the generated machine code look like?<a href="#what-does-the-generated-machine-code-look-like" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The allocation fast path of the RPython GC is a simple bump pointer, in Python
+pseudo-code it would look roughly like this:</p>
+<div class="code"><pre class="code literal-block"><span class="n">result</span> <span class="o">=</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span>
+<span class="c1"># Move nursery_free pointer forward by totalsize</span>
+<span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span> <span class="o">=</span> <span class="n">result</span> <span class="o">+</span> <span class="n">totalsize</span>
+<span class="c1"># Check if this allocation would exceed the nursery</span>
+<span class="k">if</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_free</span> <span class="o">&gt;</span> <span class="n">gc</span><span class="o">.</span><span class="n">nursery_top</span><span class="p">:</span>
+    <span class="c1"># If it does =&gt; collect the nursery and al</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">collect_and_reserve</span><span class="p">(</span><span class="n">totalsize</span><span class="p">)</span>
+<span class="n">result</span><span class="o">.</span><span class="n">hdr</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">GC</span> <span class="n">flags</span> <span class="ow">and</span> <span class="nb">type</span> <span class="nb">id</span> <span class="n">of</span> <span class="n">A</span><span class="o">&gt;</span>
+</pre></div>
+
+<p>So we can disassemble the compiled binary <code>targetallocatealot-c</code> and try to
+find the equivalent logic in machine code. I'm super bad at reading machine
+code, but I tried to annotate what I think is the core loop (the version
+without initializing the <code>i</code> field) below:</p>
+<div class="code"><pre class="code literal-block"><span class="w">    </span><span class="p">...</span>
+<span class="w">    </span><span class="nl">cb68</span><span class="p">:</span><span class="w">   </span><span class="n">mov</span><span class="w">    </span><span class="o">%</span><span class="n">rbx</span><span class="p">,</span><span class="o">%</span><span class="n">rdi</span><span class="w"> </span>
+<span class="w">    </span><span class="nl">cb6b</span><span class="p">:</span><span class="w">   </span><span class="n">mov</span><span class="w">    </span><span class="o">%</span><span class="n">rdx</span><span class="p">,</span><span class="o">%</span><span class="n">rbx</span>
+
+<span class="w">    </span><span class="cp"># initialize object header of object allocated in previous iteration</span>
+<span class="w">    </span><span class="nl">cb6e</span><span class="p">:</span><span class="w">   </span><span class="n">movq</span><span class="w">   </span><span class="n">$0x4c8</span><span class="p">,(</span><span class="o">%</span><span class="n">rbx</span><span class="p">)</span>
+
+<span class="w">    </span><span class="cp"># loop termination check</span>
+<span class="w">    </span><span class="nl">cb75</span><span class="p">:</span><span class="w">   </span><span class="n">cmp</span><span class="w">    </span><span class="o">%</span><span class="n">rbp</span><span class="p">,</span><span class="o">%</span><span class="n">r12</span>
+<span class="w">    </span><span class="nl">cb78</span><span class="p">:</span><span class="w">   </span><span class="n">je</span><span class="w">     </span><span class="n">ccb8</span>
+
+<span class="w">    </span><span class="cp"># load nursery_free</span>
+<span class="w">    </span><span class="nl">cb7e</span><span class="p">:</span><span class="w">   </span><span class="n">mov</span><span class="w">    </span><span class="mh">0x33c13</span><span class="p">(</span><span class="o">%</span><span class="n">rip</span><span class="p">),</span><span class="o">%</span><span class="n">rdx</span>
+
+<span class="w">    </span><span class="cp"># increment loop counter</span>
+<span class="w">    </span><span class="nl">cb85</span><span class="p">:</span><span class="w">   </span><span class="n">add</span><span class="w">    </span><span class="n">$0x1</span><span class="p">,</span><span class="o">%</span><span class="n">rbp</span>
+
+<span class="w">    </span><span class="cp"># add 16 (size of object) to nursery_free</span>
+<span class="w">    </span><span class="nl">cb89</span><span class="p">:</span><span class="w">   </span><span class="n">lea</span><span class="w">    </span><span class="mh">0x10</span><span class="p">(</span><span class="o">%</span><span class="n">rdx</span><span class="p">),</span><span class="o">%</span><span class="n">rax</span>
+
+<span class="w">    </span><span class="cp"># compare nursery_top with new nursery_free</span>
+<span class="w">    </span><span class="nl">cb8d</span><span class="p">:</span><span class="w">   </span><span class="n">cmp</span><span class="w">    </span><span class="o">%</span><span class="n">rax</span><span class="p">,</span><span class="mh">0x33c24</span><span class="p">(</span><span class="o">%</span><span class="n">rip</span><span class="p">)</span>
+
+<span class="w">    </span><span class="cp"># store new nursery_free</span>
+<span class="w">    </span><span class="nl">cb94</span><span class="p">:</span><span class="w">   </span><span class="n">mov</span><span class="w">    </span><span class="o">%</span><span class="n">rax</span><span class="p">,</span><span class="mh">0x33bfd</span><span class="p">(</span><span class="o">%</span><span class="n">rip</span><span class="p">)</span>
+
+<span class="w">    </span><span class="cp"># if new nursery_free exceeds nursery_top, fall through to slow path, if not, start at top</span>
+<span class="w">    </span><span class="nl">cb9b</span><span class="p">:</span><span class="w">   </span><span class="n">jae</span><span class="w">    </span><span class="n">cb68</span>
+
+<span class="w">    </span><span class="cp"># slow path from here on:</span>
+<span class="w">    </span><span class="cp"># save live object from last iteration to GC shadow stack</span>
+<span class="w">    </span><span class="nl">cb9d</span><span class="p">:</span><span class="w">   </span><span class="n">mov</span><span class="w">    </span><span class="o">%</span><span class="n">rbx</span><span class="p">,</span><span class="mh">-0x8</span><span class="p">(</span><span class="o">%</span><span class="n">rcx</span><span class="p">)</span>
+<span class="w">    </span><span class="nl">cba1</span><span class="p">:</span><span class="w">   </span><span class="n">mov</span><span class="w">    </span><span class="o">%</span><span class="n">r13</span><span class="p">,</span><span class="o">%</span><span class="n">rdi</span>
+<span class="w">    </span><span class="nl">cba4</span><span class="p">:</span><span class="w">   </span><span class="n">mov</span><span class="w">    </span><span class="n">$0x10</span><span class="p">,</span><span class="o">%</span><span class="n">esi</span>
+<span class="w">    </span><span class="cp"># do minor collection</span>
+<span class="w">    </span><span class="nl">cba9</span><span class="p">:</span><span class="w">   </span><span class="n">call</span><span class="w">   </span><span class="mi">20800</span><span class="w"> </span><span class="o">&lt;</span><span class="n">pypy_g_IncrementalMiniMarkGC_collect_and_reserve</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="p">...</span>
+</pre></div>
+
+<h3 id="running-the-benchmark-as-regular-python-code">Running the benchmark as regular Python code<a href="#running-the-benchmark-as-regular-python-code" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>So far we ran this code as <em>RPython</em>, i.e. type inference is performed and the
+program is translated to a C binary. We can also run it on top of PyPy, as a
+regular Python3 program. However, an instance of a user-defined class in regular
+Python when run on PyPy is actually a much larger object, due to <a href="https://pypy.org/posts/2010/11/efficiently-implementing-python-objects-3838329944323946932.html">dynamic
+typing</a>.
+It's at least 7 words, which is 56 bytes.</p>
+<p>However, we can simply use <code>int</code> objects instead. Integers are allocated on the
+heap and consist of two words, one for the GC and one with the
+machine-word-sized integer value, if the integer fits into a signed 64-bit
+representation (otherwise a less compact different representation is used,
+which can represent arbitrarily large integers).</p>
+<p>Therefore, we can simply use this kind of code:</p>
+<div class="code"><pre class="code literal-block"><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span><span class="o">,</span><span class="w"> </span><span class="nn">time</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="n">loops</span><span class="p">):</span>
+    <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">prev</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">loops</span><span class="p">):</span>
+        <span class="n">prev</span> <span class="o">=</span> <span class="n">a</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">i</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">prev</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span> <span class="c1"># make sure always two objects are alive</span>
+    <span class="n">t2</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">object_size_in_words</span> <span class="o">=</span> <span class="mi">2</span> <span class="c1"># GC header, one integer field</span>
+    <span class="n">mem</span> <span class="o">=</span> <span class="n">loops</span> <span class="o">*</span> <span class="mi">28</span> <span class="o">/</span> <span class="mf">1024.0</span> <span class="o">/</span> <span class="mf">1024.0</span> <span class="o">/</span> <span class="mf">1024.0</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">mem</span><span class="p">,</span> <span class="s1">'GB'</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">mem</span> <span class="o">/</span> <span class="p">(</span><span class="n">t2</span> <span class="o">-</span> <span class="n">t1</span><span class="p">),</span> <span class="s1">'GB/s'</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">argv</span><span class="p">):</span>
+    <span class="n">loops</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">run</span><span class="p">(</span><span class="n">loops</span><span class="p">)</span>
+    <span class="k">return</span> <span class="mi">0</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">'__main__'</span><span class="p">:</span>
+    <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="n">main</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">))</span>
+</pre></div>
+
+<p>In this case we can't really leave the value uninitialized though.</p>
+<p>We can run this both with and without the JIT:</p>
+<div class="code"><pre class="code literal-block"><span class="gp">$ </span>pypy3<span class="w"> </span>allocatealot.py<span class="w"> </span><span class="m">1000000000</span>
+<span class="go">999999998 999999999</span>
+<span class="go">14.901161193847656 GB</span>
+<span class="go">17.857494904899553 GB/s</span>
+<span class="gp">$ </span>pypy3<span class="w"> </span>--jit<span class="w"> </span>off<span class="w"> </span>allocatealot.py<span class="w"> </span><span class="m">1000000000</span>
+<span class="go">999999998 999999999</span>
+<span class="go">14.901161193847656 GB</span>
+<span class="go">0.8275382375297171 GB/s</span>
+</pre></div>
+
+<p>This is obviously much less efficient than the C code, the PyPy JIT generates
+much less efficient machine code than GCC. Still, "only" twice as slow is kind
+of cool anyway.</p>
+<p>(Running it with CPython doesn't really make sense for this measurements, since
+CPython ints are bigger – <code>sys.getsizeof(5)</code> reports 28 bytes.)</p>
+<h3 id="the-machine-code-that-the-jit-generates">The machine code that the JIT generates<a href="#the-machine-code-that-the-jit-generates" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>Unfortunately it's a bit of a journey to show the machine code that PyPy's JIT generates for this. First we need to run with all jit logging categories:</p>
+<div class="code"><pre class="code literal-block"><span class="gp">$ </span><span class="nv">PYPYLOG</span><span class="o">=</span>jit:out<span class="w"> </span>pypy3<span class="w"> </span>allocatealot.py<span class="w"> </span><span class="m">1000000000</span>
+</pre></div>
+
+<p>Then we can read the log file to find the trace IR for the loop under the logging category <code>jit-log-opt</code>:</p>
+<div class="code"><pre class="code literal-block"><span class="o">+</span><span class="mi">532</span><span class="p">:</span><span class="w"> </span><span class="n">label</span><span class="p">(</span><span class="n">p0</span><span class="p">,</span><span class="w"> </span><span class="n">p1</span><span class="p">,</span><span class="w"> </span><span class="n">p6</span><span class="p">,</span><span class="w"> </span><span class="n">p9</span><span class="p">,</span><span class="w"> </span><span class="n">p11</span><span class="p">,</span><span class="w"> </span><span class="n">i34</span><span class="p">,</span><span class="w"> </span><span class="n">p13</span><span class="p">,</span><span class="w"> </span><span class="n">p19</span><span class="p">,</span><span class="w"> </span><span class="n">p21</span><span class="p">,</span><span class="w"> </span><span class="n">p23</span><span class="p">,</span><span class="w"> </span><span class="n">p25</span><span class="p">,</span><span class="w"> </span><span class="n">p29</span><span class="p">,</span><span class="w"> </span><span class="n">p31</span><span class="p">,</span><span class="w"> </span><span class="n">i44</span><span class="p">,</span><span class="w"> </span><span class="n">i35</span><span class="p">,</span><span class="w"> </span><span class="n">descr</span><span class="o">=</span><span class="n">TargetToken</span><span class="p">(</span><span class="mi">137358545605472</span><span class="p">))</span>
+<span class="n">debug_merge_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s1">'run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-9~#24 FOR_ITER'</span><span class="p">)</span>
+
+<span class="c1"># are we at the end of the loop</span>
+<span class="o">+</span><span class="mi">552</span><span class="p">:</span><span class="w"> </span><span class="n">i45</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">int_lt</span><span class="p">(</span><span class="n">i44</span><span class="p">,</span><span class="w"> </span><span class="n">i35</span><span class="p">)</span>
+<span class="o">+</span><span class="mi">555</span><span class="p">:</span><span class="w"> </span><span class="n">guard_true</span><span class="p">(</span><span class="n">i45</span><span class="p">,</span><span class="w"> </span><span class="n">descr</span><span class="o">=&lt;</span><span class="n">Guard0x7ced4756a160</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">[</span><span class="n">p0</span><span class="p">,</span><span class="w"> </span><span class="n">p6</span><span class="p">,</span><span class="w"> </span><span class="n">p9</span><span class="p">,</span><span class="w"> </span><span class="n">p11</span><span class="p">,</span><span class="w"> </span><span class="n">p13</span><span class="p">,</span><span class="w"> </span><span class="n">p19</span><span class="p">,</span><span class="w"> </span><span class="n">p21</span><span class="p">,</span><span class="w"> </span><span class="n">p23</span><span class="p">,</span><span class="w"> </span><span class="n">p25</span><span class="p">,</span><span class="w"> </span><span class="n">p29</span><span class="p">,</span><span class="w"> </span><span class="n">p31</span><span class="p">,</span><span class="w"> </span><span class="n">p1</span><span class="p">,</span><span class="w"> </span><span class="n">i44</span><span class="p">,</span><span class="w"> </span><span class="n">i35</span><span class="p">,</span><span class="w"> </span><span class="n">i34</span><span class="p">]</span>
+<span class="o">+</span><span class="mi">561</span><span class="p">:</span><span class="w"> </span><span class="n">i47</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">int_add</span><span class="p">(</span><span class="n">i44</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="n">debug_merge_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s1">'run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-9~#26 STORE_FAST'</span><span class="p">)</span>
+<span class="n">debug_merge_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s1">'run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-10~#28 LOAD_FAST'</span><span class="p">)</span>
+<span class="n">debug_merge_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s1">'run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-10~#30 STORE_FAST'</span><span class="p">)</span>
+<span class="n">debug_merge_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s1">'run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-11~#32 LOAD_FAST'</span><span class="p">)</span>
+<span class="n">debug_merge_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s1">'run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-11~#34 STORE_FAST'</span><span class="p">)</span>
+<span class="n">debug_merge_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s1">'run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-11~#36 JUMP_ABSOLUTE'</span><span class="p">)</span>
+
+<span class="c1"># update iterator object</span>
+<span class="o">+</span><span class="mi">565</span><span class="p">:</span><span class="w"> </span><span class="n">setfield_gc</span><span class="p">(</span><span class="n">p25</span><span class="p">,</span><span class="w"> </span><span class="n">i47</span><span class="p">,</span><span class="w"> </span><span class="n">descr</span><span class="o">=&lt;</span><span class="n">FieldS</span><span class="w"> </span><span class="n">pypy</span><span class="o">.</span><span class="n">module</span><span class="o">.</span><span class="n">__builtin__</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">W_IntRangeIterator</span><span class="o">.</span><span class="n">inst_current</span><span class="w"> </span><span class="mi">8</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="o">+</span><span class="mi">569</span><span class="p">:</span><span class="w"> </span><span class="n">guard_not_invalidated</span><span class="p">(</span><span class="n">descr</span><span class="o">=&lt;</span><span class="n">Guard0x7ced4756a1b0</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">[</span><span class="n">p0</span><span class="p">,</span><span class="w"> </span><span class="n">p6</span><span class="p">,</span><span class="w"> </span><span class="n">p9</span><span class="p">,</span><span class="w"> </span><span class="n">p11</span><span class="p">,</span><span class="w"> </span><span class="n">p19</span><span class="p">,</span><span class="w"> </span><span class="n">p21</span><span class="p">,</span><span class="w"> </span><span class="n">p23</span><span class="p">,</span><span class="w"> </span><span class="n">p25</span><span class="p">,</span><span class="w"> </span><span class="n">p29</span><span class="p">,</span><span class="w"> </span><span class="n">p31</span><span class="p">,</span><span class="w"> </span><span class="n">p1</span><span class="p">,</span><span class="w"> </span><span class="n">i44</span><span class="p">,</span><span class="w"> </span><span class="n">i34</span><span class="p">]</span>
+
+<span class="c1"># check for signals</span>
+<span class="o">+</span><span class="mi">569</span><span class="p">:</span><span class="w"> </span><span class="n">i49</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getfield_raw_i</span><span class="p">(</span><span class="mi">137358624889824</span><span class="p">,</span><span class="w"> </span><span class="n">descr</span><span class="o">=&lt;</span><span class="n">FieldS</span><span class="w"> </span><span class="n">pypysig_long_struct_inner</span><span class="o">.</span><span class="n">c_value</span><span class="w"> </span><span class="mi">0</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="o">+</span><span class="mi">582</span><span class="p">:</span><span class="w"> </span><span class="n">i51</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">int_lt</span><span class="p">(</span><span class="n">i49</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+<span class="o">+</span><span class="mi">586</span><span class="p">:</span><span class="w"> </span><span class="n">guard_false</span><span class="p">(</span><span class="n">i51</span><span class="p">,</span><span class="w"> </span><span class="n">descr</span><span class="o">=&lt;</span><span class="n">Guard0x7ced4754db78</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">[</span><span class="n">p0</span><span class="p">,</span><span class="w"> </span><span class="n">p6</span><span class="p">,</span><span class="w"> </span><span class="n">p9</span><span class="p">,</span><span class="w"> </span><span class="n">p11</span><span class="p">,</span><span class="w"> </span><span class="n">p19</span><span class="p">,</span><span class="w"> </span><span class="n">p21</span><span class="p">,</span><span class="w"> </span><span class="n">p23</span><span class="p">,</span><span class="w"> </span><span class="n">p25</span><span class="p">,</span><span class="w"> </span><span class="n">p29</span><span class="p">,</span><span class="w"> </span><span class="n">p31</span><span class="p">,</span><span class="w"> </span><span class="n">p1</span><span class="p">,</span><span class="w"> </span><span class="n">i44</span><span class="p">,</span><span class="w"> </span><span class="n">i34</span><span class="p">]</span>
+<span class="n">debug_merge_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s1">'run;/home/cfbolz/projects/gitpypy/allocatealot.py:6-9~#24 FOR_ITER'</span><span class="p">)</span>
+
+<span class="c1"># allocate the integer (allocation sunk to the end of the trace)</span>
+<span class="o">+</span><span class="mi">592</span><span class="p">:</span><span class="w"> </span><span class="n">p52</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">new_with_vtable</span><span class="p">(</span><span class="n">descr</span><span class="o">=&lt;</span><span class="n">SizeDescr</span><span class="w"> </span><span class="mi">16</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="o">+</span><span class="mi">630</span><span class="p">:</span><span class="w"> </span><span class="n">setfield_gc</span><span class="p">(</span><span class="n">p52</span><span class="p">,</span><span class="w"> </span><span class="n">i34</span><span class="p">,</span><span class="w"> </span><span class="n">descr</span><span class="o">=&lt;</span><span class="n">FieldS</span><span class="w"> </span><span class="n">pypy</span><span class="o">.</span><span class="n">objspace</span><span class="o">.</span><span class="n">std</span><span class="o">.</span><span class="n">intobject</span><span class="o">.</span><span class="n">W_IntObject</span><span class="o">.</span><span class="n">inst_intval</span><span class="w"> </span><span class="mi">8</span><span class="w"> </span><span class="n">pure</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="o">+</span><span class="mi">634</span><span class="p">:</span><span class="w"> </span><span class="n">jump</span><span class="p">(</span><span class="n">p0</span><span class="p">,</span><span class="w"> </span><span class="n">p1</span><span class="p">,</span><span class="w"> </span><span class="n">p6</span><span class="p">,</span><span class="w"> </span><span class="n">p9</span><span class="p">,</span><span class="w"> </span><span class="n">p11</span><span class="p">,</span><span class="w"> </span><span class="n">i44</span><span class="p">,</span><span class="w"> </span><span class="n">p52</span><span class="p">,</span><span class="w"> </span><span class="n">p19</span><span class="p">,</span><span class="w"> </span><span class="n">p21</span><span class="p">,</span><span class="w"> </span><span class="n">p23</span><span class="p">,</span><span class="w"> </span><span class="n">p25</span><span class="p">,</span><span class="w"> </span><span class="n">p29</span><span class="p">,</span><span class="w"> </span><span class="n">p31</span><span class="p">,</span><span class="w"> </span><span class="n">i47</span><span class="p">,</span><span class="w"> </span><span class="n">i35</span><span class="p">,</span><span class="w"> </span><span class="n">descr</span><span class="o">=</span><span class="n">TargetToken</span><span class="p">(</span><span class="mi">137358545605472</span><span class="p">))</span>
+</pre></div>
+
+<p>To find the machine code address of the trace, we need to search for this line:</p>
+<div class="code"><pre class="code literal-block"><span class="nx">Loop</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">(</span><span class="nx">run</span><span class="p">;</span><span class="o">/</span><span class="nx">home</span><span class="o">/</span><span class="nx">cfbolz</span><span class="o">/</span><span class="nx">projects</span><span class="o">/</span><span class="nx">gitpypy</span><span class="o">/</span><span class="nx">allocatealot</span><span class="p">.</span><span class="nx">py</span><span class="p">:</span><span class="mi">6</span><span class="o">-</span><span class="mi">9</span><span class="o">~</span><span class="err">#</span><span class="mi">24</span><span class="w"> </span><span class="nx">FOR_ITER</span><span class="p">)</span><span class="w"> </span>\
+<span class="w">    </span><span class="nx">has</span><span class="w"> </span><span class="nx">address</span><span class="w"> </span><span class="mh">0x7ced473ffa0b</span><span class="w"> </span><span class="nx">to</span><span class="w"> </span><span class="mh">0x7ced473ffbb0</span><span class="w"> </span><span class="p">(</span><span class="nx">bootstrap</span><span class="w"> </span><span class="mh">0x7ced473ff980</span><span class="p">)</span>
+</pre></div>
+
+<p>Then we can use a script in the PyPy repo to disassemble the generated machine code:</p>
+<div class="code"><pre class="code literal-block"><span class="gp">$ </span>pypy<span class="w"> </span>rpython/jit/backend/tool/viewcode.py<span class="w"> </span>out
+</pre></div>
+
+<p>This will dump all the machine code to stdout, and open a <a href="https://pypy.org/posts/2021/04/ways-pypy-graphviz.html">pygame-based
+graphviz cfg</a>. In there
+we can search for the address and see this:</p>
+<p><img alt="Graphviz based visualization of the machine code the JIT generates" src="../../../images/2025-allocatealot-machine-code.png"></p>
+<p>Here's an annotated version with what I think this code does:</p>
+<div class="code"><pre class="code literal-block"><span class="x"># increment the profile counter</span>
+<span class="x">7ced473ffb40:   48 ff 04 25 20 9e 33    incq   0x38339e20</span>
+<span class="x">7ced473ffb47:   38 </span>
+
+<span class="x"># check whether the loop is done</span>
+<span class="x">7ced473ffb48:   4c 39 fe                cmp    %r15,%rsi</span>
+<span class="x">7ced473ffb4b:   0f 8d 76 01 00 00       jge    0x7ced473ffcc7</span>
+
+<span class="x"># increment iteration variable</span>
+<span class="x">7ced473ffb51:   4c 8d 66 01             lea    0x1(%rsi),%r12</span>
+
+<span class="x"># update iterator object</span>
+<span class="x">7ced473ffb55:   4d 89 61 08             mov    %r12,0x8(%r9)</span>
+
+<span class="x"># check for ctrl-c/thread switch</span>
+<span class="x">7ced473ffb59:   49 bb e0 1b 0b 4c ed    movabs $0x7ced4c0b1be0,%r11</span>
+<span class="x">7ced473ffb60:   7c 00 00 </span>
+<span class="x">7ced473ffb63:   49 8b 0b                mov    (%r11),%rcx</span>
+<span class="x">7ced473ffb66:   48 83 f9 00             cmp    $0x0,%rcx</span>
+<span class="x">7ced473ffb6a:   0f 8c 8f 01 00 00       jl     0x7ced473ffcff</span>
+
+<span class="x"># load nursery_free pointer</span>
+<span class="x">7ced473ffb70:   49 8b 8b d8 30 f6 fe    mov    -0x109cf28(%r11),%rcx</span>
+
+<span class="x"># add size (16)</span>
+<span class="x">7ced473ffb77:   48 8d 51 10             lea    0x10(%rcx),%rdx</span>
+
+<span class="x"># compare against nursery top</span>
+<span class="x">7ced473ffb7b:   49 3b 93 f8 30 f6 fe    cmp    -0x109cf08(%r11),%rdx</span>
+
+<span class="x"># jump to slow path if nursery is full</span>
+<span class="x">7ced473ffb82:   0f 87 41 00 00 00       ja     0x7ced473ffbc9</span>
+
+<span class="x"># store new value of nursery free</span>
+<span class="x">7ced473ffb88:   49 89 93 d8 30 f6 fe    mov    %rdx,-0x109cf28(%r11)</span>
+
+<span class="x"># initialize GC header</span>
+<span class="x">7ced473ffb8f:   48 c7 01 30 11 00 00    movq   $0x1130,(%rcx)</span>
+
+<span class="x"># initialize integer field</span>
+<span class="x">7ced473ffb96:   48 89 41 08             mov    %rax,0x8(%rcx)</span>
+<span class="x">7ced473ffb9a:   48 89 f0                mov    %rsi,%rax</span>
+<span class="x">7ced473ffb9d:   48 89 8d 60 01 00 00    mov    %rcx,0x160(%rbp)</span>
+<span class="x">7ced473ffba4:   4c 89 e6                mov    %r12,%rsi</span>
+<span class="x">7ced473ffba7:   e9 94 ff ff ff          jmp    0x7ced473ffb40</span>
+<span class="x">7ced473ffbac:   0f 1f 40 00             nopl   0x0(%rax)</span>
+</pre></div>
+
+<h3 id="conclusion">Conclusion<a href="#conclusion" class="headerlink" title="Permalink to this heading">¶</a></h3>
+<p>The careful design of the RPython GC's allocation fast path gives pretty good
+allocation rates. This technique isn't really new, it's a pretty typical way to
+design a GC. Apart from that, my main conclusion would be that computers are
+fast or something? Indeed, when we ran the same code on my colleague's
+two-year-old AMD, we got quite a bit worse results, so a lot of the speed seems
+to be due to the hard work of CPU architects.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/benchmarking.html" rel="tag">benchmarking</a></li>
+            <li><a class="tag p-category" href="../../../categories/gc.html" rel="tag">gc</a></li>
+            <li><a class="tag p-category" href="../../../categories/rpython.html" rel="tag">rpython</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="../04/prospero-in-rpython.html" rel="prev" title="Doing the Prospero-Challenge in RPython">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="../07/pypy-v7320-release.html" rel="next" title="PyPy v7.3.20 release">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                      <div data-title="How fast can the RPython GC allocate?" id="utterances-thread"></div>
+        <script src="https://utteranc.es/client.js" repo="pypy/pypy.org" issue-term="title" label="Comments" theme="github-light" crossorigin="anonymous"></script></section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html \ prefix="
+        og: http://ogp.me/ns# article: http://ogp.me/ns/article#
+    " vocab="http://ogp.me/ns" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Applying a Tracing JIT to an Interpreter | PyPy</title>
+<link href="../../../assets/css/rst_base.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/nikola_rst.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/code.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/theme.css" rel="stylesheet" type="text/css">
+<link href="../../../assets/css/styles.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" hreflang="en" href="../../../rss.xml">
+<link rel="canonical" href="https://www.pypy.org/posts/2009/03/applying-tracing-jit-to-interpreter-3287844903778799266.html">
+<link rel="icon" href="../../../favicon2.ico" sizes="16x16">
+<link rel="icon" href="../../../favicon32x32.ico" sizes="32x32">
+<!--[if lt IE 9]><script src="../../../assets/js/html5shiv-printshiv.min.js"></script><![endif]--><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="../../../assets/css/tipuesearch.css">
+<meta name="author" content="Carl Friedrich Bolz-Tereick">
+<link rel="prev" href="next-leysin-winter-sprint-1791506307881043273.html" title="The next Leysin Winter Sprint" type="text/html">
+<link rel="next" href="pypy-on-mobiles-at-openbossa-845760004725129519.html" title="PyPy on Mobiles, at OpenBossa" type="text/html">
+<meta property="og:site_name" content="PyPy">
+<meta property="og:title" content="Applying a Tracing JIT to an Interpreter">
+<meta property="og:url" content="https://www.pypy.org/posts/2009/03/applying-tracing-jit-to-interpreter-3287844903778799266.html">
+<meta property="og:description" content="After I had failed once more to explain to someone on IRC what the idea behind
+the current JIT generator work of PyPy, I decided to just write a blog post to
+explain it. Here it is :-). The post turne">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2009-03-02T17:09:00Z">
+<meta property="article:tag" content="jit">
+</head>
+<body>
+    <a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+    <div id="container">
+             <header id="header"><!-- Adapted from https://www.taniarascia.com/responsive-dropdown-navigation-bar --><section class="navigation"><div class="nav-container">
+            <div class="brand">
+                <a href="../../../index.html">
+                    <image id="toplogo" src="../../../images/pypy-logo.svg" width="75px;" alt="PyPy/"></image></a>
+            </div>
+            <nav><ul class="nav-list">
+<li> 
+                <a href="#!">Features</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../features.html">What is PyPy?</a> </li>  
+                    <li> <a href="../../../compat.html">Compatibility</a> </li>  
+                    <li> <a href="../../../performance.html">Performance</a> </li>  
+                </ul>
+</li>
+          <li> <a href="../../../download.html">Download</a> </li>  
+          <li> <a href="http://doc.pypy.org">Dev Docs</a> </li>  
+            <li> 
+                <a href="#!">Blog</a>
+                <ul class="nav-dropdown">
+<li> <a href="../../../blog/">Index</a> </li>  
+                    <li> <a href="../../../categories/">Tags</a> </li>  
+                    <li> <a href="../../../archive.html">Archive by year</a> </li>  
+                    <li> <a href="../../../rss.xml">RSS feed</a> </li>  
+                    <li> <a href="https://morepypy.blogspot.com/">Old site</a> </li>  
+                </ul>
+</li>
+            <li> 
+                <a href="#!">About</a>
+                <ul class="nav-dropdown">
+<li> <a href="https://bsky.app/profile/pypyproject.bsky.social">Bluesky</a> </li>  
+                    <li> <a href="https://libera.irclog.whitequark.org/pypy">IRC logs</a> </li>  
+                    <li> <a href="https://www.youtube.com/playlist?list=PLADqad94yVqDRQXuqxKrPS5QnVqbDLlRt">YouTube</a> </li>  
+                    <li> <a href="https://www.twitch.tv/pypyproject">Twitch</a> </li>  
+                    <li> <a href="../../../pypy-sponsors.html">Sponsors</a> </li>  
+                    <li> <a href="../../../howtohelp.html">How To Help?</a> </li>  
+                    <li> <a href="../../../contact.html">Contact</a> </li>  
+                </ul>
+</li>
+
+                </ul></nav><div class="nav-mobile">
+                <a id="nav-toggle" href="#!"> <span></span></a>
+            </div>
+        </div>
+    </section><div class="searchform" role="search">
+                
+<form class="navbar-form navbar-left" action="../../../search.html" role="search">
+    <div class="form-group">
+        <input type="text" class="form-control" id="tipue_search_input" name="q" placeholder="Search…" autocomplete="off">
+</div>
+    <input type="submit" value="Local Search" style="visibility: hidden;">
+</form>
+
+            </div>
+    </header><main id="content"><article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><div class="post">
+          <header><h1 class="p-name entry-title" itemprop="headline name"><a href="#" class="u-url">Applying a Tracing JIT to an Interpreter</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard p-author h-card"><span class="byline-name fn p-name" itemprop="author">
+                    <a class="u-url" href="../../../authors/carl-friedrich-bolz-tereick.html">Carl Friedrich Bolz-Tereick</a>
+            </span></p>
+            <p class="dateline">
+            <a href="#" rel="bookmark">
+            <time class="published dt-published" datetime="2009-03-02T17:09:00Z" itemprop="datePublished" title="2009-03-02 17:09">2009-03-02 17:09</time></a>
+            </p>
+                <p class="commentline">4 comments</p>
+
+                <p class="commentline">            <a href="applying-tracing-jit-to-interpreter-3287844903778799266.html#utterances-thread">Comments</a>
+
+
+            
+        </p>
+</div>
+        
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+      <p>After I had failed once more to explain to someone on IRC what the idea behind
+the current JIT generator work of PyPy, I decided to just write a blog post to
+explain it. Here it is :-). The post turned out to be a bit long, so please bear
+with me.</p>
+<p>The goal of the post is to give an understanding of how PyPy's JIT generator is
+going to work. To do this, I will look at what happens when you write an
+interpreter in Java and apply a completely normal tracing JIT to it (for this
+reason all the code examples will be in some sort of pseudo-Java). The
+resulting generated machine code is bad, so I will explain a way to fix the
+occurring problem.</p>
+<p>The techniques I describe here are conceptually similar to what we are doing in
+PyPy. The details (as usual) are different. The reasons why I am trying to
+explain things in this way is that I can start from tracing JITs, which are a
+known existing technique.</p>
+<p>To understand the following, it is helpful to already know a bit how a normal
+tracing JIT works. I will give a reminder of how it is working, but there also
+exist a couple of <a class="reference" href="https://andreasgal.com/2008/08/22/tracing-the-web/">more thorough</a> <a class="reference" href="https://weblogs.mozillazine.org/roadmap/archives/2008/08/tracemonkey_javascript_lightsp.html">introductions</a> on the web already.
+I also will leave out a lot of details about the more detailed workings of
+tracing JITs and only explain the things that are relevant to what I am trying
+to get to here.</p>
+<h2 id="tracing-jits"><a id="tracing-jits" name="tracing-jits">Tracing JITs</a><a href="#tracing-jits" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>Tracing JITs are an idea explored by the <a class="reference" href="https://www.hpl.hp.com/techreports/1999/HPL-1999-78.html">Dynamo project</a> in the context of
+dynamic optimization of machine code at runtime. The techniques were then
+<a class="reference" href="https://portal.acm.org/citation.cfm?doid=1134760.1134780">successfully applied</a> to Java VMs and are now being used by Mozilla's
+<a class="reference" href="https://wiki.mozilla.org/JavaScript:TraceMonkey">TraceMonkey</a> JavaScript VM. They are built on some basic assumptions:</p>
+<blockquote>
+<ul class="simple">
+<li>programs spend most of their runtime in loops</li>
+<li>several iterations of the same loop are likely to take similar code paths</li>
+<li>the best way to gain information about the behaviour of a program is to
+observe it</li>
+</ul>
+</blockquote>
+<p>The basic approach of a tracing JIT is to only generate machine code for
+commonly executed loops and to interpret the rest of the program. The code for
+those common loops however should be highly optimized, including aggressive
+inlining.</p>
+<p>The generation of loops works as follows: At first, everything is interpreted.
+The interpreter does a bit of lightweight profiling to figure out which loops
+are run often. When a common loop is identified, the interpreter enters a
+special mode (called tracing mode). When in tracing mode, the interpreter
+records a history (the <em>trace</em>) of all the operations it executes, in addition
+to actually performing the operations. During tracing, the trace is repeatedly
+checked whether the interpreter is at a position in the program that it had seen
+earlier in the trace. If this happens, the trace recorded corresponds to a loop
+in the program that the tracing interpreter is running. At this point, this loop
+is turned into machine code by taking the trace and making machine code versions
+of all the operations in it.</p>
+<p>This process assumes that the path through the loop that was traced is a
+"typical" example of possible paths (which is statistically likely). Of course
+it is possible that later another path through the loop is taken, therefore the
+machine code will contain <em>guards</em>, which check that the path is still the same.
+If during execution of the machine code a guard fails, the machine code is left
+and execution falls back to using interpretation (there are more complex
+mechanisms in place to still produce more code for the cases of guard failures,
+but they are of no importance for this post).</p>
+<p>It is important to understand when the tracer considers a loop in the trace to
+be closed. This happens when the <em>position key</em> is the same as at an earlier
+point. The position key describes the position of the execution of the program,
+e.g. usually contains things like the function currently being executed and the
+program counter position of the tracing interpreter.</p>
+<p>Let's look at a small example. Take the following code:</p>
+<pre class="literal-block">
+int sum_1_to_n(int n) {
+    int result = 0;
+    while (n &gt;= 0) {
+        result += n;
+        n -= 1;
+    }
+    return result;
+}
+</pre>
+<p>The tracing JIT will at one point trace the execution of the while loop in
+<tt class="docutils literal"><span class="pre">sum_1_to_n</span></tt>. The trace might look as follows:</p>
+<pre class="literal-block">
+guard_true(n &gt;= 0);
+result += n;
+n -= 1;
+&lt;loop_back&gt;
+</pre>
+<p>This trace will then be turned into machine code. Note that the machine code
+loop is by itself infinite and can only be left via a guard failure.</p>
+<p>A slightly more complex example:</p>
+<pre class="literal-block">
+int f(int a, int b) {
+    if (b % 46 == 41)
+        return a - b;
+    else
+        return a + b;
+}
+
+int strange_sum(int n) {
+    int result = 0;
+    while (n &gt;= 0) {
+        result = f(result, n);
+        n -= 1;
+    }
+    return result;
+}
+</pre>
+<p>The trace of the loop in <tt class="docutils literal"><span class="pre">strange_sum</span></tt> would maybe look like this:</p>
+<pre class="literal-block">
+guard_true(n &gt;= 0);
+a = result;
+b = n;
+guard_false(b % 46 == 41);
+result = a + b;
+n -= 1;
+&lt;loop_back&gt;
+</pre>
+<p>This would then be turned into machine code. Note how <tt class="docutils literal"><span class="pre">f</span></tt> was inlined into the
+loop and how the common <tt class="docutils literal"><span class="pre">else</span></tt> case was turned into machine code, while the
+other one is implemented via a guard failure.</p>
+<h2 id="applying-a-tracing-jit-to-an-interpreter"><a id="id1" name="id1">Applying a Tracing JIT to an Interpreter</a><a href="#applying-a-tracing-jit-to-an-interpreter" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>In the rest of the post we will explore what happens when the program that is
+being executed/compiled by the tracing JIT is itself a (bytecode) interpreter
+for another language.</p>
+<p>A stylized bytecode interpreter for a simple programming language could look as
+follows:</p>
+<pre class="literal-block">
+W_Object interpret(String bytecode, ...) {
+    Stack&lt;W_Object&gt; stack = new Stack&lt;W_Object&gt;();
+    int pc = 0;
+    while (true) { // bytecode dispatch loop
+        char instruction = bytecode.charAt(pc);
+        pc += 1;
+        switch (instruction) {
+            case ADD:
+                W_Object arg2 = stack.pop();
+                W_Object arg1 = stack.pop();
+                stack.push(do_addition(arg1, arg2));
+                break;
+            case SUB:
+                W_Object arg2 = stack.pop();
+                W_Object arg1 = stack.pop();
+                stack.push(do_substraction(arg1, arg2));
+                break;
+            case RETURN:
+                return stack.pop();
+            case JUMP_BACKWARD:
+                pc -= (int)bytecode.charAt(pc);
+                break;
+            case LOAD_INTEGER:
+                int value = (int)bytecode.charAt(pc);
+                pc += 1;
+                stack.push(new W_Integer(value));
+                break;
+            case PRINT:
+                do_print(stack.pop());
+                break;
+            case DUP:
+                stack.push(stack.peek());
+                break;
+            case JUMP_IF_TRUE:
+                ...
+            ...
+        }
+    }
+</pre>
+<p>If we apply a tracing JIT to this function, it will trace and compile the
+execution of one bytecode, because after one bytecode the bytecode dispatch loop
+is closed. E.g. it might trace and produce machine code for the execution of a
+<tt class="docutils literal"><span class="pre">SUB</span></tt>. (<em>Sidenote:</em> this <tt class="docutils literal"><span class="pre">interpret</span></tt> function is an example where one of the
+assumptions of a tracing JIT break down: two iterations of the bytecode dispatch
+loop are rarely going to follow the same code path, because usually two
+consecutive bytecodes encode different instructions).</p>
+<p>The important bit to remember here is that the tracing JIT will produce a
+machine code loop that corresponds to the bytecode dispatch loop in the
+<tt class="docutils literal"><span class="pre">interpret</span></tt> function. Let's see how we can change that.</p>
+<h2 id="improving-the-generated-code"><a id="improving-the-generated-code" name="improving-the-generated-code">Improving the Generated Code</a><a href="#improving-the-generated-code" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>If we want to make use of the fact that the program that is being jitted is
+itself an interpreter, we need to change the tracing JIT a bit. To be more
+precise we add a way for the user of the tracing JIT to add information to the
+position key that the tracing JIT uses to decide when a loop is closed. This is
+done by a call to a magic function <tt class="docutils literal"><span class="pre">add_to_position_key</span></tt>. This allows the
+program writer to influence the tracing JIT's behaviour.</p>
+<p>The semantics of <tt class="docutils literal"><span class="pre">add_to_position_key</span></tt> is as follows: The method itself does
+not do anything. It has an effect only when it is seen during tracing. If it is
+seen during tracing, the tracer adds the argument of the call to the position
+key that the tracer is using to find out whether a loop was closed or not.</p>
+<p>In the example of the <tt class="docutils literal"><span class="pre">interpret</span></tt> function above, we would add a call to this
+function into the <tt class="docutils literal"><span class="pre">while</span></tt> loop as follows:</p>
+<pre class="literal-block">
+W_Object interpret(String bytecode, ...) {
+    Stack stack = new Stack();
+    int pc = 0;
+    while (true) { // bytecode dispatch loop
+        add_to_position_key(pc);
+        add_to_position_key(bytecode);
+        char instruction = bytecode.charAt(pc);
+        pc += 1;
+        switch (instruction) {
+            case ADD:
+    ...
+</pre>
+<p>When the modified tracing JIT traces now the <tt class="docutils literal"><span class="pre">interpret</span></tt> function executing a
+<tt class="docutils literal"><span class="pre">SUB</span></tt>, something interesting happens. When the bytecode loop is closed, the
+modified tracing JIT does not consider the trace to be a loop, because the value of
+<tt class="docutils literal"><span class="pre">pc</span></tt> has been increased by one, so the position key differs. Instead it
+continues to trace, effectively unrolling the bytecode dispatch loop of
+<tt class="docutils literal"><span class="pre">interpret</span></tt>.</p>
+<p>The only way for a loop to be considered closed is if the <tt class="docutils literal"><span class="pre">pc</span></tt> variable has
+the same value a second time.  This can only happen after a <tt class="docutils literal"><span class="pre">JUMP_BACKWARD</span></tt>
+instruction has been executed.  A <tt class="docutils literal"><span class="pre">JUMP_BACKWARD</span></tt> instruction will only be in
+the bytecode when the bytecode represents a loop. This means that the modified
+tracing JIT will trace the <tt class="docutils literal"><span class="pre">interpret</span></tt> function and will only consider that
+the trace represents a loop when the bytecode itself represents a loop! Thus, a
+machine code loop will eventually be created that corresponds to the loop in the
+<tt class="docutils literal"><span class="pre">bytecode</span></tt>.</p>
+<p>Let's look at at example. If we have a bytecode that corresponds to the
+following instructions:</p>
+<pre class="literal-block">
+pc |   instruction
+---+---------------------
+0  |  LOAD_INTEGER 0
+2  |  DUP
+3  |  PRINT
+4  |  LOAD_INTEGER 1
+6  |  ADD
+7  |  JUMP_BACKWARD 6
+</pre>
+<p>This loop will print integers starting from 0 and going on from there. The
+modified tracing JIT will unroll the bytecode dispatch until it sees the
+<tt class="docutils literal"><span class="pre">JUMP_BACKWARD</span></tt> bytecode. After that bytecode the <tt class="docutils literal"><span class="pre">pc</span></tt> will be 2 again. Thus
+the earlier position key is repeated, which means that the loop will be closed.
+The produced machine code will do the equivalent of the following Java code:</p>
+<pre class="literal-block">
+...
+guard_true(pc == 2)
+guard_true(bytecode == "... correct bytecode string ...")
+while (true) {
+    instruction = bytecode.charAt(pc);
+    pc += 1;
+    guard_true(instruction == DUP);
+    stack.push(stack.peek());
+
+    instruction = bytecode.charAt(pc);
+    pc += 1;
+    guard_true(instruction == PRINT);
+    do_print(stack.pop());
+
+    instruction = bytecode.charAt(pc);
+    pc += 1;
+    guard_true(instruction == LOAD_INTEGER)
+    value = (int)bytecode.charAt(pc);
+    pc += 1
+    stack.push(W_Integer(value))
+
+    instruction = bytecode.charAt(pc);
+    pc += 1;
+    guard_true(instruction == ADD)
+    arg2 = stack.pop()
+    arg1 = stack.pop()
+    stack.push(do_addition(arg1, arg2))
+
+    instruction = bytecode.charAt(pc);
+    pc += 1;
+    guard_true(instruction == JUMP_BACKWARD)
+    pc -= (int)bytecode.charAt(pc);
+}
+</pre>
+<p>This is machine code that essentially does what the bytecode above did. Of
+course the code still remains some remnants of the interpreter (like the program
+counter manipulations, the stack handling, etc), which would have to be removed
+by some clever enough optimization step. If this were done, result would look a
+lot more natural.</p>
+<h2 id="summary"><a id="summary" name="summary">Summary</a><a href="#summary" class="headerlink" title="Permalink to this heading">¶</a></h2>
+<p>If a tracing JIT is enhanced by a way to influence its loop-closing behaviour we
+can significantly improve its performance when the jitted program is itself an
+interpreter. The result is that in such a case the produced machine code
+will correspond to the functions that are being interpreted, not to the code of
+the interpreter itself.</p>
+<p>Now, what does all this have to do with PyPy? What we are working on since a
+while is a sort of tracing JIT for RPython which allows to be customized with a
+function very similar to the <tt class="docutils literal"><span class="pre">add_to_position_key</span></tt> described above. This will
+make it possible to make the tracing JIT generate code that corresponds to the
+code that the interpreter interprets. For example, we would add a call to
+<tt class="docutils literal"><span class="pre">add_to_position_key</span></tt> to SPy, PyPy's Smalltalk VM. Then the tracing JIT will
+produce machine code for Smalltalk-level loops, with all the usual benefits of a
+tracing JIT (like inlining of intermediate methods, constant-folding, ...).
+This JIT differs from normal tracing JITs in that it also supports very powerful
+constant-folding and allocation-removal optimizations. Those optimizations will
+(hopefully) be the content of a later blog post.</p>
+<p>The basics of this process have been working fine since quite a while. What the
+work currently focuses on is to improve the optimizers to remove not only the
+bytecode manipulation code, but also the stack handling, and a large number of
+other inefficiencies.</p>
+      </div>
+      <aside class="postpromonav"><nav><ul itemprop="keywords" class="tags">
+<li><a class="tag p-category" href="../../../categories/jit.html" rel="tag">jit</a></li>
+        </ul>
+<ul class="pager hidden-print">
+<li class="previous">
+                <a href="next-leysin-winter-sprint-1791506307881043273.html" rel="prev" title="The next Leysin Winter Sprint">Previous post</a>
+            </li>
+            <li class="next">
+                <a href="pypy-on-mobiles-at-openbossa-845760004725129519.html" rel="next" title="PyPy on Mobiles, at OpenBossa">Next post</a>
+            </li>
+        </ul></nav></aside><section class="comments hidden-print"><h2>Comments</h2>
+                <div class="comment-level comment-level-1">
+      <div class="comment comment-6213116918081541944">
+        <div class="comment-header">
+          <a name="comment-6213116918081541944"></a>
+            <span class="author">Benjamin Peterson</span> wrote on <span class="date">2009-03-03 03:04</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wow, that's very cool! PyPy is an amazing novel project, but how did you guys ever think of this?</p>
+        </div>
+      </div>
+      <div class="comment comment-102432360547621553">
+        <div class="comment-header">
+          <a name="comment-102432360547621553"></a>
+            <span class="author">Unknown</span> wrote on <span class="date">2009-03-03 13:47</span>:
+        </div>
+        <div class="comment-content">
+          <p>great explanaition.. thanks!</p>
+        </div>
+      </div>
+      <div class="comment comment-5513845136120198723">
+        <div class="comment-header">
+          <a name="comment-5513845136120198723"></a>
+            <span class="author">Anonymous</span> wrote on <span class="date">2009-03-03 15:01</span>:
+        </div>
+        <div class="comment-content">
+          <p>Very nice. You might want to have a look at <a href="https://people.csail.mit.edu/gregs/dynamorio.html" rel="nofollow"> Sullivan, et al (2003) Dynamic Native Optimization of Interpreters</a>. They also identify the need to record not only the native PC but also the interpreter's virtual PC to identify useful trace heads. They provide three intrinsic functions (compared to your single <i>add_to_position_key</i>) to achieve this. Further, they provide three more intrinsics to support constant propagation.</p>
+        </div>
+      </div>
+      <div class="comment comment-6445525016253631324">
+        <div class="comment-header">
+          <a name="comment-6445525016253631324"></a>
+            <span class="author">Carl Friedrich Bolz-Tereick</span> wrote on <span class="date">2009-03-04 15:27</span>:
+        </div>
+        <div class="comment-content">
+          <p>Wow, that's extremely interesting! It's indeed very similar to what I describe in the blog post (apparently Armin knew of the paper, but I didn't). Of course they are severely hampered by the fact that the system is working on assembler level, so they don't really have enough information available to do really interesting optimizations.</p>
+        </div>
+      </div>
+         </div>
+
+          </section>
+</div>
+    <div class="sidebar">
+<div>
+  <h2>
+    The PyPy blogposts
+  </h2>
+  <div>
+    Create a guest post via a PR to the <a href="https://github.com/pypy/pypy.org">source repo</a>
+  </div>
+</div>
+    <div id="global-recent-posts">
+    <h2>
+      Recent Posts
+    </h2>
+    <ul class="post-list">
+      <li>
+        <a href="/posts/2025/12/toy-load-store.html" class="listtitle">Load and store forwarding in the Toy Optimizer</a>
+      </li>
+      <li>
+        <a href="/posts/2025/07/pypy-v7320-release.html" class="listtitle">PyPy v7.3.20 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/06/rpython-gc-allocation-speed.html" class="listtitle">How fast can the RPython GC allocate?</a>
+      </li>
+      <li>
+        <a href="/posts/2025/04/prospero-in-rpython.html" class="listtitle">Doing the Prospero-Challenge in RPython</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7319-release.html" class="listtitle">PyPy v7.3.19 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-gc-sampling.html" class="listtitle">Low Overhead Allocation Sampling with VMProf in PyPy's GC</a>
+      </li>
+      <li>
+        <a href="/posts/2025/02/pypy-v7318-release.html" class="listtitle">PyPy v7.3.18 release</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/musings-tracing.html" class="listtitle">Musings on Tracing in PyPy</a>
+      </li>
+      <li>
+        <a href="/posts/2025/01/towards-pypy311-an-update.html" class="listtitle">Towards PyPy3.11 - an update</a>
+      </li>
+      <li>
+        <a href="/posts/2024/11/guest-post-final-encoding-in-rpython.html" class="listtitle">Guest Post: Final Encoding in RPython Interpreters</a>
+      </li>
+    </ul>
+  </div>
+
+          <div id="global-archive-list">
+          <h2>
+            Archives
+          </h2>
+          <ul class="archive-level archive-level-1">
+            <li><a class="reference" href="/2007/">2007</a> (19)
+            </li>
+            <li><a class="reference" href="/2008/">2008</a> (62)
+            </li>
+            <li><a class="reference" href="/2009/">2009</a> (38)
+            </li>
+            <li><a class="reference" href="/2010/">2010</a> (44)
+            </li>
+            <li><a class="reference" href="/2011/">2011</a> (43)
+            </li>
+            <li><a class="reference" href="/2012/">2012</a> (44)
+            </li>
+            <li><a class="reference" href="/2013/">2013</a> (46)
+            </li>
+            <li><a class="reference" href="/2014/">2014</a> (22)
+            </li>
+            <li><a class="reference" href="/2015/">2015</a> (20)
+            </li>
+            <li><a class="reference" href="/2016/">2016</a> (20)
+            </li>
+            <li><a class="reference" href="/2017/">2017</a> (13)
+            </li>
+            <li><a class="reference" href="/2018/">2018</a> (12)
+            </li>
+            <li><a class="reference" href="/2019/">2019</a> (12)
+            </li>
+            <li><a class="reference" href="/2020/">2020</a> (9)
+            </li>
+            <li><a class="reference" href="/2021/">2021</a> (10)
+            </li>
+            <li><a class="reference" href="/2022/">2022</a> (13)
+            </li>
+            <li><a class="reference" href="/2023/">2023</a> (6)
+            </li>
+            <li><a class="reference" href="/2024/">2024</a> (13)
+            </li>
+            <li><a class="reference" href="/2025/">2025</a> (9)
+            </li>
+          </ul>
+        </div>
+
+
+          <div id="global-tag-list">
+          <h2>
+            Tags
+          </h2>
+          <ul>
+            <li><a class="reference" href="/categories/arm.html">arm</a> (2)</li>
+            <li><a class="reference" href="/categories/benchmarking.html">benchmarking</a> (1)</li>
+            <li><a class="reference" href="/categories/casestudy.html">casestudy</a> (3)</li>
+            <li><a class="reference" href="/categories/cli.html">cli</a> (1)</li>
+            <li><a class="reference" href="/categories/compiler.html">compiler</a> (1)</li>
+            <li><a class="reference" href="/categories/conda-forge.html">conda-forge</a> (1)</li>
+            <li><a class="reference" href="/categories/cpyext.html">cpyext</a> (4)</li>
+            <li><a class="reference" href="/categories/cpython.html">CPython</a> (3)</li>
+            <li><a class="reference" href="/categories/ep2008.html">ep2008</a> (1)</li>
+            <li><a class="reference" href="/categories/extension-modules.html">extension modules</a> (3)</li>
+            <li><a class="reference" href="/categories/gc.html">gc</a> (3)</li>
+            <li><a class="reference" href="/categories/guestpost.html">guestpost</a> (3)</li>
+            <li><a class="reference" href="/categories/graalpython.html">GraalPython</a> (1)</li>
+            <li><a class="reference" href="/categories/hpy.html">hpy</a> (1)</li>
+            <li><a class="reference" href="/categories/heptapod.html">Heptapod</a> (1)</li>
+            <li><a class="reference" href="/categories/jit.html">jit</a> (23)</li>
+            <li><a class="reference" href="/categories/jython.html">jython</a> (1)</li>
+            <li><a class="reference" href="/categories/kcachegrind.html">kcachegrind</a> (1)</li>
+            <li><a class="reference" href="/categories/meta.html">meta</a> (1)</li>
+            <li><a class="reference" href="/categories/numpy.html">numpy</a> (24)</li>
+            <li><a class="reference" href="/categories/parser.html">parser</a> (1)</li>
+            <li><a class="reference" href="/categories/performance.html">performance</a> (2)</li>
+            <li><a class="reference" href="/categories/profiling.html">profiling</a> (7)</li>
+            <li><a class="reference" href="/categories/pypy.html">pypy</a> (6)</li>
+            <li><a class="reference" href="/categories/pypy3.html">pypy3</a> (16)</li>
+            <li><a class="reference" href="/categories/pyqt4.html">PyQt4</a> (1)</li>
+            <li><a class="reference" href="/categories/release.html">release</a> (66)</li>
+            <li><a class="reference" href="/categories/releasecffi.html">releasecffi</a> (3)</li>
+            <li><a class="reference" href="/categories/releaserevdb.html">releaserevdb</a> (1)</li>
+            <li><a class="reference" href="/categories/releasestm.html">releasestm</a> (1)</li>
+            <li><a class="reference" href="/categories/revdb.html">revdb</a> (1)</li>
+            <li><a class="reference" href="/categories/roadmap.html">roadmap</a> (2)</li>
+            <li><a class="reference" href="/categories/rpython.html">rpython</a> (1)</li>
+            <li><a class="reference" href="/categories/rpyc.html">RPyC</a> (1)</li>
+            <li><a class="reference" href="/categories/speed.html">speed</a> (6)</li>
+            <li><a class="reference" href="/categories/sponsors.html">sponsors</a> (7)</li>
+            <li><a class="reference" href="/categories/sprint.html">sprint</a> (3)</li>
+            <li><a class="reference" href="/categories/sprints.html">sprints</a> (1)</li>
+            <li><a class="reference" href="/categories/stm.html">stm</a> (14)</li>
+            <li><a class="reference" href="/categories/sun.html">sun</a> (1)</li>
+            <li><a class="reference" href="/categories/smalltalk.html">Smalltalk</a> (1)</li>
+            <li><a class="reference" href="/categories/squeak.html">Squeak</a> (1)</li>
+            <li><a class="reference" href="/categories/testing.html">testing</a> (1)</li>
+            <li><a class="reference" href="/categories/toy-optimizer.html">toy-optimizer</a> (6)</li>
+            <li><a class="reference" href="/categories/unicode.html">unicode</a> (1)</li>
+            <li><a class="reference" href="/categories/valgrind.html">valgrind</a> (1)</li>
+            <li><a class="reference" href="/categories/vmprof.html">vmprof</a> (3)</li>
+            <li><a class="reference" href="/categories/z3.html">z3</a> (5)</li>
+          </ul>
+        </div>    </div>
+</article></main><footer id="footer"><p>
+</p>
+<div class="myfooter">
+  <div class="logotext">
+    © 2026 <a href="mailto:pypy-dev@pypy.org">The PyPy Team</a>
+     
+    Built with <a href="https://getnikola.com" rel="nofollow">Nikola</a>
+     
+    Last built 2026-01-17T00:22
+  </div>
+  <div style="margin-left: auto">
+  <a href="../../../rss.xml">RSS feed</a>
+</div>
+
+            
+        
+
+    </div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js" crossorigin="anonymous"></script><script src="../../../assets/js/styles.js"></script></footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,565 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts by Hakan Ardo)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/authors/hakan-ardo.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Sat, 17 Jan 2026 00:22:38 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>Playing with Linear Programming on PyPy</title><link>https://www.pypy.org/posts/2011/05/playing-with-linear-programming-on-pypy-4040572987275633047.html</link><dc:creator>Hakan Ardo</dc:creator><description>&lt;p&gt;Fancy hi-level interfaces often come with a high runtime overhead
+making them slow. Here is an experiment with building such an
+interface using constructions that PyPy should be good at
+optimizing. The idea is to allow the JIT in PyPy to remove the
+overhead introduced by using a fancy high-level python interface
+on top of a low-level C interface. The application considered is
+&lt;a href="https://en.wikipedia.org/wiki/Linear_programming"&gt;Linear
+programming&lt;/a&gt;. It is a tool used to solve linear optimization
+problems. It can for example be used to find the nonnegative values
+x, y and z that gives the maximum value of
+
+&lt;/p&gt;&lt;center&gt;
+&lt;img src="https://4.bp.blogspot.com/-WZq2bkIyCu8/Tct9px6L9vI/AAAAAAAAAEc/1cAAIqo6Lbk/s320/eqsource1.png"&gt;
+&lt;/center&gt;
+
+without violating the constraints
+
+&lt;center&gt;
+&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5603193483237811810" src="https://2.bp.blogspot.com/-Sz2pbOB-2jI/TcKKyTgsZmI/AAAAAAAAAEE/_B5_wHCXbxE/s320/eqsource4.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 143px; height: 15px;"&gt;
+&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5603193442782682514" src="https://4.bp.blogspot.com/-Bh4OdLbZN_0/TcKKv8zcHZI/AAAAAAAAAD8/CXBq2l48HV4/s320/eqsource3.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 145px; height: 16px;"&gt;
+&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5603193369540695138" src="https://3.bp.blogspot.com/-6mQW30hs9vE/TcKKrr9MFGI/AAAAAAAAAD0/_x8dND-knN4/s320/eqsource2.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 114px; height: 15px;"&gt;
+&lt;/center&gt;
+
+There exists general purpose solvers for these kind of problems that
+are very fast and can literally handle millions of variables. To use
+them however the problem has to be transformed into some specific
+matrix form, and the coefficients of all the matrices
+has to be passed to the solver using some API. This transformation is
+a tedious and error prone step that forces you to work with matrix
+indexes instead of readable variable names. Also it makes maintaining
+an implementation hard since any modification has to be transformed
+too.
+
+&lt;p&gt;&lt;/p&gt;
+The example above comes from the manual of
+the &lt;a href="ftp://ftp.gnu.org/pub/gnu/glpk/"&gt;glpk&lt;/a&gt; library. That
+manual continues by describing how to convert this problem into the
+standard form of glpk (which involves introducing three new variables)
+and then gives the &lt;a href="https://bitbucket.org/hakanardo/pplp/src/825cdbc5cae6/blog/sample.c"&gt;c-code&lt;/a&gt; needed to call the
+library. Relating that c-code to the problem above without the
+intermediate explanation of the manual is not easy. A common
+solution here is to build a hi-level interface that allows a more
+natural way of defining the matrices and/or allow the equations to be
+entered symbolically. Unfortunately, such interfaces often become
+slow. For the benchmark below for example, 
+&lt;a href="https://abel.ee.ucla.edu/cvxopt"&gt;cvxopt&lt;/a&gt;
+requires 20 minutes to setup a problem that takes 9.43 seconds to solve
+(this seems a bit extreme, am I doing something wrong?).
+
+&lt;p&gt;&lt;/p&gt;
+The high-level interface I constructed on top of the
+&lt;a href="ftp://ftp.gnu.org/pub/gnu/glpk/"&gt;glpk&lt;/a&gt; library is 
+&lt;a href="https://bitbucket.org/hakanardo/pplp"&gt;pplp&lt;/a&gt; and it allows
+the equations to be entered symbolically. The above problem can be
+solved using
+&lt;pre&gt;
+    lp = LinearProgram()
+    x, y, z = lp.IntVar(), lp.IntVar(), lp.IntVar()
+    lp.objective = 10*x + 6*y + 4*z
+    lp.add_constraint( x + y + z &amp;lt;= 100 )
+    lp.add_constraint( 10*x + 4*y + 5*z &amp;lt;= 600 )
+    lp.add_constraint( 2*x + 2*y + 6*z &amp;lt;= 300 )
+    lp.add_constraint( x &amp;gt;= 0 )
+    lp.add_constraint( y &amp;gt;= 0 )
+    lp.add_constraint( z &amp;gt;= 0 )
+
+    maxval = lp.maximize()
+    print maxval
+    print x.value, y.value, z.value
+&lt;/pre&gt;
+
+&lt;p&gt;&lt;/p&gt;
+To benchmark the API I used it to solve a 
+&lt;a href="https://en.wikipedia.org/wiki/Minimum-cost_flow_problem"&gt;minimum-cost
+  flow problem&lt;/a&gt; with 154072 nodes and 390334 arcs. The C library
+  needs 9.43 s to solve this and the pplp interface adds another 5.89
+  s under PyPy and 28.17 s under CPython. A large amount of time is
+  still spend setting up the problem, but it's a significant
+  improvement over the 20 minutes required on CPython by
+  &lt;a href="https://abel.ee.ucla.edu/cvxopt"&gt;cvxopt&lt;/a&gt;. It is
+  probably not designed to be fast on this kind of benchmark. I have
+  not been able to get cvxopt to work under PyPy. The benchmark used is
+  available &lt;a href="https://bitbucket.org/hakanardo/pplp/src/default/benchmark/"&gt;here&lt;/a&gt;</description><guid>https://www.pypy.org/posts/2011/05/playing-with-linear-programming-on-pypy-4040572987275633047.html</guid><pubDate>Wed, 11 May 2011 12:27:00 GMT</pubDate></item><item><title>Loop invariant code motion</title><link>https://www.pypy.org/posts/2011/01/loop-invariant-code-motion-1998392217676829154.html</link><dc:creator>Hakan Ardo</dc:creator><description>&lt;p&gt;Recently, the jit-unroll-loops branch was merged. It implements the
+idea described in 
+&lt;a href="https://www.pypy.org/posts/2010/09/using-escape-analysis-across-loop-2887031293132023676.html"&gt;Using Escape Analysis Across Loop Boundaries for Specialization&lt;/a&gt;.
+That post does only talk about virtuals, but the idea turned out
+to be more far reaching. After the metainterpreter produces a trace,
+several optimizations are applied to the trace before it is turned
+into binary code. Removing allocations is only one of them. There are also
+for instance
+&lt;/p&gt;&lt;ul&gt;
+&lt;li&gt; Heap optimizations that removes memory accesses by reusing results
+  previously read from or written to the same location.
+&lt;/li&gt;&lt;li&gt; Reusing of the results of pure operations if the same pure
+  operation is executed twice.
+&lt;/li&gt;&lt;li&gt; Removal of redundant guards.
+&lt;/li&gt;&lt;li&gt; ...
+&lt;/li&gt;&lt;/ul&gt;
+A lot of these optimizations are in one way or another removing
+operations form the trace and/or reusing previous results. All of these
+optimizations could benefit from being able to operate across loop
+boundaries. Not only in the sense that operations operating on loop
+invariants could be moved out of the loop entirely. But also that
+results produced at the end of an iteration could be reused at the
+beginning of the next even if there are no loop invariants involved.
+
+&lt;p&gt;
+
+This is achieved by unrolling the trace into two iterations, and
+letting the optimizer work on this two-iteration-trace.
+The optimizer will now be able to optimize the second iteration more than the
+first since it can reuse results from the first iteration. The
+optimized version of the first iteration we call the &lt;em&gt;preamble&lt;/em&gt; and the
+optimized version of the second iteration we call the &lt;em&gt;loop&lt;/em&gt;. The
+preamble will end with a jump to the loop, while the loop will end
+with a jump to itself. This means that the preamble will be executed
+once for the first iteration, the loop will be executed for all following
+iterations.
+ 
+&lt;/p&gt;&lt;p&gt;
+&lt;/p&gt;&lt;h2&gt;Sqrt example&lt;/h2&gt;
+Here is an example of a Python implementation of sqrt using a fairly
+simple algorithm
+
+&lt;p&gt;
+&lt;!-- pygmentize -f html -O full -o t.html t.py --&gt;
+  
+
+&lt;/p&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;sqrt&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;y&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;n&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="mi"&gt;10000&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;y&lt;/span&gt; &lt;span class="o"&gt;/&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;
+    &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="n"&gt;n&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;n&lt;/span&gt; &lt;span class="o"&gt;-=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+        &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;y&lt;/span&gt;&lt;span class="o"&gt;/&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;/&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;
+
+If it is called with &lt;tt&gt;sqrt(1234.0)&lt;/tt&gt;,  
+&lt;a href="https://bitbucket.org/hakanardo/hakanardo/src/edbd398575ad/sqrt/noopt.txt"&gt;a fairly long trace&lt;/a&gt; is produced. From this trace
+the optimizer creates
+the
+following preamble (Loop 1) and loop (Loop 0) 
+
+
+&lt;/p&gt;&lt;p&gt;
+&lt;!--
+&lt;img src="trace1.png"&gt;
+&lt;a onblur="try {parent.deselectBloggerImageGracefully();} catch(e) {}" href="https://2.bp.blogspot.com/_Ti798w4YGGI/TSyurBi3pLI/AAAAAAAAADA/IJQ0Ki4Pu0E/s1600/trace1.png"&gt;&lt;img style="display:block; margin:0px auto 10px; text-align:center;cursor:pointer; cursor:hand;width: 225px; height: 320px;" src="https://2.bp.blogspot.com/_Ti798w4YGGI/TSyurBi3pLI/AAAAAAAAADA/IJQ0Ki4Pu0E/s320/trace1.png" border="0" alt=""id="BLOGGER_PHOTO_ID_5561011694068016306" /&gt;&lt;/a&gt;
+--&gt;
+&lt;img src="https://2.bp.blogspot.com/_Ti798w4YGGI/TSyurBi3pLI/AAAAAAAAADA/IJQ0Ki4Pu0E/s1600/trace1.png"&gt;
+&lt;/p&gt;&lt;p&gt;
+
+Looking at the preamble, it starts by making sure that it is not 
+currently being profiled, the guard
+on &lt;tt&gt;i5&lt;/tt&gt;, and that the function object have not been changed
+since the trace was made, the guard on &lt;tt&gt;p3&lt;/tt&gt;. Somewhat
+intermixed with that, the
+integer variable &lt;tt&gt;n&lt;/tt&gt; is unboxed, by making sure &lt;tt&gt;p11&lt;/tt&gt;
+points to an integer object and reading out the integer value from
+that object. 
+These operations are not needed in the
+loop (and have been removed from it) as emitting the same guards again
+would be redundant and &lt;tt&gt;n&lt;/tt&gt; becomes a virtual before the
+end of the preamble.
+&lt;/p&gt;&lt;pre&gt;
+        guard_value(i5, 0, descr=&amp;lt;Guard6&amp;gt;) 
+        guard_nonnull_class(p11, ConstClass(W_IntObject), descr=&amp;lt;Guard7&amp;gt;) 
+        guard_value(p3, ConstPtr(ptr15), descr=&amp;lt;Guard8&amp;gt;) 
+        i16 = getfield_gc_pure(p11, descr=&amp;lt;W_IntObject.inst_intval&amp;gt;)
+&lt;/pre&gt;
+
+Next comes a test and a guard implementing the while statement
+followed by the decrementing of &lt;tt&gt;n&lt;/tt&gt;. These operation appear
+both in the preamble and in the loop
+&lt;pre&gt;
+        i18 = int_gt(i16, 0)
+        guard_true(i18, descr=&amp;lt;Guard9&amp;gt;) 
+        i20 = int_sub(i16, 1)
+&lt;/pre&gt;
+
+After that the two floating point variables &lt;tt&gt;x&lt;/tt&gt; and &lt;tt&gt;y&lt;/tt&gt;
+are unboxed. Again this is only needed in the preamble. Note how the
+unboxed value of &lt;tt&gt;y&lt;/tt&gt;, called &lt;tt&gt;f23&lt;/tt&gt;, is passed unchanged
+from the preamble to the loop in arguments of the jump 
+to allow it to be reused. It will not become a virtual
+since it is never changed within the loop.
+&lt;pre&gt;
+        guard_nonnull_class(p12, 17652552, descr=&amp;lt;Guard10&amp;gt;) 
+        guard_nonnull_class(p10, 17652552, descr=&amp;lt;Guard11&amp;gt;) 
+        f23 = getfield_gc_pure(p10, descr=&amp;lt;W_FloatObject.inst_floatval&amp;gt;)
+        f24 = getfield_gc_pure(p12, descr=&amp;lt;W_FloatObject.inst_floatval&amp;gt;)
+&lt;/pre&gt;
+
+Following that is the actual calculations performed in the loop in
+form of floating point operations (since the function was called with
+a float argument). These appear in both the loop
+and the preamble.
+&lt;pre&gt;
+        i26 = float_eq(f24, 0.000000)
+        guard_false(i26, descr=&amp;lt;Guard12&amp;gt;) 
+        f27 = float_truediv(f23, f24)
+        f28 = float_add(f24, f27)
+        f30 = float_truediv(f28, 2.000000)
+&lt;/pre&gt;
+
+Finally there are some tests checking if a signal was received
+(such as when the user presses ctrl-C) and thus should execute some
+signal handler or if we need to hand over to another thread. This is
+implemented with a counter that is decreased once every iteration. It
+will go below zero after some specific number of iterations, tunable by
+&lt;tt&gt;sys.setcheckinterval&lt;/tt&gt;. The counter is read from and written to
+some global location where it also can be made negative by a C-level
+signal handler. 
+&lt;pre&gt;
+        i32 = getfield_raw(32479328, descr=&amp;lt;pypysig_long_struct.c_value&amp;gt;)
+        i34 = int_sub(i32, 2)
+        setfield_raw(32479328, i34, descr=&amp;lt;pypysig_long_struct.c_value&amp;gt;)
+        i36 = int_lt(i34, 0)
+        guard_false(i36, descr=&amp;lt;Guard13&amp;gt;) 
+        jump(p0, p1, p2, p4, p10, i20, f30, f23, descr=&amp;lt;Loop0&amp;gt;)
+&lt;/pre&gt;
+
+&lt;p&gt;
+&lt;/p&gt;&lt;h2&gt;Bridges&lt;/h2&gt;
+
+When a guard fails often enough, the meta-interpreter is started again
+to produce a new trace starting at the failing guard. The tracing is
+continued until a previously compiled loop is entered. This could
+either be the the same loop that contains the failing guard
+or some completely different loop. If it is the same loop, executing
+the preamble again maybe be unnecessary.
+It is preferable to end the bridge with a jump directly to 
+the loop. To achieve this the optimizer tries to produce &lt;i&gt;short
+  preambles&lt;/i&gt; that are inlined at the end of bridges allowing
+them to jump directly to the loop. Inlining is better than jumping to
+a common preamble because most of the inlined short preamble can
+typically be removed again by the optimizer.
+Creating such a short
+preamble is however not always possible. Bridges jumping to loops for which
+no short preamble can be generated have to end with a jump to the
+full preamble instead.
+
+&lt;p&gt;
+
+The short preamble is created by comparing the operations in the
+preamble with the operations in the loop. The
+operations that are in the preamble but not in the loop 
+are moved to the short preamble whenever it is safe to move them to
+the front of the operations remaining. In other words, the full preamble
+is equivalent to the short preamble followed by one iteration of the
+loop. 
+
+&lt;/p&gt;&lt;p&gt;
+
+This much has currently been implemented. To give the full picture
+here, there are two more features that 
+hopefully will be implemented in the near future.
+The first is to replace the full preamble, used by the interpreter
+when it reaches a compiled loop, with the short preamble.
+This is currently not done and is probably not as straight forward as
+it might first seem. The problem is where to resume interpreting on a
+guard failure. However, implementing that should save some
+memory. Not only 
+because the preamble will become smaller, but mainly because the
+guards will appear either in the loop or in the preamble, but not
+in both (as they do now). That means there will only be a single bridge and 
+not potentially two copies once the guards are traced.
+
+&lt;/p&gt;&lt;p&gt;
+
+The sqrt example above would with a short preamble result in a trace
+like this
+
+&lt;/p&gt;&lt;p&gt;
+&lt;!--
+&lt;img src="trace2.png"&gt;&lt;p&gt;
+&lt;a onblur="try {parent.deselectBloggerImageGracefully();} catch(e) {}" href="https://4.bp.blogspot.com/_Ti798w4YGGI/TS4S_CifokI/AAAAAAAAADI/uPpoIngmD-I/s1600/trace2.png"&gt;&lt;img style="display:block; margin:0px auto 10px; text-align:center;cursor:pointer; cursor:hand;width: 306px; height: 320px;" src="https://4.bp.blogspot.com/_Ti798w4YGGI/TS4S_CifokI/AAAAAAAAADI/uPpoIngmD-I/s320/trace2.png" border="0" alt=""id="BLOGGER_PHOTO_ID_5561403464071750210" /&gt;&lt;/a&gt;
+--&gt;
+&lt;img src="https://4.bp.blogspot.com/_Ti798w4YGGI/TS4S_CifokI/AAAAAAAAADI/uPpoIngmD-I/s1600/trace2.png"&gt;
+&lt;/p&gt;
+If it is executed long enough, the last guard will be traced to form a
+bridge. The trace will inherit the virtuals from its parent. This can
+be used to optimize away the part of the inlined short preamble
+that deals with virtuals. The resulting bridge should look
+something like
+
+&lt;pre&gt;
+    [p0, p1, p2, p3, p4, f5, i6]
+    i7 = force_token()
+    setfield_gc(p1, i7, descr=&amp;lt;PyFrame.vable_token&amp;gt;)
+    call_may_force(ConstClass(action_dispatcher), p0, p1, descr=&amp;lt;VoidCallDescr&amp;gt;)
+    guard_not_forced(, descr=&amp;lt;Guard19&amp;gt;) 
+    guard_no_exception(, descr=&amp;lt;Guard20&amp;gt;) 
+
+    guard_nonnull_class(p4, 17674024, descr=&amp;lt;Guard21&amp;gt;) 
+    f52 = getfield_gc_pure(p4, descr=&amp;lt;W_FloatObject.inst_floatval&amp;gt;)
+    jump(p1, p0, p2, p3, p4, i38, f53, f52, descr=&amp;lt;Loop0&amp;gt;)
+&lt;/pre&gt;
+
+Here the first paragraph comes from the traced bridge and the second
+is what remains of the short preamble after optimization. The
+box &lt;tt&gt;p4&lt;/tt&gt; is 
+not a virtual (it contains a pointer to &lt;tt&gt;y&lt;/tt&gt; which is never
+changed), and it is only virtuals 
+that the bridge inherit from it's parents. This is why the last two
+operations currently cannot be removed.
+
+
+&lt;p&gt;
+
+Each time the short preamble is inlined, a new copy of each of the
+guards in it is generated. Typically the short preamble is inlined in
+several places and thus there will be several copies of each of those
+guards. 
+If they fail often enough bridges
+from them will be traced (as with all guards). But since there
+typically are several copies of each guard the same bridge
+will be generated in 
+several places. To prevent this, mini-bridges from the inlined guards
+are produced already during the inlining. These mini-bridges contain
+nothing but a jump to the preamble.
+
+&lt;/p&gt;&lt;p&gt;
+The mini-bridges needs the arguments of the preamble to be able
+to jump to it. These arguments contain among other things, boxed
+versions of the 
+variables &lt;tt&gt;x&lt;/tt&gt; and &lt;tt&gt;y&lt;/tt&gt;. Those variables are virtuals in
+the loop, and have to be allocated. Currently those allocations
+are placed in front of the inlined guard. Moving those allocations into
+the mini-bridges is the  second feature that 
+hopefully will be implemented in the near future. 
+&lt;!--
+The current approach actually kills the entire benefit of the inlining in most
+real world cases as typically all the virtuals are forced.
+--&gt;
+After this feature is
+implemented, the result should look something like
+&lt;/p&gt;&lt;p&gt;
+&lt;!--
+&lt;img src="trace3.png"&gt;&lt;p&gt;
+&lt;a onblur="try {parent.deselectBloggerImageGracefully();} catch(e) {}" href="https://4.bp.blogspot.com/_Ti798w4YGGI/TS4TlHWn2GI/AAAAAAAAADg/xqc4-B4HH3M/s1600/trace3.png"&gt;&lt;img style="display:block; margin:0px auto 10px; text-align:center;cursor:pointer; cursor:hand;width: 320px; height: 243px;" src="https://4.bp.blogspot.com/_Ti798w4YGGI/TS4TlHWn2GI/AAAAAAAAADg/xqc4-B4HH3M/s320/trace3.png" border="0" alt=""id="BLOGGER_PHOTO_ID_5561404118199162978" /&gt;&lt;/a&gt;
+--&gt;
+&lt;a href="https://4.bp.blogspot.com/_Ti798w4YGGI/TS4TlHWn2GI/AAAAAAAAADg/xqc4-B4HH3M/s1600/trace3.png"&gt;&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5561404118199162978" src="https://4.bp.blogspot.com/_Ti798w4YGGI/TS4TlHWn2GI/AAAAAAAAADg/xqc4-B4HH3M/s1600/trace3.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 597px; height: 454px;"&gt;&lt;/a&gt;
+
+&lt;/p&gt;&lt;p&gt;
+&lt;/p&gt;&lt;h2&gt;Multiple specialized versions&lt;/h2&gt;
+
+Floating point operations were generated in the trace above
+because &lt;tt&gt;sqrt&lt;/tt&gt; was called with a float argument. If it is
+instead called with an int argument, integer operations will be generated. The
+somewhat more complex situations is when both int's and float's are
+used as arguments. Then the jit need to generate multiple versions of
+the same loop, specialized in different ways. The details, given
+below, on how this is achieved is somewhat involved. For the casual
+reader it would make perfect sense to skip to the next section here.
+
+&lt;p&gt;
+
+Consider the case when &lt;tt&gt;sqrt&lt;/tt&gt; is first called with a float
+argument (but with &lt;tt&gt;n&lt;/tt&gt; small enough not to generate the
+bridge). Then the trace shown above will be
+generated. If &lt;tt&gt;sqrt&lt;/tt&gt; is now called with an int argument, the
+guard in the preamble testing that the type of the input object is float
+will fail:
+&lt;/p&gt;&lt;pre&gt;
+        guard_nonnull_class(p12, 17652552, descr=&amp;lt;Guard10&amp;gt;) 
+&lt;/pre&gt;
+It will fail every iteration, so soon enough a bridge will be
+generated from this guard in the preamble. This guard will end with a
+jump to the same loop, and the optimizer will try to inline
+the short preamble at the end of it. This will however fail
+since now there are two guards on &lt;tt&gt;p12&lt;/tt&gt;. One that makes sure it
+is an int and and one that makes sure it is a float. The optimizer
+will detect that the second guard will always fail and mark the bridge
+as invalid. Invalid loops are not passed on to the backend for
+compilation. 
+
+&lt;p&gt;
+
+If a loop is detected to be invalid while inlining the short preamble,
+the metainterpreter will continue to trace for yet another 
+iteration of the loop. This new trace can be compiled as above and
+will produce a new loop with a new preamble that are now specialized
+for int arguments instead of float arguments. The bridge that
+previously became invalid will now be tried again. This time inlining
+the short preamble of the new loop instead. This will produce a set of
+traces connected like this
+
+&lt;/p&gt;&lt;p&gt;
+
+&lt;a href="https://2.bp.blogspot.com/_Ti798w4YGGI/TS4TdW6kYmI/AAAAAAAAADY/Py2Eh0sNaOk/s1600/trace4mag.png"&gt;&lt;img alt="" border="0" id="BLOGGER_PHOTO_ID_5561403875692575442" src="https://2.bp.blogspot.com/_Ti798w4YGGI/TS4TW_8i-tI/AAAAAAAAADQ/Ssq63lSRDIU/s1600/trace4.png" style="display: block; margin: 0px auto 10px; text-align: center; cursor: pointer; cursor: hand; width: 630px; height: 603px;"&gt;&lt;/a&gt;
+(click for some hairy details)
+&lt;/p&gt;&lt;p&gt;
+
+The height of the boxes is this figure represents how many instructions
+they contain (presuming the missing features from the previous section
+are implemented). Loop 0 is specialized for floats and it's preamble have
+been split into two boxes at the failing guard. Loop 2 is specialized
+for ints and is larger than Loop 0. This is mainly because the integer
+division in python does not map to the integer division of the
+machine, but have to be implemented with several instructions (integer
+division in python truncates its result towards minus
+infinity, while the the machine integer division truncates towards
+0). Also the height of the bridge is about the same as the height of
+Loop 2. This is because it contains a full iteration of the loop.
+
+&lt;/p&gt;&lt;p&gt;
+
+&lt;/p&gt;&lt;h2&gt;A More Advanced Example&lt;/h2&gt;
+
+Let's conclude with an example that is a bit more advanced, where this unrolling
+approach actually outperforms the previous approach. Consider
+making a
+&lt;a href="https://en.wikipedia.org/wiki/Fixed-point_arithmetic"&gt;fixed-point&lt;/a&gt;
+implementation of the square root using 16 bit's of decimals. This can be
+done using the same implementation
+of &lt;tt&gt;sqrt&lt;/tt&gt; but calling it with an object of a class representing
+such fixed-point real numbers:
+
+&lt;p&gt;
+&lt;/p&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;Fix16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;object&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;__init__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;scale&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="bp"&gt;True&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="nb"&gt;isinstance&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;Fix16&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+            &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt;
+        &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;scale&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="o"&gt;**&lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;val&lt;/span&gt;
+
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;__add__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt;  &lt;span class="n"&gt;Fix16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;Fix16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="bp"&gt;False&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;__sub__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt;  &lt;span class="n"&gt;Fix16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="n"&gt;Fix16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="bp"&gt;False&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;__mul__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt;  &lt;span class="n"&gt;Fix16&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;8&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Fix16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;8&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="bp"&gt;False&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;__div__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt;  &lt;span class="n"&gt;Fix16&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;/&lt;/span&gt; &lt;span class="n"&gt;Fix16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="bp"&gt;False&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;
+
+Below is a table comparing the runtime of the sqrt function above with
+different argument types on different python interpreters. Pypy 1.4.1
+was released before the optimizations described in this post were in place
+while they are in place in the 
+&lt;a href="https://buildbot.pypy.org/nightly/trunk/pypy-c-jit-40390-e1ab35394b0f-linux64.tar.bz2"&gt;nightly
+  build from January 5&lt;/a&gt;, 
+denoted pypy in the table. There are also the running time for the same
+algorithms implemented in C and compiled with "gcc -O3
+-march=native". Tests were executed on a 2.53GHz Intel Core2
+processor with &lt;tt&gt;n=100000000&lt;/tt&gt; iterations.
+Comparing the integer versions with C may be considered a
+bit unfair because of the more advanced integer division operator in
+python. The left part of this table shows runtimes of &lt;tt&gt;sqrt&lt;/tt&gt; in
+a program containing a single call to sqrt (i.e. only a single
+specialized version of the loop is needed). The right part shows the
+runtime of &lt;tt&gt;sqrt&lt;/tt&gt; when it has been called with a different
+type of argument before.
+
+&lt;/p&gt;&lt;p&gt;
+
+&lt;/p&gt;&lt;table&gt;
+  &lt;tr&gt;&lt;th&gt;&lt;/th&gt;&lt;th colspan="3"&gt;First call&lt;/th&gt;&lt;th&gt;&lt;/th&gt;&lt;th colspan="3"&gt;Second call&lt;/th&gt;&lt;/tr&gt;
+  &lt;tr&gt;&lt;th&gt;&lt;/th&gt;&lt;th&gt;float&lt;/th&gt;&lt;th&gt;int&lt;/th&gt;&lt;th&gt;Fix16&lt;/th&gt;&lt;th&gt;  &lt;/th&gt;
+               &lt;th&gt;float&lt;/th&gt;&lt;th&gt;int&lt;/th&gt;&lt;th&gt;Fix16&lt;/th&gt;&lt;/tr&gt;
+  &lt;tr align="right"&gt;&lt;th align="left"&gt;cpython&lt;/th&gt;
+    &lt;td&gt; 28.18 s&lt;/td&gt;
+    &lt;td&gt; 22.13 s&lt;/td&gt;
+    &lt;td&gt; 779.04 s&lt;/td&gt;
+    &lt;td&gt;&lt;/td&gt;
+    &lt;td&gt; 28.07 s&lt;/td&gt;
+    &lt;td&gt; 22.21 s&lt;/td&gt;
+    &lt;td&gt; 767.03 s&lt;/td&gt;    
+  &lt;/tr&gt;
+  &lt;tr align="right"&gt;&lt;th align="left"&gt;pypy 1.4.1&lt;/th&gt;
+    &lt;td&gt; 1.20 s&lt;/td&gt;
+    &lt;td&gt; 6.49 s&lt;/td&gt;
+    &lt;td&gt; 11.31 s&lt;/td&gt;
+    &lt;td&gt;&lt;/td&gt;
+    &lt;td&gt; 1.20 s&lt;/td&gt;
+    &lt;td&gt; 6.54 s&lt;/td&gt;
+    &lt;td&gt; 11.23 s&lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr align="right"&gt;&lt;th align="left"&gt;pypy&lt;/th&gt;
+    &lt;td&gt; 1.20 s&lt;/td&gt;
+    &lt;td&gt; 6.44 s&lt;/td&gt;
+    &lt;td&gt; 6.78 s&lt;/td&gt;
+    &lt;td&gt;&lt;/td&gt;
+    &lt;td&gt; 1.19 s&lt;/td&gt;
+    &lt;td&gt; 6.26 s&lt;/td&gt;
+    &lt;td&gt; 6.79 s&lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr align="right"&gt;&lt;th align="left"&gt;gcc&lt;/th&gt;
+    &lt;td&gt; 1.15 s&lt;/td&gt;
+    &lt;td&gt; 1.82 s&lt;/td&gt;
+    &lt;td&gt; 1.89 s&lt;/td&gt;
+    &lt;td&gt;&lt;/td&gt;
+    &lt;td&gt; 1.15 s&lt;/td&gt;
+    &lt;td&gt; 1.82 s&lt;/td&gt;
+    &lt;td&gt; 1.89 s&lt;/td&gt;
+  &lt;/tr&gt;
+&lt;/table&gt;
+
+&lt;p&gt;
+
+For this to work in the last case, when Fix16 is the argument type in
+the second type, 
+the trace_limit had to be increased from its default value to prevent
+the metainterpreter from aborting while tracing the second version of
+the loop. Also sys.setcheckinterval(1000000) were used to prevent the
+bridge from being generated. With the bridge the performance of the
+last case is significantly worse. Maybe because the optimizer currently
+fails to generate a short preamble for it. But the slowdown
+seems too big for that to be the only explanation. Below are the runtimes
+numbers with checkinterval set to its default value of 100:
+
+&lt;/p&gt;&lt;table&gt;
+  &lt;tr&gt;&lt;th&gt;&lt;/th&gt;&lt;th colspan="3"&gt;First call&lt;/th&gt;&lt;th&gt;&lt;/th&gt;&lt;th colspan="3"&gt;Second call&lt;/th&gt;&lt;/tr&gt;
+  &lt;tr&gt;&lt;th&gt;&lt;/th&gt;&lt;th&gt;float&lt;/th&gt;&lt;th&gt;int&lt;/th&gt;&lt;th&gt;Fix16&lt;/th&gt;&lt;th&gt;  &lt;/th&gt;
+               &lt;th&gt;float&lt;/th&gt;&lt;th&gt;int&lt;/th&gt;&lt;th&gt;Fix16&lt;/th&gt;&lt;/tr&gt;
+  &lt;tr align="right"&gt;&lt;th align="left"&gt;cpython&lt;/th&gt;
+    &lt;td&gt; 28.71 s&lt;/td&gt;
+    &lt;td&gt; 22.09 s&lt;/td&gt;
+    &lt;td&gt; 781.86 s&lt;/td&gt;
+    &lt;td&gt;&lt;/td&gt;
+    &lt;td&gt; 28.28 s&lt;/td&gt;
+    &lt;td&gt; 21.92 s&lt;/td&gt;
+    &lt;td&gt; 761.59 s&lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr align="right"&gt;&lt;th align="left"&gt;pypy 1.4.1&lt;/th&gt;
+    &lt;td&gt; 1.21 s&lt;/td&gt;
+    &lt;td&gt; 6.48 s&lt;/td&gt;
+    &lt;td&gt; 11.22 s&lt;/td&gt;
+    &lt;td&gt;&lt;/td&gt;
+    &lt;td&gt; 1.72 s&lt;/td&gt;
+    &lt;td&gt; 7.58 s&lt;/td&gt;
+    &lt;td&gt; 12.18 s&lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr align="right"&gt;&lt;th align="left"&gt;pypy&lt;/th&gt;
+    &lt;td&gt; 1.21 s&lt;/td&gt;
+    &lt;td&gt; 6.27 s&lt;/td&gt;
+    &lt;td&gt; 7.22 s&lt;/td&gt;
+    &lt;td&gt;&lt;/td&gt;
+    &lt;td&gt; 1.20 s&lt;/td&gt;
+    &lt;td&gt; 6.29 s&lt;/td&gt;
+    &lt;td&gt; 90.47 s&lt;/td&gt;
+  &lt;/tr&gt;
+&lt;/table&gt;
+
+&lt;p&gt;
+&lt;/p&gt;&lt;h2&gt;Conclusions&lt;/h2&gt;
+Even though we are seeing speedups in a variety of different small
+benchmarks, more complicated examples are not affected much by these
+optimizations. It might partly be because larger examples have longer
+and more complicated loops, and thus allowing optimizations to operate
+across loop boundary will have a smaller relative effect. Another problem is
+that with more complicated examples there will be more bridges, and bridges
+are currently not handled very well (most of the time all virtuals are
+forced at the end of the bridge as explained above). But moving those
+forcings into the mini bridges should fix that.</description><guid>https://www.pypy.org/posts/2011/01/loop-invariant-code-motion-1998392217676829154.html</guid><pubDate>Tue, 11 Jan 2011 19:22:00 GMT</pubDate></item></channel></rss>
