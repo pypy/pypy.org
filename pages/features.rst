@@ -11,7 +11,7 @@
 language that was co-developed with it.  The main reason to use it
 instead of CPython is speed: it runs generally faster (see next section).
 
-**PyPy** implements **Python 2.7.18 and 3.11.11**.
+**PyPy** implements **Python 2.7 (language of RPython_) and Python 3.11**.
 It supports all of the core language. It supports most of
 the commonly used Python standard library modules. For known differences with
 CPython, see our `compatibility`_ page.
@@ -39,6 +39,7 @@ If you are interested in helping, see our `howtohelp`_ page.
 .. _`PowerPC`: https://en.wikipedia.org/wiki/PowerPC
 .. _`System Z (s390x)`: https://en.wikipedia.org/wiki/IBM_System/390
 .. _`howtohelp`: howtohelp.html
+.. _RPython: https://rpython.readthedocs.io/en/latest/
 
 .. |---| unicode:: U+2014  .. em dash, trimming surrounding whitespace
    :trim:
