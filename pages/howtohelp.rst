@@ -20,7 +20,7 @@ Here are some ideas to help PyPy move forward:
 
 * donate_ some money to enable others to help
 
-* take on our consultants_ and make PyPy work better for your
+* take on our consultants_ and make PyPy work better for you
 
 .. _contact: contact.html
 .. _feedback: contact.html
