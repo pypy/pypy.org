@@ -12,9 +12,10 @@ language that was co-developed with it.  The main reason to use it
 instead of CPython is speed: it runs generally faster (see next section).
 
 **PyPy** implements **Python 2.7 (language of `RPython_`) and Python 3.11**.
-It supports all of the core language. It supports most of
-the commonly used Python standard library modules. For known differences with
-CPython, see our `compatibility`_ page.
+It supports all of the core language. It supports the Python standard library
+modules. It supports much of the C API, albeit slowly, enabling compatibility
+support for outside libraries.
+For known differences with CPython, see our `compatibility`_ page.
 
 The following CPU architectures are supported and maintained:
 
