@@ -48,21 +48,6 @@ If you are a python library maintainer and use C-extensions, please consider
 making a HPy_ / CFFI_ / cppyy_ version of your library that would be performant
 on PyPy. In any case, `cibuildwheel`_ supports building wheels for PyPy.
 
-We would like to thank our donors for the continued support of the PyPy
-project. If PyPy is not quite good enough for your needs, we are available for
-`direct consulting`_ work. If PyPy is helping you out, we would love to hear
-about it and encourage submissions to our blog_ via a pull request
-to https://github.com/pypy/pypy.org
-
-We would also like to thank our contributors and encourage new people to join
-the project. PyPy has many layers and we need help with all of them: bug fixes,
-`PyPy`_ and `RPython`_ documentation improvements, or general `help`_ with
-making RPython's JIT even better.
-
-If you are a python library maintainer and use C-extensions, please consider
-making a HPy_ / CFFI_ / cppyy_ version of your library that would be performant
-on PyPy. In any case, `cibuildwheel`_ supports building wheels for PyPy.
-
 .. _`PyPy`: https://doc.pypy.org/
 .. _`RPython`: https://rpython.readthedocs.org
 .. _`help`: https://doc.pypy.org/en/latest/project-ideas.html
