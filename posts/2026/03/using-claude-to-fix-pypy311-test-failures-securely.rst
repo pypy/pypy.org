@@ -3,9 +3,9 @@
 .. slug: using-claude-to-fix-pypy311-test-failures-securely
 .. date: 2026-03-23 10:27:55 UTC
 .. tags: AI
-.. category: 
-.. link: 
-.. description: 
+.. category:
+.. link:
+.. description:
 .. type: rst
 .. author: mattip
 -->
@@ -64,6 +64,7 @@ directories. I wanted a ``/tmp`` for running pytest. I also wanted the prompt
 to reflect the use of bubblewrap, so changed the ``hostname``:
 
 .. code:: bash
+
   cat << 'EOL' >> ./run_bwrap.sh
     function call_bwrap() {
       bwrap \
@@ -172,7 +173,7 @@ work. Claude would hang until I installed them, and I needed to kill it with
 .. code:: bash
 
     sudo apt install socat
-    sudo npm install -g @anthropic-ai/sandbox-runtime 
+    sudo npm install -g @anthropic-ai/sandbox-runtime
 
 Final touches
 =============
@@ -184,6 +185,7 @@ requests in read-only mode. So I added a local ``.claude/settings.json`` file
 inside the repo (see below for which directory to do this):
 
 .. code:: json
+
     {
       "permissions": {
         "allow": [
@@ -223,13 +225,13 @@ failure from the buildbot. So starting from the `buildbot py3.11 summary`_,
 click on one of the ``F`` links and copy-paste all that into the claude prompt.
 It didn't take long for claude to come up with solutions for the long-standing
 `ctype error missing exception`_ which turned out to be due to an missing error
-trap when already handling an error. 
+trap when already handling an error.
 
 Also a `CTYPES_MAX_ARGCOUNT check`_ was
 missing. At first, claude wanted to change the ctypes code from CPython's stdlib,
 and so I had to make it clear that claude was not to touch the files in
 ``lib-python``. They are copied verbatim from CPython and should not be
-modified without really good reasons. 
+modified without really good reasons.
 
 The `fix to raise`_ ``TypeError`` rather
 than ``Attribute Error`` for deleting ctype object's ``value`` was maybe a little
@@ -267,7 +269,7 @@ terminal. It helps that I was given a generous budget to use Anthropic's tool.
 Claude seems capable of understanding the layers of PyPy: from the pure python
 stdlib to RPython and into the small amount of C code. I even asked it to
 examine a segfault_ in the recently released PyPy7.3.21, and it seems to have
-found the general area where there was a latent bug in the JIT. 
+found the general area where there was a latent bug in the JIT.
 
 Like any tool, agentic programming must be used carefully to make sure it
 cannot do damage. I hope I closed the most obvious foot-guns, if you have other
@@ -279,4 +281,5 @@ would love to hear about them.
 .. _`ctype error missing exception`: https://github.com/pypy/pypy/commit/9e8e121b545dbea3f26ca436ae8a797617904306#diff-ab042b3dd16bf22b7e3d8595f182ad39d3823d76b414da7debe96081a884d16bR64-R330
 .. _`CTYPES_MAX_ARGCOUNT check`: https://github.com/pypy/pypy/commit/9e8e121b545dbea3f26ca436ae8a797617904306#diff-ab042b3dd16bf22b7e3d8595f182ad39d3823d76b414da7debe96081a884d16bR64-R53
 .. _`fix to raise`: https://github.com/pypy/pypy/commit/39ca7a1def272742e8aafd2a649ed4f8fed7038d
-.. _`fix for a failing text`: https://github.com/pypy/pypy/commit/e0e401699c20a92d8db657879183c68ea44246b4
+.. _`fix for a failing test`: https://github.com/pypy/pypy/commit/e0e401699c20a92d8db657879183c68ea44246b4
+.. _segfault: https://github.com/pypy/pypy/issues/5398
