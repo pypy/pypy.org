@@ -100,7 +100,7 @@ NAVIGATION_LINKS = {
             'Features',
         ),
         ('/download.html', 'Download'),
-        ('http://doc.pypy.org', 'Dev Docs'),
+        ('https://doc.pypy.org', 'Dev Docs'),
         (
           (
             ('/blog/', 'Index'),
