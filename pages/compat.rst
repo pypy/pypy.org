@@ -7,7 +7,7 @@
 .. description: 
 
 The goal of this page is to point out some of the differences between running
-python with PyPy and with CPython
+python with PyPy and with CPython.
 
 TL;DR
 -----
@@ -96,9 +96,9 @@ More info
 
 A more complete list of known differences is available at `our dev site`_.
 
-.. _`CPython C API`: http://docs.python.org/c-api/
-.. _`CFFI`: http://cffi.readthedocs.org/
+.. _`CPython C API`: https://docs.python.org/3/c-api/
+.. _`CFFI`: https://cffi.readthedocs.io/en/stable/
 .. _HPy: https://hpyproject.org/
-.. _`conda`: https://conda-forge.org/blog/posts/2020-03-10-pypy/
-.. _`our dev site`: http://pypy.readthedocs.org/en/latest/cpython_differences.html
-.. _`more details here`: http://pypy.readthedocs.org/en/latest/cpython_differences.html#differences-related-to-garbage-collection-strategies
+.. _`conda`: https://conda-forge.org/blog/2020/03/10/pypy/
+.. _`our dev site`: https://doc.pypy.org/cpython_differences.html
+.. _`more details here`: https://doc.pypy.org/cpython_differences.html#differences-related-to-garbage-collection-strategies

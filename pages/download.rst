@@ -27,6 +27,7 @@ We provide pre-compiled binaries for many platforms and OSes.
     :start-after: notes_and_links start
     :end-before: notes_and_links finish
 
+
 Source
 ------
 
@@ -50,7 +51,7 @@ running PyPy, STM, instructions on building from source and more.
 .. _`more information`: download_advanced.html
 
 
-
 Checksums
 ---------
-Checksums for the downloads are :doc:`here <checksums>`
+
+Checksums for the downloads are :doc:`here <checksums>`.

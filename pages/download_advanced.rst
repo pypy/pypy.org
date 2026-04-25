@@ -84,7 +84,7 @@ We provide pre-compiled binaries for many platforms and OSes:
 .. __: https://downloads.python.org/pypy/pypy3.11-v7.3.21-aarch64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.21-aarch64.tar.bz2
 
-.. _`PyPy latest`: https://doc.pypy.org/en/latest/release-v7.3.21.html
+.. _`PyPy latest`: https://doc.pypy.org/release-v7.3.21.html
 .. _`vcredist.x64.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
 
 ..
@@ -109,14 +109,16 @@ We provide pre-compiled binaries for many platforms and OSes:
 .. __: https://downloads.python.org/pypy/pypy3.11-v7.3.21-linux32.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.21-linux32.tar.bz2
 
+
 .. _`Default (with a JIT Compiler)`:
 
 "JIT Compiler" version
--------------------------------
+----------------------
 
 The binaries above include a Just-in-Time compiler. On x86-32, they only work on
-CPUs that have the SSE2 instruction set (most of them do, nowadays).. They also
+CPUs that have the SSE2 instruction set (most of them do, nowadays). They also
 contain `stackless`_ extensions, like `greenlets`_.
+
 
 Linux binaries and common distributions
 ---------------------------------------
@@ -164,16 +166,16 @@ There are other solutions:
 .. _`Fedora`: https://fedoraproject.org/wiki/Features/PyPyStack
 .. _`Gentoo`: https://packages.gentoo.org/package/dev-python/pypy
 .. _`Homebrew`: https://github.com/Homebrew/homebrew-core/blob/master/Formula/p/pypy.rb
-.. _`Arch`: https://wiki.archlinux.org/index.php/PyPy
+.. _`Arch`: https://wiki.archlinux.org/title/PyPy
 .. _`portable-pypy`: https://github.com/squeaky-pl/portable-pypy#portable-pypy-distribution-for-linux
-.. _`recompile the CFFI-based`: https://doc.pypy.org/en/latest/build.html#build-cffi-import-libraries-for-the-stdlib
+.. _`recompile the CFFI-based`: https://doc.pypy.org/build.html#build-cffi-import-libraries-for-the-stdlib
 .. _`certifi`: https://pypi.org/project/certifi/
 
 ..
   notes_and_links finish
 
 
-Previous version can be downloaded from here__, or directly from the buildbot's
+Previous version can be downloaded from here__, or directly from the Buildbot's
 mirror_.
 
 .. __: https://downloads.python.org/pypy/
@@ -187,6 +189,7 @@ SSE2 (``--jit-backend=x86-without-sse2``) but note that your machine
 is probably low-spec enough that running CPython on it is a better
 idea in the first place.
 
+
 PyPy-STM 2.5.1
 --------------
 
@@ -195,7 +198,7 @@ Memory`_ (STM) documentation.
 
 * `PyPy-STM Linux x86-64 binary (64bit, tar.bz2 built on Ubuntu 12.04 - 16.04)`__
 
-.. _`Software Transactional Memory`: https://doc.pypy.org/en/latest/stm.html
+.. _`Software Transactional Memory`: https://doc.pypy.org/stm.html
 .. __: https://downloads.python.org/pypy/pypy-stm-2.5.1-linux64.tar.bz2
 
 
@@ -227,9 +230,10 @@ The other versions of PyPy are:
 
 .. __: https://downloads.python.org/pypy/pypy-1.8-sandbox-linux64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy-1.8-sandbox-linux.tar.bz2
-.. _`sandbox docs`: https://doc.pypy.org/en/latest/sandbox.html
+.. _`sandbox docs`: https://doc.pypy.org/sandbox.html
 
 .. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
+
 
 Installing
 ----------
@@ -255,15 +259,15 @@ If you use your distribution's PyPy package we recommend you install packages
 into a virtualenv. If you try to build a module and the build process complains
 about "missing Python.h", you may need to install the pypy-dev package.
 
-.. _installation documentation: https://doc.pypy.org/en/latest/install.html
+.. _installation documentation: https://doc.pypy.org/install.html
 
-.. _translate: https://doc.pypy.org/en/latest/build.html
+.. _translate: https://doc.pypy.org/build.html
+
 
 Building from source
 --------------------
 
-(see more build instructions_)
-
+See also more build instructions_.
 
 1. Get the source code.  The preferred way is to checkout the current
    trunk using git.  The trunk usually works and is of course
@@ -277,13 +281,13 @@ Building from source
 
    .. code-block:: bash
 
-     # switch to the branch that implements Python 3.10
-     git checkout branches/py3.10
+     # switch to the branch that implements Python 3.11
+     git checkout branches/py3.11
 
    Alternatively, get one of the following smaller packages for the source at
    the same revision as the above binaries:
 
-   * `pypy3.11-v7.3.21-src.tar.bz2`__ (sources, PyPy 3.10 only)
+   * `pypy3.11-v7.3.21-src.tar.bz2`__ (sources, PyPy 3.11 only)
    * `pypy2.7-v7.3.21-src.tar.bz2`__ (sources, PyPy 2.7 only)
 
    .. __: https://downloads.python.org/pypy/pypy3.11-v7.3.21-src.tar.bz2
@@ -292,7 +296,7 @@ Building from source
 
 2. Make sure you **installed the dependencies.**  See the list here__.
 
-   .. __: https://pypy.readthedocs.org/en/latest/build.html#install-build-time-dependencies
+   .. __: https://doc.pypy.org/build.html#install-build-time-dependencies
 
 3. Enter the ``goal`` directory:
 
@@ -372,16 +376,17 @@ Notes:
   This also applies to translation (unless you use CPython to run the
   translation and you specify ``--source``).
 
-.. _instructions: https://pypy.readthedocs.org/en/latest/build.html
+.. _instructions: https://doc.pypy.org/build.html
 .. _`x86 (IA-32)`: https://en.wikipedia.org/wiki/IA-32
 .. _`x86-64`: https://en.wikipedia.org/wiki/X86-64
 .. _SSE2: https://en.wikipedia.org/wiki/SSE2
 .. _`contact us`: contact.html
 .. _`sandboxing`: features.html#sandboxing
 .. _`stackless`: https://www.stackless.com/
-.. _`greenlets`: https://pypy.readthedocs.org/en/latest/stackless.html#greenlets
-.. _`Windows build instructions`: https://doc.pypy.org/en/latest/windows.html#preparing-windows-for-the-large-build
-.. _`shadow stack`: https://pypy.readthedocs.org/en/latest/config/translation.gcrootfinder.html
+.. _`greenlets`: https://doc.pypy.org/stackless.html#greenlets
+.. _`Windows build instructions`: https://doc.pypy.org/windows.html#preparing-windows-for-the-large-build
+.. _`shadow stack`: https://doc.pypy.org/config/translation.gcrootfinder.html
+
 
 Packaging
 ---------
@@ -413,6 +418,8 @@ directory that you add to the env var ``PYTHONPATH``.
 
 .. _`package.py`: https://github.com/pypy/pypy/blob/release-pypy3.11-v7.3.21/pypy/tool/release/package.py
 
+
 Checksums
 ---------
-Checksums for the downloads are :doc:`here <checksums>`
+
+Checksums for the downloads are :doc:`here <checksums>`.
