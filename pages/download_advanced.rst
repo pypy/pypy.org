@@ -296,7 +296,7 @@ See also more build instructions_.
 
 2. Make sure you **installed the dependencies.**  See the list here__.
 
-   .. __: https://pypy.readthedocs.org/build.html#install-build-time-dependencies
+   .. __: https://doc.pypy.org/build.html#install-build-time-dependencies
 
 3. Enter the ``goal`` directory:
 
