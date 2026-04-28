@@ -77,4 +77,4 @@ or by sending a quick mail to the pypy-dev mailing list:
   http://mail.python.org/mailman/listinfo/pypy-dev
 
 
-.. _`pull request`: https://doc.pypy.org/en/latest/coding-guide.html
+.. _`pull request`: https://doc.pypy.org/coding-guide.html
