@@ -1,6 +1,6 @@
-.. title: PyPy v7.3.21 release
-.. slug: pypy-v7321-release
-.. date: 2026-03-13 10:00:00 UTC
+.. title: PyPy v7.3.22 release
+.. slug: pypy-v7322-release
+.. date: 2026-04-28 10:00:00 UTC
 .. tags: release
 .. category: 
 .. link: 
@@ -9,12 +9,27 @@
 .. author: mattip
 
 =========================================
-PyPy v7.3.21: release of python 2.7, 3.11
+PyPy v7.3.22: release of python 2.7, 3.11
 =========================================
 
-The PyPy team is proud to release version 7.3.21 of PyPy after the previous
-release on July 4, 2025. This is a bug-fix release that also updates to Python
-3.11.15.
+The PyPy team is proud to release version 7.3.22 of PyPy after the previous
+release on March 13, 2026. This is a bug-fix release that fixes several issues
+in the JIT. Among them, a long-standing JIT bug that started appearing when
+some instance optimizations exposed it. We also cleaned
+up many of the remaining stdlib test suite failures, which improves CPython
+compatibility around line numbers in dis.dis, signatures and objclass
+attributes for builtins, and other quality of life features.
+
+There is now an RPython ``_pickle`` module that mirrors
+the CPython one, greatly speeding up pickling operations. Where before PyPy was
+5.7x slower than CPython on the pickle benchmark from the pyperformance
+benchmark suite, now it is only 1.6x slower [0]_. We also added pypy
+pickler extensions to dump and load lists using list strategies, and enabled
+them in the ``ForkingPickler`` used by multiprocessing, speeding up cases where
+such objects are passed between PyPy multiprocessing instances.
+
+We also added an RPython json encoder, speeding up json_bench from being 2.6x
+slower than CPython to being 0.7x (meaning faster).
 
 The release includes two different interpreters:
 
@@ -48,6 +63,10 @@ If you are a python library maintainer and use C-extensions, please consider
 making a HPy_ / CFFI_ / cppyy_ version of your library that would be performant
 on PyPy. In any case, `cibuildwheel`_ supports building wheels for PyPy.
 
+.. rubric:: Footnotes
+
+.. [0] Once `a PR to pyperformance`_ to use the _pickle module on PyPy is accepted
+
 .. _`PyPy`: https://doc.pypy.org/
 .. _`RPython`: https://rpython.readthedocs.org
 .. _`help`: https://doc.pypy.org/en/latest/project-ideas.html
@@ -57,6 +76,7 @@ on PyPy. In any case, `cibuildwheel`_ supports building wheels for PyPy.
 .. _blog: https://pypy.org/blog
 .. _HPy: https://hpyproject.org/
 .. _direct consulting: https://www.pypy.org/pypy-sponsors.html
+.. _`a PR to pyperformance`: https://github.com/python/pyperformance/pull/461
 
 What is PyPy?
 =============
@@ -87,11 +107,11 @@ conda, OpenBSD, FreeBSD, Gentoo, and more.
 What else is new?
 =================
 
-For more information about the 7.3.21 release, see the `full changelog`_.
+For more information about the 7.3.22 release, see the `full changelog`_.
 
 Please update, and continue to help us make pypy better.
 
 Cheers,
 The PyPy Team
 
-.. _`full changelog`: https://doc.pypy.org/en/latest/release-v7.3.21.html#changelog 
+.. _`full changelog`: https://doc.pypy.org/en/latest/release-v7.3.22.html#changelog 
