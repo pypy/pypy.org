@@ -50,7 +50,7 @@ learn more about what was happening by looking on the CI runners.
 ## Running on CI
 
 I forked the nanobind repo and hacked the CI script in order to get it to use a
-PyPy build with [full debug information and more assertions turned on](https://doc.pypy.org/en/latest/build.html#making-a-debug-build-of-pypy). In order
+PyPy build with [full debug information and more assertions turned on](https://doc.pypy.org/build.html#making-a-debug-build-of-pypy). In order
 to increase the probability of seeing the crash I added an otherwise unused
 [matrix](https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs)
 variable to the CI script that just contained 32 parameters. This means every

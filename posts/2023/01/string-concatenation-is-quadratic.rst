@@ -14,7 +14,7 @@ submitter) to have a post to point to, since it's a problem that comes up with
 some regularity. It's also documented on our page of `differences between PyPy
 and CPython`_ but I thought an additional blog post might be good.
 
-.. _`differences between PyPy and CPython`: https://doc.pypy.org/en/latest/cpython_differences.html?highlight=join#performance-differences
+.. _`differences between PyPy and CPython`: https://doc.pypy.org/cpython_differences.html?highlight=join#performance-differences
 
 The issue pointed out that a small program that operates on strings is much
 slower on PyPy compared to CPython. The program is a solution for 2016's
