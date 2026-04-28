@@ -76,6 +76,7 @@ on PyPy. In any case, `cibuildwheel`_ supports building wheels for PyPy.
 .. _blog: https://pypy.org/blog
 .. _HPy: https://hpyproject.org/
 .. _direct consulting: https://www.pypy.org/pypy-sponsors.html
+.. _`a PR to pyperformance`: https://github.com/python/pyperformance/pull/461
 
 What is PyPy?
 =============
