@@ -36,10 +36,10 @@ Source
 * `3.11 Source (tar.bz2)`__; `3.11 Source (zip)`__.
 * `2.7 Source (tar.bz2)`__; `2.7 Source (zip)`__.
 
-.. __: https://downloads.python.org/pypy/pypy3.11-v7.3.21-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.11-v7.3.21-src.zip
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.21-src.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.21-src.zip
+.. __: https://downloads.python.org/pypy/pypy3.11-v7.3.22-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.11-v7.3.22-src.zip
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.22-src.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy2.7-v7.3.22-src.zip
 
 
 More information
