@@ -53,8 +53,6 @@ If you are a python library maintainer and use C-extensions, please consider
 making a HPy_ / CFFI_ / cppyy_ version of your library that would be performant
 on PyPy. In any case, `cibuildwheel`_ supports building wheels for PyPy.
 
-.. rubric:: Footnotes
-
 .. _`PyPy`: https://doc.pypy.org/
 .. _`RPython`: https://rpython.readthedocs.org
 .. _`help`: https://doc.pypy.org/project-ideas.html
