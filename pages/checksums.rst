@@ -7,6 +7,30 @@
 .. description:
 
 Here are the checksums
+
+pypy3.11-v7.3.23 sha256::
+
+    5433ac0ad526aeb35025ef8509bed65cd62ea35cb9e21ac649c69a5eff4eecb6  pypy3.11-v7.3.23-aarch64.tar.bz2
+    c7e2ffb173dcadbe4708a2e606e0b705474c1c33f25a09a4084f265d538172e4  pypy3.11-v7.3.23-linux32.tar.bz2
+    16f9f56e82d1f4ec95a324c1a8cacfd78afc7f0656c0a809a18725ef4391453a  pypy3.11-v7.3.23-linux64.tar.bz2
+    4747b3aceba4c1c6104cddc0fe5ea302101d32955f0957347b9ecc4fbd7aed05  pypy3.11-v7.3.23-macos_arm64.tar.bz2
+    c95363c4e87235d11a6cec8128239c291b1eb67a752778fbcfe029a71da82b5e  pypy3.11-v7.3.23-macos_x86_64.tar.bz2
+    f15c9c41e03f3f7ecc25228c6c67427b8918f21ef2d694215994b1fade20f69b  pypy3.11-v7.3.23-src.tar.bz2
+    04f039d68a938725b381c27eb9180171b28adb93fcad60c4d27f62d0f7dbafb6  pypy3.11-v7.3.23-src.zip
+    948b8ea58dea5b9917210fe4afd242c788fbfaba1c3f1a25e696a404f703389a  pypy3.11-v7.3.23-win64.zip
+
+pypy2.7-v7.3.23 sha256::
+
+    b0bec20c16b6ab2bd46bd4f5d6049b6070a22a53eaed437ee9ac36d842ceda74  pypy2.7-v7.3.23-aarch64.tar.bz2
+    fa6499281775ec22f4742e9dd7b31c22b8fc6a700c1cf50aebc7ef24f61461c5  pypy2.7-v7.3.23-linux32.tar.bz2
+    7833be48244a6f4aa0720c6b98f151428291a52697da849ef6b3ca7d5bf45b96  pypy2.7-v7.3.23-linux64.tar.bz2
+    f83d8fce9695f598dc55187c0f6c06c367dbf76d288d2bca7dbf040e4be15f37  pypy2.7-v7.3.23-macos_arm64.tar.bz2
+    edbddb678c00f29c2361dbe6c6ea634f5d62e6854a775a9209c6b789bb0dc00b  pypy2.7-v7.3.23-macos_x86_64.tar.bz2
+    7aa8eaf414d25f916fe426365404759c56aa28aea6190e65967c4a45f64dc899  pypy2.7-v7.3.23-src.tar.bz2
+    7a2ba4fd239c6197a4ef972796d4de7c693aa17a693b7ef05759fc57250d69d7  pypy2.7-v7.3.23-src.zip
+    005fda0a46e0e3f34476967c27e9f7f80d8b60a1095a2cda380e5eb47c3733ef  pypy2.7-v7.3.23-win64.zip
+
+
 pypy3.11-v7.3.22 sha256::
 
     c29a8933e2084f52df74c829aa0d8f5652b9d5919f68e9fb89cab3afe35dd884  pypy3.11-v7.3.22-aarch64.tar.bz2
