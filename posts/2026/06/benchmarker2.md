@@ -73,7 +73,7 @@ the pipeline:
   endpoints are not supported on buildbot 0.9 and up, we set up a
   [build-summary](https://build-summary.pypy.org/summary?branch=py3.11)
   alternative that is synchronized to the buildbot work.
-- Perhaps make more use of the free github actions workers to replace or
+- Perhaps make more use of the free GitHub actions workers to replace or
   enhance the buildbot workers. Some of that can be seen in PR 5488. The
   build-summary service is also able to ingest github action testing results.
 - Continue to push on in CPython compatibility, performance improvements, and
