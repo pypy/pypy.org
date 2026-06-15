@@ -11,23 +11,25 @@
 -->
 
 
-The [https://speed.pypy.org]() site has been running the [PyPy benchmark
+The [https://speed.pypy.org](https://pypy.org) site has been running the [PyPy benchmark
 suite](https://foss.heptapod.net/pypy/benchmarks) since at least 2010. Our
 first benchmarking machine was called tannit, and it faithfully ran the suite
 from May 2010 to Dec 2016. For a brief period in the middle we had a machine
 called speed-python, but tannit was the gold standard. In June 2016 we started
 running benchmarks on our current machine, __benchmarker__ (Intel i7-7700). It has been graciously
-sponsored by [BaroqueSoftware](https://barouquesoftware.com). Based on a xenial
+sponsored by [Baroque Software](https://baroquesoftware.com/). Based on a xenial
 chroot, the machine has been quite stable but over the years has had a few
 kernel exploits blocked in firmware that changed its base performance.
 
 It is time to update. Rather than use the same machine with updated software,
-we decided to opt for a newer machine. Since the beginning of May we have been
+we decided to opt for different hardware. Since the beginning of May we have been
 running the benchmark suite on __benchmarker2__: an AMD Ryzen 5 3600 machine. In
-order to try to stabilize benchmarks the machine was set up
+order to try to stabilize benchmarks the machine was set up:
+
 - without SMT (hyper-threading)
-- using `cpuset` to partition CPUs 3,4,5 off and use them exclusively for
-  benchmarking
+- using `cpuset` to partition CPUs 3,4,5 off (the CPU has 2 CCD chiplets so the
+  CPU sets are truly independent, the reason we chose the Zen2 architecture)
+  and use them exclusively for benchmarking
 - disable turbo speed strategy.
 
 It runs debian13 as a base operating system, and the benchmarks run in a
@@ -42,8 +44,9 @@ In order to establish a baseline, I compiled CPython 3.11.5 with
 The difference between the two machines is striking: where the xenial image
 (with gcc 5.4) benchmark comparison to CPython 3.11.9 shows a 3x improvement
 when run on PyPy on benchmarker, the newer machine with the newer compiler and
-a fresh baseline shows a 4.3x improvement.  I think the major differences
-between the results is
+a fresh baseline shows a 4.3x improvement.  I can only speculate that the major
+differences between the results is:
+
 - The CPython3.11.9 run was done in June 2024. This was before some firmware
   kernel changes applied to the host machine that slowed it down. I did notice
   at the time the exploit migitagion firmware was applied that the overall
@@ -54,10 +57,11 @@ between the results is
 - The AMD machine uses RAM at 3200MHz, the Intel at 2400MB.
 
 The last 3 points may affect PyPy more than CPython, since PyPy's JIT is more
-memory intensive.
+memory intensive and the RPython codegen may be handled better by newer compilers.
 
 This is the first step in an overhaul of PyPy's infrastructure. Other plans in
 the pipeline:
+
 - Move all the buildbot builds from `manylinux_2014` to `manylinux2_28`-based
   images. This will match the move on benchmarker2. It will require some
   adaptations so that tests will pass on the newer compiler, see [PR
@@ -77,5 +81,5 @@ the pipeline:
   version](https://github.com/pypy/pypy/issues?q=is%3Aissue%20state%3Aopen%20milestone%3A%22Python%203.12%22)
 
 Help of course is welcome.
+
 Matti
-- 
