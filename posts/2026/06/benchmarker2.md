@@ -12,7 +12,7 @@
 
 
 The [https://speed.pypy.org](https://pypy.org) site has been running the [PyPy benchmark
-suite](https://foss.heptapod.net/pypy/benchmarks) since at least 2010. Our
+suite](https://foss.heptapod.net/pypy/benchmarks) since 2010. Our
 first benchmarking machine was called tannit, and it faithfully ran the suite
 from May 2010 to Dec 2016. For a brief period in the middle we had a machine
 called speed-python, but tannit was the gold standard. In June 2016 we started
