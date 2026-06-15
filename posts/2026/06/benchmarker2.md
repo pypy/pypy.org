@@ -52,7 +52,7 @@ differences between the results is:
   at the time the exploit migitagion firmware was applied that the overall
   comparison dropped from 3.3x to 3x, but felt the additional protection was
   warrented.
-- The newer software image uses gcc 14, where the older one used gcc5.
+- The newer software image uses GCC 14, where the older one used GCC 5.
 - The AMD machine has 32MB of L3 cache, the Intel machine has 8MB.
 - The AMD machine uses RAM at 3200MHz, the Intel at 2400MB.
 
