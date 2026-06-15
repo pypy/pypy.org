@@ -42,7 +42,7 @@ In order to establish a baseline, I compiled CPython 3.11.5 with:
 ```
 
 The difference between the two machines is striking: where the xenial image
-(with gcc 5.4) benchmark comparison to CPython 3.11.9 shows a 3x improvement
+(with GCC 5.4) benchmark comparison to CPython 3.11.9 shows a 3x improvement
 when run on PyPy on benchmarker, the newer machine with the newer compiler and
 a fresh baseline shows a 4.3x improvement.  I can only speculate that the major
 differences between the results is:
