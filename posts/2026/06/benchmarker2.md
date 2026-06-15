@@ -47,7 +47,7 @@ when run on PyPy on benchmarker, the newer machine with the newer compiler and
 a fresh baseline shows a 4.3x improvement.  I can only speculate that the major
 differences between the results is:
 
-- The CPython3.11.9 run was done in June 2024. This was before some firmware
+- The CPython 3.11.9 run was done in June 2024. This was before some firmware
   kernel changes applied to the host machine that slowed it down. I did notice
   at the time the exploit migitagion firmware was applied that the overall
   comparison dropped from 3.3x to 3x, but felt the additional protection was
