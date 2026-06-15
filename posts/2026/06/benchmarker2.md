@@ -35,7 +35,7 @@ order to try to stabilize benchmarks the machine was set up:
 It runs debian13 as a base operating system, and the benchmarks run in a
 `manylinux2_28` docker, which provides gcc14.
 
-In order to establish a baseline, I compiled CPython 3.11.5 with
+In order to establish a baseline, I compiled CPython 3.11.5 with:
 ```
 ./configure --prefix=/opt/cpython-3.11 --enable-optimizations \
 --with-computed-gotos --enable-shared LDFLAGS='-Wl,-rpath,\$$ORIGIN/../lib'
