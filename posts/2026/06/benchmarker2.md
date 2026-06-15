@@ -64,8 +64,8 @@ the pipeline:
 
 - Move all the buildbot builds from `manylinux_2014` to `manylinux2_28`-based
   images. This will match the move on benchmarker2. It will require some
-  adaptations so that tests will pass on the newer compiler, see [PR
-  5488](https://github.com/pypy/pypy/pull/5488). This will mean an ABI break,
+  adaptations so that tests will pass on the newer compiler, see
+  [pypy/pypy#5488](https://github.com/pypy/pypy/pull/5488). This will mean an ABI break,
   so the next PyPy release will leave behind the 7.3.x series.
 - Think about [updating our use of buildbot 0.8.8](https://github.com/pypy/buildbot/issues/1),
   which is woefully out of date. Since we have a heavily customized [summary
