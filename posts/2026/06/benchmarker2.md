@@ -11,13 +11,13 @@
 -->
 
 
-The [https://speed.pypy.org](https://pypy.org) site has been running the [PyPy benchmark
+The [https://speed.pypy.org](https://speed.pypy.org) site has been running the [PyPy benchmark
 suite](https://foss.heptapod.net/pypy/benchmarks) since 2010. Our
 first benchmarking machine was called tannit, and it faithfully ran the suite
 from May 2010 to Dec 2016. For a brief period in the middle we had a machine
 called speed-python, but tannit was the gold standard. In June 2016 we started
 running benchmarks on our current machine, __benchmarker__ (Intel i7-7700). It has been graciously
-sponsored by [Baroque Software](https://baroquesoftware.com/). Based on a xenial
+sponsored by [Baroque Software](https://baroquesoftware.com/). Based on an Ubuntu xenial
 chroot, the machine has been quite stable but over the years has had a few
 kernel exploits blocked in firmware that changed its base performance.
 
@@ -54,7 +54,7 @@ differences between the results is:
   warrented.
 - The newer software image uses GCC 14, where the older one used GCC 5.
 - The AMD machine has 32MB of L3 cache, the Intel machine has 8MB.
-- The AMD machine uses RAM at 3200MHz, the Intel at 2400MB.
+- The AMD machine uses RAM at 3200MHz, the Intel at 2400MHz.
 
 The last 3 points may affect PyPy more than CPython, since PyPy's JIT is more
 memory intensive and the RPython codegen may be handled better by newer compilers.
