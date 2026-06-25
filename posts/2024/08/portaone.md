@@ -88,7 +88,7 @@ At the time of updating PyPy from 3.5 to 3.6 our QA started noticing those
 crashes more often, but we still had no luck with STR or collecting proper
 coredumps with debug symbols. Then it became even worse after our development
 played with the [Garbage Collector's
-options](https://doc.pypy.org/en/latest/gc_info.html) to increase performance
+options](https://doc.pypy.org/gc_info.html) to increase performance
 of our middleware component. The crashes started to affect our regular
 performance testing (controlled by QA manager Yevhenii Bovda). At that point it
 was decided that we can no longer live like that and so we started an intense
@@ -99,7 +99,7 @@ troubleshooting) we narrowed down the issue as much as we could. So, it was not
 our code, it was definitely somewhere in PyPy. Eventually our SIP software
 engineer [Yevhenii Yatchenko](https://github.com/Yevhenii-Yatchenko) found out
 that this bug is connected with the use of our [custom hooks in the
-GC](https://doc.pypy.org/en/latest/gc_info.html#gc-hooks). Yevhenii created
+GC](https://doc.pypy.org/gc_info.html#gc-hooks). Yevhenii created
 ticket [#4899](https://github.com/pypy/pypy/issues/4899) and within 2-3 days we
 got a fix from a [member of the PyPy team](https://github.com/cfbolz), in true open-source fashion.
 
@@ -115,7 +115,7 @@ helped! What a relief! So, the next logical step was to remove all debug
 options and run PyPy only with the patch. Unfortunately, it started to fail
 again and we came to the obvious conclusion that what will help us is not a
 patch, but one of options we were testing out. At that point we found out that
-[`PYPY_GC_MAX_PINNED=0`](https://doc.pypy.org/en/latest/gc_info.html#environment-variables)
+[`PYPY_GC_MAX_PINNED=0`](https://doc.pypy.org/gc_info.html#environment-variables)
 is a necessary and sufficient condition to solve our issue. This points to
 another bug in the garbage collector, somehow related to object pinning.
 

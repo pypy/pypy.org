@@ -32,7 +32,7 @@ model and user interface are superior. But
   Tracking interlocking issues is easier if all the code is on the same
   platform.
 
-- The [FAQ](https://doc.pypy.org/en/latest/faq.html#why-doesn-t-pypy-use-git-and-move-to-github)
+- The [FAQ](https://doc.pypy.org/faq.html#why-doesn-t-pypy-use-git-and-move-to-github)
   presents two arguments against the move. [Github notes](https://git-scm.com/docs/git-notes)
   solves much of point (1): the difficulty of discovering provenance of
   commits, although not entirely. But the main problem is point (2), it turns

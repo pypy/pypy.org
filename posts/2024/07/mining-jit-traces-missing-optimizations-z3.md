@@ -60,7 +60,7 @@ healthy dose of cleanups first).
 ## Dumping PyPy Traces
 
 PyPy will write its JIT traces into the file `out` if the environment variable
-[`PYPYLOG`](https://doc.pypy.org/en/latest/man/pypy.1.html) is set as follows:
+[`PYPYLOG`](https://doc.pypy.org/man/pypy.1.html) is set as follows:
 
 ```
 PYPYLOG=jit-log-opt:out pypy <program.py>
