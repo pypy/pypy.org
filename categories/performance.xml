@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about performance)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/performance.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Thu, 25 Jun 2026 04:50:17 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>A new benchmark runner for PyPy</title><link>https://www.pypy.org/posts/2026/06/benchmarker2-for-pypy.html</link><dc:creator>mattip</dc:creator><description>&lt;p&gt;The &lt;a href="https://speed.pypy.org"&gt;https://speed.pypy.org&lt;/a&gt; site has been running the &lt;a href="https://foss.heptapod.net/pypy/benchmarks"&gt;PyPy benchmark
+suite&lt;/a&gt; since 2010. Our
+first benchmarking machine was called tannit, and it faithfully ran the suite
+from May 2010 to Dec 2016. For a brief period in the middle we had a machine
+called speed-python, but tannit was the gold standard. In June 2016 we started
+running benchmarks on our current machine, &lt;strong&gt;benchmarker&lt;/strong&gt; (Intel i7-7700). It has been graciously
+sponsored by &lt;a href="https://baroquesoftware.com/"&gt;Baroque Software&lt;/a&gt;. Based on an Ubuntu xenial
+chroot, the machine has been quite stable but over the years has had a few
+kernel exploits blocked in firmware that changed its base performance.&lt;/p&gt;
+&lt;p&gt;It is time to update. Rather than use the same machine with updated software,
+we decided to opt for different hardware. Since the beginning of May we have been
+running the benchmark suite on &lt;strong&gt;benchmarker2&lt;/strong&gt;: an AMD Ryzen 5 3600 machine. In
+order to try to stabilize benchmarks the machine was set up:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;without SMT (hyper-threading)&lt;/li&gt;
+&lt;li&gt;using &lt;code&gt;cpuset&lt;/code&gt; to partition CPUs 3,4,5 off (the CPU has 2 CCD chiplets so the
+  CPU sets are truly independent, the reason we chose the Zen2 architecture)
+  and use them exclusively for benchmarking&lt;/li&gt;
+&lt;li&gt;disable turbo speed strategy.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;It runs debian13 as a base operating system, and the benchmarks run in a
+&lt;code&gt;manylinux2_28&lt;/code&gt; docker, which provides gcc14.&lt;/p&gt;
+&lt;p&gt;In order to establish a baseline, I compiled CPython 3.11.5 with:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;./configure --prefix=/opt/cpython-3.11 --enable-optimizations \
+--with-computed-gotos --enable-shared LDFLAGS='-Wl,-rpath,\$$ORIGIN/../lib'
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;The difference between the two machines is striking: where the xenial image
+(with GCC 5.4) benchmark comparison to CPython 3.11.9 shows a 3x improvement
+when run on PyPy on benchmarker, the newer machine with the newer compiler and
+a fresh baseline shows a 4.3x improvement.  I can only speculate that the major
+differences between the results is:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The CPython 3.11.9 run was done in June 2024. This was before some firmware
+  kernel changes applied to the host machine that slowed it down. I did notice
+  at the time the exploit migitagion firmware was applied that the overall
+  comparison dropped from 3.3x to 3x, but felt the additional protection was
+  warrented.&lt;/li&gt;
+&lt;li&gt;The newer software image uses GCC 14, where the older one used GCC 5.&lt;/li&gt;
+&lt;li&gt;The AMD machine has 32MB of L3 cache, the Intel machine has 8MB.&lt;/li&gt;
+&lt;li&gt;The AMD machine uses RAM at 3200MHz, the Intel at 2400MHz.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The last 3 points may affect PyPy more than CPython, since PyPy's JIT is more
+memory intensive and the RPython codegen may be handled better by newer compilers.&lt;/p&gt;
+&lt;p&gt;This is the first step in an overhaul of PyPy's infrastructure. Other plans in
+the pipeline:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Move all the buildbot builds from &lt;code&gt;manylinux_2014&lt;/code&gt; to &lt;code&gt;manylinux2_28&lt;/code&gt;-based
+  images. This will match the move on benchmarker2. It will require some
+  adaptations so that tests will pass on the newer compiler, see
+  &lt;a href="https://github.com/pypy/pypy/pull/5488"&gt;pypy/pypy#5488&lt;/a&gt;. This will mean an ABI break,
+  so the next PyPy release will leave behind the 7.3.x series.&lt;/li&gt;
+&lt;li&gt;Think about &lt;a href="https://github.com/pypy/buildbot/issues/1"&gt;updating our use of buildbot 0.8.8&lt;/a&gt;,
+  which is woefully out of date. Since we have a heavily customized &lt;a href="https://buildbot.pypy.org/summary?branch=py3.11"&gt;summary
+  page&lt;/a&gt;, and the twistd-based
+  endpoints are not supported on buildbot 0.9 and up, we set up a
+  &lt;a href="https://build-summary.pypy.org/summary?branch=py3.11"&gt;build-summary&lt;/a&gt;
+  alternative that is synchronized to the buildbot work.&lt;/li&gt;
+&lt;li&gt;Perhaps make more use of the free GitHub actions workers to replace or
+  enhance the buildbot workers. Some of that can be seen in PR 5488. The
+  build-summary service is also able to ingest github action testing results.&lt;/li&gt;
+&lt;li&gt;Continue to push on in CPython compatibility, performance improvements, and
+  bugfixes, as well as work on a &lt;a href="https://github.com/pypy/pypy/issues?q=is%3Aissue%20state%3Aopen%20milestone%3A%22Python%203.12%22"&gt;PyPy 3.12
+  version&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Help of course is welcome.&lt;/p&gt;
+&lt;p&gt;Matti&lt;/p&gt;</description><category>benchmarks</category><category>infrastructure</category><category>performance</category><guid>https://www.pypy.org/posts/2026/06/benchmarker2-for-pypy.html</guid><pubDate>Sun, 14 Jun 2026 15:07:09 GMT</pubDate></item><item><title>RPython-based emulator speeds up RISC-V simulation over 15x</title><link>https://www.pypy.org/posts/2023/05/rpython-used-to-speed-up-risc-v-simulation-over-15x.html</link><dc:creator>CF Bolz-Tereick</dc:creator><description>&lt;p&gt;In cooperation with &lt;a class="reference external" href="https://riscv.org/"&gt;RISC-V International&lt;/a&gt;, who funded a part of this project,
+we recently created a workflow to
+use RPython to take a &lt;a class="reference external" href="https://github.com/riscv/sail-riscv#riscv-sail-model"&gt;Sail RISC-V&lt;/a&gt; model and automatically create a RISC-V ISA
+emulator from it, which we call &lt;a class="reference external" href="https://docs.pydrofoil.org"&gt;Pydrofoil&lt;/a&gt;. The simulator sped up booting a
+linux emulator from 35 minutes (using the standard Sail-generated emulator in
+C) to 2 minutes, a speedup of 17.5x. More details about the process are in the
+&lt;a class="reference external" href="https://riscv.org/blog/2023/05/how-to-speed-up-the-emulating-process-with-pydrofoil-carl-friedrich/"&gt;RISC-V blog post&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;A few take-aways from the project:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;While PyPy has shown it can speed up generic python code &lt;a class="reference external" href="https://speed.pypy.org"&gt;about 4x&lt;/a&gt;, the
+technology behind PyPy can really shine in other areas.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;RPython is malleable and can be molded to many tasks, the RPython meta-JIT is
+very flexible.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;A JIT is well-suited for the problem of emulation, because it can
+perform dynamic binary translation.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy can solve real world performance problems, even somewhat unusual ones.
+Please &lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;get in touch&lt;/a&gt; and let us know how we can help you solve yours!&lt;/p&gt;</description><category>casestudy</category><category>performance</category><guid>https://www.pypy.org/posts/2023/05/rpython-used-to-speed-up-risc-v-simulation-over-15x.html</guid><pubDate>Tue, 16 May 2023 11:22:35 GMT</pubDate></item><item><title>Repeated string concatenation is quadratic in PyPy (and CPython)</title><link>https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html</link><dc:creator>CF Bolz-Tereick</dc:creator><description>&lt;p&gt;This is a super brief blog post responding to an &lt;a class="reference external" href="https://foss.heptapod.net/pypy/pypy/-/issues/3885"&gt;issue&lt;/a&gt; that we got on the PyPy
+issue tracker. I am moving my response to the blog (with permission of the
+submitter) to have a post to point to, since it's a problem that comes up with
+some regularity. It's also documented on our page of &lt;a class="reference external" href="https://doc.pypy.org/cpython_differences.html?highlight=join#performance-differences"&gt;differences between PyPy
+and CPython&lt;/a&gt; but I thought an additional blog post might be good.&lt;/p&gt;
+&lt;p&gt;The issue pointed out that a small program that operates on strings is much
+slower on PyPy compared to CPython. The program is a solution for 2016's
+Advent of Code &lt;a class="reference external" href="https://adventofcode.com/2016/day/16"&gt;Day 16&lt;/a&gt; and looks like this:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code python"&gt;&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-1" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-1" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-1"&gt;&lt;/a&gt;&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;dragon&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-2" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-2" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-2"&gt;&lt;/a&gt;    &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[::&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;replace&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'r'&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;replace&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;'1'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;replace&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;'r'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'1'&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-3" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-3" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-3"&gt;&lt;/a&gt;    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-4" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-4" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-4"&gt;&lt;/a&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-5" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-5" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-5"&gt;&lt;/a&gt;&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;diffstr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-6" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-6" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-6"&gt;&lt;/a&gt;    &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;""&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-7" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-7" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-7"&gt;&lt;/a&gt;    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-8" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-8" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-8"&gt;&lt;/a&gt;        &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'1'&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]]&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-9" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-9" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-9"&gt;&lt;/a&gt;    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-10" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-10" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-10"&gt;&lt;/a&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-11" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-11" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-11"&gt;&lt;/a&gt;&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;iterdiff&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-12" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-12" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-12"&gt;&lt;/a&gt;    &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-13" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-13" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-13"&gt;&lt;/a&gt;    &lt;span class="k"&gt;while&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-14" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-14" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-14"&gt;&lt;/a&gt;        &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;diffstr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-15" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-15" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-15"&gt;&lt;/a&gt;    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-16" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-16" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-16"&gt;&lt;/a&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-17" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-17" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-17"&gt;&lt;/a&gt;&lt;span class="n"&gt;size&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;35651584&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-18" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-18" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-18"&gt;&lt;/a&gt;&lt;span class="n"&gt;initstate&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;'10010000000110000'&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-19" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-19" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-19"&gt;&lt;/a&gt;&lt;span class="k"&gt;while&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;initstate&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-20" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-20" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-20"&gt;&lt;/a&gt;    &lt;span class="n"&gt;initstate&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;dragon&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;initstate&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-21" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-21" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-21"&gt;&lt;/a&gt;&lt;span class="n"&gt;initstate&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;initstate&lt;/span&gt;&lt;span class="p"&gt;[:&lt;/span&gt;&lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+&lt;a id="rest_code_6886ca6c8a354c57bdea725a7183e35b-22" name="rest_code_6886ca6c8a354c57bdea725a7183e35b-22" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_6886ca6c8a354c57bdea725a7183e35b-22"&gt;&lt;/a&gt;&lt;span class="nb"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;iterdiff&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;initstate&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;The submitter pointed out, that the program is fast on CPython (~8s on my
+laptop) and slow (didn't finish) on PyPy.&lt;/p&gt;
+&lt;p&gt;The reason for the performance difference is that &lt;code class="docutils literal"&gt;+=&lt;/code&gt; on strings in a loop
+has quadratic complexity in PyPy, which is what &lt;code class="docutils literal"&gt;diffstr&lt;/code&gt; does. To see the
+quadraticness, consider that to add a character at the end of the string, the
+beginning of the string needs to be copied into a new chunk of memory. If the
+loop runs &lt;code class="docutils literal"&gt;n&lt;/code&gt; times, that means there are&lt;/p&gt;
+&lt;p&gt;&lt;code class="docutils literal"&gt;1 + 2 + 3 + ... + n = n * (n + 1) // 2&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;character copies.&lt;/p&gt;
+&lt;p&gt;Repeated string concatenations are in principle also quadratic in CPython, but
+CPython has an &lt;a class="reference external" href="https://docs.python.org/2/whatsnew/2.4.html#optimizations"&gt;optimization&lt;/a&gt; that makes them sometimes not quadratic, which is
+what makes this program not too slow in CPython.&lt;/p&gt;
+&lt;p&gt;In order to fix the problem on PyPy it's best to use a list for the string
+parts, which has the right amortized O(1) complexity for &lt;code class="docutils literal"&gt;.append&lt;/code&gt; calls, and
+then use &lt;code class="docutils literal"&gt;str.join&lt;/code&gt; after the loop:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code python"&gt;&lt;a id="rest_code_7d019620c35848edb762f643835dab05-1" name="rest_code_7d019620c35848edb762f643835dab05-1" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_7d019620c35848edb762f643835dab05-1"&gt;&lt;/a&gt;&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;diffstr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_7d019620c35848edb762f643835dab05-2" name="rest_code_7d019620c35848edb762f643835dab05-2" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_7d019620c35848edb762f643835dab05-2"&gt;&lt;/a&gt;    &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;
+&lt;a id="rest_code_7d019620c35848edb762f643835dab05-3" name="rest_code_7d019620c35848edb762f643835dab05-3" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_7d019620c35848edb762f643835dab05-3"&gt;&lt;/a&gt;    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_7d019620c35848edb762f643835dab05-4" name="rest_code_7d019620c35848edb762f643835dab05-4" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_7d019620c35848edb762f643835dab05-4"&gt;&lt;/a&gt;        &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;append&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'1'&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]])&lt;/span&gt;
+&lt;a id="rest_code_7d019620c35848edb762f643835dab05-5" name="rest_code_7d019620c35848edb762f643835dab05-5" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_7d019620c35848edb762f643835dab05-5"&gt;&lt;/a&gt;    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s2"&gt;""&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;With this change the program becomes a little bit faster on CPython for me, and
+on PyPy it stops being quadratic and runs in ~3.5s.&lt;/p&gt;
+&lt;p&gt;In general, it's best not to rely on the presence of this optimization in
+CPython either. Sometimes, a small innocent looking changes will break CPython's
+optimization. E.g. this useless change makes CPython also take ages:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code python"&gt;&lt;a id="rest_code_4e94c1504e334392abcf7cbfa68ea91e-1" name="rest_code_4e94c1504e334392abcf7cbfa68ea91e-1" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_4e94c1504e334392abcf7cbfa68ea91e-1"&gt;&lt;/a&gt;&lt;span class="k"&gt;def&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nf"&gt;diffstr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_4e94c1504e334392abcf7cbfa68ea91e-2" name="rest_code_4e94c1504e334392abcf7cbfa68ea91e-2" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_4e94c1504e334392abcf7cbfa68ea91e-2"&gt;&lt;/a&gt;    &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;""&lt;/span&gt;
+&lt;a id="rest_code_4e94c1504e334392abcf7cbfa68ea91e-3" name="rest_code_4e94c1504e334392abcf7cbfa68ea91e-3" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_4e94c1504e334392abcf7cbfa68ea91e-3"&gt;&lt;/a&gt;    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+&lt;a id="rest_code_4e94c1504e334392abcf7cbfa68ea91e-4" name="rest_code_4e94c1504e334392abcf7cbfa68ea91e-4" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_4e94c1504e334392abcf7cbfa68ea91e-4"&gt;&lt;/a&gt;        &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="s1"&gt;'0'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="s1"&gt;'1'&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]]&lt;/span&gt;
+&lt;a id="rest_code_4e94c1504e334392abcf7cbfa68ea91e-5" name="rest_code_4e94c1504e334392abcf7cbfa68ea91e-5" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_4e94c1504e334392abcf7cbfa68ea91e-5"&gt;&lt;/a&gt;        &lt;span class="n"&gt;c&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;
+&lt;a id="rest_code_4e94c1504e334392abcf7cbfa68ea91e-6" name="rest_code_4e94c1504e334392abcf7cbfa68ea91e-6" href="https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html#rest_code_4e94c1504e334392abcf7cbfa68ea91e-6"&gt;&lt;/a&gt;    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;The reason why this change breaks the optimization in CPython is that it only
+triggers if the reference count of &lt;code class="docutils literal"&gt;b&lt;/code&gt; is 1, in which case it uses &lt;code class="docutils literal"&gt;realloc&lt;/code&gt;
+on the string. The change is unrealistic of course, but you could imagine a
+related that keeps an extra reference to &lt;code class="docutils literal"&gt;b&lt;/code&gt; for a sensible reason.&lt;/p&gt;
+&lt;p&gt;Another situation in which the optimization doesn't work is discussed in this
+&lt;a class="reference external" href="https://stackoverflow.com/a/44487738"&gt;StackOverflow question&lt;/a&gt; with an answer by Tim Peters.&lt;/p&gt;
+&lt;p&gt;It's unlikely that PyPy will fix this. We had a prototype how to do it, but it
+seems very little "production" code uses &lt;cite&gt;+=&lt;/cite&gt; on strings in a loop, and the fix
+makes the strings implementation quite a bit more complex.&lt;/p&gt;
+&lt;p&gt;So, in summary, don't use repeated concatenations in a loop!&lt;/p&gt;</description><category>performance</category><guid>https://www.pypy.org/posts/2023/01/string-concatenation-quadratic.html</guid><pubDate>Wed, 04 Jan 2023 09:00:00 GMT</pubDate></item></channel></rss>
