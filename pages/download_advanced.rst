@@ -19,7 +19,9 @@ We provide pre-compiled binaries for many platforms and OSes:
 
   Our `nightly binary builds`_ have the most recent bugfixes and performance
   improvements, though they can be less stable than the official releases. See
-  this link for `older versions`_.
+  this link for `older versions`_. Note that as of mid-July 2026, the nightly
+  builds for linux require ``GLBIC>=2.28`` (they build on ``manylinux2_28``
+  containers), which corresponds to CentOS8.
 
 .. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
 .. _`older versions`: https://downloads.python.org/pypy/
@@ -42,7 +44,7 @@ We provide pre-compiled binaries for many platforms and OSes:
    * - **Linux x86 64 bit**
      - Download__
      - Download__
-     - compatible with CentOS7 and later.
+     - compatible with CentOS7 (manylinux2014) and later.
 
    * - **Windows 64 bit**
      - Download__
@@ -67,7 +69,7 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - Download__
      - Download__
-     - compatible with CentOS7 and later.
+     - compatible with CentOS7 (manylinux2014) and later.
 
 .. __: https://downloads.python.org/pypy/pypy3.11-v7.3.23-linux64.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.23-linux64.tar.bz2
@@ -104,7 +106,7 @@ We provide pre-compiled binaries for many platforms and OSes:
 
      - Download__
      - Download__
-     - compatible with CentOS7 and later
+     - compatible with CentOS7 (manylinux2014) and later
 
 .. __: https://downloads.python.org/pypy/pypy3.11-v7.3.23-linux32.tar.bz2
 .. __: https://downloads.python.org/pypy/pypy2.7-v7.3.23-linux32.tar.bz2
