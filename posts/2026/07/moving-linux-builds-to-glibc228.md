@@ -12,7 +12,7 @@
 
 A short note for visibility.
 
-PyPy builds tarballs of the compiler [ready for
+PyPy builds tarballs of the python interpreter [ready for
 download](https://downloads.python.org/pypy/). These include the latest
 releases and also nightly builds, fresh from our fleet of buildbots. Over the
 next couple of days, the nightly builds on linux will transition from
