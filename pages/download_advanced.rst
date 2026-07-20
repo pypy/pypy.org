@@ -20,7 +20,7 @@ We provide pre-compiled binaries for many platforms and OSes:
   Our `nightly binary builds`_ have the most recent bugfixes and performance
   improvements, though they can be less stable than the official releases. See
   this link for `older versions`_. Note that as of mid-July 2026, the nightly
-  builds for linux require ``GLBIC>=2.28`` (they build on ``manylinux2_28``
+  builds for linux require ``GLIBC>=2.28`` (they build on ``manylinux2_28``
   containers), which corresponds to CentOS8.
 
 .. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
