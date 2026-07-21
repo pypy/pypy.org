@@ -15,7 +15,7 @@ We provide pre-compiled binaries for many platforms and OSes.
   improvements, though they can be less stable than the official releases. See
   these links for `other versions`_ or `more information`_ including other
   platforms. Note that as of mid-July 2026, the nightly builds for linux require
-  ``GLBIC>=2.28`` (they build on ``manylinux2_28`` containers)
+  ``GLIBC>=2.28`` (they build on ``manylinux2_28`` containers)
 
 .. _`nightly binary builds`: https://buildbot.pypy.org/nightly/
 .. _`other versions`: https://downloads.python.org/pypy/
