@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts about benchmarks)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/categories/benchmarks.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Tue, 21 Jul 2026 08:21:41 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>A new benchmark runner for PyPy</title><link>https://www.pypy.org/posts/2026/06/benchmarker2-for-pypy.html</link><dc:creator>mattip</dc:creator><description>&lt;p&gt;The &lt;a href="https://speed.pypy.org"&gt;https://speed.pypy.org&lt;/a&gt; site has been running the &lt;a href="https://foss.heptapod.net/pypy/benchmarks"&gt;PyPy benchmark
+suite&lt;/a&gt; since 2010. Our
+first benchmarking machine was called tannit, and it faithfully ran the suite
+from May 2010 to Dec 2016. For a brief period in the middle we had a machine
+called speed-python, but tannit was the gold standard. In June 2016 we started
+running benchmarks on our current machine, &lt;strong&gt;benchmarker&lt;/strong&gt; (Intel i7-7700). It has been graciously
+sponsored by &lt;a href="https://baroquesoftware.com/"&gt;Baroque Software&lt;/a&gt;. Based on an Ubuntu xenial
+chroot, the machine has been quite stable but over the years has had a few
+kernel exploits blocked in firmware that changed its base performance.&lt;/p&gt;
+&lt;p&gt;It is time to update. Rather than use the same machine with updated software,
+we decided to opt for different hardware. Since the beginning of May we have been
+running the benchmark suite on &lt;strong&gt;benchmarker2&lt;/strong&gt;: an AMD Ryzen 5 3600 machine. In
+order to try to stabilize benchmarks the machine was set up:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;without SMT (hyper-threading)&lt;/li&gt;
+&lt;li&gt;using &lt;code&gt;cpuset&lt;/code&gt; to partition CPUs 3,4,5 off (the CPU has 2 CCD chiplets so the
+  CPU sets are truly independent, the reason we chose the Zen2 architecture)
+  and use them exclusively for benchmarking&lt;/li&gt;
+&lt;li&gt;disable turbo speed strategy.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;It runs debian13 as a base operating system, and the benchmarks run in a
+&lt;code&gt;manylinux2_28&lt;/code&gt; docker, which provides gcc14.&lt;/p&gt;
+&lt;p&gt;In order to establish a baseline, I compiled CPython 3.11.5 with:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;./configure --prefix=/opt/cpython-3.11 --enable-optimizations \
+--with-computed-gotos --enable-shared LDFLAGS='-Wl,-rpath,\$$ORIGIN/../lib'
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;The difference between the two machines is striking: where the xenial image
+(with GCC 5.4) benchmark comparison to CPython 3.11.9 shows a 3x improvement
+when run on PyPy on benchmarker, the newer machine with the newer compiler and
+a fresh baseline shows a 4.3x improvement.  I can only speculate that the major
+differences between the results is:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The CPython 3.11.9 run was done in June 2024. This was before some firmware
+  kernel changes applied to the host machine that slowed it down. I did notice
+  at the time the exploit migitagion firmware was applied that the overall
+  comparison dropped from 3.3x to 3x, but felt the additional protection was
+  warrented.&lt;/li&gt;
+&lt;li&gt;The newer software image uses GCC 14, where the older one used GCC 5.&lt;/li&gt;
+&lt;li&gt;The AMD machine has 32MB of L3 cache, the Intel machine has 8MB.&lt;/li&gt;
+&lt;li&gt;The AMD machine uses RAM at 3200MHz, the Intel at 2400MHz.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The last 3 points may affect PyPy more than CPython, since PyPy's JIT is more
+memory intensive and the RPython codegen may be handled better by newer compilers.&lt;/p&gt;
+&lt;p&gt;This is the first step in an overhaul of PyPy's infrastructure. Other plans in
+the pipeline:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Move all the buildbot builds from &lt;code&gt;manylinux_2014&lt;/code&gt; to &lt;code&gt;manylinux2_28&lt;/code&gt;-based
+  images. This will match the move on benchmarker2. It will require some
+  adaptations so that tests will pass on the newer compiler, see
+  &lt;a href="https://github.com/pypy/pypy/pull/5488"&gt;pypy/pypy#5488&lt;/a&gt;. This will mean an ABI break,
+  so the next PyPy release will leave behind the 7.3.x series.&lt;/li&gt;
+&lt;li&gt;Think about &lt;a href="https://github.com/pypy/buildbot/issues/1"&gt;updating our use of buildbot 0.8.8&lt;/a&gt;,
+  which is woefully out of date. Since we have a heavily customized &lt;a href="https://buildbot.pypy.org/summary?branch=py3.11"&gt;summary
+  page&lt;/a&gt;, and the twistd-based
+  endpoints are not supported on buildbot 0.9 and up, we set up a
+  &lt;a href="https://build-summary.pypy.org/summary?branch=py3.11"&gt;build-summary&lt;/a&gt;
+  alternative that is synchronized to the buildbot work.&lt;/li&gt;
+&lt;li&gt;Perhaps make more use of the free GitHub actions workers to replace or
+  enhance the buildbot workers. Some of that can be seen in PR 5488. The
+  build-summary service is also able to ingest github action testing results.&lt;/li&gt;
+&lt;li&gt;Continue to push on in CPython compatibility, performance improvements, and
+  bugfixes, as well as work on a &lt;a href="https://github.com/pypy/pypy/issues?q=is%3Aissue%20state%3Aopen%20milestone%3A%22Python%203.12%22"&gt;PyPy 3.12
+  version&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Help of course is welcome.&lt;/p&gt;
+&lt;p&gt;Matti&lt;/p&gt;</description><category>benchmarks</category><category>infrastructure</category><category>performance</category><guid>https://www.pypy.org/posts/2026/06/benchmarker2-for-pypy.html</guid><pubDate>Sun, 14 Jun 2026 15:07:09 GMT</pubDate></item></channel></rss>
