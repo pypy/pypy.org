@@ -79,25 +79,25 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - compatible with manylinux_2_28 and later.
 
-.. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-linux64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-linux64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-linux64.tar.gz
+.. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-linux64.tar.gz
+.. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-linux64.tar.gz
 
 .. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-win64.zip
 .. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-win64.zip
 .. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-win64.zip
 
-.. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-macos_arm64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-macos_arm64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-macos_arm64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-macos_arm64.tar.gz
+.. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-macos_arm64.tar.gz
+.. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-macos_arm64.tar.gz
 
-.. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-macos_x86_64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-macos_x86_64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-macos_x86_64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-macos_x86_64.tar.gz
+.. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-macos_x86_64.tar.gz
+.. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-macos_x86_64.tar.gz
 
-.. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-aarch64.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-aarch64.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-aarch64.tar.gz
+.. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-aarch64.tar.gz
+.. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-aarch64.tar.gz
 
 .. _`PyPy latest`: https://doc.pypy.org/release-v8.0.0.html
 .. _`vcredist.x64.exe`: https://www.microsoft.com/en-us/download/details.aspx?id=52685
@@ -123,9 +123,9 @@ We provide pre-compiled binaries for many platforms and OSes:
      - Download__
      - compatible with manylinux_2_28 and later
 
-.. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-linux32.tar.bz2
-.. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-linux32.tar.bz2
+.. __: https://downloads.python.org/pypy/pypy3.12-v8.0.0-linux32.tar.gz
+.. __: https://downloads.python.org/pypy/pypy3.11-v8.0.0-linux32.tar.gz
+.. __: https://downloads.python.org/pypy/pypy2.7-v8.0.0-linux32.tar.gz
 
 
 .. _`Default (with a JIT Compiler)`:
