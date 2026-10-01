@@ -53,15 +53,20 @@ A `fast`_, `compliant`_ alternative implementation of `Python`_
 
 .. class:: small
 
-On average, PyPy is **about 3 times faster** than CPython 3.11. We currently support python 3.11 and 2.7.
+On average, PyPy 3.12 is **about 4 times faster** than CPython 3.11. We currently support Python 3.12, 3.11 and 2.7.
 
-.. figure:: images/pypy_speed_graph.png
-    :alt: PyPy vs. Python speed comparison graph"
-    :figclass: text-sm
-    :width: 100%
+.. raw:: html
 
-    PyPy (with JIT) benchmark times normalized to CPython. Smaller is
-    better. Based on the geometric average of all benchmarks
+    <figure class="text-sm">
+        <iframe src="https://speed.pypy.org/embed/comparison/"
+                title="PyPy vs. Python speed comparison graph"
+                loading="lazy"
+                style="width: 100%; height: 400px; border: 0;"></iframe>
+        <figcaption>
+            PyPy (with JIT) benchmark times normalized to CPython. Smaller is
+            better. Live data from <a href="https://speed.pypy.org/">speed.pypy.org</a>.
+        </figcaption>
+    </figure>
 
 ::
 
