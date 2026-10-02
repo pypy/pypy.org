@@ -1,0 +1,892 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="../assets/xml/rss.xsl" media="all"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>PyPy (Posts by mattip)</title><link>https://www.pypy.org/</link><description></description><atom:link href="https://www.pypy.org/authors/mattip.xml" rel="self" type="application/rss+xml"></atom:link><language>en</language><copyright>Contents © 2026 &lt;a href="mailto:pypy-dev@pypy.org"&gt;The PyPy Team&lt;/a&gt; </copyright><lastBuildDate>Fri, 02 Oct 2026 04:00:32 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>PyPy v8.0.0 release</title><link>https://www.pypy.org/posts/2026/09/pypy-v800-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v8-0-0-release-of-python-2-7-3-11-and-3-12-beta-released-2026-09-19"&gt;
+&lt;h2&gt;PyPy v8.0.0: release of python 2.7, 3.11, and 3.12 beta released 2026-09-19&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 8.0.0 of PyPy after the previous
+release on May 26, 2026. This is a major new version, hence the bump to 8.0.0.
+It is our first release of Python 3.12, which may still have some bugs so we
+are calling it "beta" quality.&lt;/p&gt;
+&lt;section id="why-the-move-to-8-0-0"&gt;
+&lt;h3&gt;Why the move to 8.0.0&lt;/h3&gt;
+&lt;section id="glibc2-28"&gt;
+&lt;h4&gt;glibc2.28&lt;/h4&gt;
+&lt;p&gt;We have updated our linux buildbots (linux64, linux32, aarch64) to use
+manylinux_2_28 images based on AlmaLinux 8 and glibc 2.28. These use gcc14
+instead of the gcc5 previously used.  So our compiled tarballs will require at
+least glibc2.28, which should be universally supported by now (Ubuntu 24.04
+uses glibc2.39). In order to prevent confusion, we felt bumping the major
+version would be prudent.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="cp12-abi3-support"&gt;
+&lt;h4&gt;cp12-abi3 support&lt;/h4&gt;
+&lt;p&gt;PyPy's Python 3.12 support comes with a new model for the C layer &lt;code class="docutils literal"&gt;PyObject&lt;/code&gt;.
+In order to link the C object to the internal RPython one, we have an extra
+field in the object &lt;code class="docutils literal"&gt;ob_pypy_link&lt;/code&gt;, as described in-depth in
+&lt;a class="reference external" href="https://doc.pypy.org/discussion/rawrefcount.html"&gt;rawrefcount-and-the-gc&lt;/a&gt;. In previous versions, this field was
+visible in a way that makes the &lt;code class="docutils literal"&gt;PyObject&lt;/code&gt; struct different from the CPython
+one. From v8.0.0, we "hide" the PyPy-only extension in a prefix before
+the pointer we hand off to C-extension modules. The goal of this work is to
+allow PyPy to use cp312-abi3 wheels produced for CPython 3.12 and up, using the
+limited ABI. The required pieces have all been put in place:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy's C headers, including struct definitions like &lt;code class="docutils literal"&gt;PyObject&lt;/code&gt;, are
+compatible with CPython's C headers when defining
+&lt;code class="docutils literal"&gt;Py_LIMITED_API=0x030C0000&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy no longer mangles exported function names from the limited API.
+In PyPy3.11 and earlier, functions like &lt;code class="docutils literal"&gt;PyTuple_New&lt;/code&gt; were exported as
+&lt;code class="docutils literal"&gt;PyPyTupleNew&lt;/code&gt;.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Still missing: the import machinery must be taught that abi3.so shared objects
+are valid for PyPy, and the larger ecosystem (pip, uv) must also accept that
+cp312-abi3 wheels are valid candidates for installation.&lt;/p&gt;
+&lt;p&gt;Yes, this is a big step. We are working with Cython and PyO3 to make sure it
+all will Just Work™. Hopefully this will make it easier for packages to
+support PyPy.&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;
+&lt;section id="what-is-new-in-rpython-code-generation"&gt;
+&lt;h3&gt;What is new in RPython code generation&lt;/h3&gt;
+&lt;p&gt;PyPy is written in RPython, and has code generation to translate RPython into
+C as part of the VM build process. We have made some improvements to code
+generation in attempts to speed up the base interpreter. While the speedups
+have not been that impressive, we have made some steps forward:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;We now use &lt;a class="reference external" href="https://eli.thegreenplace.net/2012/07/12/computed-goto-for-efficient-dispatch-tables"&gt;computed gotos&lt;/a&gt; and more aggressively inline code. While this
+produces more compact sources, it does not boost performance as much as we
+wished.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;The source code includes comments mapping the source back to the RPython code
+that generated the block. This is very helpful to see exactly what is going on,
+and may enable further improvements.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/section&gt;
+&lt;section id="dropping-hpy"&gt;
+&lt;h3&gt;Dropping HPy&lt;/h3&gt;
+&lt;p&gt;We have dropped the internal &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; backend for PyPy. The HPy project's
+understanding of how to use handles instead of pointers was a good prototype,
+but the project did not attract enough supporters to become a new standard. The
+code is still in the PyPy codebase, and can be toggled on with a &lt;a class="reference external" href="https://doc.pypy.org/config/commandline.html#pypy-python-interpreter-options"&gt;build option&lt;/a&gt;.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="a-revived-tool-comparing-headers-and-exported-functions"&gt;
+&lt;h3&gt;A revived tool comparing headers and exported functions&lt;/h3&gt;
+&lt;p&gt;We revived the &lt;a class="reference external" href="https://github.com/pypy/pypy/issues/3397#issuecomment-1872091878"&gt;clang-based pyhdrdump&lt;/a&gt; to compare PyPy's header files to
+CPython's header files. See &lt;a class="reference external" href="https://github.com/pypy/pypy/tree/py3.12/pypy/tool/pyhdrdump#pyhdrdump"&gt;the README&lt;/a&gt; for more information on how it works
+and how to use it.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="interpreters"&gt;
+&lt;h3&gt;Interpreters&lt;/h3&gt;
+&lt;p&gt;The release includes three different interpreters:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.11, supporting the syntax and the features of
+Python 3.11, including the stdlib for CPython 3.11.16. Barring security
+issues, this will be the last release to support 3.11.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.12, supporting the syntax and features of Python 3.12, including the
+stdlib for CPython 3.12.14.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the triple
+release.&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear
+about it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://doc.pypy.org/"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://doc.pypy.org/project-ideas.html"&gt;help&lt;/a&gt; with
+making RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; version of your library that would be performant
+on PyPy. Failing that, PyPy will soon support the cp312-abi3 tag for limited
+ABI wheels.  In any case, &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; supports building wheels for PyPy.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython.
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;) and macos (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy supports Windows 32-bit, Linux PPC64 big- and little-endian, Linux ARM
+32 bit, RISC-V RV64IMAFD Linux, and s390x Linux but does not release binaries.
+Please reach out to us if you wish to sponsor binary releases for those
+platforms. Downstream packagers provide binary builds for debian, Fedora,
+conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 8.0.0 release, see the &lt;a class="reference external" href="https://doc.pypy.org/en/latest/release-v8.0.0.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2026/09/pypy-v800-release.html</guid><pubDate>Fri, 18 Sep 2026 11:00:00 GMT</pubDate></item><item><title>Moving linux builds to GLIBC==2.28</title><link>https://www.pypy.org/posts/2026/07/moving-linux-builds-to-glibc228.html</link><dc:creator>mattip</dc:creator><description>&lt;p&gt;A short note for visibility.&lt;/p&gt;
+&lt;p&gt;PyPy builds tarballs of the python interpreter &lt;a href="https://downloads.python.org/pypy/"&gt;ready for
+download&lt;/a&gt;. These include the latest
+releases and also nightly builds, fresh from our fleet of buildbots. Over the
+next couple of days, the nightly builds on linux will transition from
+&lt;code&gt;manylinux2014&lt;/code&gt; based docker images &lt;a href="https://github.com/pypy/pypy-ci"&gt;to &lt;code&gt;manylinux2_28&lt;/code&gt;
+images&lt;/a&gt;. The practical implication is that
+nightly images, and the next releases, will require a minimum of &lt;code&gt;GLIBC&amp;gt;=2.28&lt;/code&gt;,
+i.e. AlmaLinux8, amanzonlinux 2023, debian 10, ubuntu 20.04. For a good
+overview of how this glibc/distro/manylinux all works, see &lt;a href="https://github.com/mayeut/pep600_compliance"&gt;the PEP 600 compliance
+page&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;The next release will indicate this change by a new PyPy major version, 8.0.0.
+It should include a Python3.12 interpreter, in which case it will be the last
+release of the Python 3.11 interpreter.&lt;/p&gt;</description><guid>https://www.pypy.org/posts/2026/07/moving-linux-builds-to-glibc228.html</guid><pubDate>Sat, 18 Jul 2026 18:09:11 GMT</pubDate></item><item><title>A new benchmark runner for PyPy</title><link>https://www.pypy.org/posts/2026/06/benchmarker2-for-pypy.html</link><dc:creator>mattip</dc:creator><description>&lt;p&gt;The &lt;a href="https://speed.pypy.org"&gt;https://speed.pypy.org&lt;/a&gt; site has been running the &lt;a href="https://foss.heptapod.net/pypy/benchmarks"&gt;PyPy benchmark
+suite&lt;/a&gt; since 2010. Our
+first benchmarking machine was called tannit, and it faithfully ran the suite
+from May 2010 to Dec 2016. For a brief period in the middle we had a machine
+called speed-python, but tannit was the gold standard. In June 2016 we started
+running benchmarks on our current machine, &lt;strong&gt;benchmarker&lt;/strong&gt; (Intel i7-7700). It has been graciously
+sponsored by &lt;a href="https://baroquesoftware.com/"&gt;Baroque Software&lt;/a&gt;. Based on an Ubuntu xenial
+chroot, the machine has been quite stable but over the years has had a few
+kernel exploits blocked in firmware that changed its base performance.&lt;/p&gt;
+&lt;p&gt;It is time to update. Rather than use the same machine with updated software,
+we decided to opt for different hardware. Since the beginning of May we have been
+running the benchmark suite on &lt;strong&gt;benchmarker2&lt;/strong&gt;: an AMD Ryzen 5 3600 machine. In
+order to try to stabilize benchmarks the machine was set up:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;without SMT (hyper-threading)&lt;/li&gt;
+&lt;li&gt;using &lt;code&gt;cpuset&lt;/code&gt; to partition CPUs 3,4,5 off (the CPU has 2 CCD chiplets so the
+  CPU sets are truly independent, the reason we chose the Zen2 architecture)
+  and use them exclusively for benchmarking&lt;/li&gt;
+&lt;li&gt;disable turbo speed strategy.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;It runs debian13 as a base operating system, and the benchmarks run in a
+&lt;code&gt;manylinux2_28&lt;/code&gt; docker, which provides gcc14.&lt;/p&gt;
+&lt;p&gt;In order to establish a baseline, I compiled CPython 3.11.5 with:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code literal-block"&gt;./configure --prefix=/opt/cpython-3.11 --enable-optimizations \
+--with-computed-gotos --enable-shared LDFLAGS='-Wl,-rpath,\$$ORIGIN/../lib'
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;The difference between the two machines is striking: where the xenial image
+(with GCC 5.4) benchmark comparison to CPython 3.11.9 shows a 3x improvement
+when run on PyPy on benchmarker, the newer machine with the newer compiler and
+a fresh baseline shows a 4.3x improvement.  I can only speculate that the major
+differences between the results is:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The CPython 3.11.9 run was done in June 2024. This was before some firmware
+  kernel changes applied to the host machine that slowed it down. I did notice
+  at the time the exploit migitagion firmware was applied that the overall
+  comparison dropped from 3.3x to 3x, but felt the additional protection was
+  warrented.&lt;/li&gt;
+&lt;li&gt;The newer software image uses GCC 14, where the older one used GCC 5.&lt;/li&gt;
+&lt;li&gt;The AMD machine has 32MB of L3 cache, the Intel machine has 8MB.&lt;/li&gt;
+&lt;li&gt;The AMD machine uses RAM at 3200MHz, the Intel at 2400MHz.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The last 3 points may affect PyPy more than CPython, since PyPy's JIT is more
+memory intensive and the RPython codegen may be handled better by newer compilers.&lt;/p&gt;
+&lt;p&gt;This is the first step in an overhaul of PyPy's infrastructure. Other plans in
+the pipeline:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Move all the buildbot builds from &lt;code&gt;manylinux_2014&lt;/code&gt; to &lt;code&gt;manylinux2_28&lt;/code&gt;-based
+  images. This will match the move on benchmarker2. It will require some
+  adaptations so that tests will pass on the newer compiler, see
+  &lt;a href="https://github.com/pypy/pypy/pull/5488"&gt;pypy/pypy#5488&lt;/a&gt;. This will mean an ABI break,
+  so the next PyPy release will leave behind the 7.3.x series.&lt;/li&gt;
+&lt;li&gt;Think about &lt;a href="https://github.com/pypy/buildbot/issues/1"&gt;updating our use of buildbot 0.8.8&lt;/a&gt;,
+  which is woefully out of date. Since we have a heavily customized &lt;a href="https://buildbot.pypy.org/summary?branch=py3.11"&gt;summary
+  page&lt;/a&gt;, and the twistd-based
+  endpoints are not supported on buildbot 0.9 and up, we set up a
+  &lt;a href="https://build-summary.pypy.org/summary?branch=py3.11"&gt;build-summary&lt;/a&gt;
+  alternative that is synchronized to the buildbot work.&lt;/li&gt;
+&lt;li&gt;Perhaps make more use of the free GitHub actions workers to replace or
+  enhance the buildbot workers. Some of that can be seen in PR 5488. The
+  build-summary service is also able to ingest github action testing results.&lt;/li&gt;
+&lt;li&gt;Continue to push on in CPython compatibility, performance improvements, and
+  bugfixes, as well as work on a &lt;a href="https://github.com/pypy/pypy/issues?q=is%3Aissue%20state%3Aopen%20milestone%3A%22Python%203.12%22"&gt;PyPy 3.12
+  version&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Help of course is welcome.&lt;/p&gt;
+&lt;p&gt;Matti&lt;/p&gt;</description><category>benchmarks</category><category>infrastructure</category><category>performance</category><guid>https://www.pypy.org/posts/2026/06/benchmarker2-for-pypy.html</guid><pubDate>Sun, 14 Jun 2026 15:07:09 GMT</pubDate></item><item><title>PyPy v7.3.23 release</title><link>https://www.pypy.org/posts/2026/05/pypy-v7322-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-23-release-of-python-2-7-3-11"&gt;
+&lt;h2&gt;PyPy v7.3.23: release of python 2.7, 3.11&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.23 of PyPy after the previous
+release on April 26, 2026. This is a bug-fix release that fixes an overeager
+warning about unused coroutines, and some problems around multiple inheritance
+in c-extensions.&lt;/p&gt;
+&lt;p&gt;This version includes a change to the bytecode interpreter to use &lt;a class="reference external" href="https://github.com/python/cpython/blob/main/InternalDocs/exception_handling.md"&gt;exception tables&lt;/a&gt;
+instead of dedicated opcodes. Now the PyPy disassembly will be closer to
+CPython format. So far it does not impact performance.&lt;/p&gt;
+&lt;p&gt;The release includes two different interpreters:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.11, which is an interpreter supporting the syntax and the features of
+Python 3.11, including the stdlib for CPython 3.11.15.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the double
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases.&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear
+about it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://doc.pypy.org/"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://doc.pypy.org/project-ideas.html"&gt;help&lt;/a&gt; with
+making RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; supports building wheels for PyPy.&lt;/p&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython.
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;) and macos (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy supports Windows 32-bit, Linux PPC64 big- and little-endian, Linux ARM
+32 bit, RISC-V RV64IMAFD Linux, and s390x Linux but does not release binaries.
+Please reach out to us if you wish to sponsor binary releases for those
+platforms. Downstream packagers provide binary builds for debian, Fedora,
+conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.23 release, see the &lt;a class="reference external" href="https://doc.pypy.org/en/latest/release-v7.3.23.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2026/05/pypy-v7322-release.html</guid><pubDate>Wed, 27 May 2026 10:00:00 GMT</pubDate></item><item><title>PyPy v7.3.22 release</title><link>https://www.pypy.org/posts/2026/04/pypy-v7322-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-22-release-of-python-2-7-3-11"&gt;
+&lt;h2&gt;PyPy v7.3.22: release of python 2.7, 3.11&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.22 of PyPy after the previous
+release on March 13, 2026. This is a bug-fix release that fixes several issues
+in the JIT. Among them, a long-standing JIT bug that started appearing when
+some instance optimizations exposed it. We also cleaned
+up many of the remaining stdlib test suite failures, which improves CPython
+compatibility around line numbers in dis.dis, signatures and objclass
+attributes for builtins, and other quality of life features.&lt;/p&gt;
+&lt;p&gt;There is now an RPython &lt;code class="docutils literal"&gt;_pickle&lt;/code&gt; module that mirrors
+the CPython one, greatly speeding up pickling operations. Where before PyPy was
+5.7x slower than CPython on the pickle benchmark from the pyperformance
+benchmark suite, now it is only 1.6x slower &lt;a class="brackets" href="https://www.pypy.org/posts/2026/04/pypy-v7322-release.html#footnote-1" id="footnote-reference-1" role="doc-noteref"&gt;&lt;span class="fn-bracket"&gt;[&lt;/span&gt;0&lt;span class="fn-bracket"&gt;]&lt;/span&gt;&lt;/a&gt;. We also added pypy
+pickler extensions to dump and load lists using list strategies, and enabled
+them in the &lt;code class="docutils literal"&gt;ForkingPickler&lt;/code&gt; used by multiprocessing, speeding up cases where
+such objects are passed between PyPy multiprocessing instances.&lt;/p&gt;
+&lt;p&gt;We also added an RPython json encoder, speeding up json_bench from being 2.6x
+slower than CPython to being 0.7x (meaning faster).&lt;/p&gt;
+&lt;p&gt;The release includes two different interpreters:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.11, which is an interpreter supporting the syntax and the features of
+Python 3.11, including the stdlib for CPython 3.11.15.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the double
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases.&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear
+about it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://doc.pypy.org/"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://doc.pypy.org/project-ideas.html"&gt;help&lt;/a&gt; with
+making RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; supports building wheels for PyPy.&lt;/p&gt;
+&lt;p class="rubric"&gt;Footnotes&lt;/p&gt;
+&lt;aside class="footnote-list brackets"&gt;
+&lt;aside class="footnote brackets" id="footnote-1" role="doc-footnote"&gt;
+&lt;span class="label"&gt;&lt;span class="fn-bracket"&gt;[&lt;/span&gt;&lt;a role="doc-backlink" href="https://www.pypy.org/posts/2026/04/pypy-v7322-release.html#footnote-reference-1"&gt;0&lt;/a&gt;&lt;span class="fn-bracket"&gt;]&lt;/span&gt;&lt;/span&gt;
+&lt;p&gt;Once &lt;a class="reference external" href="https://github.com/python/pyperformance/pull/461"&gt;a PR to pyperformance&lt;/a&gt; to use the _pickle module on PyPy is accepted&lt;/p&gt;
+&lt;/aside&gt;
+&lt;/aside&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;) and macos (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy supports Windows 32-bit, Linux PPC64 big- and little-endian, Linux ARM
+32 bit, RISC-V RV64IMAFD Linux, and s390x Linux but does not release binaries.
+Please reach out to us if you wish to sponsor binary releases for those
+platforms. Downstream packagers provide binary builds for debian, Fedora,
+conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.22 release, see the &lt;a class="reference external" href="https://doc.pypy.org/release-v7.3.22.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2026/04/pypy-v7322-release.html</guid><pubDate>Tue, 28 Apr 2026 10:00:00 GMT</pubDate></item><item><title>Using Claude to fix PyPy3.11 test failures securely</title><link>https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html</link><dc:creator>mattip</dc:creator><description>&lt;p&gt;I got access to Claude Max for 6 months, as a promotional move Anthropic made
+to Open Source Software contributors. My main OSS impact is as a maintainer for
+NumPy, but I decided to see what claude-code could to for PyPy's failing 3.11
+tests. Most of these failures are edge cases: error messages that differ from
+CPython, or debugging tools that fail in certain cases. I was worried about
+letting an AI agent loose on my development machine. I noticed &lt;a class="reference external" href="https://patrickmccanna.net/a-better-way-to-limit-claude-code-and-other-coding-agents-access-to-secrets/"&gt;a post&lt;/a&gt; by
+Patrick McCanna (thanks Patrick!) that pointed to using bubblewrap to
+sandbox the agent. So I set it all up and (hopefully securely) pointed
+claude-code at some tests.&lt;/p&gt;
+&lt;!-- TEASER_END: Read more to find out how it went --&gt;
+&lt;section id="setting-up"&gt;
+&lt;h2&gt;Setting up&lt;/h2&gt;
+&lt;p&gt;There were a few steps to make sure I didn't open myself up to obvious gotchas.
+There are stories about agents wiping out data bases, or deleting mail boxes.&lt;/p&gt;
+&lt;section id="bubblewrap"&gt;
+&lt;h3&gt;Bubblewrap&lt;/h3&gt;
+&lt;p&gt;First I needed to see what bubblewrap does. I followed the instructions in the
+blog post to set things up with some minor variations:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code bash"&gt;&lt;a id="rest_code_f111b7ee2b614c9081f47efc0319e459-1" name="rest_code_f111b7ee2b614c9081f47efc0319e459-1" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_f111b7ee2b614c9081f47efc0319e459-1"&gt;&lt;/a&gt;sudo&lt;span class="w"&gt; &lt;/span&gt;apt&lt;span class="w"&gt; &lt;/span&gt;install&lt;span class="w"&gt; &lt;/span&gt;bubblewrap
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;I couldn't run &lt;code class="docutils literal"&gt;bwrap&lt;/code&gt;. After digging around a bit, I found I needed to add
+an exception for appamor on Ubuntu 24.04:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code bash"&gt;&lt;a id="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-1" name="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-1" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-1"&gt;&lt;/a&gt;sudo&lt;span class="w"&gt; &lt;/span&gt;bash&lt;span class="w"&gt; &lt;/span&gt;-c&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s1"&gt;'cat &amp;gt; /etc/apparmor.d/bwrap &amp;lt;&amp;lt; EOF&lt;/span&gt;
+&lt;a id="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-2" name="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-2" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-2"&gt;&lt;/a&gt;&lt;span class="s1"&gt;abi &amp;lt;abi/4.0&amp;gt;,&lt;/span&gt;
+&lt;a id="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-3" name="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-3" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-3"&gt;&lt;/a&gt;&lt;span class="s1"&gt;include &amp;lt;tunables/global&amp;gt;&lt;/span&gt;
+&lt;a id="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-4" name="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-4" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-4"&gt;&lt;/a&gt;
+&lt;a id="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-5" name="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-5" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-5"&gt;&lt;/a&gt;&lt;span class="s1"&gt;profile bwrap /usr/bin/bwrap flags=(unconfined) {&lt;/span&gt;
+&lt;a id="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-6" name="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-6" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-6"&gt;&lt;/a&gt;&lt;span class="s1"&gt;  userns,&lt;/span&gt;
+&lt;a id="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-7" name="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-7" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-7"&gt;&lt;/a&gt;&lt;span class="s1"&gt;}&lt;/span&gt;
+&lt;a id="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-8" name="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-8" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-8"&gt;&lt;/a&gt;&lt;span class="s1"&gt;EOF'&lt;/span&gt;
+&lt;a id="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-9" name="rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-9" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_164d2e0d5fbc47b4a9d4715dc5593f41-9"&gt;&lt;/a&gt;sudo&lt;span class="w"&gt; &lt;/span&gt;apparmor_parser&lt;span class="w"&gt; &lt;/span&gt;-r&lt;span class="w"&gt; &lt;/span&gt;/etc/apparmor.d/bwrap
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Then &lt;code class="docutils literal"&gt;bwrap&lt;/code&gt; would run. It is all locked down by default, so I opened up some
+exceptions. The arguments are pretty self-explanatory. Ubuntu spreads the
+executables around the operating system, so I needed access to various
+directories. I wanted a &lt;code class="docutils literal"&gt;/tmp&lt;/code&gt; for running pytest. I also wanted the prompt
+to reflect the use of bubblewrap, so changed the &lt;code class="docutils literal"&gt;hostname&lt;/code&gt;:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code bash"&gt;&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-1" name="rest_code_bd109b9cf3284124943c61e1b9637218-1" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-1"&gt;&lt;/a&gt;cat&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;&amp;lt;&amp;lt; 'EOL' &amp;gt;&amp;gt; ./run_bwrap.sh&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-2" name="rest_code_bd109b9cf3284124943c61e1b9637218-2" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-2"&gt;&lt;/a&gt;&lt;span class="s"&gt;  function call_bwrap() {&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-3" name="rest_code_bd109b9cf3284124943c61e1b9637218-3" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-3"&gt;&lt;/a&gt;&lt;span class="s"&gt;    bwrap \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-4" name="rest_code_bd109b9cf3284124943c61e1b9637218-4" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-4"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --ro-bind /usr /usr \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-5" name="rest_code_bd109b9cf3284124943c61e1b9637218-5" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-5"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --ro-bind /etc /etc \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-6" name="rest_code_bd109b9cf3284124943c61e1b9637218-6" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-6"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --ro-bind /run /run \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-7" name="rest_code_bd109b9cf3284124943c61e1b9637218-7" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-7"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --symlink usr/lib /lib \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-8" name="rest_code_bd109b9cf3284124943c61e1b9637218-8" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-8"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --symlink usr/lib64 /lib64 \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-9" name="rest_code_bd109b9cf3284124943c61e1b9637218-9" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-9"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --symlink usr/bin /bin \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-10" name="rest_code_bd109b9cf3284124943c61e1b9637218-10" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-10"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --proc /proc \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-11" name="rest_code_bd109b9cf3284124943c61e1b9637218-11" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-11"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --dev /dev \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-12" name="rest_code_bd109b9cf3284124943c61e1b9637218-12" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-12"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --bind $(pwd) $(pwd) \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-13" name="rest_code_bd109b9cf3284124943c61e1b9637218-13" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-13"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --chdir $(pwd) \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-14" name="rest_code_bd109b9cf3284124943c61e1b9637218-14" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-14"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --unshare-user --unshare-pid --unshare-ipc --unshare-uts --unshare-cgroup \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-15" name="rest_code_bd109b9cf3284124943c61e1b9637218-15" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-15"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --die-with-parent \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-16" name="rest_code_bd109b9cf3284124943c61e1b9637218-16" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-16"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --hostname bwrap \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-17" name="rest_code_bd109b9cf3284124943c61e1b9637218-17" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-17"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --tmpfs /tmp \&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-18" name="rest_code_bd109b9cf3284124943c61e1b9637218-18" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-18"&gt;&lt;/a&gt;&lt;span class="s"&gt;      /bin/bash "$@"&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-19" name="rest_code_bd109b9cf3284124943c61e1b9637218-19" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-19"&gt;&lt;/a&gt;&lt;span class="s"&gt;  }&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-20" name="rest_code_bd109b9cf3284124943c61e1b9637218-20" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-20"&gt;&lt;/a&gt;&lt;span class="s"&gt;EOL&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-21" name="rest_code_bd109b9cf3284124943c61e1b9637218-21" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-21"&gt;&lt;/a&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-22" name="rest_code_bd109b9cf3284124943c61e1b9637218-22" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-22"&gt;&lt;/a&gt;&lt;span class="nb"&gt;source&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;./run_bwrap.sh
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-23" name="rest_code_bd109b9cf3284124943c61e1b9637218-23" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-23"&gt;&lt;/a&gt;call_bwrap
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-24" name="rest_code_bd109b9cf3284124943c61e1b9637218-24" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-24"&gt;&lt;/a&gt;&lt;span class="c1"&gt;# now I am in a sandboxed bash shell&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-25" name="rest_code_bd109b9cf3284124943c61e1b9637218-25" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-25"&gt;&lt;/a&gt;&lt;span class="c1"&gt;# play around, try seeing other directories, getting sudo, or writing outside&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-26" name="rest_code_bd109b9cf3284124943c61e1b9637218-26" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-26"&gt;&lt;/a&gt;&lt;span class="c1"&gt;# the sandbox&lt;/span&gt;
+&lt;a id="rest_code_bd109b9cf3284124943c61e1b9637218-27" name="rest_code_bd109b9cf3284124943c61e1b9637218-27" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_bd109b9cf3284124943c61e1b9637218-27"&gt;&lt;/a&gt;&lt;span class="nb"&gt;exit&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;I did not do &lt;code class="docutils literal"&gt;&lt;span class="pre"&gt;--unshare-network&lt;/span&gt;&lt;/code&gt; since, after all, I want to use claude and
+that needs network access. I did add rw access to &lt;code class="docutils literal"&gt;$(pwd)&lt;/code&gt; since I want it to
+edit code in the current directory, that is the whole point.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="basic-claude"&gt;
+&lt;h3&gt;Basic claude&lt;/h3&gt;
+&lt;p&gt;After trying out bubblewrap and convincing myself it does actually work, I
+installed claude code&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code bash"&gt;&lt;a id="rest_code_142da3463d184f1c9fba9f62fb043c99-1" name="rest_code_142da3463d184f1c9fba9f62fb043c99-1" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_142da3463d184f1c9fba9f62fb043c99-1"&gt;&lt;/a&gt;curl&lt;span class="w"&gt; &lt;/span&gt;-fsSL&lt;span class="w"&gt; &lt;/span&gt;https://claude.ai/install.sh&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;bash
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Really Anthropic, this is the best way to install claude? No dpkg?&lt;/p&gt;
+&lt;p&gt;I ran claude once (unsafely) to get logged in. It opened a webpage, and saved
+the login to the &lt;code class="docutils literal"&gt;oathAccount&lt;/code&gt; field in &lt;code class="docutils literal"&gt;&lt;span class="pre"&gt;~/.claude.json&lt;/span&gt;&lt;/code&gt;. Now I changed my
+bash script to this to get claude to run inside the bubblewrap sandbox:&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code bash"&gt;&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-1" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-1" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-1"&gt;&lt;/a&gt;cat&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;&amp;lt;&amp;lt; 'EOL' &amp;gt;&amp;gt; ./run_claude.sh&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-2" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-2" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-2"&gt;&lt;/a&gt;&lt;span class="s"&gt;  claude-safe() {&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-3" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-3" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-3"&gt;&lt;/a&gt;&lt;span class="s"&gt;    bwrap \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-4" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-4" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-4"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --ro-bind /usr /usr \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-5" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-5" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-5"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --ro-bind /etc /etc \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-6" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-6" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-6"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --ro-bind /run /run \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-7" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-7" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-7"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --ro-bind "$HOME/.local/share/claude" "$HOME/.local/share/claude" \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-8" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-8" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-8"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --symlink usr/lib /lib \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-9" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-9" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-9"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --symlink usr/lib64 /lib64 \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-10" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-10" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-10"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --symlink usr/bin /bin \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-11" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-11" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-11"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --symlink "$HOME/.local/share/claude/versions/2.1.81" "$HOME/.local/bin/claude" \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-12" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-12" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-12"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --proc /proc \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-13" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-13" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-13"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --dev /dev \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-14" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-14" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-14"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --bind $(pwd) $(pwd) \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-15" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-15" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-15"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --bind "$HOME/.claude" "$HOME/.claude" \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-16" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-16" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-16"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --bind "$HOME/.claude.json" "$HOME/.claude.json" \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-17" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-17" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-17"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --chdir $(pwd) \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-18" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-18" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-18"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --unshare-user --unshare-pid --unshare-ipc --unshare-uts --unshare-cgroup \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-19" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-19" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-19"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --die-with-parent \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-20" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-20" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-20"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --hostname bwrap \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-21" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-21" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-21"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --tmpfs /tmp \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-22" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-22" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-22"&gt;&lt;/a&gt;&lt;span class="s"&gt;      --setenv PATH "$HOME/.local/bin:$PATH" \&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-23" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-23" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-23"&gt;&lt;/a&gt;&lt;span class="s"&gt;      claude "$@"&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-24" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-24" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-24"&gt;&lt;/a&gt;&lt;span class="s"&gt;  }&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-25" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-25" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-25"&gt;&lt;/a&gt;&lt;span class="s"&gt;EOL&lt;/span&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-26" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-26" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-26"&gt;&lt;/a&gt;
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-27" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-27" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-27"&gt;&lt;/a&gt;&lt;span class="nb"&gt;source&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;./run_claude.sh
+&lt;a id="rest_code_ce9b7ac443f8406f83b93232af4ddaff-28" name="rest_code_ce9b7ac443f8406f83b93232af4ddaff-28" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_ce9b7ac443f8406f83b93232af4ddaff-28"&gt;&lt;/a&gt;claude-safe
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Now I can use claude. Note it needs some more directories in order to run. This
+script hard-codes the version, in the future YMMV. I want it to be able to look
+at github, and also my local checkout of cpython so it can examine differences.
+I created a read-only token by clicking on my avatar in the upper right corner
+of a github we page, then going to Settings → Developer settings → Personal
+access tokens → Fine-grained tokens → Generate new token. Since pypy is in the
+pypy org, I used "Repository owner: pypy", "Repository access: pypy (only)" and
+"Permissions: Contents". Then I made doubly sure the token permissions were
+read-only. And checked again. Then I copied the token to the bash script. I
+also added a &lt;code class="docutils literal"&gt;&lt;span class="pre"&gt;ro-bind&lt;/span&gt;&lt;/code&gt; to the cpython checkout, so I could tell claude code
+where to look for CPython implementations of missing PyPy functionality.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code bash"&gt;&lt;a id="rest_code_94d8922006c5454194fa99b14bc08b56-1" name="rest_code_94d8922006c5454194fa99b14bc08b56-1" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_94d8922006c5454194fa99b14bc08b56-1"&gt;&lt;/a&gt;--ro-bind&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s2"&gt;"&lt;/span&gt;&lt;span class="nv"&gt;$HOME&lt;/span&gt;&lt;span class="s2"&gt;/oss/cpython"&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s2"&gt;"&lt;/span&gt;&lt;span class="nv"&gt;$HOME&lt;/span&gt;&lt;span class="s2"&gt;/oss/cpython"&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="se"&gt;\&lt;/span&gt;
+&lt;a id="rest_code_94d8922006c5454194fa99b14bc08b56-2" name="rest_code_94d8922006c5454194fa99b14bc08b56-2" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_94d8922006c5454194fa99b14bc08b56-2"&gt;&lt;/a&gt;--setenv&lt;span class="w"&gt; &lt;/span&gt;GH_TOKEN&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s2"&gt;"hah, sharing my token would not have been smart"&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="se"&gt;\&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/section&gt;
+&lt;section id="claude-sandbox"&gt;
+&lt;h3&gt;Claude /sandbox&lt;/h3&gt;
+&lt;p&gt;Claude comes with its own sandbox, configured by using the &lt;code class="docutils literal"&gt;/sandbox&lt;/code&gt; command.
+I chose the defaults, which prevents malicious code in the repo from accessing
+the file system and the network. I was missing some packages to get this to
+work. Claude would hang until I installed them, and I needed to kill it with
+&lt;code class="docutils literal"&gt;kill&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code bash"&gt;&lt;a id="rest_code_69173301a65f41bfa9ba4aca84b19d3e-1" name="rest_code_69173301a65f41bfa9ba4aca84b19d3e-1" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_69173301a65f41bfa9ba4aca84b19d3e-1"&gt;&lt;/a&gt;sudo&lt;span class="w"&gt; &lt;/span&gt;apt&lt;span class="w"&gt; &lt;/span&gt;install&lt;span class="w"&gt; &lt;/span&gt;socat
+&lt;a id="rest_code_69173301a65f41bfa9ba4aca84b19d3e-2" name="rest_code_69173301a65f41bfa9ba4aca84b19d3e-2" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_69173301a65f41bfa9ba4aca84b19d3e-2"&gt;&lt;/a&gt;sudo&lt;span class="w"&gt; &lt;/span&gt;npm&lt;span class="w"&gt; &lt;/span&gt;install&lt;span class="w"&gt; &lt;/span&gt;-g&lt;span class="w"&gt; &lt;/span&gt;@anthropic-ai/sandbox-runtime
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/section&gt;
+&lt;section id="final-touches"&gt;
+&lt;h3&gt;Final touches&lt;/h3&gt;
+&lt;p&gt;One last thing that I discovered later: I needed to give claude access to some
+grepping and git tools. While git should be locked down externally so it
+cannot push to the repo, I do want claude to look at other issues and pull
+requests in read-only mode. So I added a local &lt;code class="docutils literal"&gt;.claude/settings.json&lt;/code&gt; file
+inside the repo (see below for which directory to do this):&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code json"&gt;&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-1" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-1" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-1"&gt;&lt;/a&gt;&lt;span class="p"&gt;{&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-2" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-2" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-2"&gt;&lt;/a&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="nt"&gt;"permissions"&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-3" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-3" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-3"&gt;&lt;/a&gt;&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="nt"&gt;"allow"&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-4" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-4" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-4"&gt;&lt;/a&gt;&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="s2"&gt;"Bash(sed*)"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-5" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-5" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-5"&gt;&lt;/a&gt;&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="s2"&gt;"Bash(grep*)"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-6" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-6" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-6"&gt;&lt;/a&gt;&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="s2"&gt;"Bash(cat*)"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-7" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-7" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-7"&gt;&lt;/a&gt;&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="s2"&gt;"Bash(find*)"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-8" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-8" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-8"&gt;&lt;/a&gt;&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="s2"&gt;"Bash(rg*)"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-9" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-9" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-9"&gt;&lt;/a&gt;&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="s2"&gt;"Bash(python*)"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-10" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-10" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-10"&gt;&lt;/a&gt;&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="s2"&gt;"Bash(pytest*)"&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-11" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-11" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-11"&gt;&lt;/a&gt;&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-12" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-12" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-12"&gt;&lt;/a&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;
+&lt;a id="rest_code_b892d7708a6c40a69a9928c081c94e8d-13" name="rest_code_b892d7708a6c40a69a9928c081c94e8d-13" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_b892d7708a6c40a69a9928c081c94e8d-13"&gt;&lt;/a&gt;&lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Then I made git ignore it, even when doing a &lt;code class="docutils literal"&gt;git clean&lt;/code&gt;, in a local (not part
+of the repo) configuration&lt;/p&gt;
+&lt;div class="code"&gt;&lt;pre class="code bash"&gt;&lt;a id="rest_code_2c47dade795b42fba9ed7d39635f1def-1" name="rest_code_2c47dade795b42fba9ed7d39635f1def-1" href="https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html#rest_code_2c47dade795b42fba9ed7d39635f1def-1"&gt;&lt;/a&gt;&lt;span class="nb"&gt;echo&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;-n&lt;span class="w"&gt; &lt;/span&gt;.claude&lt;span class="w"&gt; &lt;/span&gt;&amp;gt;&amp;gt;&lt;span class="w"&gt; &lt;/span&gt;~/.config/git/ignore
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/section&gt;
+&lt;section id="what-about-git-push"&gt;
+&lt;h3&gt;What about &lt;code class="docutils literal"&gt;git push&lt;/code&gt;?&lt;/h3&gt;
+&lt;p&gt;I don't want claude messing around with the upstream repo, only read access. But
+I did not actively prevent &lt;code class="docutils literal"&gt;git push&lt;/code&gt;. So instead of using my actual pypy
+repo, I cloned it to a separate directory and did not add a remote pointing to
+github.com.&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;
+&lt;section id="fixing-tests-easy"&gt;
+&lt;h2&gt;Fixing tests - easy&lt;/h2&gt;
+&lt;p&gt;Now that everything is set up (I hope I remembered everything), I could start
+asking questions. The technique I chose was to feed claude the whole test
+failure from the buildbot. So starting from the &lt;a class="reference external" href="https://buildbot.pypy.org/summary?branch=py3.11"&gt;buildbot py3.11 summary&lt;/a&gt;,
+click on one of the &lt;code class="docutils literal"&gt;F&lt;/code&gt; links and copy-paste all that into the claude prompt.
+It didn't take long for claude to come up with solutions for the long-standing
+&lt;a class="reference external" href="https://github.com/pypy/pypy/commit/9e8e121b545dbea3f26ca436ae8a797617904306#diff-ab042b3dd16bf22b7e3d8595f182ad39d3823d76b414da7debe96081a884d16bR64-R330"&gt;ctype error missing exception&lt;/a&gt; which turned out to be due to an missing error
+trap when already handling an error.&lt;/p&gt;
+&lt;p&gt;Also a &lt;a class="reference external" href="https://github.com/pypy/pypy/commit/9e8e121b545dbea3f26ca436ae8a797617904306#diff-ab042b3dd16bf22b7e3d8595f182ad39d3823d76b414da7debe96081a884d16bR64-R53"&gt;CTYPES_MAX_ARGCOUNT check&lt;/a&gt; was
+missing. At first, claude wanted to change the ctypes code from CPython's stdlib,
+and so I had to make it clear that claude was not to touch the files in
+&lt;code class="docutils literal"&gt;&lt;span class="pre"&gt;lib-python&lt;/span&gt;&lt;/code&gt;. They are copied verbatim from CPython and should not be
+modified without really good reasons.&lt;/p&gt;
+&lt;p&gt;The &lt;a class="reference external" href="https://github.com/pypy/pypy/commit/39ca7a1def272742e8aafd2a649ed4f8fed7038d"&gt;fix to raise&lt;/a&gt; &lt;code class="docutils literal"&gt;TypeError&lt;/code&gt; rather
+than &lt;code class="docutils literal"&gt;Attribute Error&lt;/code&gt; for deleting ctype object's &lt;code class="docutils literal"&gt;value&lt;/code&gt; was maybe a little
+trickier: claude needed to create its own &lt;code class="docutils literal"&gt;property&lt;/code&gt; class and use it in
+assignments.&lt;/p&gt;
+&lt;p&gt;The &lt;a class="reference external" href="https://github.com/pypy/pypy/commit/e0e401699c20a92d8db657879183c68ea44246b4"&gt;fix for a failing test&lt;/a&gt; for a correct &lt;code class="docutils literal"&gt;repr&lt;/code&gt; of a ctypes array was a
+little more involved.  Claude needed to figure out that &lt;code class="docutils literal"&gt;newmemoryview&lt;/code&gt; was
+raising an exception, dive into the RPython implementation and fix the problem,
+and then also fix a pure-python &lt;code class="docutils literal"&gt;__buffer__&lt;/code&gt; shape edge case error.&lt;/p&gt;
+&lt;p&gt;There were more, but you get the idea. With a little bit of coaching, and by showing
+claude where the CPython implementation was, more tests are now passing.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="fixing-tests-harder"&gt;
+&lt;h2&gt;Fixing tests - harder&lt;/h2&gt;
+&lt;p&gt;PyPy has a HPy backend. There were some test failures that were
+easy to fix (a handle not being closed, an annotation warning). But the big one
+was a problem with the context tracking before and after ffi function calls. In
+debug mode there is a check that the ffi call is done using the correct HPy
+context. It turns out to be tricky to hang on to a reference to a context in
+RPython since the context RPython object is pre-built. The solution, which took
+quite a few tokens and translation cycles to work out, was to assign the
+context on the C level, and have a getter to fish it out in RPython.&lt;/p&gt;
+&lt;section id="conclusion"&gt;
+&lt;h3&gt;Conclusion&lt;/h3&gt;
+&lt;p&gt;I started this journey not more than 24 hours ago, after some successful
+sessions using claude to refactor some web sites off hosting platforms and make
+them static pages. I was impressed enough to try coding with it from the
+terminal. It helps that I was given a generous budget to use Anthropic's tool.&lt;/p&gt;
+&lt;p&gt;Claude seems capable of understanding the layers of PyPy: from the pure python
+stdlib to RPython and into the small amount of C code. I even asked it to
+examine a &lt;a class="reference external" href="https://github.com/pypy/pypy/issues/5398"&gt;segfault&lt;/a&gt; in the recently released PyPy7.3.21, and it seems to have
+found the general area where there was a latent bug in the JIT.&lt;/p&gt;
+&lt;p&gt;Like any tool, agentic programming must be used carefully to make sure it
+cannot do damage. I hope I closed the most obvious foot-guns, if you have other
+ideas of things I should do to protect myself while using an agent like this, I
+would love to hear about them.&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>AI</category><guid>https://www.pypy.org/posts/2026/03/using-claude-to-fix-pypy311-test-failures-securely.html</guid><pubDate>Mon, 23 Mar 2026 10:27:55 GMT</pubDate></item><item><title>PyPy v7.3.21 release</title><link>https://www.pypy.org/posts/2026/03/pypy-v7321-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-21-release-of-python-2-7-3-11"&gt;
+&lt;h2&gt;PyPy v7.3.21: release of python 2.7, 3.11&lt;/h2&gt;
+&lt;aside class="admonition warning"&gt;
+&lt;p class="admonition-title"&gt;Warning&lt;/p&gt;
+&lt;p&gt;This release has some known crashes. We recommend you use a different version&lt;/p&gt;
+&lt;/aside&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.21 of PyPy after the previous
+release on July 4, 2025. This is a bug-fix release that also updates to Python
+3.11.15.&lt;/p&gt;
+&lt;p&gt;The release includes two different interpreters:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.11, which is an interpreter supporting the syntax and the features of
+Python 3.11, including the stdlib for CPython 3.11.15.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the double
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases.&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear
+about it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://doc.pypy.org/"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://doc.pypy.org/project-ideas.html"&gt;help&lt;/a&gt; with
+making RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; supports building wheels for PyPy.&lt;/p&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;) and macos (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy supports Windows 32-bit, Linux PPC64 big- and little-endian, Linux ARM
+32 bit, RISC-V RV64IMAFD Linux, and s390x Linux but does not release binaries.
+Please reach out to us if you wish to sponsor binary releases for those
+platforms. Downstream packagers provide binary builds for debian, Fedora,
+conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.21 release, see the &lt;a class="reference external" href="https://doc.pypy.org/release-v7.3.21.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2026/03/pypy-v7321-release.html</guid><pubDate>Fri, 13 Mar 2026 10:00:00 GMT</pubDate></item><item><title>PyPy v7.3.20 release</title><link>https://www.pypy.org/posts/2025/07/pypy-v7320-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-20-release-of-python-2-7-3-11"&gt;
+&lt;h2&gt;PyPy v7.3.20: release of python 2.7, 3.11&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.20 of PyPy after the previous
+release on Feb 26, 2025. The release fixes some subtle bugs in ctypes and
+&lt;code class="docutils literal"&gt;OrderedDict&lt;/code&gt; and makes PyPy3.11 compatible with an upcoming release of
+Cython.&lt;/p&gt;
+&lt;p&gt;The release includes two different interpreters:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.11, which is an interpreter supporting the syntax and the features of
+Python 3.11, including the stdlib for CPython 3.11.13.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the double
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases.&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear
+about it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://doc.pypy.org/"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://doc.pypy.org/project-ideas.html"&gt;help&lt;/a&gt; with
+making RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; supports building wheels for PyPy.&lt;/p&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;) and macos (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy supports Windows 32-bit, Linux PPC64 big- and little-endian, Linux ARM
+32 bit, RISC-V RV64IMAFD Linux, and s390x Linux but does not release binaries.
+Please reach out to us if you wish to sponsor binary releases for those
+platforms. Downstream packagers provide binary builds for debian, Fedora,
+conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.20 release, see the &lt;a class="reference external" href="https://doc.pypy.org/release-v7.3.20.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2025/07/pypy-v7320-release.html</guid><pubDate>Fri, 04 Jul 2025 12:00:00 GMT</pubDate></item><item><title>PyPy v7.3.19 release</title><link>https://www.pypy.org/posts/2025/02/pypy-v7319-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-19-release-of-python-2-7-3-10-and-3-11-beta"&gt;
+&lt;h2&gt;PyPy v7.3.19: release of python 2.7, 3.10 and 3.11 beta&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.19 of PyPy. This is primarily a
+bug-fix release fixing JIT-related problems and follows quickly on the heels of
+the previous release on Feb 6, 2025.&lt;/p&gt;
+&lt;p&gt;This release includes a python 3.11 interpreter. There were bugs in the first
+beta that could prevent its wider use, so we are continuing to call this
+release "beta". In the next release we will drop 3.10 and remove the "beta"
+label.&lt;/p&gt;
+&lt;p&gt;The release includes three different interpreters:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.10, which is an interpreter supporting the syntax and the features of
+Python 3.10, including the stdlib for CPython 3.10.16.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.11, which is an interpreter supporting the syntax and the features of
+Python 3.11, including the stdlib for CPython 3.11.11.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the triple
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases. It follows after 7.3.17 release on August 28, 2024.&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear
+about it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://doc.pypy.org/"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://doc.pypy.org/project-ideas.html"&gt;help&lt;/a&gt; with
+making RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, both &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; and the &lt;a class="reference external" href="https://github.com/matthew-brett/multibuild"&gt;multibuild system&lt;/a&gt; support
+building wheels for PyPy.&lt;/p&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;) and macos (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy supports Windows 32-bit, Linux PPC64 big- and little-endian, Linux ARM
+32 bit, RISC-V RV64IMAFD Linux, and s390x Linux but does not release binaries.
+Please reach out to us if you wish to sponsor binary releases for those
+platforms. Downstream packagers provide binary builds for debian, Fedora,
+conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.19 release, see the &lt;a class="reference external" href="https://doc.pypy.org/release-v7.3.19.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2025/02/pypy-v7319-release.html</guid><pubDate>Wed, 26 Feb 2025 12:00:00 GMT</pubDate></item><item><title>PyPy v7.3.18 release</title><link>https://www.pypy.org/posts/2025/02/pypy-v7318-release.html</link><dc:creator>mattip</dc:creator><description>&lt;section id="pypy-v7-3-18-release-of-python-2-7-3-10-and-3-11-beta"&gt;
+&lt;h2&gt;PyPy v7.3.18: release of python 2.7, 3.10 and 3.11 beta&lt;/h2&gt;
+&lt;p&gt;The PyPy team is proud to release version 7.3.18 of PyPy.&lt;/p&gt;
+&lt;p&gt;This release includes a python 3.11 interpreter. We are labelling it "beta"
+because it is the first one. In the next release we will drop 3.10 and remove
+the "beta" label. There are a particularly large set of bugfixes in this
+release thanks to @devdanzin using fusil on the 3.10 builds, originally written
+by Victor Stinner. Other significant changes:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;We have updated libffi shipped in our portable builds. We also now statically
+link to libffi where possible which reduces the number of
+shared object dependencies.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;We have added code to be able to show the native function names when
+profiling with VMProf. So far only Linux supports this feature.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;We have added a &lt;a class="reference external" href="https://peps.python.org/pep-0768/"&gt;PEP 768&lt;/a&gt;-inspired remote debugging facility.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;The HPy backend has been updated to latest HPy HEAD&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The release includes three different interpreters:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;PyPy2.7, which is an interpreter supporting the syntax and the features of
+Python 2.7 including the stdlib for CPython 2.7.18+ (the &lt;code class="docutils literal"&gt;+&lt;/code&gt; is for
+backported security updates)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.10, which is an interpreter supporting the syntax and the features of
+Python 3.10, including the stdlib for CPython 3.10.16.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;PyPy3.11, which is an interpreter supporting the syntax and the features of
+Python 3.11, including the stdlib for CPython 3.11.11.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The interpreters are based on much the same codebase, thus the triple
+release. This is a micro release, all APIs are compatible with the other 7.3
+releases. It follows after 7.3.17 release on August 28, 2024.&lt;/p&gt;
+&lt;p&gt;We recommend updating. You can find links to download the releases here:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://pypy.org/download.html"&gt;https://pypy.org/download.html&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;We would like to thank our donors for the continued support of the PyPy
+project. If PyPy is not quite good enough for your needs, we are available for
+&lt;a class="reference external" href="https://www.pypy.org/pypy-sponsors.html"&gt;direct consulting&lt;/a&gt; work. If PyPy is helping you out, we would love to hear
+about it and encourage submissions to our &lt;a class="reference external" href="https://pypy.org/blog"&gt;blog&lt;/a&gt; via a pull request
+to &lt;a class="reference external" href="https://github.com/pypy/pypy.org"&gt;https://github.com/pypy/pypy.org&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;We would also like to thank our contributors and encourage new people to join
+the project. PyPy has many layers and we need help with all of them: bug fixes,
+&lt;a class="reference external" href="https://doc.pypy.org/"&gt;PyPy&lt;/a&gt; and &lt;a class="reference external" href="https://rpython.readthedocs.org"&gt;RPython&lt;/a&gt; documentation improvements, or general &lt;a class="reference external" href="https://doc.pypy.org/project-ideas.html"&gt;help&lt;/a&gt; with
+making RPython's JIT even better.&lt;/p&gt;
+&lt;p&gt;If you are a python library maintainer and use C-extensions, please consider
+making a &lt;a class="reference external" href="https://hpyproject.org/"&gt;HPy&lt;/a&gt; / &lt;a class="reference external" href="https://cffi.readthedocs.io"&gt;CFFI&lt;/a&gt; / &lt;a class="reference external" href="https://cppyy.readthedocs.io"&gt;cppyy&lt;/a&gt; version of your library that would be performant
+on PyPy. In any case, both &lt;a class="reference external" href="https://github.com/joerick/cibuildwheel"&gt;cibuildwheel&lt;/a&gt; and the &lt;a class="reference external" href="https://github.com/matthew-brett/multibuild"&gt;multibuild system&lt;/a&gt; support
+building wheels for PyPy.&lt;/p&gt;
+&lt;section id="vmprof-native-symbol-names"&gt;
+&lt;h3&gt;VMProf Native Symbol Names&lt;/h3&gt;
+&lt;p&gt;When running VMProf profiling with native profiling enabled, PyPy did so far
+not produce function names for C functions. The output looked like this:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;pypy -m vmprof ~/projects/gitpypy/lib-python/2.7/test/pystone.py
+Pystone(1.1) time for 50000 passes = 0.0109887
+This machine benchmarks at 4.55011e+06 pystones/second
+ vmprof output:
+ %:      name:                location:
+ 100.0%  entry_point          &amp;lt;builtin&amp;gt;/app_main.py:874
+ 100.0%  run_command_line     &amp;lt;builtin&amp;gt;/app_main.py:601
+ 100.0%  run_toplevel         &amp;lt;builtin&amp;gt;/app_main.py:93
+ 100.0%  _run_module_as_main  /home/user/bin/pypy-c-jit-170203-99a72243b541-linux64/lib-python/2.7/runpy.py:150
+ 100.0%  _run_code            /home/user/bin/pypy-c-jit-170203-99a72243b541-linux64/lib-python/2.7/runpy.py:62
+ 100.0%  &amp;lt;module&amp;gt;             /home/user/bin/pypy-c-jit-170203-99a72243b541-linux64/site-packages/vmprof/__main__.py:1
+ 100.0%  main                 /home/user/bin/pypy-c-jit-170203-99a72243b541-linux64/site-packages/vmprof/__main__.py:30
+ 100.0%  run_path             /home/user/bin/pypy-c-jit-170203-99a72243b541-linux64/lib-python/2.7/runpy.py:238
+ 100.0%  _run_module_code     /home/user/bin/pypy-c-jit-170203-99a72243b541-linux64/lib-python/2.7/runpy.py:75
+ 100.0%  &amp;lt;module&amp;gt;             /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:3
+ 100.0%  main                 /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:60
+ 100.0%  pystones             /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:67
+ 100.0%  Proc0                /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:79
+ 76.9%   &amp;lt;unknown code&amp;gt;
+ 69.2%   &amp;lt;unknown code&amp;gt;
+ 53.8%   &amp;lt;unknown code&amp;gt;
+ 53.8%   &amp;lt;unknown code&amp;gt;
+ 46.2%   &amp;lt;unknown code&amp;gt;
+ 46.2%   &amp;lt;unknown code&amp;gt;
+ 38.5%   &amp;lt;unknown code&amp;gt;
+ 38.5%   Proc8                /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:212
+ 30.8%   &amp;lt;unknown code&amp;gt;
+ ...&lt;/pre&gt;
+&lt;p&gt;We can now symbolify these C functions and give function names and which
+shared library they come from, at least on Linux:&lt;/p&gt;
+&lt;pre class="literal-block"&gt;Pystone(1.1) time for 50000 passes = 0.218967
+This machine benchmarks at 228345 pystones/second
+ vmprof output:
+ %:      name:                                           location:
+ 100.0%  entry_point                                     &amp;lt;builtin&amp;gt;/app_main.py:889
+ 100.0%  run_command_line                                &amp;lt;builtin&amp;gt;/app_main.py:616
+ 100.0%  run_toplevel                                    &amp;lt;builtin&amp;gt;/app_main.py:95
+ 100.0%  _run_module_as_main                             /home/user/projects/gitpypy/lib-python/2.7/runpy.py:150
+ 100.0%  _run_code                                       /home/user/projects/gitpypy/lib-python/2.7/runpy.py:62
+ 100.0%  &amp;lt;module&amp;gt;                                        /home/user/projects/gitpypy/site-packages/vmprof/__main__.py:1
+ 100.0%  main                                            /home/user/projects/gitpypy/site-packages/vmprof/__main__.py:30
+ 100.0%  run_module                                      /home/user/projects/gitpypy/lib-python/2.7/runpy.py:179
+ 100.0%  _run_module_code                                /home/user/projects/gitpypy/lib-python/2.7/runpy.py:75
+ 100.0%  &amp;lt;module&amp;gt;                                        /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:3
+ 100.0%  main                                            /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:60
+ 100.0%  pystones                                        /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:67
+ 100.0%  Proc0                                           /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:79
+ 95.5%   n:pypy_g_execute_frame:0:pypy-c
+ 91.4%   n:pypy_g_PyFrame_dispatch:0:pypy-c
+ 63.8%   n:pypy_g_PyFrame_dispatch_bytecode:0:pypy-c
+ 49.8%   Proc1                                           /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:137
+ 17.6%   copy                                            /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:53
+ 13.6%   n:pypy_g_PyFrame_CALL_FUNCTION:0:pypy-c
+ 10.4%   Proc8                                           /home/user/projects/gitpypy/lib-python/2.7/test/pystone.py:212
+ 8.6%    n:pypy_g_STORE_ATTR_slowpath:0:pypy-c&lt;/pre&gt;
+&lt;p&gt;This becomes even more useful when using the &lt;a class="reference external" href="https://github.com/Cskorpion/vmprof-firefox-converter/"&gt;VMProf Firefox converter&lt;/a&gt;, which
+uses the Firefox Profiler Web UI to visualize profiling output:&lt;/p&gt;
+&lt;img alt="/images/2025-vmprof-firefox.png" src="https://www.pypy.org/images/2025-vmprof-firefox.png"&gt;
+&lt;/section&gt;
+&lt;section id="what-is-pypy"&gt;
+&lt;h3&gt;What is PyPy?&lt;/h3&gt;
+&lt;p&gt;PyPy is a Python interpreter, a drop-in replacement for CPython
+It's fast (&lt;a class="reference external" href="https://speed.pypy.org"&gt;PyPy and CPython&lt;/a&gt; performance
+comparison) due to its integrated tracing JIT compiler.&lt;/p&gt;
+&lt;p&gt;We also welcome developers of other &lt;a class="reference external" href="https://rpython.readthedocs.io/en/latest/examples.html"&gt;dynamic languages&lt;/a&gt; to see what RPython
+can do for them.&lt;/p&gt;
+&lt;p&gt;We provide binary builds for:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;x86&lt;/strong&gt; machines on most common operating systems
+(Linux 32/64 bits, Mac OS 64 bits, Windows 64 bits)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;64-bit &lt;strong&gt;ARM&lt;/strong&gt; machines running Linux (&lt;code class="docutils literal"&gt;aarch64&lt;/code&gt;) and macos (&lt;code class="docutils literal"&gt;macos_arm64&lt;/code&gt;).&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;PyPy supports Windows 32-bit, Linux PPC64 big- and little-endian, Linux ARM
+32 bit, RISC-V RV64IMAFD Linux, and s390x Linux but does not release binaries.
+Please reach out to us if you wish to sponsor binary releases for those
+platforms. Downstream packagers provide binary builds for debian, Fedora,
+conda, OpenBSD, FreeBSD, Gentoo, and more.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="what-else-is-new"&gt;
+&lt;h3&gt;What else is new?&lt;/h3&gt;
+&lt;p&gt;For more information about the 7.3.18 release, see the &lt;a class="reference external" href="https://doc.pypy.org/release-v7.3.18.html#changelog"&gt;full changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please update, and continue to help us make pypy better.&lt;/p&gt;
+&lt;p&gt;Cheers,
+The PyPy Team&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;</description><category>release</category><guid>https://www.pypy.org/posts/2025/02/pypy-v7318-release.html</guid><pubDate>Thu, 06 Feb 2025 12:00:00 GMT</pubDate></item></channel></rss>
