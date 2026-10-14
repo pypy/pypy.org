@@ -88,7 +88,7 @@ On average, PyPy 3.12 is **about 4 times faster** than CPython 3.11. We currentl
   MBs or more) might end up taking `less space`_ than they do in CPython.
 
 * **Compatibility:** PyPy is `highly compatible`_ with existing python code.
-  It supports `cffi`_, `cppyy`_, and can run popular python libraries like
+  It supports `cffi`_ and can run popular python libraries like
   `twisted`_, and `django`_. It can also run NumPy, Scikit-learn and more via a
   c-extension compatibility layer.
 
@@ -108,7 +108,6 @@ On average, PyPy 3.12 is **about 4 times faster** than CPython 3.11. We currentl
 .. _`twisted`: https://twistedmatrix.com/
 .. _`django`: https://www.djangoproject.com/
 .. _`cffi`: https://cffi.readthedocs.org
-.. _`cppyy`: https://cppyy.readthedocs.org
 .. _`features`: features.html
 .. _`less space`: /posts/2009/10/gc-improvements-6174120095428192954.html
 .. _`highly compatible`: compat.html
