@@ -1,6 +1,6 @@
 .. title: PyPy v8.0.1 release
 .. slug: pypy-v801-release
-.. date: 2026-09-14 08:00:00 UTC
+.. date: 2026-10-14 08:00:00 UTC
 .. tags: release
 .. category: 
 .. link: 
