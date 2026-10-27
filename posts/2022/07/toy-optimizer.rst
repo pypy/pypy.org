@@ -6,7 +6,7 @@
 .. link:
 .. description:
 .. type: rest
-.. author: Carl Friedrich Bolz-Tereick
+.. author: CF Bolz-Tereick
 
 
 In this blog post I want to show the complete code (in Python3) of how a very

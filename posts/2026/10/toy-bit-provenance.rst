@@ -6,6 +6,7 @@
 .. link:
 .. description:
 .. type: rest
+.. author: CF Bolz-Tereick
 
 The `Knownbits Toy abstract domain`_ that I wrote about earlier is great for
 all kinds of bit manipulation rewrites. However, it is not particularly good at
