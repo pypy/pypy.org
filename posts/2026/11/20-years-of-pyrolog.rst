@@ -9,7 +9,7 @@
 .. author: CF Bolz-Tereick
 
 
-On November 12, 2006 I did the first surviving commit of my RPython based
+On November 12, 2006 I did the `first surviving commit`_ of my RPython based
 Prolog implementation **Pyrolog** into the PyPy repository. I had been working
 on it since spring 2006 already. In that year we were finishing up the first
 PyPy EU research project and I was finishing up my Bachelor studies at Uni
@@ -50,10 +50,9 @@ with their bindings stored in a global array at that index.
 
 .. figure:: /images/2026-pyrolog-memory-orig.svg
    :alt: Memory layout of the interpreter
-   :target:  /images/2026-pyrolog-memory-orig.svg
-   :width: 100%
+   :width: 90%
 
-   Pyrolog Memory Layout
+   Pyrolog Memory Layout from [Bolz2007]_
 
 That version represented choice points by having exception handlers on the
 interpreter level, and backtracking via throwing exceptions, catching them
@@ -85,7 +84,7 @@ In the thesis I also implemented a way to call into Prolog from Python code and
 had a case study where I implemented a Tic-Tac-Toe GUI in Python, with the game
 logic in Prolog.
 
-Shortly after finishing my thesis, I changed the variable representation:
+Shortly after finishing my thesis, I `changed the variable representation`_:
 instead of indexing into a global binding array, each variable object stored
 its own binding. The exception-based backtracking architecture stayed in place
 for another two years.
@@ -102,7 +101,7 @@ us to experiment more easily with different designs.
 
 Towards the end of 2008 and
 throughout 2009 Armin, Maciej Fijałkowski, me and others started porting the
-design back to RPython and called it pyjitpl5 (the "pl" in the name stands for
+design back to RPython and called it pyjitpl5_ (the "pl" in the name stands for
 "Prolog"). This is still the base of the current PyPy meta-JIT compiler and
 became the subject of the second (smaller) PyPy EU project in the Eurostars_
 program.
@@ -121,8 +120,8 @@ on Pyrolog again over the 2009 Christmas break. Since the stackless
 transformation wasn't compatible with the new JIT I had to switch to a
 different architecture, still used today. The first version of the Pyrolog
 architecture had already stored success continuations on the heap. The goal of this
-refactoring was to also store the *failure continuations* as reified RPython
-objects.
+refactoring was to also store the *failure continuations* as `reified RPython
+objects`_.
 
 .. code:: python
 
@@ -165,6 +164,8 @@ microbenchmarks.
 .. figure:: /images/2026-pyrolog-vmgen.svg
    :width: 50%
 
+   Pyrolog VM Generation vs. Runtime from [BLS2010]_
+
 Unfortunately this is mainly the case for code with very predictable control
 flow, ideally with nice loops. Since the main appeal of Prolog is to do
 backtracking search, control flow is typically not very predictable for
@@ -183,17 +184,20 @@ Kenichi Asai (who had worked on partial evaluation and reflection) and several
 others. At that point during my PhD I was feeling relatively demotivated, and
 my chats with these researchers were incredibly encouraging.
 
+.. _`Prolog talk`: https://www.youtube.com/watch?v=SRYAMt8iQSw
+
 .. figure:: https://www3.risc.jku.at/conferences/ppdp2010/photos/img_8487.jpg
 
-   Group photo at PPDP 2010
+   `Group photo at PPDP 2010`_
 
-.. _`Prolog talk`: https://www.youtube.com/watch?v=SRYAMt8iQSw
+.. _`Group photo at PPDP 2010`: https://www3.risc.jku.at/conferences/ppdp2010/photos/index.html
+
 
 On the bus trip to Gmunden, where the conference dinner took place, somebody
 explained how to implement unification of cyclic terms (i.e. rational trees) to
 me. Unfortunately I am not quite sure who it was any more, I think it might
-have been Thierry Martinez. This led to me implementing support for cyclic
-term unification. I still like that trick a lot and tried to explain it to
+have been Thierry Martinez. This led to me `implementing support for cyclic
+term unification`_. I still like that trick a lot and tried to explain it to
 `Phil Zucker`_ earlier this year. I hope to blog about it eventually. For a fun
 use case see my blog post on `rational tree unification for dfa minimization`_.
 
@@ -271,7 +275,7 @@ combination.
 2013 Pycket
 ==============
 
-Also in 2013 I started working on Pycket, an RPython implementation of Racket,
+Also in 2013 I started working on Pycket_, an RPython implementation of Racket,
 together with `Sam Tobin-Hochstadt`_ and `Jeremy Siek`_. Later Tobias Pape and
 Spenser Bauman also joined. The Pycket architecture was indirectly inspired by
 the Pyrolog continuation approach. We implemented the CEK machine relatively
@@ -287,15 +291,15 @@ but never really polished it enough to be able to merge it.
 
 Another implementation technique in Pycket was to make continuation objects
 much smaller, to make the case of them escaping to the heap less bad. This
-approach *did* make it back to Pyrolog.
+approach *did* `make it back to Pyrolog`_.
 
 2022-2024 RPython implementation of Effekt
 ==========================================
 
 I left King's College in 2016 and have been back at Uni Düsseldorf (half-time)
 since 2017. In 2022 I started working with `Marcial Gaißert`_ and `Jonathan
-Brachthäuser`_ on an RPython implementation of Effekt and related languages.
-This was an implementation of a JIT for effect handlers in RPython [GBB2025]_.
+Brachthäuser`_ on an RPython implementation of Effekt_ and related languages.
+This was an implementation of a JIT for `effect handlers`_ in RPython [GBB2025]_.
 Again, it uses the approach of having reified stack frames/continuations which
 can then be manipulated by the interpreter, adding effect handlers on top of it.
 
@@ -310,13 +314,20 @@ self-contained way to get line editing. I added a debugger, some colors, nicer
 parse errors, also a new parser, to fix the lost feature of user-defined
 operators.
 
+.. figure:: /images/2026-pyrolog-screenshot.png
+   :width: 80%
+
+   Screenshot of the new repl with debugger and colors
+
+
+
 Conclusion
 ===========
 
 .. figure:: /images/2026-pyrolog-activity-by-month-authors.svg
    :width: 100%
 
-    commits per month on the main branch, by author
+   commits per month on the main branch, by author
 
 Pyrolog has always been a much more researchy project than PyPy itself. While
 PyPy tries to be an open source project and "product", Pyrolog never had any
@@ -360,6 +371,15 @@ Prolog researchers that inspired and encouraged me.
 .. _`SWI`: https://www.swi-prolog.org/
 .. _`Sicstus Prolog`: https://sicstus.sics.se/
 .. _`Github repo`: https://github.com/cfbolz/pyrolog
+.. _`first surviving commit`: https://github.com/cfbolz/pyrolog/commit/6653a22
+.. _`changed the variable representation`: https://github.com/cfbolz/pyrolog/commit/04307d2
+.. _Pycket: https://github.com/pycket/pycket
+.. _Effekt: https://effekt-lang.org/
+.. _`effect handlers`: https://effekt-lang.org/docs/concepts/effect-handlers
+.. _pyjitpl5: https://github.com/pypy/pypy/commit/bbb1996550b
+.. _`reified RPython objects`: https://github.com/cfbolz/pyrolog/commit/fc1a4f9
+.. _`implementing support for cyclic term unification`: https://github.com/cfbolz/pyrolog/commit/8d51938
+.. _`make it back to Pyrolog`: https://github.com/cfbolz/pyrolog/commit/59fb825
 
 
 Bibliography
