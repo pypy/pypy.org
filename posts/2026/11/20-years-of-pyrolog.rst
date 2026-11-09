@@ -18,6 +18,10 @@ retrospective post on this project. Pyrolog never had any real users, but it
 still led to some interesting research and influenced a number of other RPython
 projects.
 
+.. contents:: Contents
+   :depth: 1
+   :backlinks: none
+
 Context
 ========
 
@@ -175,7 +179,7 @@ the JIT optimizes and have to be allocated on the heap again. Therefore Pyrolog 
 quite extreme performance cliffs.
 
 We wrote a paper about this version of Pyrolog for PPDP 2010 [BLS2010]_ (together with
-Michael Leuschel and my PhD student colleague David Schneider). That conference
+Michael Leuschel and my later colleague David Schneider). That conference
 was super interesting and important for me. I met Paul Tarau (who invented
 BinProlog, one of the inspirations of Pyrolog. He later gave an excellent `Prolog
 talk`_ at the virtual machine summer school in 2016), Olivier Danvy (whose
@@ -191,7 +195,6 @@ my chats with these researchers were incredibly encouraging.
    `Group photo at PPDP 2010`_
 
 .. _`Group photo at PPDP 2010`: https://www3.risc.jku.at/conferences/ppdp2010/photos/index.html
-
 
 On the bus trip to Gmunden, where the conference dinner took place, somebody
 explained how to implement unification of cyclic terms (i.e. rational trees) to
@@ -215,6 +218,13 @@ execution model intact (with some small additions). I also spent some time
 improving the error messages of Pyrolog to for example show backtraces on
 Prolog exceptions.
 
+Pyrolog also served as an `early test case`_ for David Schneider's ARM JIT
+backend. In January 2011, he could already run Pyrolog microbenchmarks with the
+JIT on a BeagleBoard, while the backend still needed debugging before running
+more complex Python benchmarks.
+
+.. _`early test case`: /posts/2011/01/jit-backend-for-arm-processors-5994810755839586463.html
+
 In 2012 I mostly wrote my PhD thesis [Bolz2012]_. It contains a chapter on Pyrolog based
 on the PPDP 2010 paper. That chapter argues that the fact that Pyrolog works
 relatively well demonstrates that the RPython meta-JIT can be used for quite a
@@ -222,7 +232,11 @@ wide variety of languages.
 
 There was also another chapter that compared how a meta-tracing JIT works with
 more classical partial evaluation approaches. The code of that was again
-written in Prolog.
+written in Prolog and originally_ presented_ `here on the blog`_.
+
+.. _originally: /posts/2012/01/simple-tracer-for-flow-graph-language-6930951890987229484.html 
+.. _presented: /posts/2012/02/optimizing-traces-of-flow-graph-4169388883059419385.html
+.. _`here on the blog`: /posts/2012/02/larger-example-for-flow-graph-language-6139699450091061040.html
 
 At this point I left Düsseldorf. In the winter semester 2012/13 I spent half a
 year in Berlin at `Hasso-Plattner-Institute`_ with my PhD co-advisor `Robert
