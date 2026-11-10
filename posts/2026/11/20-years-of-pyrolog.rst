@@ -19,7 +19,7 @@ still led to some interesting research and influenced a number of other RPython
 projects.
 
 .. contents:: Contents
-   :depth: 1
+   :depth: 2
    :backlinks: none
 
 Context
@@ -317,22 +317,18 @@ This was an implementation of a JIT for `effect handlers`_ in RPython [GBB2025]_
 Again, it uses the approach of having reified stack frames/continuations which
 can then be manipulated by the interpreter, adding effect handlers on top of it.
 
-2026 Git and some new features
+2026 Git Conversion
 ================================
 
 This fall, I got an email by a researcher about Pyrolog and realized that it
 was 20 years old this year. Subsequently I merged various strands of the
-surviving mercurial history into a new `Github repo`_, and dusted it off a bit
-(with some LLM support). I ported `pyrepl`_ to RPython to finally give it a
-self-contained way to get line editing. I added a debugger, some colors, nicer
-parse errors, also a new parser, to fix the lost feature of user-defined
-operators.
+surviving mercurial history into a new `Github repo`_, fixed some bugs and
+implemented some convenience features.
 
 .. figure:: /images/2026-pyrolog-screenshot.png
    :width: 80%
 
-   Screenshot of the new repl with debugger and colors
-
+   Screenshot of Pyrolog
 
 
 Conclusion
