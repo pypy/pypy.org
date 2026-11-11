@@ -267,10 +267,12 @@ backtracking.
 
 When I was at HPI for six months in winter 2012/2013 I worked with Tobias Pape to
 implement the same compression idea for a simpler functional language called
-lamb. Tobias pushed this approach much further in the following years
+lamb, later Theseus_. Tobias pushed this approach much further in the following years
 [PBH2015]_, [PBH2017]_. My hope was to eventually understand the problem well
 enough to be able to port it back to Pyrolog. But that part never happened. We
 did eventually try those ideas in Pycket though.
+
+.. _Theseus: https://github.com/shiplift/theseus/
 
 
 2013 Unipycation
@@ -360,8 +362,8 @@ I still have no concrete use case for Pyrolog so it's kind of unlikely that I
 will work much more on it right now. But my development on this project was
 always quite bursty, so I am bound to return to it at some point in the future.
 
-I would like to end with thanking all the contributors and the long line of
-Prolog researchers that inspired and encouraged me.
+I would like to end with thanking all the contributors, my other collaborators
+and the long line of Prolog researchers that inspired and encouraged me.
 
 
 .. _`Logilab`: https://www.logilab.fr/
