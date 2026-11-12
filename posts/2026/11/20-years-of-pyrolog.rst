@@ -1,6 +1,6 @@
 .. title: 20 Years of Pyrolog
 .. slug: 20-years-of-pyrolog
-.. date: 2026-11-08 14:16:45 UTC+01:00
+.. date: 2026-11-12 9:16:45 UTC+01:00
 .. tags: 
 .. category: 
 .. link: 
